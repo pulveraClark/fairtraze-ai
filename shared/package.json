@@ -1,0 +1,13 @@
+{
+  "name": "@fairtraze/shared",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/types.ts",
+  "types": "./src/types.ts",
+  "exports": {
+    ".": "./src/types.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
