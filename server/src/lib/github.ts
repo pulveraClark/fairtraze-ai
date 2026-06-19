@@ -1,5 +1,12 @@
 import { Octokit } from "@octokit/rest";
-import type { MemberStats, ContributorWeekStat } from "@shared/types.js";
+
+export interface GitHubContributorData {
+  githubUsername: string;
+  commits: number;
+  additions: number;
+  deletions: number;
+  commitDates: string[]; // ISO timestamps, most-recent-first
+}
 
 function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   const match = repoUrl
@@ -22,6 +29,13 @@ interface GitHubContributorStat {
   author: { login: string } | null;
   total: number;
   weeks: GitHubWeek[];
+}
+
+interface GitHubCommit {
+  commit: {
+    author: { date?: string } | null;
+    committer: { date?: string } | null;
+  };
 }
 
 async function fetchContributorStats(
@@ -54,69 +68,61 @@ async function fetchContributorStats(
   );
 }
 
-async function fetchLastCommitAt(
+async function fetchAllCommitDates(
   octokit: Octokit,
   owner: string,
   repo: string,
   login: string
-): Promise<string | null> {
-  try {
+): Promise<string[]> {
+  const dates: string[] = [];
+  let page = 1;
+
+  while (true) {
     const response = await octokit.request(
       "GET /repos/{owner}/{repo}/commits",
-      { owner, repo, author: login, per_page: 1 }
+      { owner, repo, author: login, per_page: 100, page }
     );
-    const commit = response.data[0];
-    return (
-      commit?.commit?.committer?.date ??
-      commit?.commit?.author?.date ??
-      null
-    );
-  } catch {
-    return null;
+
+    const commits = response.data as unknown as GitHubCommit[];
+    for (const commit of commits) {
+      const date =
+        commit.commit?.committer?.date ?? commit.commit?.author?.date;
+      if (date) dates.push(date);
+    }
+
+    if (commits.length < 100) break;
+    page++;
   }
+
+  return dates;
 }
 
 export async function fetchRepoStats(
   repoUrl: string,
   githubToken: string
-): Promise<{
-  stats: Omit<MemberStats, "studentName">[];
-}> {
+): Promise<{ contributors: GitHubContributorData[] }> {
   const octokit = new Octokit({ auth: githubToken });
   const { owner, repo } = parseRepoUrl(repoUrl);
 
   const contributorStats = await fetchContributorStats(octokit, owner, repo);
-
-  const stats: Omit<MemberStats, "studentName">[] = [];
+  const contributors: GitHubContributorData[] = [];
 
   for (const contributor of contributorStats) {
     if (!contributor.author?.login) continue;
     const login = contributor.author.login;
 
-    const weeklyBreakdown: ContributorWeekStat[] = contributor.weeks
-      .filter((w) => w.c > 0 || w.a > 0 || w.d > 0)
-      .map((w) => ({
-        week: w.w,
-        additions: w.a,
-        deletions: w.d,
-        commits: w.c,
-      }));
+    const additions = contributor.weeks.reduce((s, w) => s + w.a, 0);
+    const deletions = contributor.weeks.reduce((s, w) => s + w.d, 0);
+    const commitDates = await fetchAllCommitDates(octokit, owner, repo, login);
 
-    const totalAdditions = contributor.weeks.reduce((s, w) => s + w.a, 0);
-    const totalDeletions = contributor.weeks.reduce((s, w) => s + w.d, 0);
-
-    const lastCommitAt = await fetchLastCommitAt(octokit, owner, repo, login);
-
-    stats.push({
+    contributors.push({
       githubUsername: login,
-      totalCommits: contributor.total,
-      totalAdditions,
-      totalDeletions,
-      firstCommitAt: null,
-      lastCommitAt,
-      weeklyBreakdown,
+      commits: contributor.total,
+      additions,
+      deletions,
+      commitDates,
     });
   }
 
-  return { stats };
+  return { contributors };
 }

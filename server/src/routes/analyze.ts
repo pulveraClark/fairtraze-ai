@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { fetchRepoStats } from "../lib/github.js";
-import type { AnalyzeResponse } from "@shared/types.js";
+import { computeTeamReport } from "@shared/scoring.js";
+import { generateFairnessNarrative } from "../lib/gemini.js";
+import type { RawMemberStats, AnalyzeResponse } from "@shared/types.js";
 
 export const analyzeRouter = Router();
 
@@ -29,9 +31,9 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
     return;
   }
 
-  let rawStats: Awaited<ReturnType<typeof fetchRepoStats>>;
+  let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
   try {
-    rawStats = await fetchRepoStats(project.repoUrl, githubToken);
+    rawData = await fetchRepoStats(project.repoUrl, githubToken);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
     if (e.status === 404) {
@@ -52,26 +54,61 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
     return;
   }
 
-  const memberMap = new Map(
-    project.members.map((m) => [m.githubUsername.toLowerCase(), m])
+  // Build login → contributor map (case-insensitive)
+  const contributorMap = new Map(
+    rawData.contributors.map((c) => [c.githubUsername.toLowerCase(), c])
   );
-  const unmatchedGitHubLogins: string[] = [];
 
-  const members = rawStats.stats.map((stat) => {
-    const member = memberMap.get(stat.githubUsername.toLowerCase());
-    if (!member) unmatchedGitHubLogins.push(stat.githubUsername);
+  // Every DB member gets an entry; zero-commit members stay in for scoring
+  const matchedLogins = new Set<string>();
+  const rawMembers: RawMemberStats[] = project.members.map((member) => {
+    const key = member.githubUsername.toLowerCase();
+    const contributor = contributorMap.get(key);
+    if (contributor) matchedLogins.add(key);
     return {
-      ...stat,
-      studentName: member?.studentName ?? null,
+      studentName: member.studentName,
+      githubUsername: member.githubUsername,
+      commits: contributor?.commits ?? 0,
+      additions: contributor?.additions ?? 0,
+      deletions: contributor?.deletions ?? 0,
+      commitDates: contributor?.commitDates ?? [],
     };
+  });
+
+  const unmatchedGitHubLogins = rawData.contributors
+    .filter((c) => !matchedLogins.has(c.githubUsername.toLowerCase()))
+    .map((c) => c.githubUsername);
+
+  const report = computeTeamReport(rawMembers);
+
+  // Generate AI narrative (fall back gracefully if key is absent or call fails)
+  const geminiKey = process.env.GEMINI_API_KEY;
+  let narrative = "AI narrative unavailable — please review the statistics directly.";
+  if (geminiKey) {
+    try {
+      narrative = await generateFairnessNarrative(project.name, report, geminiKey);
+    } catch {
+      // fallback message already set
+    }
+  }
+
+  // Persist report to database
+  await prisma.report.create({
+    data: {
+      projectId,
+      gini: report.gini,
+      teamHealth: report.teamHealth,
+      content: JSON.stringify({ report, narrative }),
+    },
   });
 
   const response: AnalyzeResponse = {
     projectId,
     repoUrl: project.repoUrl,
     analyzedAt: new Date().toISOString(),
-    members,
     unmatchedGitHubLogins,
+    report,
+    narrative,
   };
 
   res.status(200).json(response);

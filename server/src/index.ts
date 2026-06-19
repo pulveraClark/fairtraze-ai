@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { analyzeRouter } from "./routes/analyze.js";
+import { projectsRouter } from "./routes/projects.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -13,6 +14,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+app.use(projectsRouter);
 app.use(analyzeRouter);
 
 app.use(
