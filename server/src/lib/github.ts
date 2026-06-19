@@ -1,5 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { classifyAddedLines } from "@shared/lineClassifier.js";
+import { getFileWeight, categorizeFile } from "@shared/fileWeights.js";
+import { classifyCommit, COMMIT_IMPACT } from "@shared/commitClassifier.js";
 
 export interface GitHubContributorData {
   githubUsername: string;
@@ -10,6 +12,10 @@ export interface GitHubContributorData {
   codeLinesAdded: number;
   commentLinesAdded: number;
   blankLinesAdded: number;
+  weightedAdditions: number;
+  selfChurnRatio: number;
+  commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
+  fileTypeBreakdown: { source: number; test: number; docs: number; style: number; config: number; other: number };
 }
 
 function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
@@ -46,6 +52,9 @@ interface GitHubCommitListItem {
 interface GitHubCommitDetail {
   files?: Array<{
     filename: string;
+    status?: string;
+    additions?: number;
+    deletions?: number;
     patch?: string;
   }>;
 }
@@ -112,46 +121,132 @@ async function fetchCommitShasAndDates(
   return { dates, shas };
 }
 
-// Fetches per-commit diffs for the given SHAs and classifies added lines.
-// Cap: caller must pass at most 50 SHAs to stay within GitHub rate limits.
+// Fetches per-commit diffs for the given SHAs.
+// Processes oldest-first for accurate self-churn tracking.
+// Cap: caller must pass at most 50 SHAs.
 async function fetchCommitDiffs(
   octokit: Octokit,
   owner: string,
   repo: string,
   shas: string[]
-): Promise<{ codeLinesAdded: number; commentLinesAdded: number; blankLinesAdded: number }> {
-  let codeLinesAdded = 0;
+): Promise<{
+  codeLinesAdded: number;
+  commentLinesAdded: number;
+  blankLinesAdded: number;
+  weightedAdditions: number;
+  selfChurnRatio: number;
+  commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
+  fileTypeBreakdown: { source: number; test: number; docs: number; style: number; config: number; other: number };
+}> {
+  let codeLinesAdded    = 0;
   let commentLinesAdded = 0;
-  let blankLinesAdded = 0;
+  let blankLinesAdded   = 0;
+  let weightedAdditions = 0;
 
-  for (const sha of shas) {
+  // Self-churn tracking: how many lines the member added to a file that were later deleted by them
+  const fileAddedLines = new Map<string, number>(); // filename → running tally of lines added
+  let selfDeletedTotal        = 0;
+  let totalAdditionsForChurn  = 0;
+
+  const commitImpactBreakdown = { structural: 0, functional: 0, cosmetic: 0, trivial: 0 };
+  const fileTypeBreakdown     = { source: 0, test: 0, docs: 0, style: 0, config: 0, other: 0 };
+
+  // Process oldest-first so self-churn tracking is chronologically correct
+  const orderedShas = [...shas].reverse();
+
+  for (const sha of orderedShas) {
     const response = await octokit.request(
       "GET /repos/{owner}/{repo}/commits/{ref}",
       { owner, repo, ref: sha }
     );
 
     const detail = response.data as GitHubCommitDetail;
-    for (const file of detail.files ?? []) {
+    const files  = detail.files ?? [];
+
+    // Commit-level aggregates for classifyCommit
+    let commitFilesChanged    = 0;
+    let commitNewFilesCreated = 0;
+    let commitAdditions       = 0;
+    let commitDeletions       = 0;
+    let commitHasSourceFiles  = false;
+    let commitWeightedRaw     = 0;
+
+    for (const file of files) {
+      const filename = file.filename;
+      const category = categorizeFile(filename);
+      const weight   = getFileWeight(filename);
+
+      commitFilesChanged++;
+      if (file.status === "added") commitNewFilesCreated++;
+
+      const fileAdditions = file.additions ?? 0;
+      const fileDeletions = file.deletions ?? 0;
+      commitAdditions += fileAdditions;
+      commitDeletions += fileDeletions;
+
+      if (category === "source" || category === "test") commitHasSourceFiles = true;
+
       if (!file.patch) continue;
 
-      // Extract added lines: lines starting with '+' but not the diff header '++'
+      // Parse patch: collect added lines and count deleted lines
       const addedLines: string[] = [];
+      let   patchDeletedCount = 0;
       for (const patchLine of file.patch.split("\n")) {
         if (patchLine.startsWith("+") && !patchLine.startsWith("++")) {
-          addedLines.push(patchLine.slice(1)); // strip leading '+'
+          addedLines.push(patchLine.slice(1));
+        } else if (patchLine.startsWith("-") && !patchLine.startsWith("--")) {
+          patchDeletedCount++;
         }
       }
 
+      // Self-churn: how many of the deleted lines were previously added by this member
+      const priorAdded  = fileAddedLines.get(filename) ?? 0;
+      const selfDeleted = Math.min(patchDeletedCount, priorAdded);
+      selfDeletedTotal += selfDeleted;
+      totalAdditionsForChurn += addedLines.length;
+      fileAddedLines.set(filename, Math.max(0, priorAdded - selfDeleted) + addedLines.length);
+
+      // Weighted additions (file-type weight applied per line, multiplied by impact later)
+      commitWeightedRaw += addedLines.length * weight;
+
+      // File-type breakdown (generated files contribute 0 weight and are excluded)
+      if (category !== "generated" && category in fileTypeBreakdown) {
+        (fileTypeBreakdown as Record<string, number>)[category] += addedLines.length;
+      }
+
+      // Classify added lines for the meaningful-contribution signal
       if (addedLines.length > 0) {
-        const counts = classifyAddedLines(file.filename, addedLines);
-        codeLinesAdded += counts.code;
+        const counts = classifyAddedLines(filename, addedLines);
+        codeLinesAdded    += counts.code;
         commentLinesAdded += counts.comment;
-        blankLinesAdded += counts.blank;
+        blankLinesAdded   += counts.blank;
       }
     }
+
+    // Classify commit and apply impact multiplier to this commit's weighted additions
+    const impact = classifyCommit({
+      filesChanged:    commitFilesChanged,
+      newFilesCreated: commitNewFilesCreated,
+      additions:       commitAdditions,
+      deletions:       commitDeletions,
+      hasSourceFiles:  commitHasSourceFiles,
+    });
+    commitImpactBreakdown[impact]++;
+    weightedAdditions += commitWeightedRaw * COMMIT_IMPACT[impact];
   }
 
-  return { codeLinesAdded, commentLinesAdded, blankLinesAdded };
+  const selfChurnRatio =
+    totalAdditionsForChurn > 0 ? selfDeletedTotal / totalAdditionsForChurn : 0;
+
+  return {
+    codeLinesAdded,
+    commentLinesAdded,
+    blankLinesAdded,
+    weightedAdditions,
+    selfChurnRatio,
+    commitImpactBreakdown,
+    fileTypeBreakdown,
+  };
 }
 
 export async function fetchRepoStats(

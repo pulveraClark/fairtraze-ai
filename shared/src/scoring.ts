@@ -38,25 +38,41 @@ export function computeTeamReport(
   const equalShare = 1 / memberCount;
 
   const baseStats = rawMembers.map((m) => {
-    const codeLinesAdded = m.codeLinesAdded ?? 0;
+    const codeLinesAdded    = m.codeLinesAdded    ?? 0;
     const commentLinesAdded = m.commentLinesAdded ?? 0;
-    const blankLinesAdded = m.blankLinesAdded ?? 0;
-    // meaningfulLines is the line-magnitude signal: code counts fully, comments at 25%
-    const meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded;
+    const blankLinesAdded   = m.blankLinesAdded   ?? 0;
+    const meaningfulLines   = codeLinesAdded + 0.25 * commentLinesAdded;
+
+    // Significance fields — fall back to meaningfulLines when not provided (preserves existing tests)
+    const weightedAdditionsRaw = m.weightedAdditions ?? meaningfulLines;
+    const selfChurnRatio       = Math.min(1, Math.max(0, m.selfChurnRatio ?? 0));
+    const effectiveAdditions   = weightedAdditionsRaw * (1 - 0.5 * selfChurnRatio);
+    // Log-scale commits: diminishing returns on raw count, neutralises commit-padding
+    const logCommits = Math.log(m.commits + 1);
+
+    const commitImpactBreakdown = m.commitImpactBreakdown ?? { structural: 0, functional: 0, cosmetic: 0, trivial: 0 };
+    const fileTypeBreakdown     = m.fileTypeBreakdown     ?? { source: 0, test: 0, docs: 0, style: 0, config: 0, other: 0 };
+
     return {
       ...m,
       codeLinesAdded,
       commentLinesAdded,
       blankLinesAdded,
       meaningfulLines,
+      weightedAdditions: weightedAdditionsRaw,
+      selfChurnRatio,
+      effectiveAdditions,
+      logCommits,
+      commitImpactBreakdown,
+      fileTypeBreakdown,
       churn: m.additions + m.deletions,
       activeDays: new Set(m.commitDates.map((d) => d.slice(0, 10))).size,
     };
   });
 
-  const totalCommits = baseStats.reduce((s, m) => s + m.commits, 0);
-  const totalMeaningfulLines = baseStats.reduce((s, m) => s + m.meaningfulLines, 0);
-  const totalActiveDays = baseStats.reduce((s, m) => s + m.activeDays, 0);
+  const totalLogCommits         = baseStats.reduce((s, m) => s + m.logCommits, 0);
+  const totalEffectiveAdditions = baseStats.reduce((s, m) => s + m.effectiveAdditions, 0);
+  const totalActiveDays         = baseStats.reduce((s, m) => s + m.activeDays, 0);
 
   // Compute overall timeline boundaries for lastPhaseRatio
   const allTimestamps = rawMembers
@@ -74,8 +90,8 @@ export function computeTeamReport(
   }
 
   const withShares = baseStats.map((m) => {
-    const commitShare = totalCommits > 0 ? m.commits / totalCommits : 0;
-    const linesShare = totalMeaningfulLines > 0 ? m.meaningfulLines / totalMeaningfulLines : 0;
+    const commitShare    = totalLogCommits > 0 ? m.logCommits / totalLogCommits : 0;
+    const linesShare     = totalEffectiveAdditions > 0 ? m.effectiveAdditions / totalEffectiveAdditions : 0;
     const activeDaysShare = totalActiveDays > 0 ? m.activeDays / totalActiveDays : 0;
     const contributionShare =
       weights.commits * commitShare +
@@ -134,6 +150,10 @@ export function computeTeamReport(
       commentLinesAdded: m.commentLinesAdded,
       blankLinesAdded: m.blankLinesAdded,
       codeToCommentRatio,
+      weightedAdditions:     round3(m.weightedAdditions),
+      selfChurnRatio:        round3(m.selfChurnRatio),
+      commitImpactBreakdown: m.commitImpactBreakdown,
+      fileTypeBreakdown:     m.fileTypeBreakdown,
       flags,
     };
   });

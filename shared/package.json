@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/types.ts",
     "./scoring": "./src/scoring.ts",
-    "./lineClassifier": "./src/lineClassifier.ts"
+    "./lineClassifier": "./src/lineClassifier.ts",
+    "./fileWeights": "./src/fileWeights.ts",
+    "./commitClassifier": "./src/commitClassifier.ts"
   },
   "scripts": {
     "test": "vitest run"

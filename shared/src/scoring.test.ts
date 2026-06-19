@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { gini, computeTeamReport } from "./scoring";
 import { classifyAddedLines } from "./lineClassifier";
+import { getFileWeight } from "./fileWeights";
+import { classifyCommit } from "./commitClassifier";
 import type { RawMemberStats } from "./types";
 
 // ── gini ──────────────────────────────────────────────────────────────────────
@@ -12,6 +14,59 @@ describe("gini", () => {
 
   it("returns 0.5 for [1, 0]", () => {
     expect(gini([1, 0])).toBe(0.5);
+  });
+});
+
+// ── getFileWeight ─────────────────────────────────────────────────────────────
+
+describe("getFileWeight", () => {
+  it("source files get weight 1.0", () => {
+    expect(getFileWeight("app.ts")).toBe(1.0);
+    expect(getFileWeight("main.py")).toBe(1.0);
+  });
+
+  it("test files get weight 0.8", () => {
+    expect(getFileWeight("app.test.ts")).toBe(0.8);
+    expect(getFileWeight("__tests__/util.ts")).toBe(0.8);
+  });
+
+  it("style files get weight 0.7", () => {
+    expect(getFileWeight("styles.css")).toBe(0.7);
+  });
+
+  it("doc files get weight 0.6", () => {
+    expect(getFileWeight("README.md")).toBe(0.6);
+  });
+
+  it("generated files get weight 0.0", () => {
+    expect(getFileWeight("package-lock.json")).toBe(0.0);
+    expect(getFileWeight("dist/bundle.js")).toBe(0.0);
+  });
+
+  it("unknown extension gets weight 0.5 (other)", () => {
+    expect(getFileWeight("unknown.xyz")).toBe(0.5);
+  });
+});
+
+// ── classifyCommit ────────────────────────────────────────────────────────────
+
+describe("classifyCommit", () => {
+  it("classifies as structural when many files touched", () => {
+    expect(classifyCommit({ filesChanged: 6, newFilesCreated: 3, additions: 50, deletions: 10, hasSourceFiles: true })).toBe("structural");
+  });
+
+  it("classifies as functional for substantive source-file change", () => {
+    expect(classifyCommit({ filesChanged: 1, newFilesCreated: 0, additions: 50, deletions: 10, hasSourceFiles: true })).toBe("functional");
+  });
+
+  it("classifies as cosmetic for balanced small non-source edit", () => {
+    // ratio 8/9 ≈ 0.89 (within 0.8–1.2), total 17 < 20, no source files
+    expect(classifyCommit({ filesChanged: 2, newFilesCreated: 0, additions: 8, deletions: 9, hasSourceFiles: false })).toBe("cosmetic");
+  });
+
+  it("classifies as trivial for tiny non-source change", () => {
+    // total 4 <= 5, no source files
+    expect(classifyCommit({ filesChanged: 1, newFilesCreated: 0, additions: 2, deletions: 2, hasSourceFiles: false })).toBe("trivial");
   });
 });
 
@@ -80,6 +135,79 @@ describe("classifyAddedLines", () => {
   });
 });
 
+// ── log-scale commit normalization ────────────────────────────────────────────
+
+describe("log-scale commit normalization", () => {
+  it("member with 0 commits has commitShare 0", () => {
+    const members: RawMemberStats[] = [
+      { studentName: "Active", githubUsername: "active", commits: 10, additions: 100, deletions: 0, commitDates: ["2024-01-10T10:00:00Z"] },
+      { studentName: "Zero", githubUsername: "zero", commits: 0, additions: 0, deletions: 0, commitDates: [] },
+    ];
+    const report = computeTeamReport(members);
+    const zero = report.members.find((m) => m.githubUsername === "zero")!;
+    expect(zero.commitShare).toBe(0);
+  });
+
+  it("two members with equal commits have equal commitShare", () => {
+    const date = "2024-01-10T10:00:00Z";
+    const members: RawMemberStats[] = [
+      { studentName: "A", githubUsername: "a", commits: 7, additions: 100, deletions: 0, commitDates: [date] },
+      { studentName: "B", githubUsername: "b", commits: 7, additions: 100, deletions: 0, commitDates: [date] },
+    ];
+    const report = computeTeamReport(members);
+    const a = report.members.find((m) => m.githubUsername === "a")!;
+    const b = report.members.find((m) => m.githubUsername === "b")!;
+    expect(a.commitShare).toBe(b.commitShare);
+  });
+});
+
+// ── self-churn penalty ────────────────────────────────────────────────────────
+
+describe("self-churn penalty", () => {
+  it("selfChurnRatio:0 means effectiveAdditions equals weightedAdditions (via linesShare proportionality)", () => {
+    const date = "2024-01-10T10:00:00Z";
+    const members: RawMemberStats[] = [
+      {
+        studentName: "A", githubUsername: "a", commits: 5, additions: 50, deletions: 0, commitDates: [date],
+        weightedAdditions: 100, selfChurnRatio: 0,
+      },
+      {
+        studentName: "B", githubUsername: "b", commits: 5, additions: 50, deletions: 0, commitDates: [date],
+        weightedAdditions: 100, selfChurnRatio: 0,
+      },
+    ];
+    const report = computeTeamReport(members);
+    const a = report.members.find((m) => m.githubUsername === "a")!;
+    const b = report.members.find((m) => m.githubUsername === "b")!;
+    // Equal weightedAdditions + no churn → equal linesShare
+    expect(a.linesShare).toBe(b.linesShare);
+    expect(a.selfChurnRatio).toBe(0);
+  });
+
+  it("selfChurnRatio:1 cuts effectiveAdditions to 0.5 × weightedAdditions", () => {
+    const date = "2024-01-10T10:00:00Z";
+    // A: 100 weighted, no churn → effectiveAdditions = 100
+    // B: 100 weighted, full churn → effectiveAdditions = 50
+    const members: RawMemberStats[] = [
+      {
+        studentName: "A", githubUsername: "a", commits: 5, additions: 50, deletions: 0, commitDates: [date],
+        weightedAdditions: 100, selfChurnRatio: 0,
+      },
+      {
+        studentName: "B", githubUsername: "b", commits: 5, additions: 50, deletions: 0, commitDates: [date],
+        weightedAdditions: 100, selfChurnRatio: 1,
+      },
+    ];
+    const report = computeTeamReport(members);
+    const a = report.members.find((m) => m.githubUsername === "a")!;
+    const b = report.members.find((m) => m.githubUsername === "b")!;
+    // A has 100 effective, B has 50 effective → A's linesShare ≈ 0.667, B's ≈ 0.333
+    expect(a.linesShare).toBeCloseTo(2 / 3, 2);
+    expect(b.linesShare).toBeCloseTo(1 / 3, 2);
+    expect(b.selfChurnRatio).toBe(1);
+  });
+});
+
 // ── computeTeamReport ─────────────────────────────────────────────────────────
 
 describe("computeTeamReport", () => {
@@ -129,6 +257,9 @@ describe("computeTeamReport", () => {
   });
 
   it("dominant member is overload and tiny contributor is free-rider", () => {
+    // Use extreme ratio (99:1) because log-scale compresses smaller ratios
+    // Big: log(100)/log(2) ≈ 0.87 commitShare → contributionShare ≈ 0.924 > 0.875 (overload ✓)
+    // Small: log(2)/log(100) ≈ 0.13 commitShare → contributionShare ≈ 0.076 < 0.25 (free-rider ✓)
     const daysA = Array.from({ length: 9 }, (_, i) =>
       `2024-01-${String(i + 1).padStart(2, "0")}T10:00:00Z`
     );
@@ -136,20 +267,20 @@ describe("computeTeamReport", () => {
       {
         studentName: "Big",
         githubUsername: "big",
-        commits: 90,
-        additions: 900,
+        commits: 99,
+        additions: 990,
         deletions: 0,
         commitDates: daysA,
-        codeLinesAdded: 900,  // 90% of meaningful lines
+        codeLinesAdded: 990,
       },
       {
         studentName: "Small",
         githubUsername: "small",
-        commits: 10,
-        additions: 100,
+        commits: 1,
+        additions: 10,
         deletions: 0,
         commitDates: ["2024-01-10T10:00:00Z"],
-        codeLinesAdded: 100,  // 10% of meaningful lines
+        codeLinesAdded: 10,
       },
     ];
     const report = computeTeamReport(members);
@@ -197,7 +328,6 @@ describe("computeTeamReport", () => {
 
   it("codeLinesAdded drives linesShare; pure blank lines contribute nothing", () => {
     const date = "2024-01-10T10:00:00Z";
-    // Member A: 100 real code lines; Member B: 1000 blank lines only (meaningfulLines = 0)
     const members: RawMemberStats[] = [
       {
         studentName: "Coder",
@@ -225,10 +355,8 @@ describe("computeTeamReport", () => {
     const report = computeTeamReport(members);
     const coder = report.members.find((m) => m.githubUsername === "coder")!;
     const blanks = report.members.find((m) => m.githubUsername === "blanks")!;
-    // Coder has all the meaningful lines; blanks has none
     expect(coder.linesShare).toBe(1);
     expect(blanks.linesShare).toBe(0);
-    // codeToCommentRatio: coder has no comments → null; blanks has nothing → null
     expect(coder.codeToCommentRatio).toBeNull();
     expect(blanks.codeToCommentRatio).toBeNull();
   });

@@ -35,6 +35,11 @@ export interface RawMemberStats {
   codeLinesAdded?: number;
   commentLinesAdded?: number;
   blankLinesAdded?: number;
+  // Contribution significance (optional; populated by enhanced GitHub diff fetch)
+  weightedAdditions?:     number;
+  selfChurnRatio?:        number;
+  commitImpactBreakdown?: { structural: number; functional: number; cosmetic: number; trivial: number };
+  fileTypeBreakdown?:     { source: number; test: number; docs: number; style: number; config: number; other: number };
 }
 
 export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
@@ -59,6 +64,11 @@ export interface ScoredMember {
   commentLinesAdded: number;
   blankLinesAdded: number;
   codeToCommentRatio: number | null; // null when no code or no comments written
+  // Contribution significance
+  weightedAdditions:     number;
+  selfChurnRatio:        number;
+  commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
+  fileTypeBreakdown:     { source: number; test: number; docs: number; style: number; config: number; other: number };
   flags: Flag[];
 }
 

@@ -8,6 +8,7 @@ import { Narrative } from "./components/Narrative";
 import { SystemOverview } from "./components/SystemOverview";
 import { AnalysisStepper } from "./components/AnalysisStepper";
 import { ScopeLegend } from "./components/ScopeLegend";
+import { SignificanceTable } from "./components/SignificanceTable";
 
 interface ProjectSummary {
   id: number;
@@ -167,6 +168,8 @@ export default function App() {
                 <ContributionChart members={result.report.members} />
 
                 <MemberTable members={result.report.members} />
+
+                <SignificanceTable members={result.report.members} />
 
                 <Narrative narrative={result.narrative} />
 

@@ -1,0 +1,170 @@
+// ============================================================
+// FAIR TRAZE AI — Target Schema (design reference only)
+// ============================================================
+// This file is NOT used by the running application.
+// It is a draft of the full multi-user institutional hierarchy.
+// Phases: A (auth), B (team formation), C (student dashboards),
+//         D (combined analysis), F (institutional analytics).
+//
+// DO NOT rename this file to schema.prisma or run any migration.
+// The live schema is server/prisma/schema.prisma.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────
+
+// System-wide access role on every User account.
+enum Role {
+  ADMIN       // institutional administrator; cross-department analytics (Phase F)
+  INSTRUCTOR  // creates assignments and class sections; oversees reports
+  STUDENT     // joins groups via join code; self-registers GitHub username
+}
+
+// The data source(s) used by an Assignment.
+// Controls which analysis pipelines run and whether blended scoring applies.
+enum SourceType {
+  GITHUB    // GitHub activity only (current prototype behaviour)
+  EDITOR    // Collaborative editor only
+  COMBINED  // Both sources — enables blended scoring and role-aware mismatch detection (Phase D)
+}
+
+// ── Models ───────────────────────────────────────────────────
+
+// Every person who can log in.
+// departmentId is set for INSTRUCTOR accounts; null for ADMIN and STUDENT.
+// githubUsername is self-registered by the student during Phase A/B onboarding.
+// googleId is set after Google OAuth sign-in (primary auth method, Phase A).
+model User {
+  id             Int     @id @default(autoincrement())
+  email          String  @unique
+  passwordHash   String? // null if the user signed in via Google OAuth only
+  googleId       String? @unique // set after Google OAuth; null for email/password-only accounts
+  fullName       String
+  role           Role
+  departmentId   Int?    // populated for INSTRUCTOR role only
+  githubUsername String? // self-registered by the student; used for cross-platform identity
+  createdAt      DateTime @default(now())
+
+  department    Department?       @relation(fields: [departmentId], references: [id])
+  classSections ClassSection[]    // sections this instructor owns
+  assignments   Assignment[]      // assignments this instructor created
+  memberships   GroupMembership[] // groups this student belongs to
+}
+
+// The top-level institution.
+model School {
+  id          Int          @id @default(autoincrement())
+  name        String
+  createdAt   DateTime     @default(now())
+
+  departments Department[]
+}
+
+// An academic department inside a school.
+// Owns many instructors and many class sections.
+model Department {
+  id            Int            @id @default(autoincrement())
+  name          String
+  schoolId      Int
+  createdAt     DateTime       @default(now())
+
+  school        School         @relation(fields: [schoolId], references: [id])
+  instructors   User[]
+  classSections ClassSection[]
+}
+
+// One course section run by one instructor in one department.
+model ClassSection {
+  id           Int          @id @default(autoincrement())
+  name         String       // e.g. "CS 401 — Section A"
+  instructorId Int
+  departmentId Int
+  createdAt    DateTime     @default(now())
+
+  instructor   User         @relation(fields: [instructorId], references: [id])
+  department   Department   @relation(fields: [departmentId], references: [id])
+  assignments  Assignment[]
+}
+
+// An instructor-created assignment within a class section.
+// Holds the join code, source type, deadline, and group-size cap for all groups under it.
+// The joinCode is what students use when a group leader creates a group here.
+model Assignment {
+  id             Int        @id @default(autoincrement())
+  title          String
+  description    String?
+  classSectionId Int
+  instructorId   Int
+  sourceType     SourceType @default(GITHUB) // determines which analysis pipelines run
+  joinCode       String     @unique          // group leaders use this to create a group here
+  startDate      DateTime?  // optional; used to anchor the deadline-driven detection window
+  deadline       DateTime   // required; anchors the timeline for deadline-driven detection
+  maxGroupSize   Int?       // optional cap enforced during Phase B team formation
+  createdAt      DateTime   @default(now())
+
+  classSection ClassSection @relation(fields: [classSectionId], references: [id])
+  instructor   User         @relation(fields: [instructorId], references: [id])
+  groups       Group[]
+}
+
+// A student project team under one Assignment.
+// repoUrl is nullable because editor-only assignments (sourceType = EDITOR) have no repo.
+// Equivalent to the current prototype's Project model, now with an Assignment above it.
+model Group {
+  id           Int       @id @default(autoincrement())
+  name         String    // e.g. "Team Falcon"
+  assignmentId Int
+  repoUrl      String?   // GitHub repo URL; null for EDITOR-only assignments
+  lockedAt     DateTime? // set by instructor to freeze the roster before analysis
+  createdAt    DateTime  @default(now())
+
+  assignment  Assignment        @relation(fields: [assignmentId], references: [id])
+  memberships GroupMembership[]
+  reports     Report[]
+}
+
+// Links one student (User with role STUDENT) to one Group.
+// GitHub identity comes from User.githubUsername — it is NOT stored here again.
+// isLeader: exactly one per group; marks who created the group and connected the repo.
+//   Being the leader grants NO automatic contribution credit — the leader is scored
+//   on actual visible work like every other member.
+// functionalRole: a flexible label (e.g. "Developer", "Documentation Lead") assigned
+//   by the group leader during team formation (Phase B). Free-form String so it works
+//   across all course types without a schema migration. Multiple members may share a role.
+//   "Leader" is NOT a valid functionalRole — every member, including the leader,
+//   has a functionalRole describing their actual contribution work.
+// Equivalent to the current prototype's Member model.
+model GroupMembership {
+  id             Int      @id @default(autoincrement())
+  groupId        Int
+  userId         Int      // must be a User with role STUDENT
+  isLeader       Boolean  @default(false)
+  functionalRole String?  // e.g. "Developer", "Documentation Lead", "Designer", "Researcher", "Tester", "Project Manager"
+  joinedAt       DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId]) // one student per group
+}
+
+// The output of one analysis run on a Group.
+// Equivalent to the current prototype's Report model, repointed from projectId to groupId.
+model Report {
+  id          Int      @id @default(autoincrement())
+  groupId     Int
+  generatedAt DateTime @default(now())
+  gini        Float?   // Gini coefficient (stored for quick retrieval)
+  teamHealth  String?  // "Healthy" | "Moderate Risk" | "High Risk"
+  content     String?  // full { report, narrative } JSON blob
+
+  group Group @relation(fields: [groupId], references: [id])
+}
