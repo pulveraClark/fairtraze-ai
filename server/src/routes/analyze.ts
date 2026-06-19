@@ -72,6 +72,9 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
       additions: contributor?.additions ?? 0,
       deletions: contributor?.deletions ?? 0,
       commitDates: contributor?.commitDates ?? [],
+      codeLinesAdded: contributor?.codeLinesAdded ?? 0,
+      commentLinesAdded: contributor?.commentLinesAdded ?? 0,
+      blankLinesAdded: contributor?.blankLinesAdded ?? 0,
     };
   });
 

@@ -37,9 +37,19 @@ This prototype does NOT implement roles, join codes, or self-registration. It us
 - `Report { id, projectId, generatedAt, gini, teamHealth, content }`
 
 ## Key computed types (`shared/src/types.ts`)
-- `ScoredMember`: commits, additions, deletions, churn, activeDays, lastPhaseRatio, commitShare, churnShare, activeDaysShare, contributionShare, flags
+- `RawMemberStats`: commits, additions, deletions, commitDates, plus optional `codeLinesAdded?`, `commentLinesAdded?`, `blankLinesAdded?` (populated by the GitHub diff fetch)
+- `ScoredMember`: commits, additions, deletions, churn, activeDays, lastPhaseRatio, commitShare, linesShare, activeDaysShare, contributionShare, codeLinesAdded, commentLinesAdded, blankLinesAdded, codeToCommentRatio, flags
 - `Flag` = "inactive" | "free-rider" | "overload" | "deadline-driven"
 - `TeamReport`: members, memberCount, gini, teamHealth ("Healthy" | "Moderate Risk" | "High Risk")
+- `ScoringWeights`: commits (0.4), lines (0.4), activeDays (0.2) — `lines` was formerly `churn`
+
+## Meaningful Contribution Analysis (`shared/src/lineClassifier.ts`)
+Added in `feature/meaningful-contribution`. The scoring's line-magnitude signal is now `meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded` (weight 0.4, same position as old churn).
+
+- `classifyAddedLines(filename, addedLines)` in `shared/src/lineClassifier.ts` classifies each added line as `"code"`, `"comment"`, or `"blank"` using language-aware comment markers derived from the file extension. Supported: js/ts/jsx/tsx/java/c/cpp/cs/go/rs (`//`, `/*`), py/rb/sh/yaml (`#`), html/xml (`<!--`), sql/lua (`--`), css/scss/less (`/*`). Unknown extensions: all lines count as code.
+- The GitHub fetch (`server/src/lib/github.ts`) samples up to **50 commits per member** via `GET /repos/{owner}/{repo}/commits/{sha}`, parses the diff patch for lines starting with `+` (not `++`), and accumulates classified line totals.
+- Blank lines contribute **zero** to `meaningfulLines`, so large formatting-only commits don't inflate scores.
+- The AI (Gemini) still only explains the already-computed numbers. It must never assess code quality.
 
 ## Audience and tone
 The user is an **instructor**. Both the UI and the AI report must be professional, factual, fair, and **non-accusatory** — describe patterns and cite evidence, never moralize or accuse. Privacy is a stated system value; demo data should use anonymized member names (e.g. "Member A").

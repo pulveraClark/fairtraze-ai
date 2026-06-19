@@ -11,6 +11,11 @@ interface Props {
   members: ScoredMember[];
 }
 
+function formatRatio(ratio: number | null): string {
+  if (ratio === null) return "—";
+  return ratio.toFixed(1);
+}
+
 export function MemberTable({ members }: Props) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -29,6 +34,10 @@ export function MemberTable({ members }: Props) {
               <th className="text-right px-4 py-3 font-medium">Commits</th>
               <th className="text-right px-4 py-3 font-medium">Churn</th>
               <th className="text-right px-4 py-3 font-medium">Active Days</th>
+              <th className="text-right px-4 py-3 font-medium">Code Lines</th>
+              <th className="text-right px-4 py-3 font-medium">Comment Lines</th>
+              <th className="text-right px-4 py-3 font-medium">Blank Lines</th>
+              <th className="text-right px-4 py-3 font-medium">Code:Comment</th>
               <th className="text-right px-4 py-3 font-medium">Contribution</th>
               <th className="text-left px-4 py-3 font-medium">Flags</th>
             </tr>
@@ -41,6 +50,10 @@ export function MemberTable({ members }: Props) {
                 <td className="px-4 py-3 text-right text-slate-700">{m.commits}</td>
                 <td className="px-4 py-3 text-right text-slate-700">{m.churn.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-slate-700">{m.activeDays}</td>
+                <td className="px-4 py-3 text-right text-slate-700">{m.codeLinesAdded.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right text-slate-700">{m.commentLinesAdded.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right text-slate-400">{m.blankLinesAdded.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right text-slate-700">{formatRatio(m.codeToCommentRatio)}</td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-800">
                   {(m.contributionShare * 100).toFixed(1)}%
                 </td>
