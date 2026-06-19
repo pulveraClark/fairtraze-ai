@@ -1,6 +1,6 @@
 import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, Flag } from "./types";
 
-export const DEFAULT_WEIGHTS: ScoringWeights = { commits: 0.4, churn: 0.4, activeDays: 0.2 };
+export const DEFAULT_WEIGHTS: ScoringWeights = { commits: 0.4, lines: 0.4, activeDays: 0.2 };
 
 export const FREE_RIDER_THRESHOLD = 0.5;
 export const OVERLOAD_THRESHOLD = 1.75;
@@ -37,14 +37,25 @@ export function computeTeamReport(
   const memberCount = rawMembers.length;
   const equalShare = 1 / memberCount;
 
-  const baseStats = rawMembers.map((m) => ({
-    ...m,
-    churn: m.additions + m.deletions,
-    activeDays: new Set(m.commitDates.map((d) => d.slice(0, 10))).size,
-  }));
+  const baseStats = rawMembers.map((m) => {
+    const codeLinesAdded = m.codeLinesAdded ?? 0;
+    const commentLinesAdded = m.commentLinesAdded ?? 0;
+    const blankLinesAdded = m.blankLinesAdded ?? 0;
+    // meaningfulLines is the line-magnitude signal: code counts fully, comments at 25%
+    const meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded;
+    return {
+      ...m,
+      codeLinesAdded,
+      commentLinesAdded,
+      blankLinesAdded,
+      meaningfulLines,
+      churn: m.additions + m.deletions,
+      activeDays: new Set(m.commitDates.map((d) => d.slice(0, 10))).size,
+    };
+  });
 
   const totalCommits = baseStats.reduce((s, m) => s + m.commits, 0);
-  const totalChurn = baseStats.reduce((s, m) => s + m.churn, 0);
+  const totalMeaningfulLines = baseStats.reduce((s, m) => s + m.meaningfulLines, 0);
   const totalActiveDays = baseStats.reduce((s, m) => s + m.activeDays, 0);
 
   // Compute overall timeline boundaries for lastPhaseRatio
@@ -64,11 +75,11 @@ export function computeTeamReport(
 
   const withShares = baseStats.map((m) => {
     const commitShare = totalCommits > 0 ? m.commits / totalCommits : 0;
-    const churnShare = totalChurn > 0 ? m.churn / totalChurn : 0;
+    const linesShare = totalMeaningfulLines > 0 ? m.meaningfulLines / totalMeaningfulLines : 0;
     const activeDaysShare = totalActiveDays > 0 ? m.activeDays / totalActiveDays : 0;
     const contributionShare =
       weights.commits * commitShare +
-      weights.churn * churnShare +
+      weights.lines * linesShare +
       weights.activeDays * activeDaysShare;
 
     let lastPhaseRatio = 0;
@@ -78,7 +89,7 @@ export function computeTeamReport(
       lastPhaseRatio = inLastPhase / timestamps.length;
     }
 
-    return { ...m, commitShare, churnShare, activeDaysShare, contributionShare, lastPhaseRatio };
+    return { ...m, commitShare, linesShare, activeDaysShare, contributionShare, lastPhaseRatio };
   });
 
   // Compute gini on unrounded contributionShares
@@ -101,6 +112,11 @@ export function computeTeamReport(
     }
     if (m.contributionShare > OVERLOAD_THRESHOLD * equalShare) flags.push("overload");
 
+    const codeToCommentRatio =
+      m.commentLinesAdded > 0
+        ? round3(m.codeLinesAdded / m.commentLinesAdded)
+        : null;
+
     return {
       studentName: m.studentName,
       githubUsername: m.githubUsername,
@@ -111,9 +127,13 @@ export function computeTeamReport(
       activeDays: m.activeDays,
       lastPhaseRatio: round3(m.lastPhaseRatio),
       commitShare: round3(m.commitShare),
-      churnShare: round3(m.churnShare),
+      linesShare: round3(m.linesShare),
       activeDaysShare: round3(m.activeDaysShare),
       contributionShare: round3(m.contributionShare),
+      codeLinesAdded: m.codeLinesAdded,
+      commentLinesAdded: m.commentLinesAdded,
+      blankLinesAdded: m.blankLinesAdded,
+      codeToCommentRatio,
       flags,
     };
   });

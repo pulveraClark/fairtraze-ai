@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { classifyAddedLines } from "@shared/lineClassifier.js";
 
 export interface GitHubContributorData {
   githubUsername: string;
@@ -6,6 +7,9 @@ export interface GitHubContributorData {
   additions: number;
   deletions: number;
   commitDates: string[]; // ISO timestamps, most-recent-first
+  codeLinesAdded: number;
+  commentLinesAdded: number;
+  blankLinesAdded: number;
 }
 
 function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
@@ -31,11 +35,19 @@ interface GitHubContributorStat {
   weeks: GitHubWeek[];
 }
 
-interface GitHubCommit {
+interface GitHubCommitListItem {
+  sha: string;
   commit: {
     author: { date?: string } | null;
     committer: { date?: string } | null;
   };
+}
+
+interface GitHubCommitDetail {
+  files?: Array<{
+    filename: string;
+    patch?: string;
+  }>;
 }
 
 async function fetchContributorStats(
@@ -68,13 +80,15 @@ async function fetchContributorStats(
   );
 }
 
-async function fetchAllCommitDates(
+// Returns commit dates AND SHAs (most-recent-first, all pages).
+async function fetchCommitShasAndDates(
   octokit: Octokit,
   owner: string,
   repo: string,
   login: string
-): Promise<string[]> {
+): Promise<{ dates: string[]; shas: string[] }> {
   const dates: string[] = [];
+  const shas: string[] = [];
   let page = 1;
 
   while (true) {
@@ -83,18 +97,61 @@ async function fetchAllCommitDates(
       { owner, repo, author: login, per_page: 100, page }
     );
 
-    const commits = response.data as unknown as GitHubCommit[];
+    const commits = response.data as unknown as GitHubCommitListItem[];
     for (const commit of commits) {
       const date =
         commit.commit?.committer?.date ?? commit.commit?.author?.date;
       if (date) dates.push(date);
+      shas.push(commit.sha);
     }
 
     if (commits.length < 100) break;
     page++;
   }
 
-  return dates;
+  return { dates, shas };
+}
+
+// Fetches per-commit diffs for the given SHAs and classifies added lines.
+// Cap: caller must pass at most 50 SHAs to stay within GitHub rate limits.
+async function fetchCommitDiffs(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  shas: string[]
+): Promise<{ codeLinesAdded: number; commentLinesAdded: number; blankLinesAdded: number }> {
+  let codeLinesAdded = 0;
+  let commentLinesAdded = 0;
+  let blankLinesAdded = 0;
+
+  for (const sha of shas) {
+    const response = await octokit.request(
+      "GET /repos/{owner}/{repo}/commits/{ref}",
+      { owner, repo, ref: sha }
+    );
+
+    const detail = response.data as GitHubCommitDetail;
+    for (const file of detail.files ?? []) {
+      if (!file.patch) continue;
+
+      // Extract added lines: lines starting with '+' but not the diff header '++'
+      const addedLines: string[] = [];
+      for (const patchLine of file.patch.split("\n")) {
+        if (patchLine.startsWith("+") && !patchLine.startsWith("++")) {
+          addedLines.push(patchLine.slice(1)); // strip leading '+'
+        }
+      }
+
+      if (addedLines.length > 0) {
+        const counts = classifyAddedLines(file.filename, addedLines);
+        codeLinesAdded += counts.code;
+        commentLinesAdded += counts.comment;
+        blankLinesAdded += counts.blank;
+      }
+    }
+  }
+
+  return { codeLinesAdded, commentLinesAdded, blankLinesAdded };
 }
 
 export async function fetchRepoStats(
@@ -113,7 +170,17 @@ export async function fetchRepoStats(
 
     const additions = contributor.weeks.reduce((s, w) => s + w.a, 0);
     const deletions = contributor.weeks.reduce((s, w) => s + w.d, 0);
-    const commitDates = await fetchAllCommitDates(octokit, owner, repo, login);
+
+    const { dates: commitDates, shas } = await fetchCommitShasAndDates(
+      octokit,
+      owner,
+      repo,
+      login
+    );
+
+    // Cap diff sampling at 50 commits to stay well within the 5000 req/hr rate limit
+    const shasToSample = shas.slice(0, 50);
+    const lineCounts = await fetchCommitDiffs(octokit, owner, repo, shasToSample);
 
     contributors.push({
       githubUsername: login,
@@ -121,6 +188,7 @@ export async function fetchRepoStats(
       additions,
       deletions,
       commitDates,
+      ...lineCounts,
     });
   }
 

@@ -31,6 +31,10 @@ export interface RawMemberStats {
   additions: number;
   deletions: number;
   commitDates: string[]; // ISO timestamps
+  // Meaningful line classification (optional so existing tests compile without them)
+  codeLinesAdded?: number;
+  commentLinesAdded?: number;
+  blankLinesAdded?: number;
 }
 
 export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
@@ -47,9 +51,14 @@ export interface ScoredMember {
   activeDays: number;
   lastPhaseRatio: number;
   commitShare: number;
-  churnShare: number;
+  linesShare: number;    // share of meaningfulLines (was churnShare)
   activeDaysShare: number;
   contributionShare: number;
+  // Meaningful contribution breakdown
+  codeLinesAdded: number;
+  commentLinesAdded: number;
+  blankLinesAdded: number;
+  codeToCommentRatio: number | null; // null when no code or no comments written
   flags: Flag[];
 }
 
@@ -62,7 +71,7 @@ export interface TeamReport {
 
 export interface ScoringWeights {
   commits: number;
-  churn: number;
+  lines: number;      // weight applied to meaningfulLines share (renamed from churn)
   activeDays: number;
 }
 
