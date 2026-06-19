@@ -1,4 +1,4 @@
-// Mirrors the Prisma schema models
+// Mirrors Prisma schema models
 export interface Project {
   id: number;
   name: string;
@@ -22,30 +22,56 @@ export interface Report {
   content: string | null;
 }
 
-// API shapes
+// Scoring pipeline types
 
-export interface ContributorWeekStat {
-  week: number;       // Unix timestamp of week start
+export interface RawMemberStats {
+  studentName: string;
+  githubUsername: string;
+  commits: number;
   additions: number;
   deletions: number;
-  commits: number;
+  commitDates: string[]; // ISO timestamps
 }
 
-export interface MemberStats {
+export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
+
+export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";
+
+export interface ScoredMember {
+  studentName: string;
   githubUsername: string;
-  studentName: string | null;
-  totalCommits: number;
-  totalAdditions: number;
-  totalDeletions: number;
-  firstCommitAt: string | null;
-  lastCommitAt: string | null;
-  weeklyBreakdown: ContributorWeekStat[];
+  commits: number;
+  additions: number;
+  deletions: number;
+  churn: number;
+  activeDays: number;
+  lastPhaseRatio: number;
+  commitShare: number;
+  churnShare: number;
+  activeDaysShare: number;
+  contributionShare: number;
+  flags: Flag[];
 }
+
+export interface TeamReport {
+  members: ScoredMember[];
+  memberCount: number;
+  gini: number;
+  teamHealth: TeamHealth;
+}
+
+export interface ScoringWeights {
+  commits: number;
+  churn: number;
+  activeDays: number;
+}
+
+// API shapes
 
 export interface AnalyzeResponse {
   projectId: number;
   repoUrl: string;
   analyzedAt: string;
-  members: MemberStats[];
   unmatchedGitHubLogins: string[];
+  report: TeamReport;
 }
