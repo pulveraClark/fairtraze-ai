@@ -74,4 +74,5 @@ export interface AnalyzeResponse {
   analyzedAt: string;
   unmatchedGitHubLogins: string[];
   report: TeamReport;
+  narrative: string;
 }
