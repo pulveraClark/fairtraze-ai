@@ -34,22 +34,27 @@ const IMPLEMENTED_PHASES = [
 const FUTURE_MODULES = [
   {
     name: "FAIR TRAZE Collaborative Editor",
-    desc: "Collects document collaboration traces from a shared editor (typed characters, edits, peer review activity) to complement GitHub data.",
+    badge: "Phase D",
+    desc: "A built-in writing environment (TipTap + Yjs) that records per-user, timestamped collaboration traces — text inserted, deleted, comments, and suggestions. Blended with GitHub data so documentary and technical contributions are both scored: combinedShare = wGitHub × githubShare + wEditor × editorShare (default 50/50, instructor-configurable).",
   },
   {
     name: "Multi-role Access Control",
+    badge: "Planned",
     desc: "Distinct instructor, group leader, student, and admin roles with scoped views and permissions.",
   },
   {
     name: "Real-time Participation Alerts",
+    badge: "Planned",
     desc: "Proactive notifications when a member's activity falls below configurable thresholds during a project sprint.",
   },
   {
     name: "Institutional Analytics Dashboard",
+    badge: "Planned",
     desc: "Aggregate fairness metrics across all projects and cohorts, enabling programme-level instructor and admin views.",
   },
   {
     name: "Project Join Codes & Team Management",
+    badge: "Planned",
     desc: "Self-service project creation, join codes for students, and role assignment without admin intervention.",
   },
 ];
@@ -61,11 +66,19 @@ export function SystemOverview() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
         <h2 className="text-sm font-semibold text-slate-700 mb-5">System Input → Process → Output</h2>
         <div className="flex items-center gap-3 flex-wrap justify-center text-sm">
-          <div className="flex flex-col items-center gap-1.5 text-center w-40">
-            <div className="rounded-lg bg-slate-100 border border-slate-200 px-4 py-3 w-full font-medium text-slate-700">
-              GitHub Repository
+          <div className="flex flex-col gap-2 w-44">
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="rounded-lg bg-slate-100 border border-slate-200 px-4 py-3 w-full font-medium text-slate-700">
+                GitHub Repository
+              </div>
+              <span className="text-xs text-emerald-600 font-medium">✓ Live in this prototype</span>
             </div>
-            <span className="text-xs text-slate-400">Group Leader connects repo · Members self-register usernames · Instructor oversees</span>
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="rounded-lg bg-slate-50 border border-dashed border-slate-300 px-4 py-3 w-full font-medium text-slate-400">
+                Collaborative Editor
+              </div>
+              <span className="text-xs text-amber-500 font-medium">Coming · Phase D</span>
+            </div>
           </div>
 
           <div className="text-slate-300 text-xl font-thin select-none">→</div>
@@ -212,8 +225,8 @@ export function SystemOverview() {
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-600">{m.name}</span>
-                <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-500">
-                  Planned
+                <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${m.badge === "Phase D" ? "bg-indigo-50 border border-indigo-200 text-indigo-600" : "bg-slate-100 border border-slate-200 text-slate-500"}`}>
+                  {m.badge}
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">{m.desc}</p>
@@ -231,7 +244,7 @@ export function SystemOverview() {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-slate-300 inline-block" />
-          Designed, not yet built — Collaborative Editor · Multi-role access · Admin analytics
+          Designed, not yet built — Collaborative Editor (Phase D) · Multi-role access · Admin analytics
         </span>
       </div>
     </div>

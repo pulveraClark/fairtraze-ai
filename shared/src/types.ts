@@ -93,5 +93,11 @@ export interface AnalyzeResponse {
   analyzedAt: string;
   unmatchedGitHubLogins: string[];
   report: TeamReport;
+  narrative: string | null; // null when no narrative has been generated yet
+}
+
+export interface NarrativeResponse {
   narrative: string;
+  cached: boolean;
+  warning?: string;
 }

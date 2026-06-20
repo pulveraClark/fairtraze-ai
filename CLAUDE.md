@@ -3,20 +3,123 @@
 This file gives you (Claude Code) the context for this capstone project. Read it before making changes.
 
 ## What this system is
-FAIR TRAZE AI helps instructors fairly assess individual contributions in academic group projects. It collects digital collaboration traces, scores each member's contribution, detects participation imbalance (free-riding, overload, deadline-driven work), and produces an explainable, evidence-based fairness report. It **supports** instructor judgment — it never replaces it and never assigns grades.
+FAIR TRAZE AI helps instructors fairly assess individual contributions in academic group projects. It collects digital collaboration traces from **GitHub** and the **FAIR TRAZE Collaborative Editor**, scores each member's contribution deterministically across both sources, detects participation imbalance (free-riding, overload, deadline-driven work), and produces an explainable, evidence-based fairness report — so instructors can assess individual work with confidence. It **supports** instructor judgment — it never replaces it and never assigns grades.
+
+**Current implementation:** GitHub analysis only. The Collaborative Editor is the planned second data source (Phase D — TipTap + Yjs). This prototype demonstrates the full GitHub pipeline end-to-end.
 
 ## Core principle (do not violate)
-**The math scores; the AI explains.** All contribution scores, flags, the Gini coefficient, and the team-health label are computed deterministically in code (`shared/src/scoring.ts`). The AI (Gemini) only writes a plain-language explanation of those already-computed numbers. The AI must never compute, change, or override the numbers, and must never assign grades. Keep this separation intact.
+**The math scores; the AI explains.** All contribution scores, flags, the Gini coefficient, and the team-health label are computed deterministically in code (`shared/src/scoring.ts`). The AI (Gemini) only writes a plain-language explanation of those already-computed numbers. The AI must never compute, change, or override the numbers, and must never assign grades. Keep this separation intact. This principle applies equally to both data sources.
 
 ## What is actually built (one core transaction — do not expand beyond this)
 **"Generate an Explainable Contribution Fairness Report from a GitHub repository."**
 Flow: pick a project → fetch each member's GitHub activity via Octokit → compute scores, flags, and team health → Gemini writes the fairness narrative → save and display it.
+
+**Current scope = GitHub only.** The combined GitHub + Editor analysis is Phase D. Do not build the editor or combined scoring without an explicit phase instruction.
 
 ### Out of scope — DO NOT build these (they are designed but future modules)
 - The FAIR TRAZE Collaborative Editor and any document/Google Docs integration
 - Login, accounts, and roles (admin / instructor / group leader / student)
 - Project join codes, team creation, role assignment, and member self-registration
 - Predictive alerts and institutional/admin analytics
+
+## FAIR TRAZE Collaborative Editor (Second Data Source)
+
+**Status: DESIGNED / PLANNED — Phase D. The current build analyses GitHub only.**
+
+The Collaborative Editor is a writing environment built directly into FAIR TRAZE AI (not Google Docs or any external tool). It records per-user, timestamped document collaboration traces and is the system's planned second data source — complementing GitHub to cover documentation and writing contributions alongside technical code work.
+
+### What it records
+- Characters and words inserted / deleted, with user attribution tied to the logged-in account
+- Edit session boundaries and activity bursts
+- Comments authored, suggestions made, and whether those suggestions were accepted
+- Full revision history of the shared document, preserved for analysis
+
+### Why it matters — the system's main differentiator
+GitHub captures code. The Collaborative Editor captures writing and documentation. Together they give instructors a view of both technical and documentary contributions — especially important for teams where some members are primarily documentation or research contributors who appear invisible in GitHub data alone. This dual-source integration distinguishes FAIR TRAZE AI from tools that analyse only code repositories.
+
+### Combined scoring (Phase D)
+Each source produces its own per-member contribution share, normalised independently within that source. The two shares are then blended:
+
+```
+combinedShare = wGitHub × githubShare + wEditor × editorShare
+```
+
+Default blend: 50/50 (`wGitHub = 0.5`, `wEditor = 0.5`). Instructor-configurable per Assignment. The blending is deterministic; the AI only writes the plain-language narrative. The math-scores-AI-explains principle is fully preserved.
+
+### Identity
+Editor activity is tied to the logged-in `User` account — stronger than GitHub's self-registered usernames (a user cannot mis-attribute their own edits). The same identity unifies activity across both sources; there is no per-group re-registration of editor credentials.
+
+### Responsibility-source mapping
+A member's functional role implies an expected primary data source:
+- **Developer** → GitHub (code commits)
+- **Documentation Lead** → Collaborative Editor (document authorship)
+- **Project Manager / Coordinator** → both
+- **Designer / Researcher** → context-dependent
+
+When `sourceType = COMBINED`, the system can flag a mismatch between a member's assigned role and their recorded activity (e.g. assigned Developer but almost no GitHub commits). This mismatch is surfaced in the report for the instructor to review — it does **not** automatically re-weight scores, and the default scoring is always role-agnostic.
+
+## Editor Scoring Model (Planned)
+
+Mirrors the GitHub scoring structure. Signals are grouped by category:
+
+### Core authorship
+- **Net retained text** *(primary meaningful-contribution signal)* — text the member contributed that survived to the final version of the document, not gross typing volume. This is the editor analog of `meaningfulLines` in GitHub scoring.
+- Characters / words inserted and deleted per user
+- Words and sections authored (by predominant contributor per region)
+
+### Activity & volume
+- Total edit operations
+- Churn (characters added + deleted)
+- Self-churn — writing then deleting one's own text before it survives; penalised analogously to the GitHub self-churn ratio
+- Editing sessions and activity bursts
+
+### Temporal
+- Active editing days (distinct calendar days with recorded edits)
+- Edit-timing distribution across the project timeline — supports deadline-driven detection (edits concentrated near the deadline)
+- First and last edit timestamps; editing consistency
+
+### Structural / content-type weighting
+Each edit is classified by substance, analogous to commit-impact classification:
+- **Substantive prose** (new content, arguments, explanations) → high weight
+- **Revision** (rewriting/improving existing content) → moderate weight
+- **Formatting-only** (headings, bold, spacing, table structure) → low weight
+- **Trivial** (punctuation, single-character corrections) → minimal weight
+
+### Collaboration-specific
+- Comments authored
+- Suggestions made (tracked-change suggestions in the editor)
+- Suggestions accepted by others (indicates influence on the document)
+- Edits to others' text (review / refinement work)
+
+### GitHub → Editor signal mapping
+
+| GitHub signal | Editor equivalent |
+|---|---|
+| Commits | Editing sessions |
+| Lines added / deleted (churn) | Words added / deleted |
+| Meaningful lines (`code + 0.25 × comments`) | Net retained text |
+| Active days | Active editing days |
+| Commit-impact class (structural / functional / cosmetic / trivial) | Edit-type weight (substantive / revision / formatting / trivial) |
+| Self-churn ratio | Self-churn ratio (own text later deleted) |
+| Deadline-driven flag | Deadline-driven flag (edit-timing distribution) |
+
+### Recommended MVP pillars
+Mirror the GitHub model as closely as possible:
+1. **Net retained text** — primary lines-equivalent signal
+2. **Active editing days** — participation rhythm
+3. **Edit-timing distribution** — deadline-driven detection
+4. **Self-churn ratio** — penalise writing then deleting one's own work
+
+Comments and suggestions are secondary signals — valuable context but harder to weight fairly across different project types.
+
+## Known Editor-Scoring Limitations (future work)
+
+Documented measurement challenges, not bugs:
+
+- **Copy-paste and AI-generated text** — a large paste or AI-generated block appears as original authorship in the edit log. Bulk-paste detection (character-velocity thresholds, paste-event signals from the editor) should dampen these. Resolution policy not yet designed.
+- **Typist credit** — one member may type up content authored collaboratively offline or dictated by another. The system credits the typist by default; the instructor must account for offline collaboration manually.
+- **Formatting inflation** — applying a heading style to a large section registers as many edits but represents little intellectual contribution. Edit-type weighting (substantive vs formatting) mitigates but does not eliminate this.
+- **Concurrent real-time attribution** — in real-time collaborative editing (multiple cursors simultaneously), character-level attribution is harder to resolve unambiguously than discrete Git commits. The Yjs CRDT tracks per-user edits, but concurrent simultaneous edits to the same region require a resolution policy.
 
 ## Designed setup-responsibilities workflow (proposed flow — NOT built; show it in the System Overview only)
 Setup is distributed so an instructor with many sections and many groups per section is not a data-entry bottleneck:
@@ -144,7 +247,7 @@ School
 - **Phase A — Auth & Roles**: `User` model, Google OAuth + email/password, session management, ADMIN/INSTRUCTOR/STUDENT access control.
 - **Phase B — Team Formation**: `School`, `Department`, `ClassSection`, `Assignment`, `Group`, `GroupMembership`; join-code flow; group leader sets repo and assigns functional roles; instructor locks roster.
 - **Phase C — Student Dashboards**: student read-only view of own report; flag-for-review action.
-- **Phase D — Combined Analysis**: editor data collection and blended scoring for `COMBINED` assignments; role-aware mismatch detection.
+- **Phase D — Combined Analysis**: FAIR TRAZE Collaborative Editor (TipTap + Yjs); editor data collection and blended scoring for `COMBINED` assignments; role-aware mismatch detection.
 - **Phase F — Institutional Analytics**: cross-group/section dashboards for ADMIN; aggregated Gini trends.
 
 The full draft schema is in `server/prisma/schema.target.prisma` (reference only — not used by the app).
@@ -222,7 +325,7 @@ Students get a **read-only view of their own contribution report** — they can 
 These are documented limitations to be addressed in future phases, not bugs.
 
 - **Non-commit GitHub activity** (pull requests, reviews, issue comments) — data is available via the GitHub API and planned as light secondary signals, but not yet collected or scored.
-- **Editor contribution measurement** — should be measured as net retained text (text that survives to the final version), not gross typing volume. Bulk pastes should be dampened. To be implemented in Phase D.
+- **Collaborative Editor measurement** — not yet implemented (Phase D). See the "Editor Scoring Model" section for the planned approach and the "Known Editor-Scoring Limitations" section for documented measurement challenges.
 - **Co-authored / pair-programming commits** — currently credit only the Git committer. GitHub's `Co-authored-by:` trailer in commit messages can optionally be parsed to credit co-authors; documented as a limitation, not yet implemented.
 - **Pure coordination / management work** — offline contributions (meetings, planning, communication) are not captured in any platform trace. The instructor must account for these manually. The system surfaces what it can measure and is explicit about this boundary.
 
