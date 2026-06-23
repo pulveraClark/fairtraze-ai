@@ -14,12 +14,12 @@ const STEPS = [
     desc: "Evaluating flags and Gini coefficient",
   },
   {
-    label: "AI-Assisted Analysis",
-    desc: "Generating Gemini fairness narrative",
+    label: "Significance Scoring",
+    desc: "Applying file-type weights, commit impact, and self-churn penalty",
   },
   {
-    label: "Explainable Fairness Report",
-    desc: "Assembling and saving the final report",
+    label: "Saving Report",
+    desc: "Persisting scores and flags; AI explanation available on demand",
   },
 ];
 
@@ -91,7 +91,7 @@ export function AnalysisStepper({ done }: Props) {
                       : "text-slate-400"
                   }`}
                 >
-                  Phase {i + 1} · {step.label}
+                  Step {i + 1} · {step.label}
                 </p>
                 <p
                   className={`text-xs mt-0.5 ${
@@ -107,7 +107,7 @@ export function AnalysisStepper({ done }: Props) {
       </ol>
       {!done && (
         <p className="mt-5 text-xs text-slate-400">
-          The AI-assisted analysis step usually takes the longest (10–30 seconds).
+          Data collection from GitHub usually takes the longest (10–30 seconds).
         </p>
       )}
     </div>

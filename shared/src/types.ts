@@ -93,5 +93,45 @@ export interface AnalyzeResponse {
   analyzedAt: string;
   unmatchedGitHubLogins: string[];
   report: TeamReport;
+  narrative: string | null; // null when no narrative has been generated yet
+}
+
+export interface NarrativeResponse {
   narrative: string;
+  cached: boolean;
+  warning?: string;
+}
+
+// Dashboard summary — returned by GET /api/projects/summary.
+// Never calls GitHub; reads stored report data only.
+export interface ProjectSummaryItem {
+  projectId: number;
+  groupName: string;      // student team name, e.g. "Group 1" — primary instructor-facing identifier
+  name: string;           // app/project name, e.g. "FairTraze AI"
+  assignmentLabel: string;
+  memberCount: number;
+  teamHealth: TeamHealth | null;
+  gini: number | null;
+  memberShares: Array<{
+    studentName: string;
+    contributionShare: number;
+    flags: Flag[];
+  }>;
+  flagsPresent: Flag[];
+  lastAnalyzedAt: string | null;
+  isAnalyzed: boolean;
+}
+
+// Stored report — returned by GET /api/projects/:id/report.
+// Reads the latest persisted analysis; no GitHub fetch.
+export interface StoredReportResponse {
+  projectId: number;
+  groupName: string;  // student team name — primary identifier
+  name: string;       // app/project name
+  repoUrl: string;
+  analyzedAt: string;
+  report: TeamReport;
+  narrative: string | null;
+  unmatchedGitHubLogins: string[];
+  sourceType: string | null; // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment)
 }

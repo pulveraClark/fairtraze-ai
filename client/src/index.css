@@ -1,1 +1,126 @@
 @import "tailwindcss";
+
+/* ── Brand tokens (CSS custom properties) ──────────────────────────────────── */
+:root {
+  /* Primary accent: indigo — used for buttons, links, active states, highlights */
+  --brand-indigo:       #6366f1;   /* indigo-500 — primary accent                */
+  --brand-indigo-dark:  #4f46e5;   /* indigo-600 — hover / pressed state         */
+  --brand-indigo-darker:#3730a3;   /* indigo-700 — deep press                    */
+  --brand-indigo-light: #a5b4fc;   /* indigo-300 — muted text on dark surfaces   */
+
+  /* Secondary accent: violet — used for the FairTraze Docs card, auth gradient  */
+  --brand-violet:       #7c3aed;   /* violet-600                                 */
+
+  /* Semantic flag colours — risk, overload, healthy                             */
+  --brand-risk-red:     #f87171;   /* red-400  — free-rider bars                 */
+  --brand-risk-amber:   #f59e0b;   /* amber-500 — overload bars / moderate badge */
+  --brand-risk-green:   #10b981;   /* emerald-500 — healthy                      */
+
+  /* Backgrounds */
+  --brand-bg-light:     #ffffff;   /* page base — pure white                     */
+  --brand-bg-subtle:    #f8fafc;   /* slate-50  — section alternates, auth bg    */
+  --brand-white:        #ffffff;
+
+  /* Text */
+  --brand-text-primary:   #0f172a; /* slate-900 */
+  --brand-text-secondary: #334155; /* slate-700 */
+  --brand-text-muted:     #64748b; /* slate-500 */
+  --brand-text-faint:     #94a3b8; /* slate-400 */
+
+  /* Borders */
+  --brand-border:         #e2e8f0; /* slate-200 */
+  --brand-border-light:   #f1f5f9; /* slate-100 */
+
+  /* Legacy aliases kept for backward compat */
+  --brand-slate-900:    #0f172a;
+  --brand-slate-700:    #334155;
+  --brand-slate-500:    #64748b;
+  --brand-slate-400:    #94a3b8;
+  --brand-slate-200:    #e2e8f0;
+  --brand-slate-100:    #f1f5f9;
+}
+
+/* ── Display font for headings and wordmark ────────────────────────────────── */
+.font-display {
+  font-family: "Outfit", system-ui, sans-serif;
+}
+
+body {
+  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--brand-bg-light);
+  color: var(--brand-text-primary);
+}
+
+/* ── Reveal-on-scroll animations ───────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleInFloat {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px) rotateX(10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0) rotateX(0deg);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.7s ease both;
+}
+
+.animate-scale-in-float {
+  animation: scaleInFloat 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: center bottom;
+  perspective: 1000px;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+
+/* ── Bento box hover ───────────────────────────────────────────── */
+.bento-card {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.3s ease,
+              border-color 0.3s ease;
+}
+.bento-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(79, 70, 229, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+/* ── Floating Animation for Hero Card ───────────────────────────────────────────── */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}

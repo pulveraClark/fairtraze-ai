@@ -1,9 +1,12 @@
+import React, { useState } from "react";
+import type { ReactNode } from "react";
 import type { ScoredMember, Flag } from "@shared/types";
+import { InfoTooltip, TipList } from "./InfoTooltip";
 
 const flagStyles: Record<Flag, string> = {
-  inactive: "bg-red-100 text-red-700",
-  "free-rider": "bg-red-100 text-red-700",
-  overload: "bg-orange-100 text-orange-700",
+  inactive:          "bg-red-100 text-red-700",
+  "free-rider":      "bg-red-100 text-red-700",
+  overload:          "bg-orange-100 text-orange-700",
   "deadline-driven": "bg-yellow-100 text-yellow-700",
 };
 
@@ -11,73 +14,233 @@ interface Props {
   members: ScoredMember[];
 }
 
-function formatRatio(ratio: number | null): string {
-  if (ratio === null) return "—";
-  return ratio.toFixed(1);
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={`w-4 h-4 transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function DetailSection({
+  label,
+  tooltip,
+  children,
+}: {
+  label: string;
+  tooltip?: ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="font-semibold text-slate-400 uppercase tracking-wide mb-1.5 text-[10px] flex items-center">
+        {label}
+        {tooltip && <InfoTooltip label={`About ${label}`} content={tooltip} />}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <p className="text-xs text-slate-600">
+      {label}:{" "}
+      <span className="font-medium text-slate-800">{value}</span>
+    </p>
+  );
 }
 
 export function MemberTable({ members }: Props) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  function toggleRow(username: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(username)) next.delete(username);
+      else next.add(username);
+      return next;
+    });
+  }
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100">
-        <h2 className="text-sm font-semibold text-slate-700">
-          <span className="font-mono text-xs text-slate-400 mr-1">Phase 5 ·</span>
-          Participation Imbalance Detection
-        </h2>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-              <th className="text-left px-6 py-3 font-medium">Student</th>
-              <th className="text-left px-4 py-3 font-medium">GitHub</th>
-              <th className="text-right px-4 py-3 font-medium">Commits</th>
-              <th className="text-right px-4 py-3 font-medium">Churn</th>
-              <th className="text-right px-4 py-3 font-medium">Active Days</th>
-              <th className="text-right px-4 py-3 font-medium">Code Lines</th>
-              <th className="text-right px-4 py-3 font-medium">Comment Lines</th>
-              <th className="text-right px-4 py-3 font-medium">Blank Lines</th>
-              <th className="text-right px-4 py-3 font-medium">Code:Comment</th>
-              <th className="text-right px-4 py-3 font-medium">Contribution</th>
-              <th className="text-left px-4 py-3 font-medium">Flags</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {members.map((m) => (
-              <tr key={m.githubUsername} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-3 font-medium text-slate-800">{m.studentName}</td>
-                <td className="px-4 py-3 text-slate-500 font-mono text-xs">{m.githubUsername}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{m.commits}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{m.churn.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{m.activeDays}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{m.codeLinesAdded.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{m.commentLinesAdded.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-slate-400">{m.blankLinesAdded.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{formatRatio(m.codeToCommentRatio)}</td>
-                <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                  {(m.contributionShare * 100).toFixed(1)}%
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {m.flags.length === 0 ? (
-                      <span className="text-slate-300 text-xs">—</span>
-                    ) : (
-                      m.flags.map((flag) => (
-                        <span
-                          key={flag}
-                          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide border-t border-slate-100">
+            <th className="text-left px-6 py-3 font-medium">Member</th>
+            <th className="text-left px-4 py-3 font-medium">
+              Contribution Share
+              <InfoTooltip
+                label="What is Contribution Share?"
+                content={
+                  <TipList items={[
+                    ["Member's share", "of the team's total contribution"],
+                    ["Fair share", "= 100% ÷ number of members"],
+                  ]} />
+                }
+              />
+            </th>
+            <th className="text-left px-4 py-3 font-medium">
+              Flags
+              <InfoTooltip
+                label="What are Flags?"
+                content={
+                  <TipList items={[
+                    ["Inactive", "no commits"],
+                    ["Free-rider", "below fair share"],
+                    ["Overload", "well above fair share"],
+                    ["Deadline-driven", "work crammed near the deadline"],
+                  ]} />
+                }
+              />
+            </th>
+            <th className="w-10 px-4 py-3" aria-label="Expand" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {members.map((m) => {
+            const expanded = expandedRows.has(m.githubUsername);
+            return (
+              <React.Fragment key={m.githubUsername}>
+                {/* Primary row */}
+                <tr
+                  className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => toggleRow(m.githubUsername)}
+                >
+                  <td className="px-6 py-3 font-medium text-slate-800">{m.studentName}</td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2 min-w-[140px]">
+                      <span className="tabular-nums font-semibold text-slate-700 w-12 text-right shrink-0">
+                        {(m.contributionShare * 100).toFixed(1)}%
+                      </span>
+                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-indigo-400"
+                          style={{ width: `${Math.min(m.contributionShare * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {m.flags.length === 0 ? (
+                        <span className="text-slate-400 text-xs italic">No flags</span>
+                      ) : (
+                        m.flags.map((flag) => (
+                          <span
+                            key={flag}
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}
+                          >
+                            {flag}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3 text-slate-400">
+                    <ChevronIcon expanded={expanded} />
+                  </td>
+                </tr>
+
+                {/* Expandable detail row */}
+                {expanded && (
+                  <tr className="bg-slate-50/70">
+                    <td colSpan={4} className="px-6 py-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-4">
+                        <DetailSection
+                          label="Activity"
+                          tooltip={
+                            <TipList items={[
+                              ["Commits", "commits made"],
+                              ["Churn", "lines added + deleted"],
+                              ["Active Days", "distinct days committed"],
+                            ]} />
+                          }
                         >
-                          {flag}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                          <Stat label="Commits" value={m.commits} />
+                          <Stat label="Churn" value={m.churn.toLocaleString()} />
+                          <Stat label="Active Days" value={m.activeDays} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="Significance"
+                          tooltip={
+                            <TipList items={[
+                              ["Weighted Lines", "lines counted by importance"],
+                              ["Self-Churn", "% of own lines later deleted"],
+                              ["Code Lines", "actual code added"],
+                              ["Comment Lines", "comments added (counted lightly)"],
+                            ]} />
+                          }
+                        >
+                          <Stat
+                            label="Weighted Lines"
+                            value={m.weightedAdditions.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                          />
+                          <Stat
+                            label="Self-Churn"
+                            value={`${(m.selfChurnRatio * 100).toFixed(1)}%`}
+                          />
+                          <Stat label="Code Lines Added" value={m.codeLinesAdded.toLocaleString()} />
+                          <Stat label="Comment Lines Added" value={m.commentLinesAdded.toLocaleString()} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="Commit Impact"
+                          tooltip={
+                            <TipList items={[
+                              ["Structural", "new files / many files touched"],
+                              ["Functional", "work on existing code"],
+                              ["Cosmetic", "formatting / non-code edits"],
+                              ["Trivial", "tiny edits, e.g. a typo"],
+                            ]} />
+                          }
+                        >
+                          <Stat label="Structural" value={m.commitImpactBreakdown.structural} />
+                          <Stat label="Functional"  value={m.commitImpactBreakdown.functional} />
+                          <Stat label="Cosmetic"    value={m.commitImpactBreakdown.cosmetic} />
+                          <Stat label="Trivial"     value={m.commitImpactBreakdown.trivial} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="File Types"
+                          tooltip={
+                            <TipList items={[
+                              ["src", "source code (counts fully)"],
+                              ["test", "test files"],
+                              ["style", "CSS/SCSS"],
+                              ["docs", "documentation"],
+                              ["config", "settings (counts little)"],
+                              ["other", "uncategorized (generated files excluded)"],
+                            ]} />
+                          }
+                        >
+                          <Stat label="src"    value={m.fileTypeBreakdown.source} />
+                          <Stat label="test"   value={m.fileTypeBreakdown.test} />
+                          <Stat label="style"  value={m.fileTypeBreakdown.style} />
+                          <Stat label="docs"   value={m.fileTypeBreakdown.docs} />
+                          <Stat label="config" value={m.fileTypeBreakdown.config} />
+                          <Stat label="other"  value={m.fileTypeBreakdown.other} />
+                        </DetailSection>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

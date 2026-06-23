@@ -34,22 +34,27 @@ const IMPLEMENTED_PHASES = [
 const FUTURE_MODULES = [
   {
     name: "FAIR TRAZE Collaborative Editor",
-    desc: "Collects document collaboration traces from a shared editor (typed characters, edits, peer review activity) to complement GitHub data.",
+    badge: "Coming soon",
+    desc: "A built-in writing environment (TipTap + Yjs) that records per-user, timestamped collaboration traces — text inserted, deleted, comments, and suggestions. Blended with GitHub data so documentary and technical contributions are both scored: combinedShare = wGitHub × githubShare + wEditor × editorShare (default 50/50, instructor-configurable).",
   },
   {
     name: "Multi-role Access Control",
+    badge: "Coming soon",
     desc: "Distinct instructor, group leader, student, and admin roles with scoped views and permissions.",
   },
   {
     name: "Real-time Participation Alerts",
+    badge: "Coming soon",
     desc: "Proactive notifications when a member's activity falls below configurable thresholds during a project sprint.",
   },
   {
     name: "Institutional Analytics Dashboard",
+    badge: "Coming soon",
     desc: "Aggregate fairness metrics across all projects and cohorts, enabling programme-level instructor and admin views.",
   },
   {
     name: "Project Join Codes & Team Management",
+    badge: "Coming soon",
     desc: "Self-service project creation, join codes for students, and role assignment without admin intervention.",
   },
 ];
@@ -61,18 +66,26 @@ export function SystemOverview() {
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
         <h2 className="text-sm font-semibold text-slate-700 mb-5">System Input → Process → Output</h2>
         <div className="flex items-center gap-3 flex-wrap justify-center text-sm">
-          <div className="flex flex-col items-center gap-1.5 text-center w-40">
-            <div className="rounded-lg bg-slate-100 border border-slate-200 px-4 py-3 w-full font-medium text-slate-700">
-              GitHub Repository
+          <div className="flex flex-col gap-2 w-44">
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="rounded-lg bg-slate-100 border border-slate-200 px-4 py-3 w-full font-medium text-slate-700">
+                GitHub Repository
+              </div>
+              <span className="text-xs text-emerald-600 font-medium">✓ Live in this prototype</span>
             </div>
-            <span className="text-xs text-slate-400">Group Leader connects repo · Members self-register usernames · Instructor oversees</span>
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="rounded-lg bg-slate-50 border border-dashed border-slate-300 px-4 py-3 w-full font-medium text-slate-400">
+                Collaborative Editor
+              </div>
+              <span className="text-xs text-amber-500 font-medium">Coming soon</span>
+            </div>
           </div>
 
           <div className="text-slate-300 text-xl font-thin select-none">→</div>
 
           <div className="flex flex-col items-center gap-1.5 text-center w-48">
             <div className="rounded-lg bg-indigo-600 px-4 py-3 w-full font-semibold text-white">
-              6-Phase Analysis Engine
+              Analysis Engine
             </div>
             <span className="text-xs text-slate-400">Collection → Profiling → AI → Imbalance Detection</span>
           </div>
@@ -91,7 +104,7 @@ export function SystemOverview() {
       {/* Six-phase pipeline */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
         <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-          <h2 className="text-sm font-semibold text-slate-700">Analysis Pipeline — All Phases Implemented</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Analysis Pipeline — Fully Implemented</h2>
           <span className="flex items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 inline-block" />
@@ -112,7 +125,7 @@ export function SystemOverview() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="text-xs font-mono text-indigo-400 block">Phase {phase.num}</span>
+                  <span className="text-xs font-mono text-indigo-400 block">Step {phase.num}</span>
                   <span className="text-sm font-semibold text-indigo-900">{phase.name}</span>
                 </div>
                 <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-xs font-medium text-emerald-700">
@@ -200,7 +213,7 @@ export function SystemOverview() {
 
       {/* Future modules */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-        <h2 className="text-sm font-semibold text-slate-700 mb-1">Planned / Future Modules</h2>
+        <h2 className="text-sm font-semibold text-slate-700 mb-1">Future Modules</h2>
         <p className="text-xs text-slate-400 mb-4">
           These modules are designed as part of the full FAIR TRAZE AI system but are not implemented in this prototype.
         </p>
@@ -212,8 +225,8 @@ export function SystemOverview() {
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-600">{m.name}</span>
-                <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-500">
-                  Planned
+                <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${m.badge === "Coming soon" ? "bg-indigo-50 border border-indigo-200 text-indigo-600" : "bg-slate-100 border border-slate-200 text-slate-500"}`}>
+                  {m.badge}
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">{m.desc}</p>

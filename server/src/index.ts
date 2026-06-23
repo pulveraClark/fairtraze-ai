@@ -3,6 +3,12 @@ import express from "express";
 import cors from "cors";
 import { analyzeRouter } from "./routes/analyze.js";
 import { projectsRouter } from "./routes/projects.js";
+import { authRouter } from "./routes/auth.js";
+import { usersRouter } from "./routes/users.js";
+import { classesRouter } from "./routes/classes.js";
+import { assignmentsRouter } from "./routes/assignments.js";
+import { joinRouter } from "./routes/join.js";
+import { groupsRouter } from "./routes/groups.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -16,6 +22,12 @@ app.get("/health", (_req, res) => {
 
 app.use(projectsRouter);
 app.use(analyzeRouter);
+app.use(authRouter);
+app.use(usersRouter);
+app.use(classesRouter);
+app.use(assignmentsRouter);
+app.use(joinRouter);
+app.use(groupsRouter);
 
 app.use(
   (
