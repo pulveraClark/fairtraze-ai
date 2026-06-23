@@ -5,10 +5,10 @@ import type { NarrativeResponse } from "@shared/types";
 interface Props {
   narrative: string | null;
   projectId: number;
+  onNarrativeGenerated: (text: string) => void;
 }
 
-export function Narrative({ narrative: initialNarrative, projectId }: Props) {
-  const [narrative, setNarrative]   = useState<string | null>(initialNarrative);
+export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props) {
   const [generating, setGenerating] = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -21,8 +21,8 @@ export function Narrative({ narrative: initialNarrative, projectId }: Props) {
       const data = (await res.json()) as Partial<NarrativeResponse> & { error?: string };
       if (!res.ok) {
         setError(data.error ?? "Could not generate explanation.");
-      } else {
-        setNarrative(data.narrative ?? null);
+      } else if (data.narrative) {
+        onNarrativeGenerated(data.narrative);
       }
     } catch {
       setError("Network error — could not reach the server.");

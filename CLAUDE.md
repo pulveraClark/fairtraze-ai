@@ -18,9 +18,11 @@ Flow: pick a project → fetch each member's GitHub activity via Octokit → com
 
 ### Out of scope — DO NOT build these (they are designed but future modules)
 - The FAIR TRAZE Collaborative Editor and any document/Google Docs integration
-- Login, accounts, and roles (admin / instructor / group leader / student)
-- Project join codes, team creation, role assignment, and member self-registration
 - Predictive alerts and institutional/admin analytics
+
+### Already implemented (do not re-build or change the foundation)
+- **Phase A**: `User` model, email/password auth (bcryptjs + JWT), `AuthContext`, `ProtectedRoute`, `/dashboard` authenticated area.
+- **Phase B**: `ClassSection`, `Assignment`, `GroupMembership`; join-code flow; student group creation (leader) and joining (member); leader reassignment; member removal/leave. Analyzer and scoring are unchanged — GitHub usernames sourced from `User.githubUsername`.
 
 ## FAIR TRAZE Collaborative Editor (Second Data Source)
 
@@ -129,15 +131,56 @@ Setup is distributed so an instructor with many sections and many groups per sec
 - **Integrity safeguards** (important for a fairness system): members confirm their own usernames (most accurate, hardest to manipulate); the instructor oversees and locks; and the system surfaces unmatched GitHub contributors, so a missing or mis-mapped member is automatically visible.
 This prototype does NOT implement roles, join codes, or self-registration. It uses a seeded roster. The workflow above is the proposed design to be communicated in the System Overview, not built.
 
+## Group Formation & Leadership (Phase B — IMPLEMENTED)
+
+**Status: IMPLEMENTED.** Join-code lookup, group creation (student becomes LEADER), group join (MEMBER), leader reassignment, and member removal/leave are all functional. The analyzer and scoring are unchanged.
+
+### Join code and formation flow
+
+One assignment = one join code, created by the instructor when they create the assignment. Students use the code through two distinct paths:
+
+1. **Create a group → Group Leader.** The first student to use the code for a new group creates that group: sets the group name and links the GitHub repository (for GitHub/Combined assignments). By doing so they become the group's **leader**. Exactly one leader per group at all times.
+2. **Join an existing group → Member.** Subsequent students use the same assignment code, select the group their leader has already created, and register as a member. Their GitHub username is drawn from their account profile.
+
+### Leader determination
+
+The group leader is whoever creates/registers the group using the assignment join code — a first-come designation. The instructor can reassign the leader for edge cases (e.g., the original leader drops the course).
+
+### Leadership is administrative only — no scoring effect
+
+**`isLeader Boolean` on `GroupMembership` grants no contribution credit and has zero effect on any score.** The leader is scored on their actual GitHub commits and document edits, exactly like every other member. The `isLeader` flag and the `functionalRole` field are entirely separate:
+- `isLeader` — structural/logistical: who registered the group, who the instructor contacts for roster questions.
+- `functionalRole` — contribution responsibility: Developer, Documentation Lead, etc.
+
+A leader always has a `functionalRole` describing their actual contribution work. Being the leader grants no automatic advantage.
+
+### Integrity safeguards
+
+- Each member self-registers their own GitHub username from their account profile (most accurate; hardest to mis-attribute from the outside).
+- The instructor oversees and can lock the roster before analysis/grading.
+- The system surfaces unmatched GitHub contributors so a missing or mis-mapped member is automatically visible.
+
 ## Stack
 - **client**: React + Vite + TypeScript + Tailwind + Recharts — an instructor-facing dashboard
 - **server**: Express + TypeScript + Prisma (SQLite) + Octokit (GitHub) + Gemini API
 - **shared**: shared TypeScript types and the deterministic scoring module
 
 ## Data model (Prisma)
-- `Project { id, name, repoUrl, createdAt }`
+- `Project { id, groupName, name, repoUrl, assignmentLabel, createdAt }`
 - `Member { id, projectId, studentName, githubUsername }`
 - `Report { id, projectId, generatedAt, gini, teamHealth, content }`
+
+### Three distinct name fields on Project (do not conflate)
+A student team, the app they build, and the repository they use are three different things. The model tracks all three:
+
+| Field | Meaning | Example |
+|---|---|---|
+| `groupName` | The student team — the entity the instructor manages. **Primary identifier on the dashboard.** | "Group 1" |
+| `name` | The app or project the team is building. Secondary detail. | "FairTraze AI" |
+| `repoUrl` | The GitHub repository URL where their code lives. | `github.com/…/Sysarch` |
+| `assignmentLabel` | The subject/assignment this group belongs to. Format: `"CODE — Subject Name"`. Used to group cards on the dashboard. | "CC-APPSDEV22 — Applications Development" |
+
+`groupName` and `assignmentLabel` default to `""` so migrations are non-breaking for existing rows (the backend falls back to `"Group {id}"` / `"General Assignment"` when empty). The seed populates both for all three demo projects.
 
 ## Key computed types (`shared/src/types.ts`)
 - `RawMemberStats`: commits, additions, deletions, commitDates, plus optional `codeLinesAdded?`, `commentLinesAdded?`, `blankLinesAdded?` (populated by the GitHub diff fetch)
@@ -244,8 +287,8 @@ School
 
 ### Phase mapping
 
-- **Phase A — Auth & Roles**: `User` model, Google OAuth + email/password, session management, ADMIN/INSTRUCTOR/STUDENT access control.
-- **Phase B — Team Formation**: `School`, `Department`, `ClassSection`, `Assignment`, `Group`, `GroupMembership`; join-code flow; group leader sets repo and assigns functional roles; instructor locks roster.
+- **Phase A — Auth & Roles** *(IMPLEMENTED)*: `User` model, email/password auth (bcryptjs + JWT), `AuthContext`, `ProtectedRoute`, `/dashboard` authenticated area. Deferred: per-instructor data scoping and `requireAuth` on analyze/summary/narrative endpoints.
+- **Phase B — Team Formation** *(IMPLEMENTED)*: `ClassSection`, `Assignment`, `GroupMembership`; join-code flow; student group creation (LEADER) and joining (MEMBER); leader reassignment (`POST /api/groups/:id/reassign-leader`); member removal/leave (`DELETE /api/groups/:id/members/:userId`); `GroupManageModal` on both instructor and student views. Analyzer and scoring unchanged. `School`/`Department` hierarchy and instructor roster-lock deferred.
 - **Phase C — Student Dashboards**: student read-only view of own report; flag-for-review action.
 - **Phase D — Combined Analysis**: FAIR TRAZE Collaborative Editor (TipTap + Yjs); editor data collection and blended scoring for `COMBINED` assignments; role-aware mismatch detection.
 - **Phase F — Institutional Analytics**: cross-group/section dashboards for ADMIN; aggregated Gini trends.

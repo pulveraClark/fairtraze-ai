@@ -24,8 +24,8 @@ function LayoutIcon() {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Analyze Project", route: "/demo",     icon: <BarChartIcon /> },
-  { label: "System Overview", route: "/overview", icon: <LayoutIcon /> },
+  { label: "Dashboard",       route: "/dashboard", icon: <BarChartIcon /> },
+  { label: "System Overview", route: "/overview",  icon: <LayoutIcon /> },
 ];
 
 export function AppSidebar() {

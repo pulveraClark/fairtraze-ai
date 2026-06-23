@@ -91,7 +91,7 @@ export function AnalysisStepper({ done }: Props) {
                       : "text-slate-400"
                   }`}
                 >
-                  Phase {i + 1} · {step.label}
+                  Step {i + 1} · {step.label}
                 </p>
                 <p
                   className={`text-xs mt-0.5 ${

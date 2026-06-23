@@ -4,13 +4,99 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { DemoPage } from "./pages/DemoPage";
 import { OverviewPage } from "./pages/OverviewPage";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { ClassPage } from "./pages/ClassPage";
+import { AssignmentPage } from "./pages/AssignmentPage";
+import { StudentPage } from "./pages/StudentPage";
+import { StudentClassPage } from "./pages/StudentClassPage";
+import { StudentGroupPage } from "./pages/StudentGroupPage";
+import { AdminPage } from "./pages/AdminPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
   const { pathname } = useRouter();
 
-  if (pathname === "/login")    return <LoginPage />;
-  if (pathname === "/register") return <RegisterPage />;
-  if (pathname === "/demo")     return <DemoPage />;
-  if (pathname === "/overview") return <OverviewPage />;
+  // Dynamic route: /project/:id (instructor only)
+  const detailMatch = pathname.match(/^\/project\/(\d+)$/);
+  if (detailMatch) {
+    return (
+      <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+        <ProjectDetailPage projectId={parseInt(detailMatch[1], 10)} />
+      </ProtectedRoute>
+    );
+  }
+
+  // Dynamic route: /class/:classId/assignment/:assignmentId
+  const assignmentMatch = pathname.match(/^\/class\/(\d+)\/assignment\/(\d+)$/);
+  if (assignmentMatch) {
+    return (
+      <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+        <AssignmentPage
+          classId={parseInt(assignmentMatch[1], 10)}
+          assignmentId={parseInt(assignmentMatch[2], 10)}
+        />
+      </ProtectedRoute>
+    );
+  }
+
+  // Dynamic route: /class/:classId
+  const classMatch = pathname.match(/^\/class\/(\d+)$/);
+  if (classMatch) {
+    return (
+      <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+        <ClassPage classId={parseInt(classMatch[1], 10)} />
+      </ProtectedRoute>
+    );
+  }
+
+  if (pathname === "/login")     return <LoginPage />;
+  if (pathname === "/register")  return <RegisterPage />;
+  if (pathname === "/overview")  return <OverviewPage />;
+
+  if (pathname === "/dashboard") return (
+    <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+      <DemoPage />
+    </ProtectedRoute>
+  );
+
+  if (pathname === "/admin") return (
+    <ProtectedRoute allowedRoles={["ADMIN"]}>
+      <AdminPage />
+    </ProtectedRoute>
+  );
+
+  // Dynamic route: /student/group/:id (student only)
+  const studentGroupMatch = pathname.match(/^\/student\/group\/(\d+)$/);
+  if (studentGroupMatch) {
+    return (
+      <ProtectedRoute allowedRoles={["STUDENT"]}>
+        <StudentGroupPage projectId={parseInt(studentGroupMatch[1], 10)} />
+      </ProtectedRoute>
+    );
+  }
+
+  // Dynamic route: /student/class/:code (student only)
+  const studentClassMatch = pathname.match(/^\/student\/class\/(.+)$/);
+  if (studentClassMatch) {
+    return (
+      <ProtectedRoute allowedRoles={["STUDENT"]}>
+        <StudentClassPage classCode={decodeURIComponent(studentClassMatch[1])} />
+      </ProtectedRoute>
+    );
+  }
+
+  if (pathname === "/student") return (
+    <ProtectedRoute allowedRoles={["STUDENT"]}>
+      <StudentPage />
+    </ProtectedRoute>
+  );
+
+  if (pathname === "/settings") return (
+    <ProtectedRoute>
+      <SettingsPage />
+    </ProtectedRoute>
+  );
+
   return <LandingPage />;
 }

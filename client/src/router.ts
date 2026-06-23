@@ -2,33 +2,41 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import type { ReactNode } from "react";
 import { createElement } from "react";
 
-export type AppRoute = "/" | "/demo" | "/overview" | "/login" | "/register";
+export type AppRoute = "/" | "/overview" | "/login" | "/register" | "/dashboard" | "/student" | "/admin" | "/settings";
 
-const VALID_ROUTES: AppRoute[] = ["/", "/demo", "/overview", "/login", "/register"];
+const VALID_STATIC_ROUTES: AppRoute[] = ["/", "/overview", "/login", "/register", "/dashboard", "/student", "/admin", "/settings"];
+
+function resolvePathname(raw: string): string {
+  if ((VALID_STATIC_ROUTES as string[]).includes(raw)) return raw;
+  if (/^\/project\/\d+$/.test(raw)) return raw;
+  if (/^\/class\/\d+\/assignment\/\d+$/.test(raw)) return raw;
+  if (/^\/class\/\d+$/.test(raw)) return raw;
+  if (/^\/student\/class\/.+$/.test(raw)) return raw;
+  if (/^\/student\/group\/\d+$/.test(raw)) return raw;
+  return "/";
+}
 
 interface RouterContextValue {
-  pathname: AppRoute;
-  navigate: (to: AppRoute) => void;
+  pathname: string;
+  navigate: (to: string) => void;
 }
 
 const RouterContext = createContext<RouterContextValue | null>(null);
 
 export function RouterProvider({ children }: { children: ReactNode }) {
-  const [pathname, setPathname] = useState<AppRoute>(() => {
-    const p = window.location.pathname;
-    return VALID_ROUTES.includes(p as AppRoute) ? (p as AppRoute) : "/";
-  });
+  const [pathname, setPathname] = useState<string>(() =>
+    resolvePathname(window.location.pathname)
+  );
 
   useEffect(() => {
     function onPop() {
-      const p = window.location.pathname;
-      setPathname(VALID_ROUTES.includes(p as AppRoute) ? (p as AppRoute) : "/");
+      setPathname(resolvePathname(window.location.pathname));
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const navigate = useCallback((to: AppRoute) => {
+  const navigate = useCallback((to: string) => {
     history.pushState(null, "", to);
     setPathname(to);
     window.scrollTo(0, 0);
