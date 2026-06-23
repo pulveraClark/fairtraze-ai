@@ -114,7 +114,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
         generatedAt: new Date(),
         gini:        report.gini,
         teamHealth:  report.teamHealth,
-        content:     JSON.stringify({ report, narrative: savedNarrative }),
+        content:     JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins }),
       },
     });
   } else {
@@ -123,7 +123,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: null }),
+        content:   JSON.stringify({ report, narrative: null, unmatchedLogins }),
       },
     });
   }

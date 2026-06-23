@@ -7,13 +7,92 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SystemRole {
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum SourceType {
+  GITHUB
+  EDITOR
+  COMBINED
+}
+
+enum MembershipRole {
+  LEADER
+  MEMBER
+}
+
+enum ClassType {
+  LECTURE
+  LABORATORY
+}
+
+model User {
+  id               Int               @id @default(autoincrement())
+  email            String            @unique
+  passwordHash     String
+  name             String
+  systemRole       SystemRole        @default(STUDENT)
+  githubUsername   String?
+  createdAt        DateTime          @default(now())
+  classSections    ClassSection[]
+  groupMemberships GroupMembership[]
+}
+
+model ClassSection {
+  id           Int          @id @default(autoincrement())
+  subjectCode  String
+  subjectName  String
+  course       String       @default("BSIT")
+  edpCode      String       @default("")
+  type         ClassType    @default(LECTURE)
+  instructorId Int
+  createdAt    DateTime     @default(now())
+  instructor   User         @relation(fields: [instructorId], references: [id])
+  assignments  Assignment[]
+
+  @@unique([instructorId, edpCode])
+}
+
+model Assignment {
+  id             Int          @id @default(autoincrement())
+  classSectionId Int
+  title          String
+  deadline       DateTime?
+  maxGroupSize   Int          @default(5)
+  sourceType     SourceType   @default(GITHUB)
+  joinCode       String       @unique
+  createdAt      DateTime     @default(now())
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id])
+  projects       Project[]
+}
+
+model GroupMembership {
+  id        Int            @id @default(autoincrement())
+  userId    Int
+  projectId Int
+  role      MembershipRole @default(MEMBER)
+  joinedAt  DateTime       @default(now())
+  user      User           @relation(fields: [userId], references: [id])
+  project   Project        @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
+}
+
 model Project {
-  id        Int      @id @default(autoincrement())
-  name      String
-  repoUrl   String
-  createdAt DateTime @default(now())
-  members   Member[]
-  reports   Report[]
+  id               Int               @id @default(autoincrement())
+  groupName        String            @default("")   // student team name, e.g. "Group 1"
+  name             String                            // app/project name, e.g. "FairTraze AI"
+  repoUrl          String                            // GitHub repository URL
+  assignmentLabel  String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
+  assignmentId     Int?
+  createdAt        DateTime          @default(now())
+  assignment       Assignment?       @relation(fields: [assignmentId], references: [id])
+  members          Member[]
+  reports          Report[]
+  groupMemberships GroupMembership[]
 }
 
 model Member {
