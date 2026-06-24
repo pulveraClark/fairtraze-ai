@@ -85,6 +85,17 @@ export interface ScoringWeights {
   activeDays: number;
 }
 
+export interface ScoringThresholds {
+  freeRider: number;      // fraction of equal share; below → free-rider flag (default 0.5)
+  overload: number;       // multiple of equal share; above → overload flag (default 1.75)
+  deadlineDriven: number; // lastPhaseRatio above this → deadline-driven flag (default 0.6)
+}
+
+export interface ProjectScoringConfig {
+  weights: ScoringWeights;
+  thresholds: ScoringThresholds;
+}
+
 // API shapes
 
 export interface AnalyzeResponse {
@@ -123,6 +134,7 @@ export interface ProjectSummaryItem {
   lastAnalyzedAt: string | null;
   isAnalyzed: boolean;
   membershipChangedAt: string | null; // set when members are added/removed; compare to lastAnalyzedAt to detect stale reports
+  scoringConfigChangedAt: string | null; // set when scoring config changes after last analyze
 }
 
 // Stored report — returned by GET /api/projects/:id/report.
@@ -137,4 +149,10 @@ export interface StoredReportResponse {
   narrative: string | null;
   unmatchedGitHubLogins: string[];
   sourceType: string | null; // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment)
+  // Scoring config stored with the report (what produced these numbers)
+  scoringConfig: ProjectScoringConfig | null;
+  // Current project config (may differ from scoringConfig if changed after last analyze)
+  currentConfig: ProjectScoringConfig;
+  // Set when config was changed after the last analysis run; cleared by re-analyze
+  scoringConfigChangedAt: string | null;
 }

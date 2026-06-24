@@ -46,7 +46,7 @@ assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (
   res.status(201).json(assignment);
 });
 
-// DELETE /api/assignments/:id — delete the assignment; DB cascades to projects → alerts/reports/members/memberships
+// DELETE /api/assignments/:id — delete the assignment and all descendants in dependency order
 assignmentsRouter.delete("/api/assignments/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
@@ -57,7 +57,24 @@ assignmentsRouter.delete("/api/assignments/:id", ...requireRole("INSTRUCTOR"), a
   const assignment = await assertOwnsAssignment(req, res, idResult.data);
   if (!assignment) return;
 
-  await prisma.assignment.delete({ where: { id: assignment.id } });
+  await prisma.$transaction(async (tx) => {
+    const projects = await tx.project.findMany({
+      where:  { assignmentId: assignment.id },
+      select: { id: true },
+    });
+    const projectIds = projects.map((p) => p.id);
+
+    if (projectIds.length) {
+      await tx.alert.deleteMany({ where: { projectId: { in: projectIds } } });
+      await tx.groupMembership.deleteMany({ where: { projectId: { in: projectIds } } });
+      await tx.member.deleteMany({ where: { projectId: { in: projectIds } } });
+      await tx.report.deleteMany({ where: { projectId: { in: projectIds } } });
+      await tx.project.deleteMany({ where: { id: { in: projectIds } } });
+    }
+
+    await tx.assignment.delete({ where: { id: assignment.id } });
+  });
+
   res.json({ message: "Assignment deleted" });
 });
 

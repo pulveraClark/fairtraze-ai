@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import type { StoredReportResponse, ProjectSummaryItem } from "@shared/types";
+import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig } from "@shared/types";
+import { useAuth } from "../context/AuthContext";
 import { AppTopBar } from "../components/AppTopBar";
 import { TeamHealthBanner } from "../components/TeamHealthBanner";
 import { ContributionChart } from "../components/ContributionChart";
@@ -8,6 +9,7 @@ import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
 import { PrintableReport } from "../components/PrintableReport";
+import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
 import { useRouter } from "../router";
 
@@ -22,7 +24,8 @@ interface Props {
 }
 
 export function ProjectDetailPage({ projectId }: Props) {
-  const { navigate } = useRouter();
+  const { navigate }  = useRouter();
+  const { token, user } = useAuth();
 
   const [stored, setStored]               = useState<StoredReportResponse | null>(null);
   const [narrativeText, setNarrativeText] = useState<string | null>(null);
@@ -31,6 +34,11 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [reanalyzing, setReanalyzing]     = useState(false);
   const [stepperDone, setStepperDone]     = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+  const [showScoringModal, setShowScoringModal] = useState(false);
+  // Tracks whether config changed after the last analysis (stale report warning)
+  const [configStale, setConfigStale]           = useState(false);
+  // Names of members with OPEN disputes (instructor only — students see nothing extra)
+  const [disputedMembers, setDisputedMembers]   = useState<Set<string>>(new Set());
 
   // Summary used for breadcrumb + group switcher
   const [projectMeta, setProjectMeta] = useState<ProjectSummaryItem | null>(null);
@@ -41,6 +49,7 @@ export function ProjectDetailPage({ projectId }: Props) {
     setNotFound(false);
     setStored(null);
     setNarrativeText(null);   // clear immediately so no previous group's text bleeds through
+    setConfigStale(false);
     try {
       const res = await fetch(`/api/projects/${projectId}/report`);
       if (res.status === 404) { setNotFound(true); return; }
@@ -52,6 +61,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       const data = (await res.json()) as StoredReportResponse;
       setStored(data);
       setNarrativeText(data.narrative ?? null);
+      setConfigStale(!!data.scoringConfigChangedAt);
     } catch {
       setFetchError("Network error — could not reach the server.");
     }
@@ -74,10 +84,27 @@ export function ProjectDetailPage({ projectId }: Props) {
     }
   }, [projectId]);
 
+  // Fetch OPEN disputes for this project so we can show inline "Disputed" tags.
+  // Only called when logged in as an instructor; silently ignored otherwise.
+  const fetchDisputes = useCallback(async () => {
+    if (!token || user?.systemRole !== "INSTRUCTOR") return;
+    try {
+      const res  = await fetch(`/api/projects/${projectId}/disputes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { disputes: Array<{ id: number; memberName: string }> };
+      setDisputedMembers(new Set(data.disputes.map((d) => d.memberName)));
+    } catch {
+      // non-critical — indicator simply won't show if fetch fails
+    }
+  }, [projectId, token, user?.systemRole]);
+
   useEffect(() => {
     void fetchStored();
     void fetchSummary();
-  }, [fetchStored, fetchSummary]);
+    void fetchDisputes();
+  }, [fetchStored, fetchSummary, fetchDisputes]);
 
   async function handleAnalyze() {
     setReanalyzing(true);
@@ -246,6 +273,20 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
+            {/* Scoring settings button — shown only when a report exists */}
+            {stored && !reanalyzing && (
+              <button
+                onClick={() => setShowScoringModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-xs font-semibold rounded-lg transition-colors"
+                title="Adjust scoring weights and flag thresholds for this group"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                Scoring settings
+              </button>
+            )}
+
             {/* Export / Print button — shown only when a report exists */}
             {stored && !reanalyzing && (
               <button
@@ -298,6 +339,23 @@ export function ProjectDetailPage({ projectId }: Props) {
         {fetchError && !reanalyzing && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700">
             {fetchError}
+          </div>
+        )}
+
+        {/* Stale report — scoring config changed after last analysis */}
+        {configStale && stored && !reanalyzing && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-800">Report is stale</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Scoring settings changed after the last analysis. The numbers shown below reflect the
+                old settings. Click <strong>Re-analyze</strong> to recompute with the new weights and
+                thresholds.
+              </p>
+            </div>
           </div>
         )}
 
@@ -362,6 +420,23 @@ export function ProjectDetailPage({ projectId }: Props) {
                   <p className="font-medium text-slate-800">{stored.report.memberCount}</p>
                 </div>
               </div>
+
+              {/* Scoring settings used for this report */}
+              {stored.scoringConfig && (
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-slate-400 font-medium">Scored with:</span>
+                  <ScoredWithPill label="commits" display={String(stored.scoringConfig.weights.commits)} />
+                  <ScoredWithPill label="lines" display={String(stored.scoringConfig.weights.lines)} />
+                  <ScoredWithPill label="days" display={String(stored.scoringConfig.weights.activeDays)} />
+                  <span className="text-slate-200 text-xs mx-0.5">|</span>
+                  <ScoredWithPill label="free-rider" display={`${stored.scoringConfig.thresholds.freeRider}×`} />
+                  <ScoredWithPill label="overload" display={`${stored.scoringConfig.thresholds.overload}×`} />
+                  <ScoredWithPill label="deadline" display={`${Math.round(stored.scoringConfig.thresholds.deadlineDriven * 100)}%`} />
+                  {configStale && (
+                    <span className="text-[10px] text-amber-600 font-semibold ml-1">(settings changed — re-analyze to update)</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* GitHub-specific sections */}
@@ -383,7 +458,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                   <div className="px-6 pt-4 pb-2">
                     <ContributionChart members={stored.report.members} />
                   </div>
-                  <MemberTable members={stored.report.members} />
+                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} />
                 </div>
 
                 {/* AI narrative — keyed to projectId so it always reflects the current group */}
@@ -451,6 +526,31 @@ export function ProjectDetailPage({ projectId }: Props) {
           assignmentLabel={assignmentLabel}
         />
       )}
+
+      {/* Scoring settings modal */}
+      {showScoringModal && stored && (
+        <ScoringSettingsModal
+          projectId={projectId}
+          currentConfig={stored.currentConfig}
+          onClose={() => setShowScoringModal(false)}
+          onSaved={(newConfig: ProjectScoringConfig) => {
+            setShowScoringModal(false);
+            // Optimistically mark config stale and update currentConfig in stored
+            setConfigStale(true);
+            setStored((prev) => prev ? { ...prev, currentConfig: newConfig, scoringConfigChangedAt: new Date().toISOString() } : prev);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Small helper component ────────────────────────────────────────────────────
+
+function ScoredWithPill({ label, display }: { label: string; display: string }) {
+  return (
+    <span className="text-[11px] font-mono text-slate-500 bg-slate-100 rounded px-1.5 py-0.5">
+      {label} <strong className="text-slate-700">{display}</strong>
+    </span>
   );
 }

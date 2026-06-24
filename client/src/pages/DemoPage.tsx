@@ -242,6 +242,7 @@ function ConfirmDialog({
   title,
   body,
   confirmLabel = "Delete",
+  typeToConfirm,
   onConfirm,
   onCancel,
   busy,
@@ -250,11 +251,15 @@ function ConfirmDialog({
   title: string;
   body: React.ReactNode;
   confirmLabel?: string;
+  typeToConfirm?: string;
   onConfirm: () => void;
   onCancel: () => void;
   busy: boolean;
   error?: string | null;
 }) {
+  const [typedValue, setTypedValue] = useState("");
+  const canConfirm = !typeToConfirm || typedValue === typeToConfirm;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -264,6 +269,21 @@ function ConfirmDialog({
         <div className="px-6 pt-6 pb-2">
           <h2 className="text-sm font-semibold text-slate-900 mb-2">{title}</h2>
           <div className="text-xs text-slate-500 leading-relaxed">{body}</div>
+          {typeToConfirm && (
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Type <span className="font-mono font-bold text-slate-800">{typeToConfirm}</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={typedValue}
+                onChange={(e) => setTypedValue(e.target.value)}
+                placeholder={typeToConfirm}
+                autoFocus
+                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+              />
+            </div>
+          )}
           {error && (
             <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
           )}
@@ -278,8 +298,8 @@ function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            disabled={busy}
-            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+            disabled={busy || !canConfirm}
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
           >
             {busy ? (
               <span className="flex items-center gap-2">
@@ -439,6 +459,7 @@ export function DemoPage() {
               </>
             }
             confirmLabel="Delete class section"
+            typeToConfirm={deleteTarget.subjectCode}
             onConfirm={() => void handleDeleteClass()}
             onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
             busy={deleting}

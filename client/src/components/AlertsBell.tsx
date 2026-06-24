@@ -31,7 +31,8 @@ export function AlertsBell() {
   async function handleAlertClick(alert: AlertItem) {
     setOpen(false);
     if (!alert.read) await markRead(alert.id);
-    navigate(`/project/${alert.projectId}`);
+    const meta = ALERT_TYPE_META[alert.type];
+    navigate(meta.navigateTo === "disputes" ? "/disputes" : `/project/${alert.projectId}`);
   }
 
   const preview  = alerts.slice(0, PREVIEW_COUNT);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
@@ -74,6 +74,106 @@ function TeamDistributionBar({ shares }: { shares: TeamShare[] }) {
 
 type Tab = "contribution" | "document";
 
+// ── Dispute types ─────────────────────────────────────────────────────────────
+interface DisputeRecord {
+  id:                 number;
+  projectId:          number;
+  status:             "OPEN" | "RESOLVED" | "DISMISSED";
+  reason:             string;
+  instructorResponse: string | null;
+  createdAt:          string;
+  resolvedAt:         string | null;
+}
+
+const DISPUTE_STATUS_STYLE: Record<string, string> = {
+  OPEN:      "text-amber-700 bg-amber-50 border-amber-200",
+  RESOLVED:  "text-emerald-700 bg-emerald-50 border-emerald-200",
+  DISMISSED: "text-slate-600 bg-slate-100 border-slate-200",
+};
+
+// ── Dispute submission modal ───────────────────────────────────────────────────
+function DisputeModal({
+  projectId,
+  token,
+  onClose,
+  onSubmitted,
+}: {
+  projectId: number;
+  token:     string;
+  onClose:   () => void;
+  onSubmitted: (d: DisputeRecord) => void;
+}) {
+  const [reason,   setReason]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error,    setError]    = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { textareaRef.current?.focus(); }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reason.trim()) { setError("Please describe the context for your instructor."); return; }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res  = await fetch("/api/disputes", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ projectId, reason: reason.trim() }),
+      });
+      const json = await res.json() as DisputeRecord & { error?: string };
+      if (!res.ok) { setError(json.error ?? "Could not submit dispute."); return; }
+      onSubmitted(json);
+    } catch {
+      setError("Network error — could not submit.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-800">Flag for review</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Describe context for your instructor. They will review and respond.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <textarea
+            ref={textareaRef}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="E.g. I was working offline and pushed everything at the end due to connectivity issues…"
+            rows={5}
+            maxLength={2000}
+            className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+          />
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !reason.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Submitting…" : "Submit dispute"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function StudentGroupPage({ projectId }: { projectId: number }) {
   const { token }     = useAuth();
@@ -83,8 +183,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("contribution");
-  const [showManageModal, setShowManageModal] = useState(false);
-  const [refreshKey, setRefreshKey]           = useState(0);
+  const [showManageModal, setShowManageModal]   = useState(false);
+  const [refreshKey, setRefreshKey]             = useState(0);
+  const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -106,6 +208,20 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, projectId, refreshKey]);
+
+  // Fetch the student's disputes to find any existing one for this group
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/disputes/mine", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json() as { disputes: DisputeRecord[] };
+        const found = json.disputes.find((d) => d.projectId === projectId) ?? null;
+        setDispute(found);
+      })
+      .catch(() => setDispute(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, projectId]);
 
   if (loading) {
     return (
@@ -167,6 +283,18 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           onChanged={() => {
             setShowManageModal(false);
             setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {showDisputeModal && token && (
+        <DisputeModal
+          projectId={projectId}
+          token={token}
+          onClose={() => setShowDisputeModal(false)}
+          onSubmitted={(d) => {
+            setDispute(d);
+            setShowDisputeModal(false);
           }}
         />
       )}
@@ -421,25 +549,42 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 <p className="text-xs text-slate-400 mt-1.5">
                                   This flag is visible to your instructor. You may submit a note to provide context.
                                 </p>
-                                <div className="mt-4 space-y-2">
-                                  <textarea
-                                    disabled
-                                    placeholder="Explain context for your instructor (e.g. I was working offline and pushed at the end)…"
-                                    rows={2}
-                                    className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-400 placeholder-slate-300 resize-none cursor-not-allowed"
-                                  />
-                                  <div className="flex items-center gap-3 flex-wrap">
+                                <div className="mt-4">
+                                  {/* Existing dispute status */}
+                                  {dispute && (
+                                    <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-wide">Dispute status:</span>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${DISPUTE_STATUS_STYLE[dispute.status]}`}>
+                                          {dispute.status}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{dispute.reason}</p>
+                                      {dispute.instructorResponse && (
+                                        <div className="pt-1.5 border-t border-slate-200">
+                                          <p className="text-[10px] font-semibold text-slate-500 mb-0.5">Instructor response:</p>
+                                          <p className="text-xs text-slate-700 leading-relaxed">{dispute.instructorResponse}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Submit button — only if no OPEN dispute exists */}
+                                  {dispute?.status === "OPEN" ? (
+                                    <p className="text-[11px] text-amber-600">
+                                      Your dispute is open and awaiting instructor review.
+                                    </p>
+                                  ) : (
                                     <button
-                                      disabled
-                                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-100 text-indigo-400 text-xs font-semibold cursor-not-allowed border border-indigo-200"
+                                      onClick={() => setShowDisputeModal(true)}
+                                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
                                     >
                                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
                                       </svg>
-                                      Flag for review / Add a note
+                                      {dispute ? "Submit another note" : "Flag for review / Add a note"}
                                     </button>
-                                    <span className="text-[11px] text-slate-400">Coming soon — Phase C</span>
-                                  </div>
+                                  )}
                                 </div>
                               </div>
                             </div>

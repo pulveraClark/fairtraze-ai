@@ -33,6 +33,13 @@ enum AlertType {
   HIGH_RISK
   MODERATE_RISK
   MEMBER_FLAGGED
+  DISPUTE_FILED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
 }
 
 model User {
@@ -46,6 +53,7 @@ model User {
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
   alerts           Alert[]
+  disputes         Dispute[]
 }
 
 model ClassSection {
@@ -89,19 +97,28 @@ model GroupMembership {
 }
 
 model Project {
-  id                   Int               @id @default(autoincrement())
-  groupName            String            @default("")   // student team name, e.g. "Group 1"
-  name                 String                            // app/project name, e.g. "FairTraze AI"
-  repoUrl              String                            // GitHub repository URL
-  assignmentLabel      String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
-  assignmentId         Int?
-  membershipChangedAt  DateTime?                         // updated when members join or leave; used to detect stale reports
-  createdAt            DateTime          @default(now())
-  assignment           Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  members              Member[]
-  reports              Report[]
-  groupMemberships     GroupMembership[]
-  alerts               Alert[]
+  id                       Int               @id @default(autoincrement())
+  groupName                String            @default("")   // student team name, e.g. "Group 1"
+  name                     String                            // app/project name, e.g. "FairTraze AI"
+  repoUrl                  String                            // GitHub repository URL
+  assignmentLabel          String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
+  assignmentId             Int?
+  membershipChangedAt      DateTime?                         // updated when members join or leave; used to detect stale reports
+  // Per-project scoring configuration (defaults mirror shared/src/scoring.ts constants)
+  weightCommits            Float             @default(0.4)
+  weightLines              Float             @default(0.4)
+  weightActiveDays         Float             @default(0.2)
+  freeRiderThreshold       Float             @default(0.5)
+  overloadThreshold        Float             @default(1.75)
+  deadlineDrivenThreshold  Float             @default(0.6)
+  scoringConfigChangedAt   DateTime?                         // set when config changes after last analyze; cleared by re-analyze
+  createdAt                DateTime          @default(now())
+  assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  members                  Member[]
+  reports                  Report[]
+  groupMemberships         GroupMembership[]
+  alerts                   Alert[]
+  disputes                 Dispute[]
 }
 
 model Member {
@@ -133,4 +150,18 @@ model Alert {
   createdAt    DateTime  @default(now())
   project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   instructor   User      @relation(fields: [instructorId], references: [id])
+}
+
+model Dispute {
+  id                 Int           @id @default(autoincrement())
+  projectId          Int
+  studentUserId      Int
+  memberName         String
+  reason             String
+  status             DisputeStatus @default(OPEN)
+  instructorResponse String?
+  createdAt          DateTime      @default(now())
+  resolvedAt         DateTime?
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  student            User          @relation(fields: [studentUserId], references: [id])
 }

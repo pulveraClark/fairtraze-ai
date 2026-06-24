@@ -341,22 +341,40 @@ function CreateAssignmentModal({
 
 // ── Confirmation dialog ───────────────────────────────────────────────────────
 function ConfirmDialog({
-  title, body, confirmLabel = "Delete", onConfirm, onCancel, busy, error,
+  title, body, confirmLabel = "Delete", typeToConfirm, onConfirm, onCancel, busy, error,
 }: {
-  title: string; body: React.ReactNode; confirmLabel?: string;
+  title: string; body: React.ReactNode; confirmLabel?: string; typeToConfirm?: string;
   onConfirm: () => void; onCancel: () => void; busy: boolean; error?: string | null;
 }) {
+  const [typedValue, setTypedValue] = useState("");
+  const canConfirm = !typeToConfirm || typedValue === typeToConfirm;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onCancel}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
         <div className="px-6 pt-6 pb-2">
           <h2 className="text-sm font-semibold text-slate-900 mb-2">{title}</h2>
           <div className="text-xs text-slate-500 leading-relaxed">{body}</div>
+          {typeToConfirm && (
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Type <span className="font-mono font-bold text-slate-800">{typeToConfirm}</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={typedValue}
+                onChange={(e) => setTypedValue(e.target.value)}
+                placeholder={typeToConfirm}
+                autoFocus
+                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+              />
+            </div>
+          )}
           {error && <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         </div>
         <div className="px-6 py-4 flex justify-end gap-2 border-t border-slate-100 mt-4">
           <button onClick={onCancel} disabled={busy} className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-colors disabled:opacity-50">Cancel</button>
-          <button onClick={onConfirm} disabled={busy} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+          <button onClick={onConfirm} disabled={busy || !canConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors">
             {busy ? <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Deleting…</span> : confirmLabel}
           </button>
         </div>
@@ -490,6 +508,7 @@ export function ClassPage({ classId }: Props) {
               </>
             }
             confirmLabel="Delete project"
+            typeToConfirm={deleteTarget.title}
             onConfirm={() => void handleDeleteProject()}
             onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
             busy={deleting}

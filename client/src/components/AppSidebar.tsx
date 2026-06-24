@@ -1,16 +1,12 @@
+import { useEffect, useState } from "react";
 import { useRouter } from "../router";
 import type { AppRoute } from "../router";
-
-interface NavItem {
-  label: string;
-  route: AppRoute;
-  icon: React.ReactNode;
-}
+import { useAuth } from "../context/AuthContext";
 
 function BarChartIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 00-2-2H9a2 2 0 012 2v10m6 0v-3a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m6 0h-6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6" />
     </svg>
   );
 }
@@ -23,13 +19,64 @@ function LayoutIcon() {
   );
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard",       route: "/dashboard", icon: <BarChartIcon /> },
-  { label: "System Overview", route: "/overview",  icon: <LayoutIcon /> },
-];
+function FlagIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+    </svg>
+  );
+}
+
+function useOpenDisputeCount() {
+  const { token, user } = useAuth();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!token || user?.systemRole !== "INSTRUCTOR") return;
+    let cancelled = false;
+
+    function load() {
+      fetch("/api/disputes", { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.json())
+        .then((data: { openCount?: number }) => {
+          if (!cancelled) setCount(data.openCount ?? 0);
+        })
+        .catch(() => {});
+    }
+
+    load();
+    const id = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token, user?.systemRole]);
+
+  return count;
+}
+
+interface NavItem {
+  label: string;
+  route: AppRoute;
+  icon: React.ReactNode;
+  badge?: number;
+}
 
 export function AppSidebar() {
   const { pathname, navigate } = useRouter();
+  const { user } = useAuth();
+  const openDisputeCount = useOpenDisputeCount();
+
+  const navItems: NavItem[] = [
+    { label: "Dashboard",       route: "/dashboard", icon: <BarChartIcon /> },
+    { label: "Disputes",        route: "/disputes",  icon: <FlagIcon />, badge: openDisputeCount },
+    { label: "System Overview", route: "/overview",  icon: <LayoutIcon /> },
+  ];
+
+  // Non-instructors don't get the disputes item
+  const visibleItems = user?.systemRole === "INSTRUCTOR"
+    ? navItems
+    : navItems.filter((i) => i.route !== "/disputes");
 
   return (
     <aside className="w-56 shrink-0 bg-[#0b0d1a] flex flex-col border-r border-white/[0.08] min-h-screen">
@@ -50,7 +97,7 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = pathname === item.route;
           return (
             <button
@@ -65,7 +112,12 @@ export function AppSidebar() {
               <span className={isActive ? "text-amber-400" : "text-slate-500"}>
                 {item.icon}
               </span>
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge != null && item.badge > 0 && (
+                <span className="min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none select-none">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
             </button>
           );
         })}

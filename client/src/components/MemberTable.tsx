@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { ReactNode } from "react";
 import type { ScoredMember, Flag } from "@shared/types";
 import { InfoTooltip, TipList } from "./InfoTooltip";
+import { useRouter } from "../router";
 
 const flagStyles: Record<Flag, string> = {
   inactive:          "bg-red-100 text-red-700",
@@ -12,6 +13,8 @@ const flagStyles: Record<Flag, string> = {
 
 interface Props {
   members: ScoredMember[];
+  // Set of studentNames that have at least one OPEN dispute (from the instructor's view)
+  disputedMembers?: Set<string>;
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -57,7 +60,8 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function MemberTable({ members }: Props) {
+export function MemberTable({ members, disputedMembers }: Props) {
+  const { navigate } = useRouter();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   function toggleRow(username: string) {
@@ -132,17 +136,28 @@ export function MemberTable({ members }: Props) {
 
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
-                      {m.flags.length === 0 ? (
+                      {m.flags.length === 0 && !disputedMembers?.has(m.studentName) ? (
                         <span className="text-slate-400 text-xs italic">No flags</span>
                       ) : (
-                        m.flags.map((flag) => (
-                          <span
-                            key={flag}
-                            className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}
-                          >
-                            {flag}
-                          </span>
-                        ))
+                        <>
+                          {m.flags.map((flag) => (
+                            <span
+                              key={flag}
+                              className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}
+                            >
+                              {flag}
+                            </span>
+                          ))}
+                          {disputedMembers?.has(m.studentName) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate("/disputes"); }}
+                              className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors"
+                              title="This member has an open dispute — click to view in Disputes inbox"
+                            >
+                              Disputed
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>

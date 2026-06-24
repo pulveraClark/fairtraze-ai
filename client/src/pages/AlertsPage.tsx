@@ -9,7 +9,8 @@ export function AlertsPage() {
 
   async function handleClick(alert: AlertItem) {
     if (!alert.read) await markRead(alert.id);
-    navigate(`/project/${alert.projectId}`);
+    const meta = ALERT_TYPE_META[alert.type];
+    navigate(meta.navigateTo === "disputes" ? "/disputes" : `/project/${alert.projectId}`);
   }
 
   return (

@@ -94,8 +94,8 @@ function JoinClassModal({
   onClose: () => void;
   onJoined: () => void;
 }) {
-  const { user }     = useAuth();
-  const { navigate } = useRouter();
+  const { user, refreshUser } = useAuth();
+  const { navigate }          = useRouter();
 
   const [step, setStep]                   = useState<ModalStep>("code");
   const [joinCode, setJoinCode]           = useState("");
@@ -117,6 +117,12 @@ function JoinClassModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Refresh the user profile when the modal opens so githubUsername is current,
+  // not a stale cached value from the login token.
+  useEffect(() => {
+    void refreshUser();
+  }, [refreshUser]);
 
   async function handleLookup() {
     if (!joinCode.trim()) { setLookupError("Please enter a join code."); return; }
@@ -140,6 +146,12 @@ function JoinClassModal({
   async function handleCreateGroup() {
     if (!groupName.trim()) { setCreateError("Enter a group name."); return; }
     if (githubRequired && !repoUrl.trim()) { setCreateError("Enter the GitHub repository URL."); return; }
+    // Re-check the current username in case it was added in another tab
+    await refreshUser();
+    if (githubRequired && !user?.githubUsername) {
+      setCreateError("Please add your GitHub username in Settings before creating a group.");
+      return;
+    }
     setCreateLoading(true);
     setCreateError("");
     try {
@@ -159,6 +171,12 @@ function JoinClassModal({
 
   async function handleJoinGroup() {
     if (!selectedGroupId) { setJoinError("Select a group to join."); return; }
+    // Re-check the current username in case it was added in another tab
+    await refreshUser();
+    if (githubRequired && !user?.githubUsername) {
+      setJoinError("Please add your GitHub username in Settings before joining a group.");
+      return;
+    }
     setJoinLoading(true);
     setJoinError("");
     try {

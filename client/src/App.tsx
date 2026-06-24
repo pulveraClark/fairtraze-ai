@@ -13,6 +13,7 @@ import { StudentGroupPage } from "./pages/StudentGroupPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AlertsPage } from "./pages/AlertsPage";
+import { DisputesPage } from "./pages/DisputesPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
@@ -102,6 +103,12 @@ export default function App() {
   if (pathname === "/alerts") return (
     <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
       <AlertsPage />
+    </ProtectedRoute>
+  );
+
+  if (pathname === "/disputes") return (
+    <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+      <DisputesPage />
     </ProtectedRoute>
   );
 

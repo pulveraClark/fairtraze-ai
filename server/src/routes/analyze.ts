@@ -5,7 +5,7 @@ import { fetchRepoStats } from "../lib/github.js";
 import { computeTeamReport } from "@shared/scoring.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
-import type { RawMemberStats, AnalyzeResponse, TeamReport } from "@shared/types.js";
+import type { RawMemberStats, AnalyzeResponse, TeamReport, ProjectScoringConfig } from "@shared/types.js";
 
 export const analyzeRouter = Router();
 
@@ -101,7 +101,21 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
   const { rawMembers, unmatchedLogins } = buildRawMembers(project.members, rawData.contributors);
   console.log(`[analyze] project ${projectId}: rawMembers built: ${rawMembers.length} — ${rawMembers.map((m) => `${m.githubUsername}(${m.commits})`).join(", ")}`);
 
-  const report = computeTeamReport(rawMembers);
+  // Build scoring config from stored project settings
+  const scoringConfig: ProjectScoringConfig = {
+    weights: {
+      commits:    project.weightCommits,
+      lines:      project.weightLines,
+      activeDays: project.weightActiveDays,
+    },
+    thresholds: {
+      freeRider:      project.freeRiderThreshold,
+      overload:       project.overloadThreshold,
+      deadlineDriven: project.deadlineDrivenThreshold,
+    },
+  };
+
+  const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);
 
   // Upsert: update existing report row for this project (preserving narrative),
@@ -123,7 +137,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
         generatedAt: new Date(),
         gini:        report.gini,
         teamHealth:  report.teamHealth,
-        content:     JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins }),
+        content:     JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
       },
     });
   } else {
@@ -132,15 +146,15 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: null, unmatchedLogins }),
+        content:   JSON.stringify({ report, narrative: null, unmatchedLogins, scoringConfig }),
       },
     });
   }
 
-  // Clear the stale flag — the report now reflects current membership
+  // Clear stale flags — report now reflects current membership and scoring config
   await prisma.project.update({
     where: { id: projectId },
-    data:  { membershipChangedAt: null },
+    data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
   });
 
   // Fire-and-forget: generate alerts for at-risk groups. Never blocks the response.

@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 export interface AlertItem {
   id: number;
   projectId: number;
-  type: "HIGH_RISK" | "MODERATE_RISK" | "MEMBER_FLAGGED";
+  type: "HIGH_RISK" | "MODERATE_RISK" | "MEMBER_FLAGGED" | "DISPUTE_FILED";
   message: string;
   teamHealth: string;
   read: boolean;
@@ -28,11 +28,12 @@ export interface UseAlertsReturn {
 
 export const ALERT_TYPE_META: Record<
   AlertItem["type"],
-  { label: string; color: string }
+  { label: string; color: string; navigateTo: "project" | "disputes" }
 > = {
-  HIGH_RISK:      { label: "High Risk",       color: "text-red-400 bg-red-500/10 border-red-500/30" },
-  MODERATE_RISK:  { label: "Moderate Risk",   color: "text-amber-400 bg-amber-500/10 border-amber-500/30" },
-  MEMBER_FLAGGED: { label: "Members Flagged", color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
+  HIGH_RISK:      { label: "High Risk",       color: "text-red-400 bg-red-500/10 border-red-500/30",       navigateTo: "project" },
+  MODERATE_RISK:  { label: "Moderate Risk",   color: "text-amber-400 bg-amber-500/10 border-amber-500/30", navigateTo: "project" },
+  MEMBER_FLAGGED: { label: "Members Flagged", color: "text-orange-400 bg-orange-500/10 border-orange-500/30", navigateTo: "project" },
+  DISPUTE_FILED:  { label: "Dispute",         color: "text-violet-400 bg-violet-500/10 border-violet-500/30", navigateTo: "disputes" },
 };
 
 export function timeAgo(iso: string): string {
