@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
-import { GroupManageModal } from "../components/GroupManageModal";
 
-// ── Gradient palette (matches instructor ClassCard) ───────────────────────────
+// ── Gradient palette ──────────────────────────────────────────────────────────
 const BAND_GRADIENTS = [
   "linear-gradient(135deg, #4338ca 0%, #6366f1 100%)",
   "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
@@ -13,7 +12,6 @@ const BAND_GRADIENTS = [
   "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
   "linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)",
 ];
-
 function pickGradient(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -26,71 +24,37 @@ const HEALTH_BADGE: Record<string, string> = {
   "High Risk":     "text-red-700 bg-red-50 border-red-200",
 };
 
-const SOURCE_LABEL: Record<string, string> = {
-  GITHUB:   "GitHub",
-  EDITOR:   "FairTraze Docs",
-  COMBINED: "GitHub + Docs",
-};
-
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface Enrollment {
-  classSection: {
-    id: number;
-    subjectCode: string;
-    subjectName: string;
-    course: string;
-    edpCode: string;
-  };
-  assignment: {
-    id: number;
-    title: string;
-    deadline: string | null;
-    sourceType: string;
-    joinCode: string;
-  };
-  project: {
-    id: number;
-    groupName: string;
-    name: string;
-    repoUrl: string;
-  };
-  membership: {
-    role: "LEADER" | "MEMBER";
-    joinedAt: string;
-  };
-  report: {
-    gini: number | null;
-    teamHealth: string | null;
-    generatedAt: string;
-  } | null;
+interface MyGroup {
+  id: number;
+  groupName: string;
+  name: string;
+  repoUrl: string;
+  role: "LEADER" | "MEMBER";
+  report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
 }
 
-interface ClassGroup {
-  classSection: Enrollment["classSection"];
-  enrollments: Enrollment[];
+interface AssignmentSummary {
+  id: number;
+  title: string;
+  deadline: string | null;
+  sourceType: string;
+  maxGroupSize: number;
+  myGroup: MyGroup | null;
 }
 
-interface LookupResult {
-  assignment: {
-    id: number;
-    title: string;
-    deadline: string | null;
-    sourceType: string;
-    maxGroupSize: number;
-    classSection: { subjectCode: string; subjectName: string };
-  };
-  groups: {
-    id: number;
-    groupName: string;
-    memberCount: number;
-    leaderName: string | null;
-    isFull: boolean;
-  }[];
+interface EnrolledClass {
+  id: number;
+  subjectCode: string;
+  subjectName: string;
+  course: string;
+  edpCode: string;
+  joinCode: string | null;
+  joinedAt: string;
+  assignments: AssignmentSummary[];
 }
 
 // ── Join a Class modal ────────────────────────────────────────────────────────
-type ModalStep = "code" | "found" | "done";
-
 function JoinClassModal({
   token,
   onClose,
@@ -100,27 +64,11 @@ function JoinClassModal({
   onClose: () => void;
   onJoined: () => void;
 }) {
-  const { user, refreshUser } = useAuth();
-  const { navigate }          = useRouter();
-
-  const [step, setStep]                   = useState<ModalStep>("code");
-  const [joinCode, setJoinCode]           = useState("");
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [lookupError, setLookupError]     = useState("");
-  const [found, setFound]                 = useState<LookupResult | null>(null);
-
-  const [groupName, setGroupName]       = useState("");
-  const [repoUrl, setRepoUrl]           = useState("");
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError]   = useState("");
-
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
-  const [joinLoading, setJoinLoading]         = useState(false);
-  const [joinError, setJoinError]             = useState("");
-
-  // Track whether the profile refresh has completed so the GitHub-username warning
-  // is only shown once we have current data, not stale cached values (Fix 4).
-  const [userRefreshed, setUserRefreshed] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [done, setDone]         = useState(false);
+  const [enrolled, setEnrolled] = useState<{ subjectCode: string; subjectName: string } | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
@@ -128,89 +76,25 @@ function JoinClassModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Refresh the user profile when the modal opens so githubUsername is current,
-  // not a stale cached value from the login token.
-  useEffect(() => {
-    refreshUser().then(() => setUserRefreshed(true)).catch(() => setUserRefreshed(true));
-  }, [refreshUser]);
-
-  async function handleLookup() {
-    if (!joinCode.trim()) { setLookupError("Please enter a join code."); return; }
-    setLookupLoading(true);
-    setLookupError("");
+  async function handleEnroll() {
+    if (!joinCode.trim()) { setError("Please enter a join code."); return; }
+    setLoading(true);
+    setError("");
     try {
-      const res  = await fetch("/api/join/lookup", {
+      const res  = await fetch("/api/join/class", {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ joinCode: joinCode.trim() }),
       });
-      const data = await res.json() as { error?: string } & Partial<LookupResult>;
-      if (!res.ok) { setLookupError(data.error ?? "Could not find that code."); return; }
-      setFound(data as LookupResult);
-      setStep("found");
-    } finally {
-      setLookupLoading(false);
-    }
-  }
-
-  async function handleCreateGroup() {
-    if (!groupName.trim()) { setCreateError("Enter a group name."); return; }
-    if (githubRequired && !repoUrl.trim()) { setCreateError("Enter the GitHub repository URL."); return; }
-    // Re-check the current username in case it was added in another tab
-    await refreshUser();
-    if (githubRequired && !user?.githubUsername) {
-      setCreateError("Please add your GitHub username in Settings before creating a group.");
-      return;
-    }
-    setCreateLoading(true);
-    setCreateError("");
-    try {
-      const res  = await fetch("/api/join/create-group", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ joinCode: joinCode.trim(), groupName: groupName.trim(), repoUrl: repoUrl.trim() }),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setCreateError(data.error ?? "Could not create group."); return; }
+      const data = await res.json() as { error?: string; subjectCode?: string; subjectName?: string };
+      if (!res.ok) { setError(data.error ?? "Could not enroll."); return; }
+      setEnrolled({ subjectCode: data.subjectCode!, subjectName: data.subjectName! });
       onJoined();
-      setStep("done");
+      setDone(true);
     } finally {
-      setCreateLoading(false);
+      setLoading(false);
     }
   }
-
-  async function handleJoinGroup() {
-    if (!selectedGroupId) { setJoinError("Select a group to join."); return; }
-    // Re-check the current username in case it was added in another tab
-    await refreshUser();
-    if (githubRequired && !user?.githubUsername) {
-      setJoinError("Please add your GitHub username in Settings before joining a group.");
-      return;
-    }
-    setJoinLoading(true);
-    setJoinError("");
-    try {
-      const res  = await fetch("/api/join/join-group", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ projectGroupId: selectedGroupId }),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setJoinError(data.error ?? "Could not join group."); return; }
-      onJoined();
-      setStep("done");
-    } finally {
-      setJoinLoading(false);
-    }
-  }
-
-  // Only evaluate the warning after refreshUser() settles so we read current data (Fix 4)
-  const noGithub = userRefreshed && !user?.githubUsername;
-  // GitHub username is only required for GITHUB or COMBINED source types
-  const githubRequired = found
-    ? found.assignment.sourceType === "GITHUB" || found.assignment.sourceType === "COMBINED"
-    : false;
-  const showGithubWarning = githubRequired && noGithub;
 
   return (
     <div
@@ -218,255 +102,40 @@ function JoinClassModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Join a Class</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {step === "code" && "Enter the join code provided by your instructor."}
-              {step === "found" && found &&
-                `${found.assignment.classSection.subjectCode} — ${found.assignment.classSection.subjectName}`}
-              {step === "done" && "You have joined successfully."}
+              {done ? "Enrollment successful" : "Enter the class join code from your instructor"}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded"
-            aria-label="Close"
-          >
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-5 space-y-5">
-
-          {/* ── Step: Enter code ── */}
-          {step === "code" && (
-            <>
-              <div className="flex gap-2.5 flex-wrap">
-                <input
-                  value={joinCode}
-                  onChange={(e) => { setJoinCode(e.target.value); setLookupError(""); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") void handleLookup(); }}
-                  disabled={lookupLoading}
-                  placeholder="Enter join code — e.g. FT-AB12-CD34"
-                  className="flex-1 min-w-40 rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:cursor-not-allowed disabled:text-slate-400"
-                />
-                <button
-                  onClick={() => void handleLookup()}
-                  disabled={lookupLoading || !joinCode.trim()}
-                  className="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-                >
-                  {lookupLoading ? "Looking up…" : "Look up →"}
-                </button>
-              </div>
-              {lookupError && <p className="text-xs text-red-600">{lookupError}</p>}
-            </>
-          )}
-
-          {/* ── Step: Code found — choose path ── */}
-          {step === "found" && found && (
-            <>
-              {/* Project summary */}
-              <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 text-xs space-y-1">
-                <p className="font-semibold text-slate-700">{found.assignment.title}</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-slate-500">
-                  <span>{SOURCE_LABEL[found.assignment.sourceType] ?? found.assignment.sourceType}</span>
-                  {found.assignment.deadline && (
-                    <span>Deadline: {new Date(found.assignment.deadline).toLocaleDateString()}</span>
-                  )}
-                  <span>Max {found.assignment.maxGroupSize} per group</span>
-                </div>
-              </div>
-
-              <div className="relative flex items-center gap-3">
-                <div className="flex-1 border-t border-slate-100" />
-                <span className="text-[11px] text-slate-400 shrink-0">Choose your path</span>
-                <div className="flex-1 border-t border-slate-100" />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-                {/* Create a Group */}
-                <div className="border border-indigo-200 bg-indigo-50/50 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
-                      <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800">Create a Group</p>
-                      <span className="text-[10px] font-bold text-indigo-600 bg-white border border-indigo-200 rounded px-1.5 py-0.5">
-                        Group Leader
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {githubRequired
-                      ? "Create the first group and connect the GitHub repository. You become the group leader."
-                      : "Create the first group. You become the group leader."}
-                  </p>
-
-                  {showGithubWarning && (
-                    <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
-                      <strong>GitHub username required for this project.</strong>{" "}
-                      <button
-                        onClick={() => { onClose(); navigate("/settings"); }}
-                        className="underline font-semibold hover:text-amber-900"
-                      >
-                        Add it in Settings
-                      </button>{" "}
-                      before creating a group.
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <input
-                      value={groupName}
-                      onChange={(e) => { setGroupName(e.target.value); setCreateError(""); }}
-                      placeholder="Group name — e.g. Group 1"
-                      disabled={createLoading || showGithubWarning}
-                      className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:text-slate-400 disabled:cursor-not-allowed"
-                    />
-                    {githubRequired && (
-                      <input
-                        value={repoUrl}
-                        onChange={(e) => { setRepoUrl(e.target.value); setCreateError(""); }}
-                        placeholder="GitHub repo URL — e.g. github.com/org/repo"
-                        disabled={createLoading}
-                        className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:text-slate-400"
-                      />
-                    )}
-                  </div>
-
-                  {createError && <p className="text-xs text-red-600">{createError}</p>}
-
-                  <button
-                    onClick={() => void handleCreateGroup()}
-                    disabled={createLoading || showGithubWarning}
-                    className="w-full py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-indigo-200 disabled:cursor-not-allowed"
-                  >
-                    {createLoading ? "Creating…" : "Create Group"}
-                  </button>
-
-                  <p className="text-[10px] text-slate-400 leading-relaxed">
-                    Leadership is administrative only — it grants no contribution credit. You are scored on your actual work, the same as every other member.
-                  </p>
-                </div>
-
-                {/* Join an Existing Group */}
-                <div className="border border-slate-200 bg-white rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800">Join an Existing Group</p>
-                      <span className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5">
-                        Member
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Select the group your leader has already created and register as a member.
-                  </p>
-
-                  {showGithubWarning && (
-                    <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
-                      <strong>GitHub username required for this project.</strong>{" "}
-                      <button
-                        onClick={() => { onClose(); navigate("/settings"); }}
-                        className="underline font-semibold hover:text-amber-900"
-                      >
-                        Add it in Settings
-                      </button>{" "}
-                      before joining a group.
-                    </div>
-                  )}
-
-                  {found.groups.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No groups yet — create the first one.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {found.groups.map((g) => (
-                        <label
-                          key={g.id}
-                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${
-                            g.isFull
-                              ? "opacity-50 cursor-not-allowed bg-slate-50 border-slate-200"
-                              : selectedGroupId === g.id
-                              ? "bg-indigo-50 border-indigo-300 cursor-pointer"
-                              : "bg-slate-50 border-slate-200 hover:border-slate-300 cursor-pointer"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="group"
-                            value={g.id}
-                            disabled={g.isFull}
-                            checked={selectedGroupId === g.id}
-                            onChange={() => { setSelectedGroupId(g.id); setJoinError(""); }}
-                            className="shrink-0"
-                          />
-                          <span className="flex-1 min-w-0">
-                            <span className="text-xs font-medium text-slate-700">{g.groupName}</span>
-                            <span className="text-[11px] text-slate-400 ml-2">
-                              {g.memberCount} / {found.assignment.maxGroupSize} members
-                            </span>
-                          </span>
-                          <span className="text-[10px] text-slate-400 shrink-0">
-                            {g.isFull ? "Full" : g.leaderName ? `Leader: ${g.leaderName}` : ""}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {joinError && <p className="text-xs text-red-600">{joinError}</p>}
-
-                  <button
-                    onClick={() => void handleJoinGroup()}
-                    disabled={joinLoading || !selectedGroupId || found.groups.length === 0 || showGithubWarning}
-                    className="w-full py-2 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    {joinLoading ? "Joining…" : "Join Group"}
-                  </button>
-
-                  <p className="text-[10px] text-slate-400 leading-relaxed">
-                    {githubRequired
-                      ? "Your GitHub username from your profile will be linked automatically."
-                      : "Your account identity will be linked automatically."}
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ── Step: Done ── */}
-          {step === "done" && (
-            <div className="text-center py-6 space-y-4">
+        <div className="px-6 py-5">
+          {done ? (
+            <div className="space-y-4 text-center">
               <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
                 <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-800">You've joined successfully!</p>
+                <p className="text-sm font-semibold text-slate-800">You're enrolled!</p>
+                {enrolled && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    {enrolled.subjectCode} — {enrolled.subjectName}
+                  </p>
+                )}
                 <p className="text-xs text-slate-400 mt-1">
-                  {githubRequired
-                    ? "Your group and GitHub username have been linked."
-                    : "You have been added to the group."}
+                  Open the class to create or join a group.
                 </p>
               </div>
               <button
@@ -476,6 +145,27 @@ function JoinClassModal({
                 Back to Dashboard
               </button>
             </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex gap-2.5">
+                <input
+                  value={joinCode}
+                  onChange={(e) => { setJoinCode(e.target.value); setError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleEnroll(); }}
+                  disabled={loading}
+                  placeholder="e.g. FT-APPS-2026"
+                  className="flex-1 min-w-0 rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:cursor-not-allowed disabled:text-slate-400"
+                />
+                <button
+                  onClick={() => void handleEnroll()}
+                  disabled={loading || !joinCode.trim()}
+                  className="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                >
+                  {loading ? "Enrolling…" : "Enroll →"}
+                </button>
+              </div>
+              {error && <p className="text-xs text-red-600">{error}</p>}
+            </div>
           )}
         </div>
       </div>
@@ -483,49 +173,44 @@ function JoinClassModal({
   );
 }
 
-// ── Class card — groups all a student's projects within one class ─────────────
+// ── Class card — navigates to /student/class/:id ───────────────────────────────
 function ClassCard({
-  classGroup,
+  cls,
   onNavigate,
-  onManage,
-  expanded,
-  onToggleExpand,
 }: {
-  classGroup: ClassGroup;
-  onNavigate: (projectId: number) => void;
-  onManage:   (projectId: number) => void;
-  expanded:   boolean;
-  onToggleExpand: () => void;
+  cls: EnrolledClass;
+  onNavigate: () => void;
 }) {
-  const { classSection, enrollments } = classGroup;
-  const single    = enrollments.length === 1;
-  const e0        = enrollments[0]!;
-  const gradient  = pickGradient(classSection.subjectCode);
-  const bandLabel = classSection.edpCode || classSection.subjectCode;
+  const [copied, setCopied] = useState(false);
 
-  // For display: if one enrollment, show its health; if multiple, show the most recent
-  const latestReport = enrollments
-    .map((e) => e.report)
-    .filter(Boolean)
-    .sort((a, b) => new Date(b!.generatedAt).getTime() - new Date(a!.generatedAt).getTime())[0] ?? null;
+  const gradient       = pickGradient(cls.subjectCode);
+  const joinedCount    = cls.assignments.filter((a) => a.myGroup !== null).length;
+  const totalAssignments = cls.assignments.length;
+  const bandLabel      = cls.edpCode || cls.subjectCode;
 
-  function handleBandClick() {
-    if (single) {
-      onNavigate(e0.project.id);
-    } else {
-      onToggleExpand();
-    }
+  const latestReport = cls.assignments
+    .flatMap((a) => (a.myGroup?.report ? [a.myGroup.report] : []))
+    .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime())[0] ?? null;
+
+  async function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!cls.joinCode) return;
+    await navigator.clipboard.writeText(cls.joinCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
-    <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all group">
-      {/* Colored band — clickable */}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onNavigate}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onNavigate(); }}
+      className="group cursor-pointer w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+    >
+      {/* Colored band */}
       <div
-        role="button"
-        tabIndex={0}
-        onClick={handleBandClick}
-        onKeyDown={(e) => e.key === "Enter" && handleBandClick()}
-        className="relative px-5 pt-5 pb-4 flex flex-col gap-3 cursor-pointer"
+        className="relative px-5 pt-5 pb-4 flex flex-col gap-3"
         style={{ background: gradient }}
       >
         <div className="flex items-start justify-between gap-2">
@@ -534,16 +219,9 @@ function ClassCard({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          {!single && (
-            <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
-              {enrollments.length} projects
-            </span>
-          )}
-          {single && (
-            <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
-              {e0.membership.role === "LEADER" ? "Group Leader" : "Member"}
-            </span>
-          )}
+          <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
+            {joinedCount}/{totalAssignments} joined
+          </span>
         </div>
         <p className="text-white font-mono font-bold text-lg leading-tight tracking-tight">{bandLabel}</p>
       </div>
@@ -552,149 +230,64 @@ function ClassCard({
       <div className="px-5 py-4 flex flex-col gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">
-            {classSection.subjectName}
+            {cls.subjectName}
           </p>
-          {single && (
-            <p className="text-xs text-slate-400 mt-0.5">
-              {e0.project.groupName} · {e0.assignment.title}
-            </p>
-          )}
+          <p className="text-xs text-slate-400 mt-0.5">{cls.course}</p>
         </div>
 
-        {/* Join code(s) — always shown as reference info */}
-        <div className="flex flex-wrap gap-2">
-          {enrollments.map((e) => (
-            <span
-              key={e.assignment.id}
-              className="inline-flex items-center gap-1 text-[11px] bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1"
+        {/* Class join code — always visible with copy button */}
+        {cls.joinCode ? (
+          <div
+            className="flex items-center gap-1.5 self-start bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+            <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{cls.joinCode}</span>
+            <button
+              onClick={(e) => void handleCopy(e)}
+              title={copied ? "Copied!" : "Copy class join code"}
+              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
             >
-              <span className="text-slate-400">Code:</span>
-              <span className="font-mono font-semibold text-slate-600 tracking-wide">{e.assignment.joinCode}</span>
-              {!single && <span className="text-slate-400 ml-0.5">({e.assignment.title})</span>}
-            </span>
-          ))}
-        </div>
-
-        {/* Metadata badges — for single-project only (multi handled below) */}
-        {single && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
-              {SOURCE_LABEL[e0.assignment.sourceType] ?? e0.assignment.sourceType}
-            </span>
-            {e0.assignment.deadline && (
-              <span className="text-[11px] text-slate-500 bg-slate-50 rounded-full px-2.5 py-1 border border-slate-200">
-                Due {new Date(e0.assignment.deadline).toLocaleDateString()}
-              </span>
-            )}
+              {copied ? (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
           </div>
+        ) : (
+          <span className="text-[11px] text-slate-300 italic">No join code</span>
         )}
 
-        {/* Health indicator — single project */}
-        {single && (
-          latestReport ? (
-            <div className="flex items-center justify-between">
-              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth ?? ""] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                {latestReport.teamHealth ?? "Unknown"}
-              </span>
-              <p className="text-[11px] text-slate-400">
-                Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
-              </p>
-            </div>
-          ) : (
-            <p className="text-[11px] text-slate-400 italic">Awaiting first analysis by instructor</p>
+        {/* Health — shown in addition to (not instead of) join code */}
+        {latestReport?.teamHealth ? (
+          <div className="flex items-center justify-between">
+            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+              {latestReport.teamHealth}
+            </span>
+            <p className="text-[11px] text-slate-400">
+              Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
+            </p>
+          </div>
+        ) : (
+          joinedCount > 0 && (
+            <p className="text-[11px] text-slate-400 italic">Awaiting first analysis</p>
           )
         )}
 
-        {/* Footer — single project */}
-        {single && (
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <button
-              onClick={() => onNavigate(e0.project.id)}
-              className="text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
-            >
-              View my project →
-            </button>
-            {e0.membership.role === "LEADER" && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onManage(e0.project.id); }}
-                className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
-              >
-                Manage group
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Multi-project: expand toggle */}
-        {!single && (
-          <button
-            onClick={onToggleExpand}
-            className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-medium text-indigo-500 hover:text-indigo-700 transition-colors w-full text-left"
-          >
-            <span>{expanded ? "Hide projects" : `View my ${enrollments.length} projects →`}</span>
-            <svg
-              className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        )}
-
-        {/* Multi-project: expanded project list */}
-        {!single && expanded && (
-          <div className="space-y-2 mt-1">
-            {enrollments.map((e) => (
-              <div
-                key={`${e.assignment.id}-${e.project.id}`}
-                className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-700 truncate">{e.project.groupName}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[10px] text-slate-400">{e.assignment.title}</span>
-                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5">
-                      {SOURCE_LABEL[e.assignment.sourceType] ?? e.assignment.sourceType}
-                    </span>
-                    {e.assignment.deadline && (
-                      <span className="text-[10px] text-slate-400">
-                        Due {new Date(e.assignment.deadline).toLocaleDateString()}
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                      e.membership.role === "LEADER"
-                        ? "text-indigo-700 bg-indigo-50 border-indigo-200"
-                        : "text-slate-500 bg-white border-slate-200"
-                    }`}>
-                      {e.membership.role === "LEADER" ? "Leader" : "Member"}
-                    </span>
-                    {e.report && (
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[e.report.teamHealth ?? ""] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                        {e.report.teamHealth ?? "Unknown"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {e.membership.role === "LEADER" && (
-                    <button
-                      onClick={() => onManage(e.project.id)}
-                      className="text-[11px] text-slate-400 hover:text-slate-700 font-medium transition-colors"
-                    >
-                      Manage
-                    </button>
-                  )}
-                  <button
-                    onClick={() => onNavigate(e.project.id)}
-                    className="text-[11px] font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
-                  >
-                    View →
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+          <span className="text-[11px] text-slate-400">
+            {totalAssignments} project{totalAssignments !== 1 ? "s" : ""}
+          </span>
+          <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">
+            Open →
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -705,38 +298,25 @@ export function StudentPage() {
   const { user, token } = useAuth();
   const { navigate }    = useRouter();
 
-  const [enrollments, setEnrollments]         = useState<Enrollment[]>([]);
-  const [loading, setLoading]                 = useState(true);
-  const [error, setError]                     = useState("");
-  const [showJoinModal, setShowJoinModal]     = useState(false);
-  const [refreshKey, setRefreshKey]           = useState(0);
-  const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
-  const [expandedClassId, setExpandedClassId] = useState<number | null>(null);
+  const [classes, setClasses]         = useState<EnrolledClass[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState("");
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [refreshKey, setRefreshKey]   = useState(0);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
     setLoading(true);
-    fetch("/api/student/me", { headers: { Authorization: `Bearer ${token}` } })
+    fetch("/api/student/classes", { headers: { Authorization: `Bearer ${token}` } })
       .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to load your enrollments.");
-        const data = (await res.json()) as { enrollments: Enrollment[] };
-        setEnrollments(data.enrollments);
+        if (!res.ok) throw new Error("Failed to load your classes.");
+        const data = (await res.json()) as { classes: EnrolledClass[] };
+        setClasses(data.classes);
         setError("");
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load data."))
       .finally(() => setLoading(false));
   }, [token, refreshKey]);
-
-  // Group enrollments by classSection — one card per class
-  const classGroups: ClassGroup[] = (() => {
-    const map = new Map<number, ClassGroup>();
-    for (const e of enrollments) {
-      const key = e.classSection.id;
-      if (!map.has(key)) map.set(key, { classSection: e.classSection, enrollments: [] });
-      map.get(key)!.enrollments.push(e);
-    }
-    return Array.from(map.values());
-  })();
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -750,15 +330,6 @@ export function StudentPage() {
         />
       )}
 
-      {managingProjectId !== null && (
-        <GroupManageModal
-          projectId={managingProjectId}
-          isInstructor={false}
-          onClose={() => setManagingProjectId(null)}
-          onChanged={() => setRefreshKey((k) => k + 1)}
-        />
-      )}
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
@@ -769,7 +340,7 @@ export function StudentPage() {
             <p className="text-xs text-slate-500 mt-0.5">
               {loading
                 ? "Loading…"
-                : `${classGroups.length} class${classGroups.length !== 1 ? "es" : ""} enrolled`}
+                : `${classes.length} class${classes.length !== 1 ? "es" : ""} enrolled`}
             </p>
           </div>
           <button
@@ -798,7 +369,7 @@ export function StudentPage() {
           </div>
         )}
 
-        {!loading && !error && classGroups.length === 0 && (
+        {!loading && !error && classes.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
             <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
               <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -808,7 +379,7 @@ export function StudentPage() {
             <div>
               <p className="text-sm font-medium text-slate-700">No classes yet</p>
               <p className="text-xs text-slate-400 mt-1">
-                Join a class using the join code your instructor provided.
+                Join a class using the class join code your instructor provided.
               </p>
             </div>
             <button
@@ -823,22 +394,17 @@ export function StudentPage() {
           </div>
         )}
 
-        {!loading && !error && classGroups.length > 0 && (
+        {!loading && !error && classes.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">
               My Classes
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {classGroups.map((cg) => (
+              {classes.map((cls) => (
                 <ClassCard
-                  key={cg.classSection.id}
-                  classGroup={cg}
-                  onNavigate={(projectId) => navigate(`/student/group/${projectId}`)}
-                  onManage={(projectId) => setManagingProjectId(projectId)}
-                  expanded={expandedClassId === cg.classSection.id}
-                  onToggleExpand={() =>
-                    setExpandedClassId((id) => id === cg.classSection.id ? null : cg.classSection.id)
-                  }
+                  key={cls.id}
+                  cls={cls}
+                  onNavigate={() => navigate(`/student/class/${cls.id}`)}
                 />
               ))}
             </div>

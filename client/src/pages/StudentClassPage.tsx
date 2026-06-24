@@ -1,74 +1,429 @@
-import { useState } from "react";
-import { AppTopBar } from "../components/AppTopBar";
-import { parseClassLabel } from "../components/ClassCard";
-import { getStudentEnrollment } from "../data/sampleStudentData";
+import { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
+import { AppTopBar } from "../components/AppTopBar";
+import { GroupManageModal } from "../components/GroupManageModal";
 
-// ── FairTraze Docs authorship palette ────────────────────────────────────────
-const DOC_AUTHORS = [
-  { name: "Member A", bg: "#ede9fe", dot: "#7c3aed", words: 78, pct: 32 },
-  { name: "Member B", bg: "#d1fae5", dot: "#059669", words: 76, pct: 31 },
-  { name: "Member C", bg: "#fef3c7", dot: "#d97706", words: 64, pct: 26 },
-  { name: "Member D", bg: "#ffe4e6", dot: "#dc2626", words: 27, pct: 11 },
-];
-
-function AuthSeg({ authorIdx, children }: { authorIdx: number; children: string }) {
-  return (
-    <span
-      style={{ backgroundColor: DOC_AUTHORS[authorIdx].bg }}
-      className="rounded-[2px] px-0.5"
-      title={`Written by ${DOC_AUTHORS[authorIdx].name}`}
-    >
-      {children}
-    </span>
-  );
-}
-
+// ── Constants ─────────────────────────────────────────────────────────────────
 const HEALTH_BADGE: Record<string, string> = {
   "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
   "Moderate Risk": "text-amber-700 bg-amber-50 border-amber-200",
   "High Risk":     "text-red-700 bg-red-50 border-red-200",
 };
 
-type Tab = "contribution" | "document";
-
-const FLAG_DESCRIPTIONS: Record<string, string> = {
-  "deadline-driven": "A high proportion of your commits were recorded in the final third of the project timeline. This pattern may indicate delayed contribution.",
-  "free-rider":      "Your contribution share is below half the equal share for this team.",
-  "inactive":        "No recorded activity was found in the analyzed period.",
-  "overload":        "Your contribution share significantly exceeds the equal share, suggesting an uneven workload distribution.",
+const SOURCE_LABEL: Record<string, string> = {
+  GITHUB:   "GitHub",
+  EDITOR:   "FairTraze Docs",
+  COMBINED: "GitHub + Docs",
 };
 
-interface Props {
-  classCode: string;
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface MyGroup {
+  id: number;
+  groupName: string;
+  name: string;
+  repoUrl: string;
+  role: "LEADER" | "MEMBER";
+  report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
 }
 
-export function StudentClassPage({ classCode }: Props) {
-  const { navigate } = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("contribution");
+interface AvailableGroup {
+  id: number;
+  groupName: string;
+  memberCount: number;
+  leaderName: string | null;
+  isFull: boolean;
+}
 
-  const enrollment = getStudentEnrollment(classCode);
+interface AssignmentDetail {
+  id: number;
+  title: string;
+  deadline: string | null;
+  sourceType: string;
+  maxGroupSize: number;
+  myGroup: MyGroup | null;
+  groups: AvailableGroup[];
+}
 
-  if (!enrollment) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <AppTopBar />
-        <main className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-          Class not found.
-        </main>
-      </div>
-    );
+interface ClassDetail {
+  classSection: {
+    id: number;
+    subjectCode: string;
+    subjectName: string;
+    course: string;
+    edpCode: string;
+    joinCode: string | null;
+  };
+  assignments: AssignmentDetail[];
+}
+
+// ── Copyable join code badge ──────────────────────────────────────────────────
+function JoinCodeBadge({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  async function handleCopy() {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+      <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+      <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+      <button
+        onClick={() => void handleCopy()}
+        title={copied ? "Copied!" : "Copy class join code"}
+        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+      >
+        {copied ? (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ── Project card — shows one assignment with create/join or group view ─────────
+function ProjectCard({
+  asgn,
+  token,
+  user,
+  onNavigate,
+  onManage,
+  onChanged,
+  refreshUser,
+}: {
+  asgn: AssignmentDetail;
+  token: string | null;
+  user: { githubUsername?: string | null } | null;
+  onNavigate: (projectId: number) => void;
+  onManage:   (projectId: number) => void;
+  onChanged:  () => void;
+  refreshUser: () => Promise<{ githubUsername?: string | null } | null>;
+}) {
+  const [mode, setMode]             = useState<"idle" | "create" | "join">("idle");
+  const [groupName, setGroupName]   = useState("");
+  const [repoUrl, setRepoUrl]       = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]           = useState("");
+
+  const needsGitHub = asgn.sourceType === "GITHUB" || asgn.sourceType === "COMBINED";
+  const noGithub    = needsGitHub && !user?.githubUsername;
+
+  async function handleCreate() {
+    if (!groupName.trim()) { setError("Enter a group name."); return; }
+    if (needsGitHub && !repoUrl.trim()) { setError("Enter the GitHub repository URL."); return; }
+    const fresh = await refreshUser();
+    const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
+    if (needsGitHub && !githubUsername) {
+      setError("Add your GitHub username in Settings before creating a group.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/join/create-group", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim(), repoUrl: repoUrl.trim() }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Could not create group."); return; }
+      onChanged();
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  const { subjectName } = parseClassLabel(enrollment.assignmentLabel);
-  const { contribution } = enrollment;
-  const mySharePct    = (contribution.share    * 100).toFixed(0);
-  const equalSharePct = (contribution.equalShare * 100).toFixed(0);
-  const giniLabel = contribution.gini < 0.2 ? "Healthy" : contribution.gini < 0.4 ? "Moderate Risk" : "High Risk";
+  async function handleJoin() {
+    if (!selectedId) { setError("Select a group to join."); return; }
+    const fresh = await refreshUser();
+    const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
+    if (needsGitHub && !githubUsername) {
+      setError("Add your GitHub username in Settings before joining a group.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/join/join-group", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ projectGroupId: selectedId }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Could not join group."); return; }
+      onChanged();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function fmtDeadline(iso: string | null): string {
+    if (!iso) return "No deadline";
+    return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Card header */}
+      <div className="px-5 pt-5 pb-3 border-b border-slate-100">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-slate-800 leading-snug">{asgn.title}</h3>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                {SOURCE_LABEL[asgn.sourceType] ?? asgn.sourceType}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {fmtDeadline(asgn.deadline)}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Max {asgn.maxGroupSize} per group
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Card body */}
+      <div className="px-5 py-4">
+        {/* Student is already in a group */}
+        {asgn.myGroup ? (() => {
+          const g = asgn.myGroup!;
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                  g.role === "LEADER"
+                    ? "text-indigo-700 bg-indigo-50 border-indigo-200"
+                    : "text-slate-500 bg-white border-slate-200"
+                }`}>
+                  {g.role === "LEADER" ? "Leader" : "Member"}
+                </span>
+                <span className="text-sm font-semibold text-slate-700">{g.groupName}</span>
+                {g.report?.teamHealth && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                    {g.report.teamHealth}
+                  </span>
+                )}
+              </div>
+
+              {!g.report && (
+                <p className="text-[11px] text-slate-400 italic">No analysis yet — awaiting instructor.</p>
+              )}
+
+              <div className="flex items-center gap-3 pt-1">
+                {g.role === "LEADER" && (
+                  <button
+                    onClick={() => onManage(g.id)}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
+                  >
+                    Manage group
+                  </button>
+                )}
+                <button
+                  onClick={() => onNavigate(g.id)}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
+                >
+                  View report →
+                </button>
+              </div>
+            </div>
+          );
+        })() : (
+          /* Student has no group yet — show create/join UI */
+          <div className="space-y-3">
+            {/* GitHub warning if needed */}
+            {noGithub && mode !== "idle" && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
+                <strong>GitHub username required for this project.</strong>{" "}
+                <a href="/settings" className="underline font-semibold hover:text-amber-900">Add it in Settings</a> first.
+              </div>
+            )}
+
+            {/* Idle: action buttons */}
+            {mode === "idle" && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => { setMode("create"); setError(""); }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Create group
+                </button>
+                {asgn.groups.length > 0 && (
+                  <button
+                    onClick={() => { setMode("join"); setError(""); }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                  >
+                    Join existing group
+                  </button>
+                )}
+                {asgn.groups.length === 0 && (
+                  <p className="text-[11px] text-slate-400 italic">No groups yet — be the first to create one.</p>
+                )}
+              </div>
+            )}
+
+            {/* Create group form */}
+            {mode === "create" && (
+              <div className="space-y-2">
+                <input
+                  value={groupName}
+                  onChange={(e) => { setGroupName(e.target.value); setError(""); }}
+                  placeholder="Group name — e.g. Group 1"
+                  disabled={submitting}
+                  className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                {needsGitHub && (
+                  <input
+                    value={repoUrl}
+                    onChange={(e) => { setRepoUrl(e.target.value); setError(""); }}
+                    placeholder="GitHub repo URL — e.g. github.com/org/repo"
+                    disabled={submitting}
+                    className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                )}
+                {error && <p className="text-xs text-red-600">{error}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => void handleCreate()}
+                    disabled={submitting || noGithub}
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? "Creating…" : "Create Group"}
+                  </button>
+                  <button
+                    onClick={() => { setMode("idle"); setError(""); setGroupName(""); setRepoUrl(""); }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Leadership is administrative only — it grants no contribution credit.
+                </p>
+              </div>
+            )}
+
+            {/* Join group form */}
+            {mode === "join" && (
+              <div className="space-y-2">
+                {asgn.groups.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No groups yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {asgn.groups.map((g) => (
+                      <label
+                        key={g.id}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${
+                          g.isFull
+                            ? "opacity-50 cursor-not-allowed bg-slate-50 border-slate-200"
+                            : selectedId === g.id
+                            ? "bg-indigo-50 border-indigo-300 cursor-pointer"
+                            : "bg-slate-50 border-slate-200 hover:border-slate-300 cursor-pointer"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`join-${asgn.id}`}
+                          value={g.id}
+                          disabled={g.isFull}
+                          checked={selectedId === g.id}
+                          onChange={() => { setSelectedId(g.id); setError(""); }}
+                          className="shrink-0"
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="text-xs font-medium text-slate-700">{g.groupName}</span>
+                          <span className="text-[11px] text-slate-400 ml-2">
+                            {g.memberCount} / {asgn.maxGroupSize} members
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {g.isFull ? "Full" : g.leaderName ? `Leader: ${g.leaderName}` : ""}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {error && <p className="text-xs text-red-600">{error}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => void handleJoin()}
+                    disabled={submitting || !selectedId || noGithub}
+                    className="flex-1 py-1.5 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? "Joining…" : "Join Group"}
+                  </button>
+                  <button
+                    onClick={() => { setMode("idle"); setError(""); setSelectedId(null); }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+interface Props { classId: number }
+
+export function StudentClassPage({ classId }: Props) {
+  const { user, token, refreshUser } = useAuth();
+  const { navigate }                 = useRouter();
+
+  const [detail, setDetail]           = useState<ClassDetail | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState("");
+  const [refreshKey, setRefreshKey]   = useState(0);
+  const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!token) { setLoading(false); return; }
+    setLoading(true);
+    setError("");
+    fetch(`/api/student/classes/${classId}/projects`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        const data = (await res.json()) as ClassDetail & { error?: string };
+        if (!res.ok) { setError(data.error ?? "Could not load class."); return; }
+        setDetail(data);
+      })
+      .catch(() => setError("Network error — is the server running?"))
+      .finally(() => setLoading(false));
+  }, [token, classId, refreshKey]);
+
+  const cls = detail?.classSection;
+  const assignments = detail?.assignments ?? [];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <AppTopBar />
+
+      {managingProjectId !== null && (
+        <GroupManageModal
+          projectId={managingProjectId}
+          isInstructor={false}
+          onClose={() => setManagingProjectId(null)}
+          onChanged={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
 
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
@@ -81,344 +436,84 @@ export function StudentClassPage({ classCode }: Props) {
               Dashboard
             </button>
             <span className="text-slate-300 text-xs shrink-0">›</span>
-            <span className="shrink-0 text-xs font-mono font-medium text-slate-400">{classCode}</span>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm font-semibold text-slate-800 truncate">{enrollment.assignmentTitle}</h1>
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
-                  {enrollment.sourceType}
-                </span>
-              </div>
+              {cls ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-mono font-bold text-indigo-600">
+                    {cls.subjectCode}
+                    {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
+                  </span>
+                  <h1 className="text-sm font-semibold text-slate-800">{cls.subjectName}</h1>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                    {cls.course}
+                  </span>
+                </div>
+              ) : (
+                <h1 className="text-sm font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
+              )}
               <p className="text-xs text-slate-400 mt-0.5">
-                {subjectName && <span className="mr-1">{subjectName} ·</span>}
-                {enrollment.groupName} · Deadline: {enrollment.deadline}
+                {assignments.length} project{assignments.length !== 1 ? "s" : ""}
+                {" · "}
+                {assignments.filter((a) => a.myGroup !== null).length} joined
               </p>
             </div>
           </div>
-          <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[enrollment.teamHealth]}`}>
-            {enrollment.teamHealth}
-          </span>
-        </div>
 
-        {/* Tab bar */}
-        <div className="max-w-5xl mx-auto px-6 sm:px-8 flex border-t border-slate-100">
-          {(["contribution", "document"] as Tab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
-                activeTab === tab
-                  ? "border-indigo-500 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {tab === "contribution" ? "My Contribution" : (
-                <>
-                  Document
-                  <span className="ml-1.5 text-[9px] font-bold text-violet-500 bg-violet-50 border border-violet-200 rounded px-1 py-0.5 normal-case tracking-normal">
-                    Preview
-                  </span>
-                </>
-              )}
-            </button>
-          ))}
+          {/* Join code — always shown in header */}
+          {cls?.joinCode && <JoinCodeBadge code={cls.joinCode} />}
         </div>
       </div>
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
 
-        {/* ── My Contribution tab ─────────────────────────────────────────────── */}
-        {activeTab === "contribution" && (
-          <div className="space-y-6">
+        {loading && (
+          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+            <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+            Loading projects…
+          </div>
+        )}
 
-            {/* Share overview */}
-            <div className="bg-white border border-slate-200 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-800">Your contribution share</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {enrollment.groupName} · {enrollment.projectName} · {contribution.memberCount} members
-                  </p>
-                </div>
-                <span className="text-3xl font-bold text-indigo-600">{mySharePct}%</span>
-              </div>
+        {!loading && error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-slate-500">Your share</span>
-                  <span className="font-semibold text-slate-700">{mySharePct}%</span>
-                </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden relative">
-                  <div
-                    className="h-full rounded-full bg-indigo-400 transition-all"
-                    style={{ width: `${contribution.share * 100}%` }}
-                  />
-                  {/* Equal share marker */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-slate-500/60"
-                    style={{ left: `${contribution.equalShare * 100}%` }}
-                  />
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  Equal share for {contribution.memberCount} members = {equalSharePct}%
-                  {contribution.share >= contribution.equalShare
-                    ? " · Your share is at or above the equal share."
-                    : " · Your share is below the equal share."}
-                  {" "}The marker line shows the equal share.
-                </p>
-              </div>
+        {!loading && !error && assignments.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
             </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700">No projects yet</p>
+              <p className="text-xs text-slate-400 mt-1">Your instructor hasn't created any projects for this class.</p>
+            </div>
+          </div>
+        )}
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {([
-                { label: "Commits",       value: String(contribution.commits) },
-                { label: "Active Days",   value: String(contribution.activeDays) },
-                { label: "Lines Added",   value: contribution.linesAdded.toLocaleString() },
-                { label: "Lines Deleted", value: contribution.linesDeleted.toLocaleString() },
-              ] as const).map(({ label, value }) => (
-                <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
-                  <p className="text-xl font-bold text-slate-800">{value}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
-                </div>
+        {!loading && !error && assignments.length > 0 && (
+          <>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">
+              Projects
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {assignments.map((asgn) => (
+                <ProjectCard
+                  key={asgn.id}
+                  asgn={asgn}
+                  token={token}
+                  user={user}
+                  onNavigate={(projectId) => navigate(`/student/group/${projectId}`)}
+                  onManage={(projectId) => setManagingProjectId(projectId)}
+                  onChanged={() => setRefreshKey((k) => k + 1)}
+                  refreshUser={refreshUser}
+                />
               ))}
             </div>
-
-            {/* Team context */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
-              <div className="flex items-start gap-6 flex-wrap">
-                <div>
-                  <p className="text-[11px] text-slate-400 mb-1.5">Team Health</p>
-                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[enrollment.teamHealth]}`}>
-                    {enrollment.teamHealth}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-[11px] text-slate-400 mb-1.5">Contribution Gini</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-slate-700">{contribution.gini.toFixed(2)}</span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[giniLabel]}`}>
-                      {giniLabel}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[11px] text-slate-400 mb-1.5">Last Analyzed</p>
-                  <p className="text-sm font-medium text-slate-700">{enrollment.lastAnalyzed}</p>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
-                The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. Only aggregate team data is shown here — individual teammates' scores are not exposed in this view.
-              </p>
-            </div>
-
-            {/* Your flags */}
-            <div>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Your Flags</h3>
-              {contribution.flags.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 text-sm text-slate-400 text-center">
-                  No flags on your contributions.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {contribution.flags.map((flag) => (
-                    <div key={flag} className="bg-white border border-yellow-200 rounded-xl p-5">
-                      <div className="flex items-start gap-3">
-                        <div className="shrink-0 w-7 h-7 rounded-full bg-yellow-100 flex items-center justify-center mt-0.5">
-                          <svg className="w-3.5 h-3.5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-[11px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5">
-                              {flag}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-700 leading-relaxed">
-                            {FLAG_DESCRIPTIONS[flag] ?? "A flag has been raised on your contribution pattern."}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1.5">
-                            This flag is visible to your instructor. You may submit a note to provide context.
-                          </p>
-
-                          {/* Flag for review — disabled preview */}
-                          <div className="mt-4 space-y-2">
-                            <textarea
-                              disabled
-                              placeholder="Explain context for your instructor (e.g. I was working offline and pushed at the end)…"
-                              rows={2}
-                              className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-400 placeholder-slate-300 resize-none cursor-not-allowed"
-                            />
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <button
-                                disabled
-                                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-100 text-indigo-400 text-xs font-semibold cursor-not-allowed border border-indigo-200"
-                              >
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
-                                </svg>
-                                Flag for review / Add a note
-                              </button>
-                              <span className="text-[11px] text-slate-400">Coming soon</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
+          </>
         )}
-
-        {/* ── Document tab (FairTraze Docs preview) ────────────────────────────── */}
-        {activeTab === "document" && (
-          <div>
-            <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
-                Preview
-              </span>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — document contributions recorded per author
-              </span>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-
-              {/* Toolbar */}
-              <div className="flex items-center gap-0.5 px-3 py-2 border-b border-slate-100 bg-slate-50 overflow-x-auto pointer-events-none select-none">
-                {(["B", "I", "U"] as const).map((fmt, i) => (
-                  <button
-                    key={fmt}
-                    className="w-7 h-7 rounded flex items-center justify-center text-sm text-slate-400"
-                    style={{
-                      fontWeight:     i === 0 ? "bold"      : "normal",
-                      fontStyle:      i === 1 ? "italic"    : "normal",
-                      textDecoration: i === 2 ? "underline" : "none",
-                    }}
-                  >
-                    {fmt}
-                  </button>
-                ))}
-                <span className="w-px h-4 bg-slate-200 mx-1.5" />
-                {(["H1", "H2"] as const).map((h) => (
-                  <button key={h} className="px-1.5 h-7 rounded flex items-center justify-center text-[11px] font-semibold text-slate-400">
-                    {h}
-                  </button>
-                ))}
-                <span className="w-px h-4 bg-slate-200 mx-1.5" />
-                <button className="w-7 h-7 rounded flex items-center justify-center text-slate-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                  </svg>
-                </button>
-                <button className="w-7 h-7 rounded flex items-center justify-center text-slate-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01" />
-                  </svg>
-                </button>
-                <span className="w-px h-4 bg-slate-200 mx-1.5" />
-                <button className="w-7 h-7 rounded flex items-center justify-center text-slate-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                </button>
-                <span className="w-px h-4 bg-slate-200 mx-1.5" />
-                <button className="w-7 h-7 rounded flex items-center justify-center text-slate-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                </button>
-                <button className="w-7 h-7 rounded flex items-center justify-center text-slate-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Editor body + contributor panel */}
-              <div className="flex divide-x divide-slate-100">
-                <div className="flex-1 px-8 py-6 overflow-y-auto max-h-[28rem] text-sm leading-relaxed text-slate-700 min-w-0">
-                  <h2 className="text-base font-bold text-slate-900 mb-4">
-                    <AuthSeg authorIdx={0}>FairTraze AI — Technical Design Document</AuthSeg>
-                  </h2>
-                  <p className="mb-3">
-                    <AuthSeg authorIdx={0}>
-                      This document describes the architecture and design of FairTraze AI, a system that helps instructors fairly assess individual contributions in academic group projects by analysing digital collaboration traces.
-                    </AuthSeg>
-                  </p>
-                  <p className="mb-3">
-                    <AuthSeg authorIdx={1}>
-                      The backend is built with Express and TypeScript. Data is stored in SQLite through Prisma ORM. Routes are organised by domain — auth, projects, and analyze — and all request bodies are validated with Zod schemas to ensure type safety at the API boundary.
-                    </AuthSeg>
-                  </p>
-                  <p className="mb-3">
-                    <AuthSeg authorIdx={2}>
-                      Users authenticate via email and password. Passwords are hashed with bcryptjs before storage. Three middleware layers — authenticateToken, requireAuth, and requireRole — protect all sensitive routes from unauthorised access.
-                    </AuthSeg>
-                  </p>
-                  <p className="mb-3">
-                    <AuthSeg authorIdx={0}>
-                      All contribution scores are computed deterministically in the shared scoring module. The AI component generates plain-language explanations of pre-computed numbers only — it never calculates, modifies, or overrides any score.
-                    </AuthSeg>
-                  </p>
-                  <p className="mb-3">
-                    <AuthSeg authorIdx={3}>
-                      A planned second data source is the FairTraze Collaborative Editor — a real-time TipTap + Yjs environment that captures per-user timestamped edits for contribution analysis.
-                    </AuthSeg>
-                  </p>
-                  <p className="mb-3">
-                    <AuthSeg authorIdx={1}>
-                      The Gini coefficient measures contribution inequality within a team. A value below 0.2 is Healthy; 0.2 to 0.4 is Moderate Risk; above 0.4 is High Risk and triggers detailed flag analysis.
-                    </AuthSeg>
-                  </p>
-                  <p>
-                    <AuthSeg authorIdx={2}>
-                      Future phases add institutional hierarchy, Google OAuth, student dashboards, and blended GitHub + editor scoring. All flag thresholds are configurable per assignment.
-                    </AuthSeg>
-                  </p>
-                </div>
-
-                {/* Contributor panel */}
-                <div className="hidden sm:flex flex-col w-48 px-4 py-5 gap-3.5 shrink-0">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Authorship</p>
-                  {DOC_AUTHORS.map((a) => (
-                    <div key={a.name}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: a.dot }} />
-                        <span className="text-xs font-medium text-slate-700 flex-1 truncate">{a.name}</span>
-                        <span className="text-[11px] font-semibold text-slate-500">{a.pct}%</span>
-                      </div>
-                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${a.pct}%`, backgroundColor: a.dot }} />
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{a.words} words</p>
-                    </div>
-                  ))}
-                  <div className="border-t border-slate-100 pt-3 mt-auto">
-                    <p className="text-[10px] text-slate-400 leading-relaxed">
-                      Highlights show who wrote each passage. Authorship is recorded per character in real time.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer bar */}
-              <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
-                <span className="text-[11px] text-violet-600 font-medium">Read-only preview</span>
-                <span className="text-slate-300 text-xs">·</span>
-                <span className="text-[11px] text-slate-400">The FairTraze Docs editor captures writing contributions alongside GitHub activity.</span>
-              </div>
-            </div>
-          </div>
-        )}
-
       </main>
 
       <footer className="border-t border-slate-200 bg-white">

@@ -6,67 +6,243 @@ import type { TeamReport } from "@shared/types.js";
 
 export const joinRouter = Router();
 
-// POST /api/join/lookup — validate a join code, return project info + existing groups
-joinRouter.post("/api/join/lookup", ...requireRole("STUDENT"), async (req, res) => {
+// ─── POST /api/join/class ──────────────────────────────────────────────────────
+// Enroll a student in a class using the class-level join code.
+// 404 if code doesn't match; 409 if already enrolled.
+joinRouter.post("/api/join/class", ...requireRole("STUDENT"), async (req, res) => {
   const result = z.object({ joinCode: z.string().min(1) }).safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: "Please enter a join code." });
     return;
   }
 
-  const code = result.data.joinCode.trim().toUpperCase();
+  const userId = req.user!.sub;
+  const code   = result.data.joinCode.trim().toUpperCase();
 
-  const assignment = await prisma.assignment.findUnique({
+  const cls = await prisma.classSection.findUnique({
     where: { joinCode: code },
-    include: { classSection: true },
+    select: {
+      id: true, subjectCode: true, subjectName: true,
+      course: true, edpCode: true, joinCode: true,
+    },
   });
-
-  if (!assignment) {
+  if (!cls) {
     res.status(404).json({ error: "Invalid join code. Check the code and try again." });
     return;
   }
 
-  const projects = await prisma.project.findMany({
-    where: { assignmentId: assignment.id },
-    orderBy: { id: "asc" },
-    include: {
-      members: { select: { id: true } },
-      groupMemberships: {
-        where: { role: "LEADER" },
-        include: { user: { select: { name: true } } },
-        take: 1,
-      },
-    },
+  const existing = await prisma.classEnrollment.findUnique({
+    where: { userId_classSectionId: { userId, classSectionId: cls.id } },
+  });
+  if (existing) {
+    res.status(409).json({ error: "You are already enrolled in this class." });
+    return;
+  }
+
+  const enrollment = await prisma.classEnrollment.create({
+    data: { userId, classSectionId: cls.id },
   });
 
-  res.json({
-    assignment: {
-      id:          assignment.id,
-      title:       assignment.title,
-      deadline:    assignment.deadline?.toISOString() ?? null,
-      sourceType:  assignment.sourceType,
-      maxGroupSize: assignment.maxGroupSize,
-      classSection: {
-        subjectCode: assignment.classSection.subjectCode,
-        subjectName: assignment.classSection.subjectName,
-      },
-    },
-    groups: projects.map((p) => ({
-      id:          p.id,
-      groupName:   p.groupName || `Group ${p.id}`,
-      memberCount: p.members.length,
-      leaderName:  p.groupMemberships[0]?.user.name ?? null,
-      isFull:      p.members.length >= assignment.maxGroupSize,
-    })),
+  res.status(201).json({
+    classSectionId: cls.id,
+    subjectCode:    cls.subjectCode,
+    subjectName:    cls.subjectName,
+    course:         cls.course,
+    edpCode:        cls.edpCode,
+    joinedAt:       enrollment.joinedAt.toISOString(),
   });
 });
 
-// POST /api/join/create-group — student creates a new group, becomes leader
+// ─── GET /api/student/classes ─────────────────────────────────────────────────
+// Return all classes the student is enrolled in, with each assignment and
+// the student's group (if any) per assignment.
+joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, res) => {
+  const userId = req.user!.sub;
+
+  const enrollments = await prisma.classEnrollment.findMany({
+    where:   { userId },
+    orderBy: { joinedAt: "asc" },
+    include: {
+      classSection: {
+        include: {
+          assignments: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              projects: {
+                orderBy: { id: "asc" },
+                include: {
+                  groupMemberships: { where: { userId }, take: 1 },
+                  reports: {
+                    orderBy: { generatedAt: "desc" },
+                    take: 1,
+                    select: { gini: true, teamHealth: true, generatedAt: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const classes = enrollments.map((e) => {
+    const cs = e.classSection;
+    return {
+      id:          cs.id,
+      subjectCode: cs.subjectCode,
+      subjectName: cs.subjectName,
+      course:      cs.course,
+      edpCode:     cs.edpCode,
+      joinCode:    cs.joinCode,
+      joinedAt:    e.joinedAt.toISOString(),
+      // One entry per assignment — not per group/project
+      assignments: cs.assignments.map((a) => {
+        // Find the project (group) this student belongs to under this assignment
+        const myProject = a.projects.find((p) => p.groupMemberships.length > 0) ?? null;
+        const myMembership = myProject?.groupMemberships[0] ?? null;
+
+        return {
+          id:           a.id,
+          title:        a.title,
+          deadline:     a.deadline?.toISOString() ?? null,
+          sourceType:   a.sourceType,
+          maxGroupSize: a.maxGroupSize,
+          myGroup: myMembership && myProject
+            ? {
+                id:        myProject.id,
+                groupName: myProject.groupName || `Group ${myProject.id}`,
+                name:      myProject.name,
+                repoUrl:   myProject.repoUrl,
+                role:      myMembership.role,
+                report:    myProject.reports[0]
+                  ? {
+                      gini:        myProject.reports[0].gini,
+                      teamHealth:  myProject.reports[0].teamHealth,
+                      generatedAt: myProject.reports[0].generatedAt.toISOString(),
+                    }
+                  : null,
+              }
+            : null,
+        };
+      }),
+    };
+  });
+
+  res.json({ classes });
+});
+
+// ─── GET /api/student/classes/:id/projects ────────────────────────────────────
+// Full drill-down for one class: enrollment required.
+// Returns each assignment with the student's group and all joinable groups.
+joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), async (req, res) => {
+  const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid class id" });
+    return;
+  }
+
+  const userId         = req.user!.sub;
+  const classSectionId = idResult.data;
+
+  const enrollment = await prisma.classEnrollment.findUnique({
+    where: { userId_classSectionId: { userId, classSectionId } },
+  });
+  if (!enrollment) {
+    res.status(403).json({ error: "You are not enrolled in this class." });
+    return;
+  }
+
+  const cs = await prisma.classSection.findUnique({
+    where: { id: classSectionId },
+    include: {
+      assignments: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          projects: {
+            orderBy: { id: "asc" },
+            include: {
+              members:          { select: { id: true } },
+              groupMemberships: { include: { user: { select: { name: true } } } },
+              reports: {
+                orderBy: { generatedAt: "desc" },
+                take: 1,
+                select: { gini: true, teamHealth: true, generatedAt: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!cs) {
+    res.status(404).json({ error: "Class not found." });
+    return;
+  }
+
+  const assignments = cs.assignments.map((a) => {
+    const myProject    = a.projects.find((p) => p.groupMemberships.some((m) => m.userId === userId)) ?? null;
+    const myMembership = myProject?.groupMemberships.find((m) => m.userId === userId) ?? null;
+
+    return {
+      id:           a.id,
+      title:        a.title,
+      deadline:     a.deadline?.toISOString() ?? null,
+      sourceType:   a.sourceType,
+      maxGroupSize: a.maxGroupSize,
+      myGroup: myMembership && myProject
+        ? {
+            id:        myProject.id,
+            groupName: myProject.groupName || `Group ${myProject.id}`,
+            name:      myProject.name,
+            repoUrl:   myProject.repoUrl,
+            role:      myMembership.role,
+            report:    myProject.reports[0]
+              ? {
+                  gini:        myProject.reports[0].gini,
+                  teamHealth:  myProject.reports[0].teamHealth,
+                  generatedAt: myProject.reports[0].generatedAt.toISOString(),
+                }
+              : null,
+          }
+        : null,
+      // All groups in this assignment (for join UI — only relevant when myGroup is null)
+      groups: a.projects.map((p) => {
+        const leader = p.groupMemberships.find((m) => m.role === "LEADER");
+        return {
+          id:          p.id,
+          groupName:   p.groupName || `Group ${p.id}`,
+          memberCount: p.members.length,
+          leaderName:  leader?.user.name ?? null,
+          isFull:      p.members.length >= a.maxGroupSize,
+        };
+      }),
+    };
+  });
+
+  res.json({
+    classSection: {
+      id:          cs.id,
+      subjectCode: cs.subjectCode,
+      subjectName: cs.subjectName,
+      course:      cs.course,
+      edpCode:     cs.edpCode,
+      joinCode:    cs.joinCode,
+    },
+    assignments,
+  });
+});
+
+// ─── POST /api/join/create-group ─────────────────────────────────────────────
+// Student creates a new group for an assignment, becoming the leader.
+// Body: { projectId (the assignment id), groupName, repoUrl }
+// Requires enrollment in the assignment's class.
 joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req, res) => {
   const result = z.object({
-    joinCode:  z.string().min(1),
-    groupName: z.string().min(1, "Group name is required"),
-    repoUrl:   z.string().default(""),
+    assignmentId: z.number().int().positive(),
+    groupName:    z.string().min(1, "Group name is required"),
+    repoUrl:      z.string().default(""),
   }).safeParse(req.body);
 
   if (!result.success) {
@@ -75,20 +251,30 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
   }
 
   const userId = req.user!.sub;
-  const code   = result.data.joinCode.trim().toUpperCase();
 
-  // Fetch user and assignment in parallel — need sourceType before checking githubUsername
   const [user, assignment] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
-    prisma.assignment.findUnique({ where: { joinCode: code } }),
+    prisma.assignment.findUnique({
+      where: { id: result.data.assignmentId },
+      select: { id: true, classSectionId: true, sourceType: true, maxGroupSize: true },
+    }),
   ]);
 
   if (!assignment) {
-    res.status(404).json({ error: "Invalid join code." });
+    res.status(404).json({ error: "Assignment not found." });
     return;
   }
 
-  // GitHub username and repo URL only required when the project attributes to GitHub
+  // Verify enrollment in the class
+  const enrollment = await prisma.classEnrollment.findUnique({
+    where: { userId_classSectionId: { userId, classSectionId: assignment.classSectionId } },
+  });
+  if (!enrollment) {
+    res.status(403).json({ error: "You must be enrolled in this class to create a group." });
+    return;
+  }
+
+  // GitHub username + repo URL only required for GitHub-tracked assignments
   const needsGitHub = assignment.sourceType === "GITHUB" || assignment.sourceType === "COMBINED";
   if (needsGitHub && !user?.githubUsername) {
     res.status(400).json({ error: "Set your GitHub username in Settings before creating this group." });
@@ -99,6 +285,7 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
     return;
   }
 
+  // One group per student per assignment
   const alreadyIn = await prisma.groupMembership.findFirst({
     where: { userId, project: { assignmentId: assignment.id } },
   });
@@ -140,7 +327,10 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
   res.status(201).json({ id: project.id, groupName: project.groupName, role: "LEADER" });
 });
 
-// POST /api/join/join-group — student joins an existing group, becomes member
+// ─── POST /api/join/join-group ────────────────────────────────────────────────
+// Student joins an existing group as a member.
+// Body: { projectGroupId } — the project (group) id.
+// Requires enrollment in the group's class.
 joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, res) => {
   const result = z.object({
     projectGroupId: z.number().int().positive(),
@@ -153,14 +343,15 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
 
   const userId = req.user!.sub;
 
-  // Fetch user and project in parallel — need sourceType before checking githubUsername
   const [user, project] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.project.findUnique({
       where: { id: result.data.projectGroupId },
       include: {
-        assignment: { select: { maxGroupSize: true, sourceType: true } },
-        members:    { select: { id: true } },
+        assignment: {
+          select: { maxGroupSize: true, sourceType: true, classSectionId: true },
+        },
+        members: { select: { id: true } },
       },
     }),
   ]);
@@ -170,13 +361,28 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
     return;
   }
 
-  // GitHub username only required when the project actually attributes to GitHub
+  // Verify enrollment in the class
+  const enrollment = await prisma.classEnrollment.findUnique({
+    where: {
+      userId_classSectionId: {
+        userId,
+        classSectionId: project.assignment.classSectionId,
+      },
+    },
+  });
+  if (!enrollment) {
+    res.status(403).json({ error: "You must be enrolled in this class to join a group." });
+    return;
+  }
+
+  // GitHub username only required for GitHub-tracked assignments
   const needsGitHub = project.assignment.sourceType === "GITHUB" || project.assignment.sourceType === "COMBINED";
   if (needsGitHub && !user?.githubUsername) {
     res.status(400).json({ error: "Set your GitHub username in Settings before joining this group." });
     return;
   }
 
+  // One group per student per assignment
   const alreadyIn = await prisma.groupMembership.findFirst({
     where: { userId, project: { assignmentId: project.assignmentId } },
   });
@@ -215,71 +421,8 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
   });
 });
 
-// GET /api/student/me — student's enrolled classes and their groups
-joinRouter.get("/api/student/me", ...requireRole("STUDENT"), async (req, res) => {
-  const memberships = await prisma.groupMembership.findMany({
-    where: { userId: req.user!.sub },
-    include: {
-      project: {
-        include: {
-          assignment: {
-            include: { classSection: true },
-          },
-          reports: {
-            orderBy: { generatedAt: "desc" },
-            take: 1,
-            select: { gini: true, teamHealth: true, generatedAt: true },
-          },
-        },
-      },
-    },
-    orderBy: { joinedAt: "desc" },
-  });
-
-  const enrollments = memberships
-    .filter((m) => m.project.assignment)
-    .map((m) => {
-      const cs  = m.project.assignment!.classSection;
-      const asgn = m.project.assignment!;
-      return {
-        classSection: {
-          id:          cs.id,
-          subjectCode: cs.subjectCode,
-          subjectName: cs.subjectName,
-          course:      cs.course,
-          edpCode:     cs.edpCode,
-        },
-        assignment: {
-          id:          asgn.id,
-          title:       asgn.title,
-          deadline:    asgn.deadline?.toISOString() ?? null,
-          sourceType:  asgn.sourceType,
-          joinCode:    asgn.joinCode,
-        },
-        project: {
-          id:        m.project.id,
-          groupName: m.project.groupName || `Group ${m.project.id}`,
-          name:      m.project.name,
-          repoUrl:   m.project.repoUrl,
-        },
-        membership: {
-          role:     m.role,
-          joinedAt: m.joinedAt.toISOString(),
-        },
-        report: m.project.reports[0]
-          ? {
-              gini:        m.project.reports[0].gini,
-              teamHealth:  m.project.reports[0].teamHealth,
-              generatedAt: m.project.reports[0].generatedAt.toISOString(),
-            }
-          : null,
-      };
-    });
-
-  res.json({ enrollments });
-});
-
-// GET /api/student/group/:projectId — student's drill-down view of their own group + stored report
+// ─── GET /api/student/group/:projectId ───────────────────────────────────────
+// Student's drill-down: their contribution data for a specific group.
 joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async (req, res) => {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.projectId);
   if (!idResult.success) {
@@ -358,7 +501,6 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     ? (teamReport.members.find((m) => m.githubUsername === myGithubUsername) ?? null)
     : null;
 
-  // Build team shares with isMe flag (sorted descending) — no names, no per-member flags
   const sharesWithMe = teamReport.members
     .map((m) => ({ share: m.contributionShare, isMe: m.githubUsername === myGithubUsername }))
     .sort((a, b) => b.share - a.share);

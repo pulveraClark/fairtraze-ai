@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertOwnsClass } from "../lib/ownership.js";
+import { generateUniqueJoinCode } from "../lib/joinCode.js";
 
 export const classesRouter = Router();
 
@@ -16,7 +17,7 @@ const createClassSchema = z.object({
 
 const idParam = z.coerce.number().int().positive();
 
-// POST /api/classes — create a class section
+// POST /api/classes — create a class section with a generated class-level join code
 classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const result = createClassSchema.safeParse(req.body);
   if (!result.success) {
@@ -37,8 +38,10 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
     return;
   }
 
+  const joinCode = await generateUniqueJoinCode();
+
   const cls = await prisma.classSection.create({
-    data: { subjectCode, subjectName, course, edpCode, type, instructorId },
+    data: { subjectCode, subjectName, course, edpCode, type, instructorId, joinCode },
   });
 
   res.status(201).json(cls);
@@ -56,6 +59,9 @@ classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (re
   if (!cls) return;
 
   await prisma.$transaction(async (tx) => {
+    // Delete ClassEnrollment rows (students enrolled in this class)
+    await tx.classEnrollment.deleteMany({ where: { classSectionId: cls.id } });
+
     const assignments = await tx.assignment.findMany({
       where:  { classSectionId: cls.id },
       select: { id: true },
@@ -129,6 +135,7 @@ classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "
       course:      cls.course,
       edpCode:     cls.edpCode,
       type:        cls.type,
+      joinCode:    cls.joinCode,
       createdAt:   cls.createdAt,
     },
     assignments,

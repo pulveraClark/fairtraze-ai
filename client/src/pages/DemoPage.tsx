@@ -88,12 +88,15 @@ function CreateClassModal({
   const [classType, setClassType]     = useState<"LECTURE" | "LABORATORY">("LECTURE");
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  // After creation: show the generated class join code before closing
+  const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [copied, setCopied]           = useState(false);
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !createdCode) onClose(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, createdCode]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -113,8 +116,9 @@ function CreateClassModal({
         }),
       });
       if (res.ok) {
+        const data = (await res.json()) as { joinCode?: string };
+        setCreatedCode(data.joinCode ?? null);
         onCreated();
-        onClose();
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Failed to create class section");
@@ -126,17 +130,28 @@ function CreateClassModal({
     }
   }
 
+  async function handleCopy() {
+    if (!createdCode) return;
+    await navigator.clipboard.writeText(createdCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={onClose}
+      onClick={() => !createdCode && onClose()}
     >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
-            <h2 className="text-sm font-semibold text-slate-800">Create Class Section</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Add a new subject to your dashboard</p>
+            <h2 className="text-sm font-semibold text-slate-800">
+              {createdCode ? "Class section created" : "Create Class Section"}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {createdCode ? "Share the class join code with your students" : "Add a new subject to your dashboard"}
+            </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -145,93 +160,145 @@ function CreateClassModal({
           </button>
         </div>
 
-        {/* Body */}
-        <form onSubmit={(e) => void handleSubmit(e)}>
-          <div className="px-6 py-5 space-y-4">
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-xs text-red-700">
-                {error}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Subject code</label>
-                <input
-                  required
-                  value={subjectCode}
-                  onChange={(e) => setSubjectCode(e.target.value)}
-                  placeholder="e.g. CC-APPSDEV22"
-                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">EDP code</label>
-                <input
-                  required
-                  value={edpCode}
-                  onChange={(e) => setEdpCode(e.target.value)}
-                  placeholder="e.g. 31400"
-                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                />
-              </div>
+        {/* Success state — show class join code */}
+        {createdCode ? (
+          <div className="px-6 py-6 space-y-5">
+            <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">"{subjectCode}" was created successfully.</span>
             </div>
+
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Subject name</label>
-              <input
-                required
-                value={subjectName}
-                onChange={(e) => setSubjectName(e.target.value)}
-                placeholder="e.g. Applications Development"
-                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-              />
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                Class join code
+                <span className="ml-1 font-normal text-slate-400">— share this with your students</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 font-mono text-xl font-bold text-indigo-700 tracking-widest text-center select-all">
+                  {createdCode}
+                </div>
+                <button
+                  onClick={() => void handleCopy()}
+                  title="Copy join code"
+                  className={`shrink-0 p-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    copied
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700"
+                  }`}
+                >
+                  {copied ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Students enter this code once to enroll in the class. They can then create or join groups for each project.
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="flex justify-end pt-1 border-t border-slate-100">
+              <button onClick={onClose} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors">
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Creation form */
+          <form onSubmit={(e) => void handleSubmit(e)}>
+            <div className="px-6 py-5 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-xs text-red-700">
+                  {error}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Subject code</label>
+                  <input
+                    required
+                    value={subjectCode}
+                    onChange={(e) => setSubjectCode(e.target.value)}
+                    placeholder="e.g. CC-APPSDEV22"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">EDP code</label>
+                  <input
+                    required
+                    value={edpCode}
+                    onChange={(e) => setEdpCode(e.target.value)}
+                    placeholder="e.g. 31400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </div>
+              </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Program / Course</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5">Subject name</label>
                 <input
-                  value={course}
-                  onChange={(e) => setCourse(e.target.value)}
-                  placeholder="e.g. BSIT"
+                  required
+                  value={subjectName}
+                  onChange={(e) => setSubjectName(e.target.value)}
+                  placeholder="e.g. Applications Development"
                   className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Type</label>
-                <select
-                  value={classType}
-                  onChange={(e) => setClassType(e.target.value as "LECTURE" | "LABORATORY")}
-                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                >
-                  <option value="LECTURE">Lecture</option>
-                  <option value="LABORATORY">Laboratory</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Program / Course</label>
+                  <input
+                    value={course}
+                    onChange={(e) => setCourse(e.target.value)}
+                    placeholder="e.g. BSIT"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Type</label>
+                  <select
+                    value={classType}
+                    onChange={(e) => setClassType(e.target.value as "LECTURE" | "LABORATORY")}
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  >
+                    <option value="LECTURE">Lecture</option>
+                    <option value="LABORATORY">Laboratory</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
-            <button
-              type="submit"
-              disabled={submitting || !subjectCode.trim() || !subjectName.trim() || !edpCode.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
-            >
-              {submitting ? (
-                <>
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                  Creating…
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Create Class Section
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+              <button
+                type="submit"
+                disabled={submitting || !subjectCode.trim() || !subjectName.trim() || !edpCode.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+              >
+                {submitting ? (
+                  <>
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Creating…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Class Section
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

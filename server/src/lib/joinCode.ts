@@ -9,7 +9,11 @@ function randomSegment(len: number): string {
 export async function generateUniqueJoinCode(): Promise<string> {
   for (;;) {
     const code = `FT-${randomSegment(4)}-${randomSegment(4)}`;
-    const existing = await prisma.assignment.findUnique({ where: { joinCode: code } });
-    if (!existing) return code;
+    // Check both tables to guarantee global uniqueness across ClassSection and Assignment
+    const [existingAssignment, existingClass] = await Promise.all([
+      prisma.assignment.findUnique({ where: { joinCode: code } }),
+      prisma.classSection.findFirst({ where: { joinCode: code } }),
+    ]);
+    if (!existingAssignment && !existingClass) return code;
   }
 }

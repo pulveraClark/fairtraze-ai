@@ -99,7 +99,6 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
     assignment: {
       id:            assignment.id,
       title:         assignment.title,
-      joinCode:      assignment.joinCode,
       deadline:      assignment.deadline,
       maxGroupSize:  assignment.maxGroupSize,
       sourceType:    assignment.sourceType,

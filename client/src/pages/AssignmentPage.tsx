@@ -88,6 +88,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [loadError, setLoadError]   = useState<string | null>(null);
   const [sortMode, setSortMode]     = useState<SortMode>("risk");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [search, setSearch]         = useState("");
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
 
@@ -151,7 +152,10 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     }
   }
 
-  const processed   = filterItems(sortItems(summary, sortMode), filterMode);
+  const sorted      = filterItems(sortItems(summary, sortMode), filterMode);
+  const processed   = search.trim()
+    ? sorted.filter((i) => i.groupName.toLowerCase().includes(search.trim().toLowerCase()))
+    : sorted;
   const atRiskCount = classAtRiskCount(summary);
   const classUrl    = `/class/${classId}`;
 
@@ -224,8 +228,20 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
 
-        {/* Sort / filter controls */}
+        {/* Search + Sort / filter controls */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search groups…"
+              className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40"
+            />
+          </div>
+          <span className="text-slate-200 hidden sm:block">|</span>
           <span className="text-xs font-medium text-slate-500">Sort:</span>
           {(["risk", "name"] as SortMode[]).map((mode) => (
             <button key={mode} onClick={() => setSortMode(mode)}
@@ -262,7 +278,12 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
         {!loading && !loadError && processed.length === 0 && (
           <div className="text-center py-16 text-slate-400 text-sm">
-            {filterMode === "at-risk" ? (
+            {search.trim() ? (
+              <>
+                No groups match &ldquo;{search}&rdquo;.{" "}
+                <button onClick={() => setSearch("")} className="underline hover:text-slate-600">Clear search</button>
+              </>
+            ) : filterMode === "at-risk" ? (
               <>
                 No at-risk groups in this project.{" "}
                 <button onClick={() => setFilterMode("all")} className="underline hover:text-slate-600">Show all groups</button>

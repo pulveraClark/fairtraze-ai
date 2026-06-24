@@ -85,12 +85,12 @@ export default function App() {
     );
   }
 
-  // Dynamic route: /student/class/:code (student only)
-  const studentClassMatch = pathname.match(/^\/student\/class\/(.+)$/);
+  // Dynamic route: /student/class/:id (student only)
+  const studentClassMatch = pathname.match(/^\/student\/class\/(\d+)$/);
   if (studentClassMatch) {
     return (
       <ProtectedRoute allowedRoles={["STUDENT"]}>
-        <StudentClassPage classCode={decodeURIComponent(studentClassMatch[1])} />
+        <StudentClassPage classId={parseInt(studentClassMatch[1], 10)} />
       </ProtectedRoute>
     );
   }

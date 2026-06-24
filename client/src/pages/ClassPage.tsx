@@ -12,7 +12,6 @@ interface LifecycleAssignment {
   deadline: string | null;
   maxGroupSize: number;
   sourceType: "GITHUB" | "EDITOR" | "COMBINED";
-  joinCode: string;
   createdAt: string;
   _count: { projects: number };
 }
@@ -24,6 +23,7 @@ interface ClassInfo {
   course: string;
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
+  joinCode: string | null;
   createdAt: string;
 }
 
@@ -105,7 +105,6 @@ function CreateAssignmentModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
-  const [copied, setCopied]           = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !createdCode) onClose(); }
@@ -133,8 +132,7 @@ function CreateAssignmentModal({
         body:    JSON.stringify(body),
       });
       if (res.ok) {
-        const data = (await res.json()) as { joinCode: string };
-        setCreatedCode(data.joinCode);
+        setCreatedCode("ok");
         onCreated();
       } else {
         const data = (await res.json()) as { error?: string };
@@ -145,13 +143,6 @@ function CreateAssignmentModal({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  async function handleCopy() {
-    if (!createdCode) return;
-    await navigator.clipboard.writeText(createdCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
 
   const SOURCE_OPTS = [
@@ -181,50 +172,19 @@ function CreateAssignmentModal({
           </button>
         </div>
 
-        {/* Success state — show join code */}
+        {/* Success state */}
         {createdCode ? (
-          <div className="px-6 py-6 space-y-5">
+          <div className="px-6 py-6 space-y-4">
             <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               <span className="font-medium">"{title}" was created successfully.</span>
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                Join code
-                <span className="ml-1 font-normal text-slate-400">— share this with your class</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 font-mono text-xl font-bold text-indigo-700 tracking-widest text-center select-all">
-                  {createdCode}
-                </div>
-                <button
-                  onClick={() => void handleCopy()}
-                  title="Copy join code"
-                  className={`shrink-0 p-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                    copied
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700"
-                  }`}
-                >
-                  {copied ? (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-2">
-                Group leaders use this code to register their team and connect their repository.
-              </p>
-            </div>
-
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Students use the <strong>class join code</strong> (shown in the class header) to enroll,
+              then create or join groups for each project.
+            </p>
             <div className="flex justify-end pt-1 border-t border-slate-100">
               <button onClick={onClose} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors">
                 Done
@@ -292,23 +252,6 @@ function CreateAssignmentModal({
                 </div>
               </div>
 
-              {/* Join code placeholder */}
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                  Join code <span className="font-normal text-slate-400">(generated on create)</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-4 py-2.5 font-mono text-base font-bold text-slate-300 tracking-widest text-center">
-                    FT-XXXX-XXXX
-                  </div>
-                  <div className="shrink-0 p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-300 cursor-not-allowed">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">Share this with your class — group leaders use it to register their team and repo.</p>
-              </div>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
@@ -335,6 +278,39 @@ function CreateAssignmentModal({
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Class join code badge (copyable) — shown in class page header ─────────────
+function ClassJoinCodeBadge({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+      <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+      <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+      <button
+        onClick={() => void handleCopy()}
+        title={copied ? "Copied!" : "Copy class join code"}
+        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+      >
+        {copied ? (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 }
@@ -400,10 +376,10 @@ export function ClassPage({ classId }: Props) {
   const [loadError, setLoadError]           = useState<string | null>(null);
   const [showModal, setShowModal]           = useState(false);
   const [filterAtRisk, setFilterAtRisk]     = useState(false);
+  const [search, setSearch]                 = useState("");
   const [deleteTarget, setDeleteTarget]     = useState<LifecycleAssignment | null>(null);
   const [deleting, setDeleting]             = useState(false);
   const [deleteError, setDeleteError]       = useState<string | null>(null);
-  const [copiedId, setCopiedId]             = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -466,12 +442,6 @@ export function ClassPage({ classId }: Props) {
     }
   }
 
-  async function handleCopyCode(id: number, code: string) {
-    await navigator.clipboard.writeText(code);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  }
-
   function getAssignmentItems(assignmentId: number): ProjectSummaryItem[] {
     const groups = assignGroups[assignmentId] ?? [];
     const ids    = new Set(groups.map((g) => g.id));
@@ -480,9 +450,13 @@ export function ClassPage({ classId }: Props) {
 
   const totalAtRisk = assignments.reduce((sum, a) => sum + classAtRiskCount(getAssignmentItems(a.id)), 0);
 
-  const visibleAssignments = filterAtRisk
+  const filteredByRisk = filterAtRisk
     ? assignments.filter((a) => classAtRiskCount(getAssignmentItems(a.id)) > 0)
     : assignments;
+
+  const visibleAssignments = search.trim()
+    ? filteredByRisk.filter((a) => a.title.toLowerCase().includes(search.trim().toLowerCase()))
+    : filteredByRisk;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -557,6 +531,10 @@ export function ClassPage({ classId }: Props) {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
+            {/* Class-level join code — students use this to enroll */}
+            {classInfo?.joinCode && !isAdmin && (
+              <ClassJoinCodeBadge code={classInfo.joinCode} />
+            )}
             {isAdmin && (
               <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
                 Admin view — read only
@@ -589,6 +567,23 @@ export function ClassPage({ classId }: Props) {
       </div>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* Search bar */}
+        {assignments.length > 0 && (
+          <div className="mb-5">
+            <div className="relative inline-block">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search projects…"
+                className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-44"
+              />
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
@@ -628,8 +623,17 @@ export function ClassPage({ classId }: Props) {
               </div>
             ) : visibleAssignments.length === 0 ? (
               <div className="text-center py-16 text-slate-400 text-sm">
-                No projects with at-risk groups.{" "}
-                <button onClick={() => setFilterAtRisk(false)} className="underline hover:text-slate-600">Show all</button>
+                {search.trim() ? (
+                  <>
+                    No projects match &ldquo;{search}&rdquo;.{" "}
+                    <button onClick={() => setSearch("")} className="underline hover:text-slate-600">Clear search</button>
+                  </>
+                ) : (
+                  <>
+                    No projects with at-risk groups.{" "}
+                    <button onClick={() => setFilterAtRisk(false)} className="underline hover:text-slate-600">Show all</button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -688,35 +692,9 @@ export function ClassPage({ classId }: Props) {
                         <p className="text-xs text-slate-500">
                           Deadline: <span className="font-medium text-slate-700">{fmtDeadline(a.deadline)}</span>
                         </p>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-500">
-                            {a._count.projects} group{a._count.projects !== 1 ? "s" : ""}
-                          </p>
-                          {/* Copyable join code */}
-                          <div className="relative group/copy flex items-center gap-1">
-                            <span className="font-mono text-[11px] text-slate-400 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 tracking-wider">
-                              {a.joinCode}
-                            </span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); void handleCopyCode(a.id, a.joinCode); }}
-                              title={copiedId === a.id ? "Copied!" : "Copy join code"}
-                              className={`p-1 rounded transition-colors ${copiedId === a.id ? "text-emerald-600" : "text-slate-300 hover:text-slate-500"}`}
-                            >
-                              {copiedId === a.id ? (
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              ) : (
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                              )}
-                            </button>
-                            <span className={`absolute -top-7 right-0 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-white whitespace-nowrap pointer-events-none transition-opacity ${copiedId === a.id ? "opacity-100" : "opacity-0 group-hover/copy:opacity-100"}`}>
-                              {copiedId === a.id ? "Copied!" : "Copy"}
-                            </span>
-                          </div>
-                        </div>
+                        <p className="text-xs text-slate-500">
+                          {a._count.projects} group{a._count.projects !== 1 ? "s" : ""}
+                        </p>
                         <RiskPills healthy={healthy} moderate={moderate} highRisk={highRisk} unanalyzed={unanalyzed} />
                         <div className="flex justify-end pt-1">
                           <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">View groups →</span>

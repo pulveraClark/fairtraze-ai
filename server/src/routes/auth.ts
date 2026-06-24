@@ -50,7 +50,7 @@ authRouter.post("/api/auth/register", async (req, res) => {
 
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null },
   });
 });
 
@@ -86,7 +86,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null },
   });
 });
 

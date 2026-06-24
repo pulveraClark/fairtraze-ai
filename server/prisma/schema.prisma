@@ -53,24 +53,38 @@ model User {
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
+  classEnrollments ClassEnrollment[]
   alerts           Alert[]
   disputes         Dispute[]
   auditLogs        AuditLog[]
 }
 
 model ClassSection {
-  id           Int          @id @default(autoincrement())
+  id           Int               @id @default(autoincrement())
   subjectCode  String
   subjectName  String
-  course       String       @default("BSIT")
-  edpCode      String       @default("")
-  type         ClassType    @default(LECTURE)
+  course       String            @default("BSIT")
+  edpCode      String            @default("")
+  type         ClassType         @default(LECTURE)
+  joinCode     String?           @unique
   instructorId Int
-  createdAt    DateTime     @default(now())
-  instructor   User         @relation(fields: [instructorId], references: [id])
+  createdAt    DateTime          @default(now())
+  instructor   User              @relation(fields: [instructorId], references: [id])
   assignments  Assignment[]
+  enrollments  ClassEnrollment[]
 
   @@unique([instructorId, edpCode])
+}
+
+model ClassEnrollment {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  classSectionId Int
+  joinedAt       DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, classSectionId])
 }
 
 model Assignment {

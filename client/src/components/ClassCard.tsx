@@ -125,20 +125,13 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
           </span>
         </div>
 
-        {/* Project + group count */}
-        <p className="text-xs text-slate-500">
-          {projectCount !== undefined ? (
-            <>
-              <span className="font-medium text-slate-700">{projectCount}</span>{" "}
-              project{projectCount !== 1 ? "s" : ""}
-              {" · "}
-              <span className="font-medium text-slate-700">{items.length}</span>{" "}
-              group{items.length !== 1 ? "s" : ""}
-            </>
-          ) : (
-            <>{items.length} group{items.length !== 1 ? "s" : ""}</>
-          )}
-        </p>
+        {/* Project count */}
+        {projectCount !== undefined && (
+          <p className="text-xs text-slate-500">
+            <span className="font-medium text-slate-700">{projectCount}</span>{" "}
+            project{projectCount !== 1 ? "s" : ""}
+          </p>
+        )}
 
         {/* Risk rollup */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
