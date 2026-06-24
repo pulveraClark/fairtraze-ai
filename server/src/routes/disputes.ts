@@ -2,8 +2,36 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
+import type { TeamReport } from "@shared/types.js";
 
 export const disputesRouter = Router();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function extractMemberFlags(reportContent: string | null, githubUsername: string | null): string {
+  if (!reportContent || !githubUsername) return "[]";
+  try {
+    const parsed = JSON.parse(reportContent) as { report?: TeamReport };
+    const member = parsed.report?.members?.find(
+      (m) => m.githubUsername.toLowerCase() === githubUsername.toLowerCase()
+    );
+    return JSON.stringify(member?.flags ?? []);
+  } catch {
+    return "[]";
+  }
+}
+
+// Given a raw disputedFlags string from DB and an optional fallback flags array,
+// returns a parsed string[] ready for the API response.
+function resolveFlags(disputedFlags: string, fallback: string[]): string[] {
+  // "" = pre-feature dispute; use fallback from current report
+  if (disputedFlags === "") return fallback;
+  try {
+    return JSON.parse(disputedFlags) as string[];
+  } catch {
+    return fallback;
+  }
+}
 
 const idParam = z.coerce.number().int().positive();
 
@@ -43,13 +71,23 @@ disputesRouter.post("/api/disputes", ...requireRole("STUDENT"), async (req, res)
     return;
   }
 
-  const student = await prisma.user.findUnique({
-    where:  { id: studentUserId },
-    select: { name: true },
-  });
+  const [student, latestReport] = await Promise.all([
+    prisma.user.findUnique({
+      where:  { id: studentUserId },
+      select: { name: true, githubUsername: true },
+    }),
+    prisma.report.findFirst({
+      where:   { projectId },
+      orderBy: { generatedAt: "desc" },
+      select:  { content: true },
+    }),
+  ]);
+
+  // Capture the member's current flags so they're preserved even if the report changes later.
+  const disputedFlags = extractMemberFlags(latestReport?.content ?? null, student?.githubUsername ?? null);
 
   const dispute = await prisma.dispute.create({
-    data: { projectId, studentUserId, memberName: student!.name, reason },
+    data: { projectId, studentUserId, memberName: student!.name, reason, disputedFlags },
   });
 
   res.status(201).json(dispute);
@@ -124,11 +162,13 @@ disputesRouter.get("/api/disputes", ...requireRole("INSTRUCTOR"), async (req, re
     },
     orderBy: { createdAt: "desc" },
     include: {
+      student: { select: { githubUsername: true } },
       project: {
         select: {
           id:         true,
           groupName:  true,
           name:       true,
+          reports:    { orderBy: { generatedAt: "desc" }, take: 1, select: { content: true } },
           assignment: {
             select: {
               id:    true,
@@ -148,8 +188,21 @@ disputesRouter.get("/api/disputes", ...requireRole("INSTRUCTOR"), async (req, re
     },
   });
 
+  // Resolve flags for each dispute: stored flags take precedence; fall back to
+  // current report flags for pre-feature disputes (disputedFlags === "").
+  const withFlags = disputes.map((d) => {
+    const fallback = extractMemberFlags(
+      d.project.reports[0]?.content ?? null,
+      d.student.githubUsername
+    );
+    const disputedFlags = resolveFlags(d.disputedFlags, JSON.parse(fallback) as string[]);
+    // Strip internal fields not needed by the client
+    const { student: _s, project: { reports: _r, ...projectRest }, ...rest } = d;
+    return { ...rest, project: projectRest, disputedFlags };
+  });
+
   // Sort OPEN first, then by createdAt desc
-  const sorted = [...disputes].sort((a, b) => {
+  const sorted = withFlags.sort((a, b) => {
     if (a.status === "OPEN" && b.status !== "OPEN") return -1;
     if (a.status !== "OPEN" && b.status === "OPEN") return  1;
     return 0;

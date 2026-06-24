@@ -10,6 +10,7 @@ interface DisputeItem {
   reason:             string;
   status:             "OPEN" | "RESOLVED" | "DISMISSED";
   instructorResponse: string | null;
+  disputedFlags:      string[];
   createdAt:          string;
   resolvedAt:         string | null;
   project: {
@@ -56,6 +57,18 @@ function classKey(cs: { subjectCode: string; edpCode: string }): string {
 
 function classLabel(cs: { subjectCode: string; edpCode: string; subjectName: string }): string {
   return cs.edpCode ? `${cs.subjectCode} (${cs.edpCode})` : cs.subjectCode;
+}
+
+// Flag chips — same yellow styling as the student group report
+function FlagChip({ flag }: { flag: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5 leading-none">
+      <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      {flag}
+    </span>
+  );
 }
 
 // ── Resolve modal ─────────────────────────────────────────────────────────────
@@ -392,6 +405,15 @@ export function DisputesPage() {
                         </span>
                         <span className="text-xs text-slate-400">{timeAgo(d.createdAt)}</span>
                       </div>
+
+                      {/* Disputed flags — what the student is contesting */}
+                      {d.disputedFlags.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {d.disputedFlags.map((flag) => (
+                            <FlagChip key={flag} flag={flag} />
+                          ))}
+                        </div>
+                      )}
 
                       {/* Full location context */}
                       <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500">

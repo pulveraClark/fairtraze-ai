@@ -49,6 +49,7 @@ model User {
   name             String
   systemRole       SystemRole        @default(STUDENT)
   githubUsername   String?
+  active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
@@ -160,6 +161,7 @@ model Dispute {
   reason             String
   status             DisputeStatus @default(OPEN)
   instructorResponse String?
+  disputedFlags      String        @default("") // JSON array of Flag strings captured at submission time; "" means pre-feature (use fallback from latest report)
   createdAt          DateTime      @default(now())
   resolvedAt         DateTime?
   project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
