@@ -467,7 +467,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                   <div className="px-6 pt-4 pb-2">
                     <ContributionChart members={stored.report.members} />
                   </div>
-                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} />
+                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} memberRoles={stored.memberRoles} />
                 </div>
 
                 {/* AI narrative — keyed to projectId so it always reflects the current group */}

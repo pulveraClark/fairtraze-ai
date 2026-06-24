@@ -160,6 +160,73 @@ A leader always has a `functionalRole` describing their actual contribution work
 - The instructor oversees and can lock the roster before analysis/grading.
 - The system surfaces unmatched GitHub contributors so a missing or mis-mapped member is automatically visible.
 
+## Group Roles (design)
+
+**Status: Persistence implemented (Phase B — `functionalRole` stored on `GroupMembership`). Source-presence mismatch detection is Phase D.**
+
+This section describes the role model for group members — what the roles are, what they do, and — critically — what they do not do to scores.
+
+### The three roles
+
+| Role | Kind | Expected source | Status |
+|---|---|---|---|
+| **Leader** | Administrative flag | — | Implemented (`isLeader` on `GroupMembership`) |
+| **Developer** | Functional role | GitHub | Persisted; mismatch detection in Phase D |
+| **Documentation** | Functional role | FairTraze Docs (Editor) | Persisted; source active in Phase D |
+
+`functionalRole` is stored as a free-form string so instructor-specific labels remain possible. These three are the default roles for this system.
+
+### Leadership is a flag, not a job
+
+`isLeader` is an administrative marker: it records who created the group, who is the instructor's point of contact, and who coordinates the group's setup. It is not a contribution category and it is not a job description.
+
+**`isLeader` has zero effect on any score.** The leader is scored on their actual recorded traces — GitHub commits and (later) editor edits — in exactly the same way as every other member. If a leader's contribution share falls below the free-rider threshold, they receive the `free-rider` flag like any other member. Leadership is invisible to the scoring engine.
+
+Every member, including the leader, also holds a **functional role** (Developer and/or Documentation) that describes their actual contribution work. `"Leader + Developer"` is a normal and expected combination. `"Leader"` alone is not a valid functional role assignment.
+
+A member may hold more than one functional role (e.g. Developer + Documentation) when their work spans both sources. The free-form `functionalRole` field accommodates this.
+
+### Roles never change scores
+
+Functional roles add **context only**. They do not alter the contribution formula, shift any member's score, or create exemptions or floors. The `contributionShare` formula in `scoring.ts` is role-agnostic and always deterministic:
+
+```
+contributionShare = 0.4 × commitShare + 0.4 × linesShare + 0.2 × activeDaysShare
+```
+
+This is deliberate. Keeping scoring role-agnostic preserves:
+- **Objectivity** — two members with identical traces receive identical scores regardless of their assigned roles.
+- **Defensibility** — the instructor can verify every score from the raw trace data alone.
+- **Resistance to mis-assignment** — a member cannot be shielded from a flag by being given a role whose source is not being analysed.
+
+### What roles do — source-presence mismatch note
+
+Each functional role implies an expected primary source:
+- **Developer** → expected to have GitHub commit activity
+- **Documentation** → expected to have FairTraze Docs editing activity (Phase D)
+
+The system checks whether the member was **active** in that source and surfaces a soft **NOTE** to the instructor if they were not (e.g. "Developer with no commit activity in the analysis window"). This is informational context to help the instructor investigate — it is not a contribution flag (`free-rider`, `overload`, etc.), it does not affect the member's score, and it is not an accusation.
+
+Only roles with a clearly traceable source drive this check:
+- **Developer / GitHub** — active now.
+- **Documentation / FairTraze Docs** — activates once the Collaborative Editor exists (Phase D).
+
+Roles whose work leaves no platform trace (e.g. Researcher, Project Manager) produce no mismatch check because there is no source to compare against.
+
+### The honest limit (known limitation)
+
+The system verifies **presence** in the expected source, not the **quality** of the role's output. It can determine that a Developer made commits; it cannot determine whether those commits implemented the right features well. It can determine that a Documentation contributor edited the shared document; it cannot determine whether the writing was substantive.
+
+Quality assessment remains the instructor's professional judgment. The student dispute workflow (Phase C) gives members a path to explain contributions the system cannot see — offline coordination, verbal design discussions, manual testing, code review given in person.
+
+This is a documented limitation, not a gap to be closed by expanding what roles control. Expanding role influence on scores would introduce subjectivity and reduce defensibility.
+
+### Role assignment model (hybrid)
+
+The group leader assigns each member's functional role(s) — including their own — during group formation. Members may self-suggest their role to the leader before it is locked. The instructor can view and override any role assignment at any point before analysis.
+
+This is low-stakes precisely because roles only add context: a mis-assigned functional role cannot protect a member from a contribution flag, since flags are computed from actual recorded traces regardless of the role label.
+
 ## Stack
 - **client**: React + Vite + TypeScript + Tailwind + Recharts — an instructor-facing dashboard
 - **server**: Express + TypeScript + Prisma (SQLite) + Octokit (GitHub) + Gemini API

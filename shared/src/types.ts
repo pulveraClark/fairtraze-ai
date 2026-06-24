@@ -44,6 +44,21 @@ export interface RawMemberStats {
 
 export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
 
+// Functional roles — context only; never affect contribution scores, Gini, or flags.
+// DEVELOPER  → expected source: GitHub (active now)
+// DOCUMENTATION → expected source: FairTraze Docs (planned — Phase D)
+export type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
+
+export interface MemberRoleInfo {
+  githubUsername:  string;
+  functionalRoles: FunctionalRole[];
+  isLeader:        boolean;
+  // Soft informational note for the instructor when a member's activity doesn't match
+  // their assigned role.  Never a contribution flag; never changes any score.
+  // null = no mismatch (or role not traceable yet)
+  mismatchNote: string | null;
+}
+
 export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";
 
 export interface ScoredMember {
@@ -155,4 +170,6 @@ export interface StoredReportResponse {
   currentConfig: ProjectScoringConfig;
   // Set when config was changed after the last analysis run; cleared by re-analyze
   scoringConfigChangedAt: string | null;
+  // Functional roles + soft mismatch notes per member (context only — never changes scores)
+  memberRoles: MemberRoleInfo[];
 }

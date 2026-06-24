@@ -13,7 +13,7 @@ interface GroupDetail {
   classSection: { id: number; subjectCode: string; subjectName: string; course: string; edpCode: string; };
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; };
   project:      { id: number; groupName: string; name: string; repoUrl: string; };
-  membership:   { role: "LEADER" | "MEMBER"; joinedAt: string; };
+  membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; };
   hasReport:    boolean;
   report: {
     gini:        number;
@@ -175,9 +175,14 @@ function DisputeModal({
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+const FUNCTIONAL_ROLE_META: Record<string, { label: string; activeClass: string; inactiveClass: string }> = {
+  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
+  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
+};
+
 export function StudentGroupPage({ projectId }: { projectId: number }) {
-  const { token }     = useAuth();
-  const { navigate }  = useRouter();
+  const { token, user } = useAuth();
+  const { navigate }    = useRouter();
 
   const [data, setData]           = useState<GroupDetail | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -187,6 +192,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [refreshKey, setRefreshKey]             = useState(0);
   const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  // Functional role self-suggest
+  const [myRoles, setMyRoles]   = useState<string[]>(["DEVELOPER"]);
+  const [rolesBusy, setRolesBusy] = useState(false);
+  const [rolesErr, setRolesErr]   = useState("");
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -203,6 +212,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           return;
         }
         setData(json);
+        setMyRoles(json.membership?.functionalRoles ?? ["DEVELOPER"]);
       })
       .catch(() => setError("Network error — could not load group."))
       .finally(() => setLoading(false));
@@ -222,6 +232,29 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       .catch(() => setDispute(null));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, projectId]);
+
+  async function handleSetMyRoles(roles: string[]) {
+    if (!token || !user?.id) return;
+    setRolesErr("");
+    setRolesBusy(true);
+    const prev = myRoles;
+    setMyRoles(roles); // optimistic
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/members/${user.id}/functional-roles`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ functionalRoles: roles }),
+      });
+      const json = await res.json() as { functionalRoles?: string[]; error?: string };
+      if (!res.ok) { setMyRoles(prev); setRolesErr(json.error ?? "Could not update role."); return; }
+      setMyRoles(json.functionalRoles ?? roles);
+    } catch {
+      setMyRoles(prev);
+      setRolesErr("Network error — could not update role.");
+    } finally {
+      setRolesBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -384,6 +417,46 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         {/* ── My Contribution tab ──────────────────────────────────────────────── */}
         {effectiveTab === "contribution" && (
           <div className="space-y-6">
+
+            {/* Your Role — self-suggest (always shown; roles are context only) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Your Role</h3>
+              {rolesErr && <p className="text-xs text-red-600 mb-2">{rolesErr}</p>}
+              <div className="flex items-center flex-wrap gap-2 mb-3">
+                {(Object.keys(FUNCTIONAL_ROLE_META) as string[])
+                  .filter((role) => {
+                    if (sourceType === "GITHUB")   return role === "DEVELOPER";
+                    if (sourceType === "EDITOR")   return role === "DOCUMENTATION";
+                    return true; // COMBINED or other → both
+                  })
+                  .map((role) => {
+                  const active = myRoles.includes(role);
+                  const meta   = FUNCTIONAL_ROLE_META[role]!;
+                  const next   = active ? myRoles.filter((r) => r !== role) : [...myRoles, role];
+                  return (
+                    <button
+                      key={role}
+                      disabled={rolesBusy}
+                      onClick={() => void handleSetMyRoles(next)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
+                        active ? meta.activeClass : meta.inactiveClass
+                      }`}
+                    >
+                      {active ? `✓ ${meta.label}` : `+ ${meta.label}`}
+                    </button>
+                  );
+                })}
+                {rolesBusy && (
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
+                    saving…
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Select the roles that best describe your contribution work. Your suggestion is visible to your group leader and instructor. Roles are context only — they never change contribution scores.
+              </p>
+            </div>
 
             {/* Not analyzed yet */}
             {!hasReport && (

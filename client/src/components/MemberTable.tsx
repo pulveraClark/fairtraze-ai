@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { ReactNode } from "react";
-import type { ScoredMember, Flag } from "@shared/types";
+import type { ScoredMember, Flag, MemberRoleInfo } from "@shared/types";
 import { InfoTooltip, TipList } from "./InfoTooltip";
 import { useRouter } from "../router";
 
@@ -11,10 +11,20 @@ const flagStyles: Record<Flag, string> = {
   "deadline-driven": "bg-yellow-100 text-yellow-700",
 };
 
+const rolePill: Record<string, string> = {
+  DEVELOPER:     "bg-indigo-50 border-indigo-200 text-indigo-700",
+  DOCUMENTATION: "bg-teal-50 border-teal-200 text-teal-700",
+};
+const roleLabel: Record<string, string> = {
+  DEVELOPER: "Developer", DOCUMENTATION: "Documentation",
+};
+
 interface Props {
   members: ScoredMember[];
   // Set of studentNames that have at least one OPEN dispute (from the instructor's view)
   disputedMembers?: Set<string>;
+  // Functional roles + soft mismatch notes per member — context only, never affects scores
+  memberRoles?: MemberRoleInfo[];
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -60,7 +70,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function MemberTable({ members, disputedMembers }: Props) {
+export function MemberTable({ members, disputedMembers, memberRoles }: Props) {
   const { navigate } = useRouter();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -118,7 +128,27 @@ export function MemberTable({ members, disputedMembers }: Props) {
                   className="hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => toggleRow(m.githubUsername)}
                 >
-                  <td className="px-6 py-3 font-medium text-slate-800">{m.studentName}</td>
+                  <td className="px-6 py-3">
+                    <div className="font-medium text-slate-800">{m.studentName}</div>
+                    {(() => {
+                      const info = memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase());
+                      if (!info || info.functionalRoles.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {info.isLeader && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-indigo-50 border-indigo-200 text-indigo-700">
+                              Leader
+                            </span>
+                          )}
+                          {info.functionalRoles.map((role) => (
+                            <span key={role} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${rolePill[role] ?? "bg-slate-50 border-slate-200 text-slate-600"}`}>
+                              {roleLabel[role] ?? role}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </td>
 
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 min-w-[140px]">
@@ -160,6 +190,17 @@ export function MemberTable({ members, disputedMembers }: Props) {
                         </>
                       )}
                     </div>
+                    {/* Mismatch note — soft context only, distinct from contribution flags */}
+                    {(() => {
+                      const note = memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase())?.mismatchNote;
+                      if (!note) return null;
+                      return (
+                        <p className="mt-1.5 text-[10px] text-sky-600 font-medium flex items-start gap-1">
+                          <span className="shrink-0">Context:</span>
+                          <span className="font-normal text-sky-500">{note}</span>
+                        </p>
+                      );
+                    })()}
                   </td>
 
                   <td className="px-4 py-3 text-slate-400">

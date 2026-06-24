@@ -87,12 +87,13 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     sourceType:  project.assignment?.sourceType ?? null,
     maxGroupSize: project.assignment?.maxGroupSize ?? null,
     members: project.groupMemberships.map((m) => ({
-      userId:         m.user.id,
-      name:           m.user.name,
-      email:          m.user.email,
-      githubUsername: m.user.githubUsername,
-      role:           m.role,
-      joinedAt:       m.joinedAt.toISOString(),
+      userId:          m.user.id,
+      name:            m.user.name,
+      email:           m.user.email,
+      githubUsername:  m.user.githubUsername,
+      role:            m.role,
+      functionalRoles: JSON.parse(m.functionalRoles) as string[],
+      joinedAt:        m.joinedAt.toISOString(),
     })),
   });
 });
@@ -143,6 +144,59 @@ groupsRouter.post("/api/groups/:id/reassign-leader", requireAuth, async (req: Re
   });
 
   res.json({ message: "Leadership reassigned.", newLeaderId: targetId });
+});
+
+// PUT /api/groups/:id/members/:userId/functional-roles — assign functional role(s) to a member.
+// Auth: requireAuth.  Allowed callers: instructor who owns the class, group leader, or the member themselves.
+// Roles add context only — they never change scores, flags, Gini, or team health.
+groupsRouter.put("/api/groups/:id/members/:userId/functional-roles", requireAuth, async (req: Request, res: Response) => {
+  const idResult     = idParam.safeParse(req.params.id);
+  const targetResult = idParam.safeParse(req.params.userId);
+  if (!idResult.success || !targetResult.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const bodyResult = z.object({
+    functionalRoles: z.array(z.enum(["DEVELOPER", "DOCUMENTATION"])).max(2),
+  }).safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "functionalRoles must be an array of valid roles: DEVELOPER, DOCUMENTATION" });
+    return;
+  }
+
+  const projectId    = idResult.data;
+  const targetUserId = targetResult.data;
+  const requesterId  = req.user!.sub;
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  const targetMembership = project.groupMemberships.find((m) => m.userId === targetUserId);
+  if (!targetMembership) {
+    res.status(404).json({ error: "That user is not a member of this group." });
+    return;
+  }
+
+  // Auth: instructor of the class, group leader, or the member themselves (self-suggest)
+  const isSelf = requesterId === targetUserId;
+  if (!isSelf && !canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader, instructor, or the member themselves can set functional roles." });
+    return;
+  }
+
+  // Deduplicate roles before storing
+  const functionalRoles = [...new Set(bodyResult.data.functionalRoles)];
+
+  await prisma.groupMembership.update({
+    where: { id: targetMembership.id },
+    data:  { functionalRoles: JSON.stringify(functionalRoles) },
+  });
+
+  res.json({ userId: targetUserId, functionalRoles });
 });
 
 // DELETE /api/groups/:id/members/:userId — remove a member (leader/instructor) or leave (self)

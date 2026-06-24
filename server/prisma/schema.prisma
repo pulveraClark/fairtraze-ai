@@ -87,13 +87,17 @@ model Assignment {
 }
 
 model GroupMembership {
-  id        Int            @id @default(autoincrement())
-  userId    Int
-  projectId Int
-  role      MembershipRole @default(MEMBER)
-  joinedAt  DateTime       @default(now())
-  user      User           @relation(fields: [userId], references: [id])
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id              Int            @id @default(autoincrement())
+  userId          Int
+  projectId       Int
+  role            MembershipRole @default(MEMBER)
+  // JSON array of functional roles: ["DEVELOPER"] | ["DOCUMENTATION"] | ["DEVELOPER","DOCUMENTATION"] | []
+  // Default ["DEVELOPER"]: all existing/new groups are GitHub-based; Developer is the correct starting point.
+  // The leader (or instructor) can always reassign. Never affects scoring — context only.
+  functionalRoles String         @default("[\"DEVELOPER\"]")
+  joinedAt        DateTime       @default(now())
+  user            User           @relation(fields: [userId], references: [id])
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
 }

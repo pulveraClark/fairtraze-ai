@@ -254,6 +254,7 @@ joinRouter.get("/api/student/me", ...requireRole("STUDENT"), async (req, res) =>
           title:       asgn.title,
           deadline:    asgn.deadline?.toISOString() ?? null,
           sourceType:  asgn.sourceType,
+          joinCode:    asgn.joinCode,
         },
         project: {
           id:        m.project.id,
@@ -332,7 +333,11 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       name:      project.name,
       repoUrl:   project.repoUrl,
     },
-    membership: { role: membership.role, joinedAt: membership.joinedAt.toISOString() },
+    membership: {
+      role:            membership.role,
+      functionalRoles: JSON.parse(membership.functionalRoles) as string[],
+      joinedAt:        membership.joinedAt.toISOString(),
+    },
   };
 
   const latestReport = project.reports[0] ?? null;

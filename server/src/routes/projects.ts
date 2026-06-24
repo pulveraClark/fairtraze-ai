@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
-import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types.js";
+import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole } from "@shared/types.js";
 
 export const projectsRouter = Router();
 
@@ -99,7 +99,13 @@ projectsRouter.get("/api/projects/:id/report", async (req, res) => {
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { assignment: { select: { sourceType: true } } },
+    include: {
+      assignment: { select: { sourceType: true } },
+      groupMemberships: {
+        include: { user: { select: { id: true, githubUsername: true } } },
+        orderBy: { joinedAt: "asc" },
+      },
+    },
   });
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -131,6 +137,30 @@ projectsRouter.get("/api/projects/:id/report", async (req, res) => {
 
   const currentCfg = projectConfig(project);
 
+  // Build memberRoles — context-only; never affects scores, flags, Gini, or team health.
+  // Mismatch note: Developer assigned but member has 0 commits in the stored report.
+  const reportMembers = stored.report.members;
+  const memberRoles: MemberRoleInfo[] = project.groupMemberships.map((m) => {
+    const functionalRoles = JSON.parse(m.functionalRoles) as FunctionalRole[];
+    const isLeader = m.role === "LEADER";
+    const github   = m.user.githubUsername ?? null;
+
+    // Find the member's stats in the stored report by githubUsername
+    const scored = github
+      ? reportMembers.find((rm) => rm.githubUsername.toLowerCase() === github.toLowerCase())
+      : null;
+
+    let mismatchNote: string | null = null;
+    if (functionalRoles.includes("DEVELOPER")) {
+      if (!scored || scored.commits === 0) {
+        mismatchNote = "Developer — no recorded GitHub activity";
+      }
+    }
+    // DOCUMENTATION mismatch detection is deferred to Phase D (editor data source not yet built)
+
+    return { githubUsername: github ?? "", functionalRoles, isLeader, mismatchNote };
+  });
+
   const response: StoredReportResponse = {
     projectId,
     groupName: project.groupName || `Group ${projectId}`,
@@ -144,6 +174,7 @@ projectsRouter.get("/api/projects/:id/report", async (req, res) => {
     scoringConfig:          stored.scoringConfig ?? null,
     currentConfig:          currentCfg,
     scoringConfigChangedAt: project.scoringConfigChangedAt?.toISOString() ?? null,
+    memberRoles,
   };
 
   res.json(response);

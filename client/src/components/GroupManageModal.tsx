@@ -3,12 +3,20 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
+
+const ROLE_META: Record<FunctionalRole, { label: string; activeClass: string; inactiveClass: string }> = {
+  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
+  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
+};
+
 interface GroupMember {
   userId: number;
   name: string;
   email: string;
   githubUsername: string | null;
   role: "LEADER" | "MEMBER";
+  functionalRoles: FunctionalRole[];
   joinedAt: string;
 }
 
@@ -63,6 +71,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const [busy, setBusy]         = useState(false);
   const [actionErr, setActionErr] = useState("");
   const [reassignTarget, setReassignTarget] = useState<number | null>(null);
+  const [roleBusy, setRoleBusy] = useState<number | null>(null);
+  const [roleErr, setRoleErr]   = useState("");
 
   const currentUserId = user?.id ?? 0;
 
@@ -141,10 +151,55 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     }
   }
 
+  // ── Set functional roles (optimistic update, revert on error) ─────────────
+  async function handleSetRoles(targetUserId: number, roles: FunctionalRole[]) {
+    if (!group) return;
+    setRoleErr("");
+    setRoleBusy(targetUserId);
+
+    // Optimistic update
+    const prev = group.members.map((m) => m.userId === targetUserId ? { ...m, functionalRoles: roles } : m);
+    setGroup({ ...group, members: prev });
+
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/members/${targetUserId}/functional-roles`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ functionalRoles: roles }),
+      });
+      const data = await res.json() as { functionalRoles?: FunctionalRole[]; error?: string };
+      if (!res.ok) {
+        // Revert
+        setGroup({ ...group });
+        setRoleErr(data.error ?? "Could not update role.");
+        return;
+      }
+      // Confirm with server-returned value (deduped) — do NOT call onChanged() here
+      // so the modal stays open while the leader/instructor assigns roles to all members.
+      const confirmed = data.functionalRoles ?? roles;
+      setGroup((g) => g ? { ...g, members: g.members.map((m) =>
+        m.userId === targetUserId ? { ...m, functionalRoles: confirmed } : m
+      ) } : g);
+    } catch {
+      setGroup({ ...group });
+      setRoleErr("Network error — could not update role.");
+    } finally {
+      setRoleBusy(null);
+    }
+  }
+
   // ── Render helpers ─────────────────────────────────────────────────────────
   function renderList() {
     if (!group) return null;
     const nonLeaderMembers = group.members.filter((m) => m.role !== "LEADER");
+
+    // Only show roles valid for this project's source type (Fix 1)
+    const st = group.sourceType;
+    const availableRoles = (Object.keys(ROLE_META) as FunctionalRole[]).filter((role) => {
+      if (st === "GITHUB")  return role === "DEVELOPER";
+      if (st === "EDITOR")  return role === "DOCUMENTATION";
+      return true; // COMBINED or null → both
+    });
 
     return (
       <>
@@ -161,16 +216,28 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             {actionErr}
           </div>
         )}
+        {roleErr && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs text-red-700">
+            {roleErr}
+          </div>
+        )}
+
+        {/* Single role-context note shown once above the member list (Fix 3) */}
+        <p className="text-[10px] text-slate-400 mb-3">
+          {!canManage && myMembership ? "You can suggest your own role — your leader or instructor can confirm. " : ""}
+          Roles are context only — they never affect contribution scores.
+        </p>
 
         <ul className="space-y-2">
           {group.members.map((m) => {
-            const isSelf      = m.userId === currentUserId;
+            const isSelf       = m.userId === currentUserId;
             const isThisLeader = m.role === "LEADER";
+            const canEditRoles = canManage || isSelf;
 
             return (
               <li
                 key={m.userId}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50"
+                className="flex items-start gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50"
               >
                 <Initials name={m.name} leader={isThisLeader} />
 
@@ -190,10 +257,47 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   {m.githubUsername && (
                     <p className="text-[11px] text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
                   )}
+
+                  {/* Functional role chips — filtered by sourceType (Fix 1) */}
+                  <div className="mt-1.5 flex items-center flex-wrap gap-1">
+                    {availableRoles.map((role) => {
+                      const active = m.functionalRoles.includes(role);
+                      const meta   = ROLE_META[role];
+                      if (!canEditRoles) {
+                        if (!active) return null;
+                        return (
+                          <span key={role} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
+                            {meta.label}
+                          </span>
+                        );
+                      }
+                      const next = active
+                        ? m.functionalRoles.filter((r) => r !== role)
+                        : ([...m.functionalRoles, role] as FunctionalRole[]);
+                      return (
+                        <button
+                          key={role}
+                          disabled={roleBusy === m.userId}
+                          onClick={() => void handleSetRoles(m.userId, next)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
+                            active ? meta.activeClass : meta.inactiveClass
+                          }`}
+                        >
+                          {active ? `✓ ${meta.label}` : `+ ${meta.label}`}
+                        </button>
+                      );
+                    })}
+                    {roleBusy === m.userId && (
+                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
+                        saving…
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                   {isSelf && isThisLeader && (
                     <span className="text-[10px] text-slate-400">Reassign to leave</span>
                   )}
@@ -411,8 +515,9 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   }
 
   // ── No GitHub username nudge (only relevant for GITHUB / COMBINED projects) ──
+  // Use freshly-loaded member record instead of potentially stale auth context (Fix 4)
   const githubRequired = group?.sourceType === "GITHUB" || group?.sourceType === "COMBINED";
-  const needsGitHub    = githubRequired && !user?.githubUsername;
+  const needsGitHub    = githubRequired && !!myMembership && !myMembership.githubUsername;
 
   return (
     <div

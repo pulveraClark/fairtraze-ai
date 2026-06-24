@@ -46,6 +46,7 @@ interface Enrollment {
     title: string;
     deadline: string | null;
     sourceType: string;
+    joinCode: string;
   };
   project: {
     id: number;
@@ -62,6 +63,11 @@ interface Enrollment {
     teamHealth: string | null;
     generatedAt: string;
   } | null;
+}
+
+interface ClassGroup {
+  classSection: Enrollment["classSection"];
+  enrollments: Enrollment[];
 }
 
 interface LookupResult {
@@ -112,6 +118,10 @@ function JoinClassModal({
   const [joinLoading, setJoinLoading]         = useState(false);
   const [joinError, setJoinError]             = useState("");
 
+  // Track whether the profile refresh has completed so the GitHub-username warning
+  // is only shown once we have current data, not stale cached values (Fix 4).
+  const [userRefreshed, setUserRefreshed] = useState(false);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", onKey);
@@ -121,7 +131,7 @@ function JoinClassModal({
   // Refresh the user profile when the modal opens so githubUsername is current,
   // not a stale cached value from the login token.
   useEffect(() => {
-    void refreshUser();
+    refreshUser().then(() => setUserRefreshed(true)).catch(() => setUserRefreshed(true));
   }, [refreshUser]);
 
   async function handleLookup() {
@@ -194,7 +204,8 @@ function JoinClassModal({
     }
   }
 
-  const noGithub = !user?.githubUsername;
+  // Only evaluate the warning after refreshUser() settles so we read current data (Fix 4)
+  const noGithub = userRefreshed && !user?.githubUsername;
   // GitHub username is only required for GITHUB or COMBINED source types
   const githubRequired = found
     ? found.assignment.sourceType === "GITHUB" || found.assignment.sourceType === "COMBINED"
@@ -472,39 +483,67 @@ function JoinClassModal({
   );
 }
 
-// ── Enrollment card ───────────────────────────────────────────────────────────
-function EnrollmentCard({
-  enrollment,
+// ── Class card — groups all a student's projects within one class ─────────────
+function ClassCard({
+  classGroup,
   onNavigate,
   onManage,
+  expanded,
+  onToggleExpand,
 }: {
-  enrollment: Enrollment;
-  onNavigate: () => void;
-  onManage: () => void;
+  classGroup: ClassGroup;
+  onNavigate: (projectId: number) => void;
+  onManage:   (projectId: number) => void;
+  expanded:   boolean;
+  onToggleExpand: () => void;
 }) {
-  const gradient = pickGradient(enrollment.classSection.subjectCode);
-  const bandLabel = enrollment.classSection.edpCode || enrollment.classSection.subjectCode;
-  const isLeader  = enrollment.membership.role === "LEADER";
+  const { classSection, enrollments } = classGroup;
+  const single    = enrollments.length === 1;
+  const e0        = enrollments[0]!;
+  const gradient  = pickGradient(classSection.subjectCode);
+  const bandLabel = classSection.edpCode || classSection.subjectCode;
+
+  // For display: if one enrollment, show its health; if multiple, show the most recent
+  const latestReport = enrollments
+    .map((e) => e.report)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b!.generatedAt).getTime() - new Date(a!.generatedAt).getTime())[0] ?? null;
+
+  function handleBandClick() {
+    if (single) {
+      onNavigate(e0.project.id);
+    } else {
+      onToggleExpand();
+    }
+  }
 
   return (
-    <div
-      onClick={onNavigate}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onNavigate()}
-      className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-indigo-300 hover:ring-1 hover:ring-indigo-100 transition-all cursor-pointer group"
-    >
-      {/* Colored band */}
-      <div className="relative px-5 pt-5 pb-4 flex flex-col gap-3" style={{ background: gradient }}>
+    <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all group">
+      {/* Colored band — clickable */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleBandClick}
+        onKeyDown={(e) => e.key === "Enter" && handleBandClick()}
+        className="relative px-5 pt-5 pb-4 flex flex-col gap-3 cursor-pointer"
+        style={{ background: gradient }}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
-            {enrollment.membership.role === "LEADER" ? "Group Leader" : "Member"}
-          </span>
+          {!single && (
+            <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
+              {enrollments.length} projects
+            </span>
+          )}
+          {single && (
+            <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
+              {e0.membership.role === "LEADER" ? "Group Leader" : "Member"}
+            </span>
+          )}
         </div>
         <p className="text-white font-mono font-bold text-lg leading-tight tracking-tight">{bandLabel}</p>
       </div>
@@ -513,50 +552,149 @@ function EnrollmentCard({
       <div className="px-5 py-4 flex flex-col gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">
-            {enrollment.classSection.subjectName}
+            {classSection.subjectName}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {enrollment.project.groupName} · {enrollment.assignment.title}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
-            {SOURCE_LABEL[enrollment.assignment.sourceType] ?? enrollment.assignment.sourceType}
-          </span>
-          {enrollment.assignment.deadline && (
-            <span className="text-[11px] text-slate-500 bg-slate-50 rounded-full px-2.5 py-1 border border-slate-200">
-              Due {new Date(enrollment.assignment.deadline).toLocaleDateString()}
-            </span>
+          {single && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              {e0.project.groupName} · {e0.assignment.title}
+            </p>
           )}
         </div>
 
-        {enrollment.report ? (
-          <div className="flex items-center justify-between">
-            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[enrollment.report.teamHealth ?? ""] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-              {enrollment.report.teamHealth ?? "Unknown"}
+        {/* Join code(s) — always shown as reference info */}
+        <div className="flex flex-wrap gap-2">
+          {enrollments.map((e) => (
+            <span
+              key={e.assignment.id}
+              className="inline-flex items-center gap-1 text-[11px] bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1"
+            >
+              <span className="text-slate-400">Code:</span>
+              <span className="font-mono font-semibold text-slate-600 tracking-wide">{e.assignment.joinCode}</span>
+              {!single && <span className="text-slate-400 ml-0.5">({e.assignment.title})</span>}
             </span>
-            <p className="text-[11px] text-slate-400">
-              Analyzed {new Date(enrollment.report.generatedAt).toLocaleDateString()}
-            </p>
+          ))}
+        </div>
+
+        {/* Metadata badges — for single-project only (multi handled below) */}
+        {single && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
+              {SOURCE_LABEL[e0.assignment.sourceType] ?? e0.assignment.sourceType}
+            </span>
+            {e0.assignment.deadline && (
+              <span className="text-[11px] text-slate-500 bg-slate-50 rounded-full px-2.5 py-1 border border-slate-200">
+                Due {new Date(e0.assignment.deadline).toLocaleDateString()}
+              </span>
+            )}
           </div>
-        ) : (
-          <p className="text-[11px] text-slate-400 italic">Awaiting first analysis by instructor</p>
         )}
 
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-xs text-indigo-500 group-hover:text-indigo-700 font-medium transition-colors">
-            View my project →
-          </span>
-          {isLeader && (
+        {/* Health indicator — single project */}
+        {single && (
+          latestReport ? (
+            <div className="flex items-center justify-between">
+              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth ?? ""] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                {latestReport.teamHealth ?? "Unknown"}
+              </span>
+              <p className="text-[11px] text-slate-400">
+                Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 italic">Awaiting first analysis by instructor</p>
+          )
+        )}
+
+        {/* Footer — single project */}
+        {single && (
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <button
-              onClick={(e) => { e.stopPropagation(); onManage(); }}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              onClick={() => onNavigate(e0.project.id)}
+              className="text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
             >
-              Manage group
+              View my project →
             </button>
-          )}
-        </div>
+            {e0.membership.role === "LEADER" && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onManage(e0.project.id); }}
+                className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              >
+                Manage group
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Multi-project: expand toggle */}
+        {!single && (
+          <button
+            onClick={onToggleExpand}
+            className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-medium text-indigo-500 hover:text-indigo-700 transition-colors w-full text-left"
+          >
+            <span>{expanded ? "Hide projects" : `View my ${enrollments.length} projects →`}</span>
+            <svg
+              className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Multi-project: expanded project list */}
+        {!single && expanded && (
+          <div className="space-y-2 mt-1">
+            {enrollments.map((e) => (
+              <div
+                key={`${e.assignment.id}-${e.project.id}`}
+                className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-700 truncate">{e.project.groupName}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400">{e.assignment.title}</span>
+                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5">
+                      {SOURCE_LABEL[e.assignment.sourceType] ?? e.assignment.sourceType}
+                    </span>
+                    {e.assignment.deadline && (
+                      <span className="text-[10px] text-slate-400">
+                        Due {new Date(e.assignment.deadline).toLocaleDateString()}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                      e.membership.role === "LEADER"
+                        ? "text-indigo-700 bg-indigo-50 border-indigo-200"
+                        : "text-slate-500 bg-white border-slate-200"
+                    }`}>
+                      {e.membership.role === "LEADER" ? "Leader" : "Member"}
+                    </span>
+                    {e.report && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[e.report.teamHealth ?? ""] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                        {e.report.teamHealth ?? "Unknown"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {e.membership.role === "LEADER" && (
+                    <button
+                      onClick={() => onManage(e.project.id)}
+                      className="text-[11px] text-slate-400 hover:text-slate-700 font-medium transition-colors"
+                    >
+                      Manage
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onNavigate(e.project.id)}
+                    className="text-[11px] font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
+                  >
+                    View →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -573,6 +711,7 @@ export function StudentPage() {
   const [showJoinModal, setShowJoinModal]     = useState(false);
   const [refreshKey, setRefreshKey]           = useState(0);
   const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
+  const [expandedClassId, setExpandedClassId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -587,6 +726,17 @@ export function StudentPage() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load data."))
       .finally(() => setLoading(false));
   }, [token, refreshKey]);
+
+  // Group enrollments by classSection — one card per class
+  const classGroups: ClassGroup[] = (() => {
+    const map = new Map<number, ClassGroup>();
+    for (const e of enrollments) {
+      const key = e.classSection.id;
+      if (!map.has(key)) map.set(key, { classSection: e.classSection, enrollments: [] });
+      map.get(key)!.enrollments.push(e);
+    }
+    return Array.from(map.values());
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -619,7 +769,7 @@ export function StudentPage() {
             <p className="text-xs text-slate-500 mt-0.5">
               {loading
                 ? "Loading…"
-                : `${enrollments.length} class${enrollments.length !== 1 ? "es" : ""} enrolled`}
+                : `${classGroups.length} class${classGroups.length !== 1 ? "es" : ""} enrolled`}
             </p>
           </div>
           <button
@@ -648,7 +798,7 @@ export function StudentPage() {
           </div>
         )}
 
-        {!loading && !error && enrollments.length === 0 && (
+        {!loading && !error && classGroups.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
             <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
               <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -673,18 +823,22 @@ export function StudentPage() {
           </div>
         )}
 
-        {!loading && !error && enrollments.length > 0 && (
+        {!loading && !error && classGroups.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">
               My Classes
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {enrollments.map((e) => (
-                <EnrollmentCard
-                  key={`${e.assignment.id}-${e.project.id}`}
-                  enrollment={e}
-                  onNavigate={() => navigate(`/student/group/${e.project.id}`)}
-                  onManage={() => setManagingProjectId(e.project.id)}
+              {classGroups.map((cg) => (
+                <ClassCard
+                  key={cg.classSection.id}
+                  classGroup={cg}
+                  onNavigate={(projectId) => navigate(`/student/group/${projectId}`)}
+                  onManage={(projectId) => setManagingProjectId(projectId)}
+                  expanded={expandedClassId === cg.classSection.id}
+                  onToggleExpand={() =>
+                    setExpandedClassId((id) => id === cg.classSection.id ? null : cg.classSection.id)
+                  }
                 />
               ))}
             </div>
