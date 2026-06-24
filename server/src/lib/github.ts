@@ -251,17 +251,22 @@ async function fetchCommitDiffs(
 
 export async function fetchRepoStats(
   repoUrl: string,
-  githubToken: string
+  githubToken: string,
+  requiredLogins: string[] = []
 ): Promise<{ contributors: GitHubContributorData[] }> {
   const octokit = new Octokit({ auth: githubToken });
   const { owner, repo } = parseRepoUrl(repoUrl);
 
   const contributorStats = await fetchContributorStats(octokit, owner, repo);
+  console.log(`[github] stats API returned ${contributorStats.length} contributor(s)`);
+
   const contributors: GitHubContributorData[] = [];
+  const processedLogins = new Set<string>();
 
   for (const contributor of contributorStats) {
     if (!contributor.author?.login) continue;
     const login = contributor.author.login;
+    processedLogins.add(login.toLowerCase());
 
     const additions = contributor.weeks.reduce((s, w) => s + w.a, 0);
     const deletions = contributor.weeks.reduce((s, w) => s + w.d, 0);
@@ -282,6 +287,44 @@ export async function fetchRepoStats(
       commits: contributor.total,
       additions,
       deletions,
+      commitDates,
+      ...lineCounts,
+    });
+  }
+
+  // For any required login the stats API didn't return, fetch directly.
+  // The stats API is eventually consistent and can miss low-activity contributors.
+  for (const login of requiredLogins) {
+    if (processedLogins.has(login.toLowerCase())) continue;
+
+    console.log(`[github] "${login}" missing from stats API — fetching directly`);
+
+    const { dates: commitDates, shas } = await fetchCommitShasAndDates(
+      octokit,
+      owner,
+      repo,
+      login
+    );
+
+    if (shas.length === 0) {
+      console.log(`[github] "${login}" has no commits — will appear as inactive`);
+      continue;
+    }
+
+    const shasToSample = shas.slice(0, 50);
+    const lineCounts = await fetchCommitDiffs(octokit, owner, repo, shasToSample);
+
+    // additions/deletions come from the weekly stats breakdown in the stats API.
+    // For the fallback path we derive them from the diff data instead.
+    const additions = lineCounts.codeLinesAdded + lineCounts.commentLinesAdded + lineCounts.blankLinesAdded;
+
+    console.log(`[github] "${login}" recovered: ${shas.length} commit(s) via direct fetch`);
+
+    contributors.push({
+      githubUsername: login,
+      commits: shas.length,
+      additions,
+      deletions: 0,
       commitDates,
       ...lineCounts,
     });

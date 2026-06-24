@@ -149,8 +149,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   const equalShare   = report ? 1 / report.memberCount : 0;
   const myShare      = report?.myContribution?.contributionShare ?? null;
-  const mySharePct   = myShare !== null ? (myShare * 100).toFixed(0) : null;
-  const equalSharePct = (equalShare * 100).toFixed(0);
+  const mySharePct   = myShare !== null ? (myShare * 100).toFixed(1) : null;
+  const equalSharePct = (equalShare * 100).toFixed(1);
   const giniLabel    = report
     ? (report.gini < 0.2 ? "Healthy" : report.gini < 0.4 ? "Moderate Risk" : "High Risk")
     : null;

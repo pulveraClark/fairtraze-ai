@@ -109,6 +109,8 @@ export interface ProjectSummaryItem {
   groupName: string;      // student team name, e.g. "Group 1" — primary instructor-facing identifier
   name: string;           // app/project name, e.g. "FairTraze AI"
   assignmentLabel: string;
+  classId: number | null;      // ClassSection.id — for breadcrumb navigation
+  assignmentId: number | null; // Assignment.id   — for breadcrumb navigation
   memberCount: number;
   teamHealth: TeamHealth | null;
   gini: number | null;
@@ -120,6 +122,7 @@ export interface ProjectSummaryItem {
   flagsPresent: Flag[];
   lastAnalyzedAt: string | null;
   isAnalyzed: boolean;
+  membershipChangedAt: string | null; // set when members are added/removed; compare to lastAnalyzedAt to detect stale reports
 }
 
 // Stored report — returned by GET /api/projects/:id/report.

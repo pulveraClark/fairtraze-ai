@@ -44,7 +44,7 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
   res.status(201).json(cls);
 });
 
-// DELETE /api/classes/:id — cascade-delete the class and all its assignments, groups, and reports
+// DELETE /api/classes/:id — delete the class; DB cascades to assignments → projects → alerts/reports/members/memberships
 classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
@@ -54,29 +54,6 @@ classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (re
 
   const cls = await assertOwnsClass(req, res, idResult.data);
   if (!cls) return;
-
-  // Collect child ids for cascade
-  const assignments = await prisma.assignment.findMany({
-    where:  { classSectionId: cls.id },
-    select: { id: true },
-  });
-  const assignmentIds = assignments.map((a) => a.id);
-
-  if (assignmentIds.length > 0) {
-    const projects = await prisma.project.findMany({
-      where:  { assignmentId: { in: assignmentIds } },
-      select: { id: true },
-    });
-    const projectIds = projects.map((p) => p.id);
-
-    if (projectIds.length > 0) {
-      await prisma.member.deleteMany({ where: { projectId: { in: projectIds } } });
-      await prisma.report.deleteMany({ where: { projectId: { in: projectIds } } });
-      await prisma.groupMembership.deleteMany({ where: { projectId: { in: projectIds } } });
-      await prisma.project.deleteMany({ where: { id: { in: projectIds } } });
-    }
-    await prisma.assignment.deleteMany({ where: { id: { in: assignmentIds } } });
-  }
 
   await prisma.classSection.delete({ where: { id: cls.id } });
   res.json({ message: "Class section deleted" });

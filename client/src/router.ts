@@ -2,9 +2,9 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import type { ReactNode } from "react";
 import { createElement } from "react";
 
-export type AppRoute = "/" | "/overview" | "/login" | "/register" | "/dashboard" | "/student" | "/admin" | "/settings";
+export type AppRoute = "/" | "/overview" | "/login" | "/register" | "/dashboard" | "/student" | "/admin" | "/settings" | "/alerts";
 
-const VALID_STATIC_ROUTES: AppRoute[] = ["/", "/overview", "/login", "/register", "/dashboard", "/student", "/admin", "/settings"];
+const VALID_STATIC_ROUTES: AppRoute[] = ["/", "/overview", "/login", "/register", "/dashboard", "/student", "/admin", "/settings", "/alerts"];
 
 function resolvePathname(raw: string): string {
   if ((VALID_STATIC_ROUTES as string[]).includes(raw)) return raw;
@@ -37,7 +37,9 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const navigate = useCallback((to: string) => {
-    history.pushState(null, "", to);
+    // { intentional: true } lets LandingPage distinguish in-app navigation
+    // from a fresh page load — so it doesn't auto-redirect on logo/back clicks.
+    history.pushState({ intentional: true }, "", to);
     setPathname(to);
     window.scrollTo(0, 0);
   }, []);

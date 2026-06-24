@@ -7,6 +7,7 @@ interface Props {
   edpCode?: string;
   classType?: "LECTURE" | "LABORATORY";
   onDelete?: () => void;
+  projectCount?: number;
 }
 
 // Deterministic gradient based on label string — stable across renders
@@ -41,7 +42,7 @@ export function classAtRiskCount(items: ProjectSummaryItem[]): number {
   ).length;
 }
 
-export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType, onDelete }: Props) {
+export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount }: Props) {
   const { code, subjectName } = parseClassLabel(assignmentLabel);
 
   const analyzed   = items.filter((i) => i.isAnalyzed);
@@ -124,9 +125,19 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
           </span>
         </div>
 
-        {/* Group count */}
+        {/* Project + group count */}
         <p className="text-xs text-slate-500">
-          {items.length} group{items.length !== 1 ? "s" : ""}
+          {projectCount !== undefined ? (
+            <>
+              <span className="font-medium text-slate-700">{projectCount}</span>{" "}
+              project{projectCount !== 1 ? "s" : ""}
+              {" · "}
+              <span className="font-medium text-slate-700">{items.length}</span>{" "}
+              group{items.length !== 1 ? "s" : ""}
+            </>
+          ) : (
+            <>{items.length} group{items.length !== 1 ? "s" : ""}</>
+          )}
         </p>
 
         {/* Risk rollup */}

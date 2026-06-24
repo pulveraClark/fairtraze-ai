@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "../router";
 import type { AppRoute } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { AlertsBell } from "./AlertsBell";
+import { UserMenu } from "./UserMenu";
 
 const DASHBOARD_ITEM = { label: "Dashboard",       route: "/dashboard" as AppRoute };
 const ADMIN_ITEM     = { label: "Admin Dashboard", route: "/admin"     as AppRoute };
@@ -43,29 +45,7 @@ function isActive(pathname: string, route: AppRoute): boolean {
 export function AppTopBar() {
   const { pathname, navigate } = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
-
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [menuOpen,   setMenuOpen]   = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Close desktop user-menu on outside-click or Escape
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onDown(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown",   onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown",   onKey);
-    };
-  }, [menuOpen]);
 
   const navItems: { label: string; route: AppRoute }[] = [];
   if (user?.systemRole === "INSTRUCTOR") navItems.push(DASHBOARD_ITEM);
@@ -74,14 +54,12 @@ export function AppTopBar() {
   function go(route: string) {
     navigate(route);
     setMobileOpen(false);
-    setMenuOpen(false);
   }
 
   function handleLogout() {
     logout();
     navigate("/");
     setMobileOpen(false);
-    setMenuOpen(false);
   }
 
   const avatarStyle = user ? (AVATAR_STYLE[user.systemRole] ?? AVATAR_STYLE.STUDENT) : "";
@@ -145,89 +123,10 @@ export function AppTopBar() {
           {!authLoading && (
             <div className="hidden sm:flex items-center gap-2">
               {user ? (
-                /* User menu trigger + dropdown */
-                <div ref={menuRef} className="relative">
-                  <button
-                    onClick={() => setMenuOpen((o) => !o)}
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-colors group"
-                  >
-                    {/* Avatar */}
-                    <span
-                      className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 select-none ${avatarStyle}`}
-                      style={{ background: avatarBg }}
-                    >
-                      {initials(user.name)}
-                    </span>
-                    {/* Name */}
-                    <span className="text-sm text-slate-300 max-w-[8rem] truncate font-medium group-hover:text-white transition-colors">
-                      {user.name}
-                    </span>
-                    {/* Caret */}
-                    <svg
-                      className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-150 ${menuOpen ? "rotate-180" : ""}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {/* Dropdown */}
-                  {menuOpen && (
-                    <div
-                      role="menu"
-                      className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-700/60 shadow-xl shadow-black/50 overflow-hidden bg-slate-900/95 backdrop-blur-xl"
-                    >
-                      {/* Header */}
-                      <div className="px-5 py-4 border-b border-slate-800 bg-slate-800/50">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold shrink-0 select-none ${avatarStyle}`}
-                            style={{ background: avatarBg }}
-                          >
-                            {initials(user.name)}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{user.name}</p>
-                            <span className={`inline-block text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border mt-1 ${roleBadge}`}>
-                              {ROLE_LABEL[user.systemRole] ?? user.systemRole}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Menu items */}
-                      <div className="py-1.5">
-                        <button
-                          role="menuitem"
-                          onClick={() => go("/settings")}
-                          className="w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors text-left font-medium"
-                        >
-                          <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          Settings
-                        </button>
-                      </div>
-
-                      {/* Sign out */}
-                      <div className="border-t border-slate-800 py-1.5">
-                        <button
-                          role="menuitem"
-                          onClick={handleLogout}
-                          className="w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-medium"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                          </svg>
-                          Sign out
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <>
+                  {user.systemRole === "INSTRUCTOR" && <AlertsBell />}
+                  <UserMenu theme="dark" />
+                </>
               ) : (
                 <>
                   <button

@@ -191,7 +191,13 @@ groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: 
     return;
   }
 
-  await prisma.groupMembership.delete({ where: { id: targetMembership.id } });
+  await prisma.$transaction([
+    prisma.groupMembership.delete({ where: { id: targetMembership.id } }),
+    prisma.project.update({
+      where: { id: projectId },
+      data:  { membershipChangedAt: new Date() },
+    }),
+  ]);
 
   // Remove the corresponding analysis Member row (matched by githubUsername + projectId)
   const targetGitHub = targetMembership.user.githubUsername;

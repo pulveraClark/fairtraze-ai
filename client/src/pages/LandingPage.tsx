@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { UserMenu } from "../components/UserMenu";
 
 // ── Static preview data ───────────────────────────────────────────────────────
 const PREVIEW_MEMBERS = [
@@ -143,6 +145,18 @@ export function LandingPage() {
       : "/dashboard"
       : null;
 
+  // Auto-redirect on fresh page load when authenticated.
+  // router.ts tags every internal navigate() with { intentional: true }, so
+  // logo clicks and browser-back land here without triggering this redirect.
+  useEffect(() => {
+    if (authLoading || !user || !dashboardPath) return;
+    const intentional = (window.history.state as { intentional?: boolean } | null)?.intentional;
+    if (intentional) return;
+    // Mark this history entry so browser-back here won't re-redirect.
+    history.replaceState({ intentional: true }, "", "/");
+    navigate(dashboardPath);
+  }, [authLoading, user, dashboardPath, navigate]);
+
   return (
     <div className="min-h-screen bg-white">
 
@@ -170,17 +184,22 @@ export function LandingPage() {
 
           {/* Right actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {dashboardPath ? (
-              <button
-                onClick={() => navigate(dashboardPath)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.98]"
-              >
-                Dashboard
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                </svg>
-              </button>
-            ) : (
+            {!authLoading && user && dashboardPath ? (
+              /* Logged in: go-to-dashboard button + user menu */
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate(dashboardPath)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.98]"
+                >
+                  Go to Dashboard
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
+                  </svg>
+                </button>
+                <UserMenu theme="light" />
+              </div>
+            ) : !authLoading ? (
+              /* Logged out */
               <>
                 <button
                   onClick={() => navigate("/login")}
@@ -195,7 +214,7 @@ export function LandingPage() {
                   Get Started
                 </button>
               </>
-            )}
+            ) : null /* loading — render nothing to avoid flash */}
           </div>
         </div>
       </nav>

@@ -7,8 +7,8 @@ import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
+import { PrintableReport } from "../components/PrintableReport";
 import { parseClassLabel } from "../components/ClassCard";
-import { getSampleAssignment } from "../data/sampleAssignments";
 import { useRouter } from "../router";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -109,15 +109,13 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   // ── Breadcrumb derivation ──────────────────────────────────────────────────
   const assignmentLabel = projectMeta?.assignmentLabel ?? "";
-  const { code } = assignmentLabel ? parseClassLabel(assignmentLabel) : { code: "" };
-  const assignment = code ? getSampleAssignment(code) : null;
+  const { code, subjectName } = assignmentLabel ? parseClassLabel(assignmentLabel) : { code: "", subjectName: "" };
 
-  const classUrl = assignmentLabel
-    ? `/class/${encodeURIComponent(assignmentLabel)}`
-    : "/dashboard";
-  const assignmentUrl = assignment && assignmentLabel
-    ? `/class/${encodeURIComponent(assignmentLabel)}/assignment/${assignment.id}`
-    : classUrl;
+  const classId      = projectMeta?.classId ?? null;
+  const assignmentId = projectMeta?.assignmentId ?? null;
+
+  const classUrl      = classId      ? `/class/${classId}`                              : "/dashboard";
+  const assignmentUrl = classId && assignmentId ? `/class/${classId}/assignment/${assignmentId}` : classUrl;
 
   const groupName = projectMeta?.groupName ?? stored?.groupName ?? `Project ${projectId}`;
 
@@ -129,10 +127,12 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
+      <div className="print:hidden">
+        <AppTopBar />
+      </div>
 
       {/* Page header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
 
           {/* Left: full breadcrumb + subtext */}
@@ -155,14 +155,14 @@ export function ProjectDetailPage({ projectId }: Props) {
                   </button>
                 </>
               )}
-              {assignment && (
+              {assignmentId && (
                 <>
                   <span className="text-slate-300 text-xs shrink-0">›</span>
                   <button
                     onClick={() => navigate(assignmentUrl)}
                     className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
                   >
-                    {assignment.title}
+                    {subjectName || "Assignment"}
                   </button>
                 </>
               )}
@@ -246,6 +246,21 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
+            {/* Export / Print button — shown only when a report exists */}
+            {stored && !reanalyzing && (
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-xs font-semibold rounded-lg transition-colors"
+                title="Export a clean PDF via the browser print dialog"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a1 1 0 001-1v-4a1 1 0 00-1-1H9a1 1 0 00-1 1v4a1 1 0 001 1zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Export / Print
+              </button>
+            )}
+
             {/* Re-analyze / Analyze button */}
             {!reanalyzing && (
               <button
@@ -262,7 +277,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         </div>
       </div>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-6">
+      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-6">
 
         {/* Loading stepper */}
         {reanalyzing && <AnalysisStepper done={stepperDone} />}
@@ -414,7 +429,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
+      <footer className="print:hidden border-t border-slate-200 bg-white">
         <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
@@ -427,6 +442,15 @@ export function ProjectDetailPage({ projectId }: Props) {
           </button>
         </div>
       </footer>
+
+      {/* Print-only layout — hidden on screen, rendered when printing */}
+      {stored && !reanalyzing && (
+        <PrintableReport
+          stored={stored}
+          narrative={narrativeText}
+          assignmentLabel={assignmentLabel}
+        />
+      )}
     </div>
   );
 }

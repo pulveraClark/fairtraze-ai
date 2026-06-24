@@ -46,7 +46,7 @@ assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (
   res.status(201).json(assignment);
 });
 
-// DELETE /api/assignments/:id — cascade-delete the assignment, its groups, and their reports/members
+// DELETE /api/assignments/:id — delete the assignment; DB cascades to projects → alerts/reports/members/memberships
 assignmentsRouter.delete("/api/assignments/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
@@ -57,21 +57,8 @@ assignmentsRouter.delete("/api/assignments/:id", ...requireRole("INSTRUCTOR"), a
   const assignment = await assertOwnsAssignment(req, res, idResult.data);
   if (!assignment) return;
 
-  const projects = await prisma.project.findMany({
-    where:  { assignmentId: assignment.id },
-    select: { id: true },
-  });
-  const projectIds = projects.map((p) => p.id);
-
-  if (projectIds.length > 0) {
-    await prisma.member.deleteMany({ where: { projectId: { in: projectIds } } });
-    await prisma.report.deleteMany({ where: { projectId: { in: projectIds } } });
-    await prisma.groupMembership.deleteMany({ where: { projectId: { in: projectIds } } });
-    await prisma.project.deleteMany({ where: { id: { in: projectIds } } });
-  }
-
   await prisma.assignment.delete({ where: { id: assignment.id } });
-  res.json({ message: "Project deleted" });
+  res.json({ message: "Assignment deleted" });
 });
 
 // GET /api/assignments/:id — one assignment with its groups (ownership-verified)

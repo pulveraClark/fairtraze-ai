@@ -20,6 +20,7 @@ projectsRouter.get("/api/projects/summary", async (_req, res) => {
     include: {
       members: true,
       reports: { orderBy: { generatedAt: "desc" }, take: 1 },
+      assignment: { select: { id: true, classSectionId: true } },
     },
     orderBy: { id: "asc" },
   });
@@ -42,17 +43,20 @@ projectsRouter.get("/api/projects/summary", async (_req, res) => {
       : [];
 
     return {
-      projectId: p.id,
-      groupName: p.groupName || `Group ${p.id}`,
-      name: p.name,
+      projectId:    p.id,
+      groupName:    p.groupName || `Group ${p.id}`,
+      name:         p.name,
       assignmentLabel: p.assignmentLabel || "General Assignment",
-      memberCount: p.members.length,
-      teamHealth: (latestReport?.teamHealth as TeamHealth | null) ?? null,
-      gini: latestReport?.gini ?? null,
+      classId:      p.assignment?.classSectionId ?? null,
+      assignmentId: p.assignment?.id ?? null,
+      memberCount:  p.members.length,
+      teamHealth:   (latestReport?.teamHealth as TeamHealth | null) ?? null,
+      gini:         latestReport?.gini ?? null,
       memberShares,
       flagsPresent,
-      lastAnalyzedAt: latestReport?.generatedAt.toISOString() ?? null,
-      isAnalyzed: !!latestReport,
+      lastAnalyzedAt:      latestReport?.generatedAt.toISOString() ?? null,
+      isAnalyzed:          !!latestReport,
+      membershipChangedAt: p.membershipChangedAt?.toISOString() ?? null,
     };
   });
 

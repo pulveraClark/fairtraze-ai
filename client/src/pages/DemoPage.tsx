@@ -580,6 +580,7 @@ export function DemoPage() {
                   edpCode={cls.edpCode || undefined}
                   classType={cls.type}
                   onDelete={() => { setDeleteTarget(cls); setDeleteError(null); }}
+                  projectCount={cls.assignments.length}
                 />
               ))}
             </div>

@@ -12,6 +12,7 @@ import { StudentClassPage } from "./pages/StudentClassPage";
 import { StudentGroupPage } from "./pages/StudentGroupPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { AlertsPage } from "./pages/AlertsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
@@ -95,6 +96,12 @@ export default function App() {
   if (pathname === "/settings") return (
     <ProtectedRoute>
       <SettingsPage />
+    </ProtectedRoute>
+  );
+
+  if (pathname === "/alerts") return (
+    <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+      <AlertsPage />
     </ProtectedRoute>
   );
 

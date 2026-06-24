@@ -190,9 +190,15 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
     return;
   }
 
-  await prisma.groupMembership.create({
-    data: { userId, projectId: project.id, role: "MEMBER" },
-  });
+  await prisma.$transaction([
+    prisma.groupMembership.create({
+      data: { userId, projectId: project.id, role: "MEMBER" },
+    }),
+    prisma.project.update({
+      where: { id: project.id },
+      data:  { membershipChangedAt: new Date() },
+    }),
+  ]);
 
   await prisma.member.create({
     data: {
