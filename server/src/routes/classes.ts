@@ -104,8 +104,8 @@ classesRouter.get("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res)
   res.json({ classes });
 });
 
-// GET /api/classes/:id/assignments — assignments for one class (ownership-verified)
-classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR"), async (req, res) => {
+// GET /api/classes/:id/assignments — assignments for one class (ownership-verified; ADMIN bypasses ownership)
+classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "ADMIN"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid class section id" });

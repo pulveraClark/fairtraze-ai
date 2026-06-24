@@ -387,8 +387,10 @@ function ConfirmDialog({
 interface Props { classId: number }
 
 export function ClassPage({ classId }: Props) {
-  const { navigate } = useRouter();
-  const { token }    = useAuth();
+  const { navigate }        = useRouter();
+  const { token, user }     = useAuth();
+  const isAdmin             = user?.systemRole === "ADMIN";
+  const dashboardUrl        = isAdmin ? "/admin" : "/dashboard";
 
   const [classInfo, setClassInfo]           = useState<ClassInfo | null>(null);
   const [assignments, setAssignments]       = useState<LifecycleAssignment[]>([]);
@@ -484,7 +486,7 @@ export function ClassPage({ classId }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      {showModal && classInfo && (
+      {!isAdmin && showModal && classInfo && (
         <CreateAssignmentModal
           classSectionId={classInfo.id}
           token={token}
@@ -523,8 +525,8 @@ export function ClassPage({ classId }: Props) {
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <button onClick={() => navigate("/dashboard")} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
-                Dashboard
+              <button onClick={() => navigate(dashboardUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
+                {isAdmin ? "Admin" : "Dashboard"}
               </button>
               <span className="text-slate-300 text-xs shrink-0">›</span>
               {classInfo ? (
@@ -555,15 +557,22 @@ export function ClassPage({ classId }: Props) {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              New Project
-            </button>
+            {isAdmin && (
+              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+                Admin view — read only
+              </span>
+            )}
+            {!isAdmin && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                New Project
+              </button>
+            )}
             {totalAtRisk > 0 && (
               <button
                 onClick={() => setFilterAtRisk(!filterAtRisk)}
@@ -605,15 +614,17 @@ export function ClassPage({ classId }: Props) {
                   <p className="text-sm font-semibold text-slate-700">No projects yet</p>
                   <p className="text-xs text-slate-400 mt-1">Create your first project for this class section.</p>
                 </div>
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Create first project
-                </button>
+                {!isAdmin && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create first project
+                  </button>
+                )}
               </div>
             ) : visibleAssignments.length === 0 ? (
               <div className="text-center py-16 text-slate-400 text-sm">
@@ -656,15 +667,17 @@ export function ClassPage({ classId }: Props) {
                                 ⚠ {atRisk} at risk
                               </span>
                             )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
-                              title="Delete project"
-                              className="p-1 rounded text-white/50 hover:text-white hover:bg-white/20 transition-colors"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
+                            {!isAdmin && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
+                                title="Delete project"
+                                className="p-1 rounded text-white/50 hover:text-white hover:bg-white/20 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </div>
                         <p className="text-white font-semibold text-sm leading-snug">{a.title}</p>

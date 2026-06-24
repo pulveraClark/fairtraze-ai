@@ -17,7 +17,7 @@ const FLAG_CHIP: Record<Flag, string> = {
 
 interface Props {
   item: ProjectSummaryItem;
-  onAnalyze: (projectId: number) => void;
+  onAnalyze?: (projectId: number) => void;
   analyzing: boolean;
   onManage?: (projectId: number) => void;
 }
@@ -63,7 +63,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
               onClick={openDetail}
               className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
             >
-              Analyze →
+              {onAnalyze ? "Analyze →" : "View →"}
             </button>
           </div>
         </div>
@@ -139,13 +139,15 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
               Membership changed — re-analyze to update the report
             </p>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onAnalyze(item.projectId); }}
-            disabled={analyzing}
-            className="shrink-0 text-[11px] font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-40"
-          >
-            {analyzing ? "Analyzing…" : "Re-analyze →"}
-          </button>
+          {onAnalyze && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAnalyze(item.projectId); }}
+              disabled={analyzing}
+              className="shrink-0 text-[11px] font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-40"
+            >
+              {analyzing ? "Analyzing…" : "Re-analyze →"}
+            </button>
+          )}
         </div>
       )}
 
@@ -170,17 +172,16 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
               Manage
             </button>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAnalyze(item.projectId);
-            }}
-            disabled={analyzing}
-            className="text-xs text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
-            title="Re-analyze this project"
-          >
-            {analyzing ? "Analyzing…" : "Re-analyze"}
-          </button>
+          {onAnalyze && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAnalyze?.(item.projectId); }}
+              disabled={analyzing}
+              className="text-xs text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
+              title="Re-analyze this project"
+            >
+              {analyzing ? "Analyzing…" : "Re-analyze"}
+            </button>
+          )}
         </div>
       </div>
     </div>

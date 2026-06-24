@@ -9,24 +9,37 @@ const idParam = z.coerce.number().int().positive();
 
 // ── GET /api/alerts ───────────────────────────────────────────────────────────
 // Returns the logged-in instructor's alerts, newest first.
-// Response: { alerts: Alert[], unreadCount: number }
+// Optional page/pageSize for the full list page; without them returns all (for bell).
+// unreadCount is always the DB total, accurate across all pages.
 
 alertsRouter.get("/api/alerts", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const instructorId = req.user!.sub;
 
-  const alerts = await prisma.alert.findMany({
-    where: { instructorId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      project: {
-        select: { id: true, groupName: true, assignmentLabel: true, name: true },
+  const rawPage = parseInt(String(req.query.page ?? ""), 10);
+  const rawSize = parseInt(String(req.query.pageSize ?? ""), 10);
+  const paginate  = Number.isFinite(rawPage) || Number.isFinite(rawSize);
+  const page      = Number.isFinite(rawPage) && rawPage > 0  ? rawPage           : 1;
+  const pageSize  = Number.isFinite(rawSize) && rawSize > 0  ? Math.min(rawSize, 100) : 20;
+
+  const [alerts, unreadCount, total] = await Promise.all([
+    prisma.alert.findMany({
+      where:   { instructorId },
+      orderBy: { createdAt: "desc" },
+      ...(paginate ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
+      include: {
+        project: {
+          select: { id: true, groupName: true, assignmentLabel: true, name: true },
+        },
       },
-    },
-  });
+    }),
+    prisma.alert.count({ where: { instructorId, read: false } }),
+    paginate ? prisma.alert.count({ where: { instructorId } }) : Promise.resolve(0),
+  ]);
 
-  const unreadCount = alerts.filter((a) => !a.read).length;
+  const base = { alerts, unreadCount };
+  if (!paginate) return res.json(base);
 
-  res.json({ alerts, unreadCount });
+  res.json({ ...base, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
 });
 
 // ── POST /api/alerts/read-all ─────────────────────────────────────────────────

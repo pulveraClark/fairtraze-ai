@@ -129,6 +129,9 @@ export function ProjectDetailPage({ projectId }: Props) {
     }
   }
 
+  const isAdmin = user?.systemRole === "ADMIN";
+  const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
+
   // ── Source visibility ─────────────────────────────────────────────────────
   const sourceType = stored?.sourceType ?? null;
   const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub
@@ -166,10 +169,10 @@ export function ProjectDetailPage({ projectId }: Props) {
           <div>
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
               <button
-                onClick={() => navigate("/dashboard")}
+                onClick={() => navigate(dashboardUrl)}
                 className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
               >
-                Dashboard
+                {isAdmin ? "Admin" : "Dashboard"}
               </button>
               {code && (
                 <>
@@ -227,6 +230,12 @@ export function ProjectDetailPage({ projectId }: Props) {
           {/* Right: group switcher + re-analyze */}
           <div className="flex items-center gap-2 flex-wrap">
 
+            {isAdmin && (
+              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+                Admin view — read only
+              </span>
+            )}
+
             {/* Group switcher — shown once siblings load */}
             {siblings.length > 1 && (
               <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
@@ -273,8 +282,8 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
-            {/* Scoring settings button — shown only when a report exists */}
-            {stored && !reanalyzing && (
+            {/* Scoring settings button — shown only when a report exists, not for admin */}
+            {stored && !reanalyzing && !isAdmin && (
               <button
                 onClick={() => setShowScoringModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-xs font-semibold rounded-lg transition-colors"
@@ -302,8 +311,8 @@ export function ProjectDetailPage({ projectId }: Props) {
               </button>
             )}
 
-            {/* Re-analyze / Analyze button */}
-            {!reanalyzing && (
+            {/* Re-analyze / Analyze button — hidden for admin */}
+            {!reanalyzing && !isAdmin && (
               <button
                 onClick={handleAnalyze}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors"

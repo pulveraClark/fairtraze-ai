@@ -147,70 +147,88 @@ disputesRouter.get("/api/disputes/mine", ...requireRole("STUDENT"), async (req, 
 });
 
 // ── GET /api/disputes ─────────────────────────────────────────────────────────
-// Instructor sees all disputes for groups in their classes, OPEN first.
+// Instructor sees disputes for groups in their classes, paginated.
+// Query params: page, pageSize, status (open|all, default open), classSectionId.
+// openCount is always total OPEN across all pages, unaffected by status filter.
 
 disputesRouter.get("/api/disputes", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const instructorId = req.user!.sub;
 
-  const disputes = await prisma.dispute.findMany({
-    where: {
-      project: {
-        assignment: {
-          classSection: { instructorId },
+  const page     = Math.max(1, parseInt(String(req.query.page     ?? "1"),  10) || 1);
+  const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
+
+  const statusParam      = typeof req.query.status === "string" ? req.query.status : "open";
+  const onlyOpen         = statusParam === "open";
+  const csIdParsed       = parseInt(String(req.query.classSectionId ?? ""), 10);
+  const classSectionId   = Number.isFinite(csIdParsed) && csIdParsed > 0 ? csIdParsed : undefined;
+
+  const baseWhere = {
+    project: {
+      assignment: {
+        classSection: {
+          instructorId,
+          ...(classSectionId ? { id: classSectionId } : {}),
         },
       },
     },
-    orderBy: { createdAt: "desc" },
-    include: {
-      student: { select: { githubUsername: true } },
-      project: {
-        select: {
-          id:         true,
-          groupName:  true,
-          name:       true,
-          reports:    { orderBy: { generatedAt: "desc" }, take: 1, select: { content: true } },
-          assignment: {
-            select: {
-              id:    true,
-              title: true,
-              classSection: {
-                select: {
-                  id:          true,
-                  subjectCode: true,
-                  subjectName: true,
-                  edpCode:     true,
+  } as const;
+
+  const where = { ...baseWhere, ...(onlyOpen ? { status: "OPEN" as const } : {}) };
+
+  const [disputes, total, openCount] = await Promise.all([
+    prisma.dispute.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip:    (page - 1) * pageSize,
+      take:    pageSize,
+      include: {
+        student: { select: { githubUsername: true } },
+        project: {
+          select: {
+            id:         true,
+            groupName:  true,
+            name:       true,
+            reports:    { orderBy: { generatedAt: "desc" }, take: 1, select: { content: true } },
+            assignment: {
+              select: {
+                id:    true,
+                title: true,
+                classSection: {
+                  select: {
+                    id:          true,
+                    subjectCode: true,
+                    subjectName: true,
+                    edpCode:     true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.dispute.count({ where }),
+    prisma.dispute.count({ where: { project: { assignment: { classSection: { instructorId } } }, status: "OPEN" } }),
+  ]);
 
-  // Resolve flags for each dispute: stored flags take precedence; fall back to
-  // current report flags for pre-feature disputes (disputedFlags === "").
   const withFlags = disputes.map((d) => {
     const fallback = extractMemberFlags(
       d.project.reports[0]?.content ?? null,
       d.student.githubUsername
     );
     const disputedFlags = resolveFlags(d.disputedFlags, JSON.parse(fallback) as string[]);
-    // Strip internal fields not needed by the client
     const { student: _s, project: { reports: _r, ...projectRest }, ...rest } = d;
     return { ...rest, project: projectRest, disputedFlags };
   });
 
-  // Sort OPEN first, then by createdAt desc
-  const sorted = withFlags.sort((a, b) => {
-    if (a.status === "OPEN" && b.status !== "OPEN") return -1;
-    if (a.status !== "OPEN" && b.status === "OPEN") return  1;
-    return 0;
+  res.json({
+    disputes: withFlags,
+    openCount,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
   });
-
-  const openCount = disputes.filter((d) => d.status === "OPEN").length;
-
-  res.json({ disputes: sorted, openCount });
 });
 
 // ── GET /api/projects/:id/disputes ────────────────────────────────────────────

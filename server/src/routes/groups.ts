@@ -72,8 +72,9 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     return;
   }
 
+  const isAdmin  = req.user!.role === "ADMIN";
   const isMember = project.groupMemberships.some((m) => m.userId === req.user!.sub);
-  if (!isMember && !isInstructorOf(req, project)) {
+  if (!isAdmin && !isMember && !isInstructorOf(req, project)) {
     res.status(403).json({ error: "You do not have access to this group." });
     return;
   }

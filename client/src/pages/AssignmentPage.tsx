@@ -77,7 +77,9 @@ interface Props { classId: number; assignmentId: number }
 
 export function AssignmentPage({ classId, assignmentId }: Props) {
   const { navigate } = useRouter();
-  const { token }    = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.systemRole === "ADMIN";
+  const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
   const [assignment, setAssignment] = useState<AssignmentMeta | null>(null);
   const [classInfo, setClassInfo]   = useState<ClassInfo | null>(null);
@@ -170,8 +172,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <button onClick={() => navigate("/dashboard")} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
-              Dashboard
+            <button onClick={() => navigate(dashboardUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
+              {isAdmin ? "Admin" : "Dashboard"}
             </button>
             <span className="text-slate-300 text-xs shrink-0">›</span>
             <button onClick={() => navigate(classUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium font-mono">
@@ -197,19 +199,26 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
             </div>
           </div>
 
-          {atRiskCount > 0 && (
-            <button
-              onClick={() => setFilterMode(filterMode === "at-risk" ? "all" : "at-risk")}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
-                filterMode === "at-risk"
-                  ? "bg-red-100 border-red-300 text-red-800"
-                  : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-              }`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-              {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
-            </button>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {isAdmin && (
+              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+                Admin view — read only
+              </span>
+            )}
+            {atRiskCount > 0 && (
+              <button
+                onClick={() => setFilterMode(filterMode === "at-risk" ? "all" : "at-risk")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
+                  filterMode === "at-risk"
+                    ? "bg-red-100 border-red-300 text-red-800"
+                    : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -270,9 +279,9 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               <GroupSummaryCard
                 key={item.projectId}
                 item={item}
-                onAnalyze={handleReanalyze}
+                onAnalyze={isAdmin ? undefined : handleReanalyze}
                 analyzing={analyzing.has(item.projectId)}
-                onManage={(id) => setManagingGroupId(id)}
+                onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
               />
             ))}
           </div>
