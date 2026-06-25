@@ -260,8 +260,11 @@ disputesRouter.get("/api/projects/:id/disputes", ...requireRole("INSTRUCTOR"), a
   }
 
   const disputes = await prisma.dispute.findMany({
-    where:   { projectId, status: "OPEN" },
-    select:  { id: true, memberName: true, createdAt: true },
+    where:   { projectId },
+    select:  {
+      id: true, memberName: true, createdAt: true,
+      status: true, disputedFlags: true, instructorResponse: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 

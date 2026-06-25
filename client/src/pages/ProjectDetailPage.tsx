@@ -19,6 +19,8 @@ const SOURCE_LABEL: Record<string, string> = {
   COMBINED: "GitHub + Docs",
 };
 
+type Tab = "report" | "document";
+
 interface Props {
   projectId: number;
 }
@@ -39,6 +41,9 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [configStale, setConfigStale]           = useState(false);
   // Names of members with OPEN disputes (instructor only — students see nothing extra)
   const [disputedMembers, setDisputedMembers]   = useState<Set<string>>(new Set());
+  // Per-flag review outcomes from resolved/dismissed disputes — shown as badges next to flags
+  const [resolvedFlagOutcomes, setResolvedFlagOutcomes] = useState<Map<string, Map<string, "RESOLVED" | "DISMISSED">>>(new Map());
+  const [activeTab, setActiveTab]               = useState<Tab>("report");
 
   // Summary used for breadcrumb + group switcher
   const [projectMeta, setProjectMeta] = useState<ProjectSummaryItem | null>(null);
@@ -84,8 +89,9 @@ export function ProjectDetailPage({ projectId }: Props) {
     }
   }, [projectId]);
 
-  // Fetch OPEN disputes for this project so we can show inline "Disputed" tags.
-  // Only called when logged in as an instructor; silently ignored otherwise.
+  // Fetch all disputes for this project (OPEN + resolved) for the instructor view.
+  // OPEN → shows "Disputed" badge in MemberTable.
+  // RESOLVED/DISMISSED → shows review-outcome badge next to the disputed flag.
   const fetchDisputes = useCallback(async () => {
     if (!token || user?.systemRole !== "INSTRUCTOR") return;
     try {
@@ -93,10 +99,43 @@ export function ProjectDetailPage({ projectId }: Props) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
-      const data = (await res.json()) as { disputes: Array<{ id: number; memberName: string }> };
-      setDisputedMembers(new Set(data.disputes.map((d) => d.memberName)));
+
+      interface DisputeSummary {
+        id: number;
+        memberName: string;
+        status: "OPEN" | "RESOLVED" | "DISMISSED";
+        disputedFlags: string;
+        instructorResponse: string | null;
+      }
+
+      const data = (await res.json()) as { disputes: DisputeSummary[] };
+      const all  = data.disputes;
+
+      // OPEN disputes → "Disputed" badge
+      setDisputedMembers(new Set(all.filter((d) => d.status === "OPEN").map((d) => d.memberName)));
+
+      // RESOLVED/DISMISSED disputes → outcome badges per flag
+      // disputedFlags is a JSON string: "[]" = legacy (applies to all 4 known flags)
+      const KNOWN_FLAGS = ["inactive", "free-rider", "overload", "deadline-driven"];
+      const outcomes = new Map<string, Map<string, "RESOLVED" | "DISMISSED">>();
+      // Endpoint returns newest-first; iterate in order so first entry for a flag wins (most recent)
+      for (const d of all) {
+        if (d.status === "OPEN") continue;
+        const outcome = d.status as "RESOLVED" | "DISMISSED";
+        const flagList: string[] = (() => {
+          try { return d.disputedFlags ? (JSON.parse(d.disputedFlags) as string[]) : []; }
+          catch { return []; }
+        })();
+        const applicable = flagList.length === 0 ? KNOWN_FLAGS : flagList;
+        if (!outcomes.has(d.memberName)) outcomes.set(d.memberName, new Map());
+        const mm = outcomes.get(d.memberName)!;
+        for (const f of applicable) {
+          if (!mm.has(f)) mm.set(f, outcome); // first (most recent) wins
+        }
+      }
+      setResolvedFlagOutcomes(outcomes);
     } catch {
-      // non-critical — indicator simply won't show if fetch fails
+      // non-critical — indicators simply won't show if fetch fails
     }
   }, [projectId, token, user?.systemRole]);
 
@@ -132,10 +171,14 @@ export function ProjectDetailPage({ projectId }: Props) {
   const isAdmin = user?.systemRole === "ADMIN";
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
-  // ── Source visibility ─────────────────────────────────────────────────────
+  // ── Source visibility & tabs ──────────────────────────────────────────────
   const sourceType = stored?.sourceType ?? null;
   const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub
-  const showDocs   = sourceType === "EDITOR" || sourceType === "COMBINED";
+  const visibleTabs: Tab[] =
+    sourceType === "EDITOR" || sourceType === "COMBINED"
+      ? ["report", "document"]
+      : ["report"]; // GITHUB or legacy
+  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
   // ── Breadcrumb derivation ──────────────────────────────────────────────────
   const assignmentLabel = projectMeta?.assignmentLabel ?? "";
@@ -325,6 +368,32 @@ export function ProjectDetailPage({ projectId }: Props) {
             )}
           </div>
         </div>
+
+        {/* Tab bar — only shown when Document tab is also available */}
+        {visibleTabs.length > 1 && (
+          <div className="max-w-6xl mx-auto px-6 sm:px-8 flex border-t border-slate-100">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
+                  effectiveTab === tab
+                    ? "border-indigo-500 text-indigo-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {tab === "report" ? "Report" : (
+                  <>
+                    FairTraze Docs
+                    <span className="ml-1.5 text-[9px] font-bold text-violet-500 bg-violet-50 border border-violet-200 rounded px-1 py-0.5 normal-case tracking-normal">
+                      Preview
+                    </span>
+                  </>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-6">
@@ -351,6 +420,9 @@ export function ProjectDetailPage({ projectId }: Props) {
           </div>
         )}
 
+        {/* ── Report tab ─────────────────────────────────────────────────────── */}
+        {effectiveTab === "report" && (
+          <>
         {/* Stale report — scoring config changed after last analysis */}
         {configStale && stored && !reanalyzing && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
@@ -467,7 +539,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                   <div className="px-6 pt-4 pb-2">
                     <ContributionChart members={stored.report.members} />
                   </div>
-                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} memberRoles={stored.memberRoles} />
+                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} resolvedFlagOutcomes={resolvedFlagOutcomes} memberRoles={stored.memberRoles} />
                 </div>
 
                 {/* AI narrative — keyed to projectId so it always reflects the current group */}
@@ -489,27 +561,29 @@ export function ProjectDetailPage({ projectId }: Props) {
               </>
             )}
 
-            {/* FairTraze Docs section — shown for EDITOR and COMBINED */}
-            {showDocs && (
-              <div>
-                <div className="flex items-center gap-3 mb-4 flex-wrap">
-                  <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
-                  <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
-                    Preview
-                  </span>
-                  <span className="text-[11px] text-slate-400 hidden sm:inline">
-                    Collaborative editor — document contributions recorded per author
-                  </span>
-                </div>
-                <FairTrazeDocsPreview />
-              </div>
-            )}
-
             {/* Timestamp */}
             <p className="text-xs text-slate-400 text-right">
               Report generated {new Date(stored.analyzedAt).toLocaleString()}
             </p>
           </>
+        )}
+          </>
+        )}
+
+        {/* ── Document tab ─────────────────────────────────────────────────────── */}
+        {effectiveTab === "document" && (
+          <div>
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
+              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+                Preview
+              </span>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                Collaborative editor — document contributions recorded per author
+              </span>
+            </div>
+            <FairTrazeDocsPreview />
+          </div>
         )}
       </main>
 

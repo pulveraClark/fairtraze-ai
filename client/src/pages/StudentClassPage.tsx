@@ -24,7 +24,16 @@ interface MyGroup {
   name: string;
   repoUrl: string;
   role: "LEADER" | "MEMBER";
+  pendingRequestCount: number;
   report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
+}
+
+interface MyRequest {
+  id: number;
+  projectId: number;
+  groupName: string;
+  status: "PENDING" | "DECLINED";
+  createdAt: string;
 }
 
 interface AvailableGroup {
@@ -42,6 +51,7 @@ interface AssignmentDetail {
   sourceType: string;
   maxGroupSize: number;
   myGroup: MyGroup | null;
+  myRequest: MyRequest | null;
   groups: AvailableGroup[];
 }
 
@@ -101,7 +111,7 @@ function ProjectCard({
   asgn: AssignmentDetail;
   token: string | null;
   user: { githubUsername?: string | null } | null;
-  onNavigate: (projectId: number) => void;
+  onNavigate: (projectId: number, tab?: string) => void;
   onManage:   (projectId: number) => void;
   onChanged:  () => void;
   refreshUser: () => Promise<{ githubUsername?: string | null } | null>;
@@ -115,6 +125,7 @@ function ProjectCard({
 
   const needsGitHub = asgn.sourceType === "GITHUB" || asgn.sourceType === "COMBINED";
   const noGithub    = needsGitHub && !user?.githubUsername;
+  const isPending   = asgn.myRequest?.status === "PENDING";
 
   async function handleCreate() {
     if (!groupName.trim()) { setError("Enter a group name."); return; }
@@ -141,24 +152,24 @@ function ProjectCard({
     }
   }
 
-  async function handleJoin() {
-    if (!selectedId) { setError("Select a group to join."); return; }
+  async function handleRequest() {
+    if (!selectedId) { setError("Select a group to request."); return; }
     const fresh = await refreshUser();
     const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
     if (needsGitHub && !githubUsername) {
-      setError("Add your GitHub username in Settings before joining a group.");
+      setError("Add your GitHub username in Settings before requesting to join a group.");
       return;
     }
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch("/api/join/join-group", {
+      const res = await fetch(`/api/groups/${selectedId}/request`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ projectGroupId: selectedId }),
+        body:    JSON.stringify({}),
       });
       const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not join group."); return; }
+      if (!res.ok) { setError(data.error ?? "Could not send request."); return; }
       onChanged();
     } finally {
       setSubmitting(false);
@@ -219,13 +230,18 @@ function ProjectCard({
                 <p className="text-[11px] text-slate-400 italic">No analysis yet — awaiting instructor.</p>
               )}
 
-              <div className="flex items-center gap-3 pt-1">
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
                 {g.role === "LEADER" && (
                   <button
                     onClick={() => onManage(g.id)}
-                    className="text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
+                    className="relative inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
                   >
                     Manage group
+                    {g.pendingRequestCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold px-1 leading-none">
+                        {g.pendingRequestCount}
+                      </span>
+                    )}
                   </button>
                 )}
                 <button
@@ -234,12 +250,52 @@ function ProjectCard({
                 >
                   View report →
                 </button>
+                {(asgn.sourceType === "EDITOR" || asgn.sourceType === "COMBINED") && (
+                  <button
+                    onClick={() => onNavigate(g.id, "document")}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
+                  >
+                    FairTraze Docs
+                    <span className="text-[9px] font-bold text-violet-400">Preview</span>
+                  </button>
+                )}
               </div>
             </div>
           );
-        })() : (
+        })() : isPending ? (
+          /* Pending request — waiting for leader approval */
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-3">
+              <span className="shrink-0 mt-0.5">
+                <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-amber-800">
+                  Request pending — {asgn.myRequest!.groupName}
+                </p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  Waiting for the group leader to respond. You will be notified when your request is accepted or declined.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
           /* Student has no group yet — show create/join UI */
           <div className="space-y-3">
+            {/* Declined request notification */}
+            {asgn.myRequest?.status === "DECLINED" && (
+              <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5">
+                <svg className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-[11px] text-red-700">
+                  Your request to join <strong>{asgn.myRequest.groupName}</strong> was declined. You can request another group.
+                </p>
+              </div>
+            )}
+
             {/* GitHub warning if needed */}
             {noGithub && mode !== "idle" && (
               <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
@@ -260,12 +316,12 @@ function ProjectCard({
                   </svg>
                   Create group
                 </button>
-                {asgn.groups.length > 0 && (
+                {asgn.groups.filter((g) => !g.isFull).length > 0 && (
                   <button
                     onClick={() => { setMode("join"); setError(""); }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
                   >
-                    Join existing group
+                    Request to join a group
                   </button>
                 )}
                 {asgn.groups.length === 0 && (
@@ -315,11 +371,11 @@ function ProjectCard({
               </div>
             )}
 
-            {/* Join group form */}
+            {/* Request to join group form */}
             {mode === "join" && (
               <div className="space-y-2">
-                {asgn.groups.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No groups yet.</p>
+                {asgn.groups.filter((g) => !g.isFull).length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">All groups are full.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {asgn.groups.map((g) => (
@@ -356,13 +412,16 @@ function ProjectCard({
                   </div>
                 )}
                 {error && <p className="text-xs text-red-600">{error}</p>}
+                <p className="text-[10px] text-slate-400">
+                  The group leader must approve your request before you are added.
+                </p>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => void handleJoin()}
+                    onClick={() => void handleRequest()}
                     disabled={submitting || !selectedId || noGithub}
                     className="flex-1 py-1.5 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Joining…" : "Join Group"}
+                    {submitting ? "Sending…" : "Send Request"}
                   </button>
                   <button
                     onClick={() => { setMode("idle"); setError(""); setSelectedId(null); }}
@@ -392,6 +451,9 @@ export function StudentClassPage({ classId }: Props) {
   const [error, setError]             = useState("");
   const [refreshKey, setRefreshKey]   = useState(0);
   const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveLoading, setLeaveLoading]     = useState(false);
+  const [leaveError, setLeaveError]         = useState("");
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -409,6 +471,24 @@ export function StudentClassPage({ classId }: Props) {
       .finally(() => setLoading(false));
   }, [token, classId, refreshKey]);
 
+  async function handleLeaveClass() {
+    setLeaveLoading(true);
+    setLeaveError("");
+    try {
+      const res  = await fetch(`/api/student/classes/${classId}/leave`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setLeaveError(data.error ?? "Could not leave class."); return; }
+      navigate("/student");
+    } catch {
+      setLeaveError("Network error — could not leave class.");
+    } finally {
+      setLeaveLoading(false);
+    }
+  }
+
   const cls = detail?.classSection;
   const assignments = detail?.assignments ?? [];
 
@@ -423,6 +503,41 @@ export function StudentClassPage({ classId }: Props) {
           onClose={() => setManagingProjectId(null)}
           onChanged={() => setRefreshKey((k) => k + 1)}
         />
+      )}
+
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-800">Leave class?</h2>
+              {cls && <p className="text-xs text-slate-400 mt-0.5">{cls.subjectName}</p>}
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 leading-relaxed">
+                You will be removed from all groups in this class.{" "}
+                <strong>Any group you lead alone will be permanently deleted.</strong>{" "}
+                This cannot be undone.
+              </div>
+              {leaveError && <p className="text-xs text-red-600">{leaveError}</p>}
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => { setShowLeaveModal(false); setLeaveError(""); }}
+                  disabled={leaveLoading}
+                  className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleLeaveClass()}
+                  disabled={leaveLoading}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {leaveLoading ? "Leaving…" : "Leave class"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Page header */}
@@ -459,8 +574,16 @@ export function StudentClassPage({ classId }: Props) {
             </div>
           </div>
 
-          {/* Join code — always shown in header */}
-          {cls?.joinCode && <JoinCodeBadge code={cls.joinCode} />}
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            {/* Join code — always shown in header */}
+            {cls?.joinCode && <JoinCodeBadge code={cls.joinCode} />}
+            <button
+              onClick={() => setShowLeaveModal(true)}
+              className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+            >
+              Leave class
+            </button>
+          </div>
         </div>
       </div>
 
@@ -505,7 +628,7 @@ export function StudentClassPage({ classId }: Props) {
                   asgn={asgn}
                   token={token}
                   user={user}
-                  onNavigate={(projectId) => navigate(`/student/group/${projectId}`)}
+                  onNavigate={(projectId, tab) => navigate(`/student/group/${projectId}${tab ? `?tab=${tab}` : ""}`)}
                   onManage={(projectId) => setManagingProjectId(projectId)}
                   onChanged={() => setRefreshKey((k) => k + 1)}
                   refreshUser={refreshUser}

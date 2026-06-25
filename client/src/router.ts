@@ -40,7 +40,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     // { intentional: true } lets LandingPage distinguish in-app navigation
     // from a fresh page load — so it doesn't auto-redirect on logo/back clicks.
     history.pushState({ intentional: true }, "", to);
-    setPathname(to);
+    setPathname(to.split("?")[0]);
     window.scrollTo(0, 0);
   }, []);
 

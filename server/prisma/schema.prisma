@@ -42,6 +42,12 @@ enum DisputeStatus {
   DISMISSED
 }
 
+enum JoinRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id               Int               @id @default(autoincrement())
   email            String            @unique
@@ -57,6 +63,8 @@ model User {
   alerts           Alert[]
   disputes         Dispute[]
   auditLogs        AuditLog[]
+  joinRequests     GroupJoinRequest[]
+  roleSuggestions  RoleSuggestion[]
 }
 
 model ClassSection {
@@ -139,6 +147,8 @@ model Project {
   groupMemberships         GroupMembership[]
   alerts                   Alert[]
   disputes                 Dispute[]
+  joinRequests             GroupJoinRequest[]
+  roleSuggestions          RoleSuggestion[]
 }
 
 model Member {
@@ -197,4 +207,28 @@ model AuditLog {
   details    String?
   createdAt  DateTime @default(now())
   actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+model GroupJoinRequest {
+  id         Int               @id @default(autoincrement())
+  userId     Int
+  projectId  Int
+  status     JoinRequestStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  resolvedAt DateTime?
+  user       User              @relation(fields: [userId], references: [id])
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model RoleSuggestion {
+  id             Int               @id @default(autoincrement())
+  userId         Int
+  projectId      Int
+  // JSON array: ["DEVELOPER"] | ["DOCUMENTATION"] | ["DEVELOPER","DOCUMENTATION"]
+  suggestedRoles String
+  status         JoinRequestStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  resolvedAt     DateTime?
+  user           User              @relation(fields: [userId], references: [id])
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

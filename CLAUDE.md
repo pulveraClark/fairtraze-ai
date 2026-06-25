@@ -221,9 +221,15 @@ Quality assessment remains the instructor's professional judgment. The student d
 
 This is a documented limitation, not a gap to be closed by expanding what roles control. Expanding role influence on scores would introduce subjectivity and reduce defensibility.
 
-### Role assignment model (hybrid)
+### Role assignment model
 
-The group leader assigns each member's functional role(s) — including their own — during group formation. Members may self-suggest their role to the leader before it is locked. The instructor can view and override any role assignment at any point before analysis.
+Roles are assigned through a tiered authority model:
+
+- **Leader** — assigns functional roles to any member, including themselves, directly through the Manage Group modal. Applied immediately; no approval step.
+- **Member** — may _suggest_ a functional role for themselves from their project view. This creates a **PENDING** `RoleSuggestion` record visible to the leader in the Manage Group modal. The suggested role does **not** apply until the leader accepts. On Decline, no change is made and the member can suggest again.
+- **Instructor** — can override any member's role directly via the same Manage Group modal, bypassing the suggestion flow.
+
+Suggesting a role never changes the member's actual `functionalRoles` — only an Accept (or a direct leader/instructor assignment) does. Any PENDING suggestion is automatically declined when the leader/instructor directly assigns a role to that member.
 
 This is low-stakes precisely because roles only add context: a mis-assigned functional role cannot protect a member from a contribution flag, since flags are computed from actual recorded traces regardless of the role label.
 

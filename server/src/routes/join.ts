@@ -181,9 +181,48 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
     return;
   }
 
+  // Collect all project IDs in this class for batch request lookups
+  const allProjectIds = cs.assignments.flatMap((a) => a.projects.map((p) => p.id));
+
+  // Fetch this student's pending/declined requests for any group in this class
+  const myJoinRequests = allProjectIds.length > 0
+    ? await prisma.groupJoinRequest.findMany({
+        where: {
+          userId,
+          projectId: { in: allProjectIds },
+          status:    { in: ["PENDING", "DECLINED"] },
+        },
+        orderBy: { createdAt: "desc" },
+        include:  { project: { select: { id: true, groupName: true, assignmentId: true } } },
+      })
+    : [];
+
+  // For groups where this student is LEADER, count incoming pending requests
+  const leaderProjectIds = cs.assignments.flatMap((a) =>
+    a.projects
+      .filter((p) => p.groupMemberships.some((m) => m.userId === userId && m.role === "LEADER"))
+      .map((p) => p.id)
+  );
+  const pendingCountRows = leaderProjectIds.length > 0
+    ? await prisma.groupJoinRequest.groupBy({
+        by:    ["projectId"],
+        where: { projectId: { in: leaderProjectIds }, status: "PENDING" },
+        _count: { id: true },
+      })
+    : [];
+  const pendingCountByProject = new Map(pendingCountRows.map((r) => [r.projectId, r._count.id]));
+
   const assignments = cs.assignments.map((a) => {
     const myProject    = a.projects.find((p) => p.groupMemberships.some((m) => m.userId === userId)) ?? null;
     const myMembership = myProject?.groupMemberships.find((m) => m.userId === userId) ?? null;
+
+    // Most relevant join request for this assignment:
+    // PENDING takes priority; fall back to most recent DECLINED (already ordered desc)
+    const assignmentProjectIds = new Set(a.projects.map((p) => p.id));
+    const relevantRequests     = myJoinRequests.filter((r) => assignmentProjectIds.has(r.project.id));
+    const pendingReq           = relevantRequests.find((r) => r.status === "PENDING");
+    const latestDeclined       = relevantRequests.find((r) => r.status === "DECLINED");
+    const myRequest            = pendingReq ?? latestDeclined ?? null;
 
     return {
       id:           a.id,
@@ -193,18 +232,28 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
       maxGroupSize: a.maxGroupSize,
       myGroup: myMembership && myProject
         ? {
-            id:        myProject.id,
-            groupName: myProject.groupName || `Group ${myProject.id}`,
-            name:      myProject.name,
-            repoUrl:   myProject.repoUrl,
-            role:      myMembership.role,
-            report:    myProject.reports[0]
+            id:                   myProject.id,
+            groupName:            myProject.groupName || `Group ${myProject.id}`,
+            name:                 myProject.name,
+            repoUrl:              myProject.repoUrl,
+            role:                 myMembership.role,
+            pendingRequestCount:  pendingCountByProject.get(myProject.id) ?? 0,
+            report:               myProject.reports[0]
               ? {
                   gini:        myProject.reports[0].gini,
                   teamHealth:  myProject.reports[0].teamHealth,
                   generatedAt: myProject.reports[0].generatedAt.toISOString(),
                 }
               : null,
+          }
+        : null,
+      myRequest: myRequest
+        ? {
+            id:        myRequest.id,
+            projectId: myRequest.project.id,
+            groupName: myRequest.project.groupName || `Group ${myRequest.project.id}`,
+            status:    myRequest.status as "PENDING" | "DECLINED",
+            createdAt: myRequest.createdAt.toISOString(),
           }
         : null,
       // All groups in this assignment (for join UI — only relevant when myGroup is null)
@@ -231,6 +280,58 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
       joinCode:    cs.joinCode,
     },
     assignments,
+  });
+});
+
+// ─── GET /api/student/requests ────────────────────────────────────────────────
+// Student's own join requests across all classes, with current status.
+joinRouter.get("/api/student/requests", ...requireRole("STUDENT"), async (req, res) => {
+  const userId = req.user!.sub;
+
+  const requests = await prisma.groupJoinRequest.findMany({
+    where:   { userId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      project: {
+        select: {
+          id:       true,
+          groupName: true,
+          assignment: {
+            select: {
+              id:    true,
+              title: true,
+              classSection: { select: { id: true, subjectCode: true, subjectName: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  res.json({
+    requests: requests.map((r) => ({
+      id:         r.id,
+      status:     r.status,
+      createdAt:  r.createdAt.toISOString(),
+      resolvedAt: r.resolvedAt?.toISOString() ?? null,
+      group: {
+        id:        r.project.id,
+        groupName: r.project.groupName || `Group ${r.project.id}`,
+      },
+      assignment: r.project.assignment
+        ? {
+            id:    r.project.assignment.id,
+            title: r.project.assignment.title,
+            classSection: r.project.assignment.classSection
+              ? {
+                  id:          r.project.assignment.classSection.id,
+                  subjectCode: r.project.assignment.classSection.subjectCode,
+                  subjectName: r.project.assignment.classSection.subjectName,
+                }
+              : null,
+          }
+        : null,
+    })),
   });
 });
 
@@ -421,6 +522,79 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
   });
 });
 
+// ─── DELETE /api/student/classes/:classSectionId/leave ───────────────────────
+// Student leaves a class. Removes their enrollment and all their group memberships
+// within that class's assignments. Sole-member leader groups are disbanded.
+// Blocked if they are a leader with other members (must reassign first).
+joinRouter.delete("/api/student/classes/:classSectionId/leave", ...requireRole("STUDENT"), async (req, res) => {
+  const idResult = z.coerce.number().int().positive().safeParse(req.params.classSectionId);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid class id" }); return; }
+
+  const userId         = req.user!.sub;
+  const classSectionId = idResult.data;
+
+  const [enrollment, user] = await Promise.all([
+    prisma.classEnrollment.findUnique({
+      where: { userId_classSectionId: { userId, classSectionId } },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { githubUsername: true } }),
+  ]);
+
+  if (!enrollment) {
+    res.status(404).json({ error: "You are not enrolled in this class." });
+    return;
+  }
+
+  const memberships = await prisma.groupMembership.findMany({
+    where: { userId, project: { assignment: { classSectionId } } },
+    include: {
+      project: {
+        select: {
+          id: true, groupName: true,
+          groupMemberships: { select: { id: true, userId: true } },
+        },
+      },
+    },
+  });
+
+  // Block if the student is a leader of any group that still has other members
+  for (const mem of memberships) {
+    if (mem.role === "LEADER" && mem.project.groupMemberships.length > 1) {
+      const name = mem.project.groupName || `Group ${mem.project.id}`;
+      res.status(409).json({
+        error: `Reassign leadership in "${name}" before leaving this class.`,
+      });
+      return;
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const mem of memberships) {
+      if (mem.role === "LEADER" && mem.project.groupMemberships.length <= 1) {
+        // Sole member — disband the group (cascade handles everything)
+        await tx.project.delete({ where: { id: mem.projectId } });
+      } else {
+        // Regular member — remove their membership and Member row
+        await tx.groupMembership.delete({ where: { id: mem.id } });
+        await tx.project.update({
+          where: { id: mem.projectId },
+          data:  { membershipChangedAt: new Date() },
+        });
+        if (user?.githubUsername) {
+          await tx.member.deleteMany({
+            where: { projectId: mem.projectId, githubUsername: user.githubUsername },
+          });
+        }
+      }
+    }
+    await tx.classEnrollment.delete({
+      where: { userId_classSectionId: { userId, classSectionId } },
+    });
+  });
+
+  res.json({ message: "Left class." });
+});
+
 // ─── GET /api/student/group/:projectId ───────────────────────────────────────
 // Student's drill-down: their contribution data for a specific group.
 joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async (req, res) => {
@@ -441,7 +615,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const [project, user] = await Promise.all([
+  const [project, user, latestSuggestion] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -450,6 +624,10 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       },
     }),
     prisma.user.findUnique({ where: { id: userId }, select: { githubUsername: true } }),
+    prisma.roleSuggestion.findFirst({
+      where:   { userId, projectId },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   if (!project?.assignment) {
@@ -480,6 +658,12 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       role:            membership.role,
       functionalRoles: JSON.parse(membership.functionalRoles) as string[],
       joinedAt:        membership.joinedAt.toISOString(),
+      roleSuggestion:  latestSuggestion ? {
+        id:             latestSuggestion.id,
+        suggestedRoles: JSON.parse(latestSuggestion.suggestedRoles) as string[],
+        status:         latestSuggestion.status as "PENDING" | "ACCEPTED" | "DECLINED",
+        createdAt:      latestSuggestion.createdAt.toISOString(),
+      } : null,
     },
   };
 

@@ -19,10 +19,16 @@ const roleLabel: Record<string, string> = {
   DEVELOPER: "Developer", DOCUMENTATION: "Documentation",
 };
 
+// Map from studentName → flag → "RESOLVED" | "DISMISSED"
+// Built from resolved/dismissed disputes so the instructor sees review outcomes on flags.
+type ResolvedFlagOutcomes = Map<string, Map<string, "RESOLVED" | "DISMISSED">>;
+
 interface Props {
   members: ScoredMember[];
   // Set of studentNames that have at least one OPEN dispute (from the instructor's view)
   disputedMembers?: Set<string>;
+  // Pre-computed review outcomes per member per flag (RESOLVED → Accepted, DISMISSED → Upheld)
+  resolvedFlagOutcomes?: ResolvedFlagOutcomes;
   // Functional roles + soft mismatch notes per member — context only, never affects scores
   memberRoles?: MemberRoleInfo[];
 }
@@ -70,7 +76,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function MemberTable({ members, disputedMembers, memberRoles }: Props) {
+export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, memberRoles }: Props) {
   const { navigate } = useRouter();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -165,19 +171,31 @@ export function MemberTable({ members, disputedMembers, memberRoles }: Props) {
                   </td>
 
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {m.flags.length === 0 && !disputedMembers?.has(m.studentName) ? (
                         <span className="text-slate-400 text-xs italic">No flags</span>
                       ) : (
                         <>
-                          {m.flags.map((flag) => (
-                            <span
-                              key={flag}
-                              className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}
-                            >
-                              {flag}
-                            </span>
-                          ))}
+                          {m.flags.map((flag) => {
+                            const outcome = resolvedFlagOutcomes?.get(m.studentName)?.get(flag);
+                            return (
+                              <span key={flag} className="inline-flex items-center gap-1 flex-wrap">
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}>
+                                  {flag}
+                                </span>
+                                {outcome === "RESOLVED" && (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Reviewed — Accepted
+                                  </span>
+                                )}
+                                {outcome === "DISMISSED" && (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-50 text-slate-500 border border-slate-200">
+                                    Reviewed — Upheld
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
                           {disputedMembers?.has(m.studentName) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); navigate("/disputes"); }}

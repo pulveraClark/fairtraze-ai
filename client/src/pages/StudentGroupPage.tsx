@@ -9,11 +9,18 @@ import type { Flag } from "@shared/types";
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface TeamShare { share: number; isMe: boolean; }
 
+interface RoleSuggestionData {
+  id:             number;
+  suggestedRoles: string[];
+  status:         "PENDING" | "ACCEPTED" | "DECLINED";
+  createdAt:      string;
+}
+
 interface GroupDetail {
   classSection: { id: number; subjectCode: string; subjectName: string; course: string; edpCode: string; };
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; };
   project:      { id: number; groupName: string; name: string; repoUrl: string; };
-  membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; };
+  membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
   report: {
     gini:        number;
@@ -72,7 +79,7 @@ function TeamDistributionBar({ shares }: { shares: TeamShare[] }) {
   );
 }
 
-type Tab = "contribution" | "document";
+type Tab = "report" | "document";
 
 // ── Dispute types ─────────────────────────────────────────────────────────────
 interface DisputeRecord {
@@ -81,8 +88,20 @@ interface DisputeRecord {
   status:             "OPEN" | "RESOLVED" | "DISMISSED";
   reason:             string;
   instructorResponse: string | null;
+  disputedFlags:      string; // JSON array of flags captured at submission; "" = legacy (all flags)
   createdAt:          string;
   resolvedAt:         string | null;
+}
+
+function getFlagDisputeOutcome(flag: string, dispute: DisputeRecord | null | undefined): "RESOLVED" | "DISMISSED" | null {
+  if (!dispute || dispute.status === "OPEN") return null;
+  const flags: string[] = (() => {
+    try { return dispute.disputedFlags ? (JSON.parse(dispute.disputedFlags) as string[]) : []; }
+    catch { return []; }
+  })();
+  // Empty = legacy dispute — applies badge to all flags
+  if (flags.length === 0 || flags.includes(flag)) return dispute.status as "RESOLVED" | "DISMISSED";
+  return null;
 }
 
 const DISPUTE_STATUS_STYLE: Record<string, string> = {
@@ -187,15 +206,20 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [data, setData]           = useState<GroupDetail | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("contribution");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") === "document" ? "document" : "report";
+  });
   const [showManageModal, setShowManageModal]   = useState(false);
   const [refreshKey, setRefreshKey]             = useState(0);
   const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
-  // Functional role self-suggest
-  const [myRoles, setMyRoles]   = useState<string[]>(["DEVELOPER"]);
-  const [rolesBusy, setRolesBusy] = useState(false);
-  const [rolesErr, setRolesErr]   = useState("");
+  // Functional role suggestion state
+  const [myRoles, setMyRoles]             = useState<string[]>([]);
+  const [mySuggestion, setMySuggestion]   = useState<RoleSuggestionData | null>(null);
+  const [suggestDraft, setSuggestDraft]   = useState<string[]>([]);
+  const [suggestBusy, setSuggestBusy]     = useState(false);
+  const [suggestErr, setSuggestErr]       = useState("");
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -212,7 +236,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           return;
         }
         setData(json);
-        setMyRoles(json.membership?.functionalRoles ?? ["DEVELOPER"]);
+        const roles = json.membership?.functionalRoles ?? [];
+        setMyRoles(roles);
+        setMySuggestion(json.membership?.roleSuggestion ?? null);
+        setSuggestDraft(roles);
       })
       .catch(() => setError("Network error — could not load group."))
       .finally(() => setLoading(false));
@@ -233,26 +260,30 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, projectId]);
 
-  async function handleSetMyRoles(roles: string[]) {
-    if (!token || !user?.id) return;
-    setRolesErr("");
-    setRolesBusy(true);
-    const prev = myRoles;
-    setMyRoles(roles); // optimistic
+  async function handleSuggestRole() {
+    if (!token) return;
+    const st = data?.assignment?.sourceType ?? "GITHUB";
+    const toSuggest = suggestDraft.filter((r) => {
+      if (st === "GITHUB") return r === "DEVELOPER";
+      if (st === "EDITOR") return r === "DOCUMENTATION";
+      return true;
+    });
+    if (toSuggest.length === 0) return;
+    setSuggestErr("");
+    setSuggestBusy(true);
     try {
-      const res  = await fetch(`/api/groups/${projectId}/members/${user.id}/functional-roles`, {
-        method:  "PUT",
+      const res  = await fetch(`/api/groups/${projectId}/role-suggestions`, {
+        method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ functionalRoles: roles }),
+        body:    JSON.stringify({ suggestedRoles: toSuggest }),
       });
-      const json = await res.json() as { functionalRoles?: string[]; error?: string };
-      if (!res.ok) { setMyRoles(prev); setRolesErr(json.error ?? "Could not update role."); return; }
-      setMyRoles(json.functionalRoles ?? roles);
+      const json = await res.json() as RoleSuggestionData & { error?: string };
+      if (!res.ok) { setSuggestErr(json.error ?? "Could not submit suggestion."); return; }
+      setMySuggestion({ id: json.id, suggestedRoles: json.suggestedRoles, status: "PENDING", createdAt: json.createdAt });
     } catch {
-      setMyRoles(prev);
-      setRolesErr("Network error — could not update role.");
+      setSuggestErr("Network error — could not submit suggestion.");
     } finally {
-      setRolesBusy(false);
+      setSuggestBusy(false);
     }
   }
 
@@ -291,9 +322,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] =
-    sourceType === "EDITOR"   ? ["document"] :
-    sourceType === "COMBINED" ? ["contribution", "document"] :
-    ["contribution"]; // GITHUB (default)
+    sourceType === "EDITOR" || sourceType === "COMBINED"
+      ? ["report", "document"]
+      : ["report"]; // GITHUB (default)
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0]!;
 
   const equalShare   = report ? 1 / report.memberCount : 0;
@@ -398,7 +429,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     : "border-transparent text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {tab === "contribution" ? "My Contribution" : (
+                {tab === "report" ? "Report" : (
                   <>
                     FairTraze Docs
                     <span className="ml-1.5 text-[9px] font-bold text-violet-500 bg-violet-50 border border-violet-200 rounded px-1 py-0.5 normal-case tracking-normal">
@@ -414,48 +445,131 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
 
-        {/* ── My Contribution tab ──────────────────────────────────────────────── */}
-        {effectiveTab === "contribution" && (
+        {/* ── Report tab ───────────────────────────────────────────────────────── */}
+        {effectiveTab === "report" && (
           <div className="space-y-6">
 
-            {/* Your Role — self-suggest (always shown; roles are context only) */}
+            {/* Your Role */}
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Your Role</h3>
-              {rolesErr && <p className="text-xs text-red-600 mb-2">{rolesErr}</p>}
-              <div className="flex items-center flex-wrap gap-2 mb-3">
-                {(Object.keys(FUNCTIONAL_ROLE_META) as string[])
-                  .filter((role) => {
-                    if (sourceType === "GITHUB")   return role === "DEVELOPER";
-                    if (sourceType === "EDITOR")   return role === "DOCUMENTATION";
-                    return true; // COMBINED or other → both
-                  })
-                  .map((role) => {
-                  const active = myRoles.includes(role);
-                  const meta   = FUNCTIONAL_ROLE_META[role]!;
-                  const next   = active ? myRoles.filter((r) => r !== role) : [...myRoles, role];
-                  return (
-                    <button
-                      key={role}
-                      disabled={rolesBusy}
-                      onClick={() => void handleSetMyRoles(next)}
-                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
-                        active ? meta.activeClass : meta.inactiveClass
-                      }`}
-                    >
-                      {active ? `✓ ${meta.label}` : `+ ${meta.label}`}
-                    </button>
-                  );
-                })}
-                {rolesBusy && (
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
-                    saving…
-                  </span>
-                )}
+
+              {/* Current applied role (always shown, read-only) */}
+              <div className="mb-3">
+                <p className="text-[11px] text-slate-400 mb-1.5">
+                  {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
+                </p>
+                <div className="flex items-center flex-wrap gap-2">
+                  {myRoles.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">No role assigned yet</span>
+                  ) : (
+                    myRoles.map((role) => {
+                      const meta = FUNCTIONAL_ROLE_META[role];
+                      if (!meta) return null;
+                      return (
+                        <span key={role} className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${meta.activeClass}`}>
+                          ✓ {meta.label}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Select the roles that best describe your contribution work. Your suggestion is visible to your group leader and instructor. Roles are context only — they never change contribution scores.
-              </p>
+
+              {/* Leader: informational note */}
+              {membership.role === "LEADER" && (
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Assign roles for all members, including yourself, through Manage Group. Roles are context only — they never affect contribution scores.
+                </p>
+              )}
+
+              {/* Member: suggestion flow */}
+              {membership.role === "MEMBER" && (
+                <div className="border-t border-slate-100 mt-3 pt-3">
+                  {suggestErr && <p className="text-xs text-red-600 mb-2">{suggestErr}</p>}
+
+                  {mySuggestion?.status === "PENDING" ? (
+                    /* Pending — awaiting leader action */
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-0.5">
+                        PENDING
+                      </span>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Your suggestion (
+                        <span className="font-medium">
+                          {mySuggestion.suggestedRoles
+                            .map((r) => FUNCTIONAL_ROLE_META[r]?.label ?? r)
+                            .join(" + ")}
+                        </span>
+                        ) is awaiting your leader's approval.
+                      </p>
+                    </div>
+                  ) : (
+                    /* Suggest / re-suggest flow */
+                    <>
+                      {mySuggestion?.status === "ACCEPTED" && (
+                        <p className="text-xs text-emerald-600 mb-2">✓ Your last suggestion was accepted.</p>
+                      )}
+                      {mySuggestion?.status === "DECLINED" && (
+                        <p className="text-xs text-red-600 mb-2">Your last suggestion was declined. You can suggest again.</p>
+                      )}
+
+                      <p className="text-[11px] text-slate-500 mb-2">
+                        Suggest a role to your leader for approval:
+                      </p>
+
+                      {/* Toggle chips — local draft, not applied until submitted */}
+                      <div className="flex items-center flex-wrap gap-2 mb-3">
+                        {(Object.keys(FUNCTIONAL_ROLE_META) as string[])
+                          .filter((role) => {
+                            if (sourceType === "GITHUB") return role === "DEVELOPER";
+                            if (sourceType === "EDITOR") return role === "DOCUMENTATION";
+                            return true;
+                          })
+                          .map((role) => {
+                            const selected = suggestDraft.includes(role);
+                            const meta     = FUNCTIONAL_ROLE_META[role]!;
+                            const next     = selected
+                              ? suggestDraft.filter((r) => r !== role)
+                              : [...suggestDraft, role];
+                            return (
+                              <button
+                                key={role}
+                                disabled={suggestBusy}
+                                onClick={() => setSuggestDraft(next)}
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
+                                  selected ? meta.activeClass : meta.inactiveClass
+                                }`}
+                              >
+                                {selected ? `✓ ${meta.label}` : meta.label}
+                              </button>
+                            );
+                          })}
+                      </div>
+
+                      <button
+                        onClick={() => void handleSuggestRole()}
+                        disabled={
+                          suggestBusy ||
+                          suggestDraft.length === 0 ||
+                          JSON.stringify([...suggestDraft].sort()) === JSON.stringify([...myRoles].sort())
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {suggestBusy ? (
+                          <>
+                            <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-white animate-spin" />
+                            Submitting…
+                          </>
+                        ) : "Submit suggestion →"}
+                      </button>
+
+                      <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                        Roles are context only — they never change contribution scores.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Not analyzed yet */}
@@ -611,10 +725,26 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 </svg>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
                                   <span className="text-[11px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5">
                                     {flag}
                                   </span>
+                                  {(() => {
+                                    const outcome = getFlagDisputeOutcome(flag, dispute);
+                                    if (!outcome) return null;
+                                    if (outcome === "RESOLVED") {
+                                      return (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-50 border-emerald-200">
+                                          Reviewed — Accepted
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-slate-50 border-slate-200">
+                                        Reviewed — Upheld
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                                 <p className="text-sm text-slate-700 leading-relaxed">
                                   {FLAG_DESCRIPTIONS[flag] ?? "A flag has been raised on your contribution pattern."}
