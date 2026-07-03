@@ -5,6 +5,7 @@ import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { QRCodeSVG } from "qrcode.react";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -170,11 +171,9 @@ function CreateClassModal({
               <span className="font-medium">"{subjectCode}" was created successfully.</span>
             </div>
 
+            {/* Join code — primary method */}
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                Class join code
-                <span className="ml-1 font-normal text-slate-400">— share this with your students</span>
-              </label>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">Class join code</label>
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 font-mono text-xl font-bold text-indigo-700 tracking-widest text-center select-all">
                   {createdCode}
@@ -202,6 +201,21 @@ function CreateClassModal({
               <p className="text-[11px] text-slate-400 mt-2">
                 Students enter this code once to enroll in the class. They can then create or join groups for each project.
               </p>
+            </div>
+
+            {/* QR code — faster shortcut */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">Scan to join instantly</label>
+              <div className="flex flex-col items-center gap-2.5 py-5 px-4 bg-slate-50 border border-slate-100 rounded-xl">
+                <QRCodeSVG
+                  value={`${window.location.origin}/join?code=${encodeURIComponent(createdCode)}`}
+                  size={148}
+                  level="M"
+                  bgColor="#f8fafc"
+                  fgColor="#312e81"
+                />
+                <p className="text-[10px] text-slate-400 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
+              </div>
             </div>
 
             <div className="flex justify-end pt-1 border-t border-slate-100">
@@ -542,7 +556,7 @@ export function DemoPage() {
           <div>
             <h1 className="text-sm font-semibold text-slate-800">Instructor Dashboard</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Group contribution overview · GitHub analysis · Collaborative Editor coming soon
+              Group contribution overview · GitHub analysis
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">

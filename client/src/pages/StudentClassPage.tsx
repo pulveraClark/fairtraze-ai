@@ -256,7 +256,6 @@ function ProjectCard({
                     className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
                   >
                     FairTraze Docs
-                    <span className="text-[9px] font-bold text-violet-400">Preview</span>
                   </button>
                 )}
               </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "../router";
 import type { AppRoute } from "../router";
 import { useAuth } from "../context/AuthContext";
+import logoUrl from "../assets/logo_transparent.png";
 
 function BarChartIcon() {
   return (
@@ -81,14 +82,14 @@ export function AppSidebar() {
   return (
     <aside className="w-56 shrink-0 bg-[#0b0d1a] flex flex-col border-r border-white/[0.08] min-h-screen">
       {/* Wordmark */}
-      <div className="px-5 py-5 border-b border-white/[0.08]">
+      <div className="px-4 py-4 border-b border-white/[0.08]">
         <button
           onClick={() => navigate("/")}
           className="text-left group"
         >
-          <span className="block text-[11px] font-semibold text-slate-500 uppercase tracking-widest mb-0.5 group-hover:text-slate-400 transition-colors">
-            FAIR <span className="text-amber-500">TRAZE</span> AI
-          </span>
+          <div className="rounded-lg bg-white/90 px-1.5 py-1 inline-flex shadow-sm mb-1">
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-6 w-auto block" />
+          </div>
           <span className="block text-[10px] text-slate-600 group-hover:text-slate-500 transition-colors">
             Contribution Fairness
           </span>

@@ -4,6 +4,7 @@ import type { AppRoute } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { AlertsBell } from "./AlertsBell";
 import { UserMenu } from "./UserMenu";
+import logoUrl from "../assets/logo_transparent.png";
 
 const DASHBOARD_ITEM = { label: "Dashboard",       route: "/dashboard" as AppRoute };
 const ADMIN_ITEM     = { label: "Admin Dashboard", route: "/admin"     as AppRoute };
@@ -16,20 +17,20 @@ const ROLE_LABEL: Record<string, string> = {
 
 const AVATAR_STYLE: Record<string, string> = {
   INSTRUCTOR: "border-indigo-400 text-indigo-300",
-  ADMIN:      "border-indigo-400 text-indigo-300",
-  STUDENT:    "border-indigo-500 text-indigo-400",
+  ADMIN:      "border-amber-400  text-amber-300",
+  STUDENT:    "border-teal-400   text-teal-300",
 };
 
 const AVATAR_BG: Record<string, string> = {
   INSTRUCTOR: "rgba(99,102,241,0.15)",
-  ADMIN:      "rgba(99,102,241,0.15)",
-  STUDENT:    "rgba(99,102,241,0.1)",
+  ADMIN:      "rgba(245,158,11,0.15)",
+  STUDENT:    "rgba(20,184,166,0.15)",
 };
 
 const ROLE_BADGE: Record<string, string> = {
   INSTRUCTOR: "text-indigo-300 border-indigo-500/50 bg-indigo-500/10",
-  ADMIN:      "text-indigo-300 border-indigo-500/50 bg-indigo-500/10",
-  STUDENT:    "text-indigo-400 border-indigo-500/30 bg-indigo-500/10",
+  ADMIN:      "text-amber-300  border-amber-500/50  bg-amber-500/10",
+  STUDENT:    "text-teal-300   border-teal-500/50   bg-teal-500/10",
 };
 
 function initials(name: string): string {
@@ -76,16 +77,11 @@ export function AppTopBar() {
           onClick={() => go("/")}
           className="shrink-0 flex items-center gap-2.5 group"
         >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-sm"
-            style={{ background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)" }}
-          >
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6" />
-            </svg>
+          <div className="rounded-lg bg-white/90 px-1.5 py-1 shrink-0 shadow-sm">
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-7 w-auto block" />
           </div>
           <span className="font-display font-bold text-base tracking-tight text-white leading-none">
-            FAIR <span className="text-indigo-500">TRAZE</span> AI
+            FAIR <span className="text-indigo-400">TRAZE</span> AI
           </span>
           <span className="hidden md:flex items-center gap-2 text-xs text-slate-400 font-medium ml-1">
             <span className="w-px h-3 bg-slate-700 block" />

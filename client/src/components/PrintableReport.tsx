@@ -1,4 +1,5 @@
 import type { StoredReportResponse, Flag } from "@shared/types";
+import logoUrl from "../assets/logo_transparent.png";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -106,18 +107,8 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
       >
         {/* Wordmark */}
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 18 }}>
-          <div
-            style={{
-              width: 30, height: 30, borderRadius: 7,
-              background: "rgba(255,255,255,0.15)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6" />
-            </svg>
+          <div style={{ background: "rgba(255,255,255,0.9)", borderRadius: 6, padding: "3px 6px", display: "inline-flex", flexShrink: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}>
+            <img src={logoUrl} alt="FAIR TRAZE AI" style={{ height: 24, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
           <span style={{ fontWeight: 800, fontSize: 13, letterSpacing: "-0.02em", opacity: 0.95 }}>
             FAIR TRAZE AI

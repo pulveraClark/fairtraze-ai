@@ -15,6 +15,7 @@ import { AuditLogPage } from "./pages/AuditLogPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { DisputesPage } from "./pages/DisputesPage";
+import { JoinPage } from "./pages/JoinPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
     );
   }
 
+  if (pathname === "/join")      return <JoinPage />;
   if (pathname === "/login")     return <LoginPage />;
   if (pathname === "/register")  return <RegisterPage />;
   if (pathname === "/overview")  return <OverviewPage />;

@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
 import { AppTopBar } from "../components/AppTopBar";
 import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { QRCodeSVG } from "qrcode.react";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -282,9 +283,11 @@ function CreateAssignmentModal({
   );
 }
 
-// ── Class join code badge (copyable) — shown in class page header ─────────────
+// ── Class join code badge (copyable + QR reveal) — shown in class page header ──
 function ClassJoinCodeBadge({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   async function handleCopy() {
     await navigator.clipboard.writeText(code);
@@ -292,10 +295,23 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  useEffect(() => {
+    if (!showQR) return;
+    function handleOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setShowQR(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [showQR]);
+
   return (
-    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+    <div ref={popoverRef} className="relative flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
       <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
       <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+
+      {/* Copy button */}
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
@@ -311,6 +327,35 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
           </svg>
         )}
       </button>
+
+      {/* QR reveal button */}
+      <button
+        onClick={() => setShowQR((v) => !v)}
+        title={showQR ? "Hide QR code" : "Show QR code"}
+        className={`p-0.5 rounded transition-colors ${showQR ? "text-indigo-600" : "text-slate-300 hover:text-indigo-500"}`}
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <path strokeLinecap="round" d="M14 14h2v2h-2zM18 14h3M14 18h2M18 18h3v3M21 14v2" />
+        </svg>
+      </button>
+
+      {/* QR popover */}
+      {showQR && (
+        <div className="absolute top-full left-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col items-center gap-2.5 min-w-[188px]">
+          <QRCodeSVG
+            value={`${window.location.origin}/join?code=${encodeURIComponent(code)}`}
+            size={148}
+            level="M"
+            bgColor="#ffffff"
+            fgColor="#312e81"
+          />
+          <p className="font-mono font-bold text-sm text-indigo-700 tracking-wider">{code}</p>
+          <p className="text-[10px] text-slate-400 text-center">Scan with a phone camera<br />to copy the join code</p>
+        </div>
+      )}
     </div>
   );
 }

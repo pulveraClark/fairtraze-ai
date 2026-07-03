@@ -139,12 +139,6 @@ export function FairTrazeDocsPreview() {
         </div>
       </div>
 
-      {/* Footer bar */}
-      <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
-        <span className="text-[11px] text-violet-600 font-medium">Read-only preview</span>
-        <span className="text-slate-300 text-xs">·</span>
-        <span className="text-[11px] text-slate-400">FairTraze Docs support coming soon. The editor will capture writing contributions alongside GitHub activity.</span>
-      </div>
     </div>
   );
 }

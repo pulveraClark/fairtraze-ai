@@ -10,27 +10,27 @@ const ROLE_LABEL: Record<string, string> = {
 
 const AVATAR_STYLE: Record<string, string> = {
   INSTRUCTOR: "border-indigo-400 text-indigo-300",
-  ADMIN:      "border-indigo-400 text-indigo-300",
-  STUDENT:    "border-indigo-500 text-indigo-400",
+  ADMIN:      "border-amber-400  text-amber-300",
+  STUDENT:    "border-teal-400   text-teal-300",
 };
 
 const AVATAR_BG: Record<string, string> = {
   INSTRUCTOR: "rgba(99,102,241,0.15)",
-  ADMIN:      "rgba(99,102,241,0.15)",
-  STUDENT:    "rgba(99,102,241,0.1)",
+  ADMIN:      "rgba(245,158,11,0.15)",
+  STUDENT:    "rgba(20,184,166,0.15)",
 };
 
 // Role badge: dark theme uses translucent; light theme uses solid for readability on white
 const ROLE_BADGE_DARK: Record<string, string> = {
   INSTRUCTOR: "text-indigo-300 border-indigo-500/50 bg-indigo-500/10",
-  ADMIN:      "text-indigo-300 border-indigo-500/50 bg-indigo-500/10",
-  STUDENT:    "text-indigo-400 border-indigo-500/30 bg-indigo-500/10",
+  ADMIN:      "text-amber-300  border-amber-500/50  bg-amber-500/10",
+  STUDENT:    "text-teal-300   border-teal-500/50   bg-teal-500/10",
 };
 
 const ROLE_BADGE_LIGHT: Record<string, string> = {
   INSTRUCTOR: "text-indigo-700 border-indigo-200 bg-indigo-50",
-  ADMIN:      "text-indigo-700 border-indigo-200 bg-indigo-50",
-  STUDENT:    "text-indigo-600 border-indigo-100 bg-indigo-50/70",
+  ADMIN:      "text-amber-700  border-amber-200  bg-amber-50",
+  STUDENT:    "text-teal-700   border-teal-200   bg-teal-50",
 };
 
 function initials(name: string): string {
@@ -129,6 +129,10 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
           {initials(user.name)}
         </span>
         <span className={s.nameText}>{user.name}</span>
+        {/* Role pill — visible md+ only to avoid crowding the nav at 640px */}
+        <span className={`hidden md:inline-block shrink-0 text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badge}`}>
+          {ROLE_LABEL[user.systemRole] ?? user.systemRole}
+        </span>
         <svg
           className={`${s.caret} ${open ? "rotate-180" : ""}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}

@@ -382,14 +382,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                     : "border-transparent text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {tab === "report" ? "Report" : (
-                  <>
-                    FairTraze Docs
-                    <span className="ml-1.5 text-[9px] font-bold text-violet-500 bg-violet-50 border border-violet-200 rounded px-1 py-0.5 normal-case tracking-normal">
-                      Preview
-                    </span>
-                  </>
-                )}
+                {tab === "report" ? "Report" : "FairTraze Docs"}
               </button>
             ))}
           </div>
@@ -575,9 +568,6 @@ export function ProjectDetailPage({ projectId }: Props) {
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
-                Preview
-              </span>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
                 Collaborative editor — document contributions recorded per author
               </span>
