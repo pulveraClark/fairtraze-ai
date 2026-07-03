@@ -16,7 +16,7 @@ interface AuthContextValue {
   register: (email: string, password: string, name: string, role?: string) => Promise<AuthUser>;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<AuthUser | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -78,18 +78,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data.user!;
   }
 
-  async function refreshUser(): Promise<void> {
+  async function refreshUser(): Promise<AuthUser | null> {
     const stored = localStorage.getItem(TOKEN_KEY);
-    if (!stored) return;
+    if (!stored) return null;
     try {
       const res = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${stored}` } });
       if (res.ok) {
         const data = (await res.json()) as AuthUser;
         setUser(data);
+        return data;
       }
     } catch {
-      // ignore — stale name stays until next login
+      // network error — return null, stale value stays
     }
+    return null;
   }
 
   function logout() {

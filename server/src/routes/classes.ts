@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertOwnsClass } from "../lib/ownership.js";
+import { generateUniqueJoinCode } from "../lib/joinCode.js";
 
 export const classesRouter = Router();
 
@@ -16,7 +17,7 @@ const createClassSchema = z.object({
 
 const idParam = z.coerce.number().int().positive();
 
-// POST /api/classes — create a class section
+// POST /api/classes — create a class section with a generated class-level join code
 classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const result = createClassSchema.safeParse(req.body);
   if (!result.success) {
@@ -37,14 +38,16 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
     return;
   }
 
+  const joinCode = await generateUniqueJoinCode();
+
   const cls = await prisma.classSection.create({
-    data: { subjectCode, subjectName, course, edpCode, type, instructorId },
+    data: { subjectCode, subjectName, course, edpCode, type, instructorId, joinCode },
   });
 
   res.status(201).json(cls);
 });
 
-// DELETE /api/classes/:id — cascade-delete the class and all its assignments, groups, and reports
+// DELETE /api/classes/:id — delete the class and all descendants in dependency order
 classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
@@ -55,30 +58,37 @@ classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (re
   const cls = await assertOwnsClass(req, res, idResult.data);
   if (!cls) return;
 
-  // Collect child ids for cascade
-  const assignments = await prisma.assignment.findMany({
-    where:  { classSectionId: cls.id },
-    select: { id: true },
-  });
-  const assignmentIds = assignments.map((a) => a.id);
+  await prisma.$transaction(async (tx) => {
+    // Delete ClassEnrollment rows (students enrolled in this class)
+    await tx.classEnrollment.deleteMany({ where: { classSectionId: cls.id } });
 
-  if (assignmentIds.length > 0) {
-    const projects = await prisma.project.findMany({
-      where:  { assignmentId: { in: assignmentIds } },
+    const assignments = await tx.assignment.findMany({
+      where:  { classSectionId: cls.id },
       select: { id: true },
     });
-    const projectIds = projects.map((p) => p.id);
+    const assignmentIds = assignments.map((a) => a.id);
 
-    if (projectIds.length > 0) {
-      await prisma.member.deleteMany({ where: { projectId: { in: projectIds } } });
-      await prisma.report.deleteMany({ where: { projectId: { in: projectIds } } });
-      await prisma.groupMembership.deleteMany({ where: { projectId: { in: projectIds } } });
-      await prisma.project.deleteMany({ where: { id: { in: projectIds } } });
+    if (assignmentIds.length) {
+      const projects = await tx.project.findMany({
+        where:  { assignmentId: { in: assignmentIds } },
+        select: { id: true },
+      });
+      const projectIds = projects.map((p) => p.id);
+
+      if (projectIds.length) {
+        await tx.alert.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.groupMembership.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.member.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.report.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.project.deleteMany({ where: { id: { in: projectIds } } });
+      }
+
+      await tx.assignment.deleteMany({ where: { id: { in: assignmentIds } } });
     }
-    await prisma.assignment.deleteMany({ where: { id: { in: assignmentIds } } });
-  }
 
-  await prisma.classSection.delete({ where: { id: cls.id } });
+    await tx.classSection.delete({ where: { id: cls.id } });
+  });
+
   res.json({ message: "Class section deleted" });
 });
 
@@ -100,8 +110,8 @@ classesRouter.get("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res)
   res.json({ classes });
 });
 
-// GET /api/classes/:id/assignments — assignments for one class (ownership-verified)
-classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR"), async (req, res) => {
+// GET /api/classes/:id/assignments — assignments for one class (ownership-verified; ADMIN bypasses ownership)
+classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "ADMIN"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid class section id" });
@@ -125,6 +135,7 @@ classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR"), 
       course:      cls.course,
       edpCode:     cls.edpCode,
       type:        cls.type,
+      joinCode:    cls.joinCode,
       createdAt:   cls.createdAt,
     },
     assignments,

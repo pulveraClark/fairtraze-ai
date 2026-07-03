@@ -16,11 +16,12 @@ export async function assertOwnsClass(
     res.status(404).json({ error: "Class section not found" });
     return null;
   }
-  if (cls.instructorId !== req.user!.sub) {
-    res.status(403).json({ error: "You do not have access to this class section" });
-    return null;
+  // ADMIN may read any class (write routes are guarded by requireRole("INSTRUCTOR") separately)
+  if (req.user!.role === "ADMIN" || cls.instructorId === req.user!.sub) {
+    return cls;
   }
-  return cls;
+  res.status(403).json({ error: "You do not have access to this class section" });
+  return null;
 }
 
 type AssignmentWithClass = Assignment & { classSection: ClassSection };
@@ -43,9 +44,10 @@ export async function assertOwnsAssignment(
     res.status(404).json({ error: "Assignment not found" });
     return null;
   }
-  if (assignment.classSection.instructorId !== req.user!.sub) {
-    res.status(403).json({ error: "You do not have access to this assignment" });
-    return null;
+  // ADMIN may read any assignment (write routes are guarded by requireRole("INSTRUCTOR") separately)
+  if (req.user!.role === "ADMIN" || assignment.classSection.instructorId === req.user!.sub) {
+    return assignment;
   }
-  return assignment;
+  res.status(403).json({ error: "You do not have access to this assignment" });
+  return null;
 }

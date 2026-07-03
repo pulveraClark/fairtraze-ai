@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
@@ -9,11 +9,18 @@ import type { Flag } from "@shared/types";
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface TeamShare { share: number; isMe: boolean; }
 
+interface RoleSuggestionData {
+  id:             number;
+  suggestedRoles: string[];
+  status:         "PENDING" | "ACCEPTED" | "DECLINED";
+  createdAt:      string;
+}
+
 interface GroupDetail {
   classSection: { id: number; subjectCode: string; subjectName: string; course: string; edpCode: string; };
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; };
   project:      { id: number; groupName: string; name: string; repoUrl: string; };
-  membership:   { role: "LEADER" | "MEMBER"; joinedAt: string; };
+  membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
   report: {
     gini:        number;
@@ -72,19 +79,147 @@ function TeamDistributionBar({ shares }: { shares: TeamShare[] }) {
   );
 }
 
-type Tab = "contribution" | "document";
+type Tab = "report" | "document";
+
+// ── Dispute types ─────────────────────────────────────────────────────────────
+interface DisputeRecord {
+  id:                 number;
+  projectId:          number;
+  status:             "OPEN" | "RESOLVED" | "DISMISSED";
+  reason:             string;
+  instructorResponse: string | null;
+  disputedFlags:      string; // JSON array of flags captured at submission; "" = legacy (all flags)
+  createdAt:          string;
+  resolvedAt:         string | null;
+}
+
+function getFlagDisputeOutcome(flag: string, dispute: DisputeRecord | null | undefined): "RESOLVED" | "DISMISSED" | null {
+  if (!dispute || dispute.status === "OPEN") return null;
+  const flags: string[] = (() => {
+    try { return dispute.disputedFlags ? (JSON.parse(dispute.disputedFlags) as string[]) : []; }
+    catch { return []; }
+  })();
+  // Empty = legacy dispute — applies badge to all flags
+  if (flags.length === 0 || flags.includes(flag)) return dispute.status as "RESOLVED" | "DISMISSED";
+  return null;
+}
+
+const DISPUTE_STATUS_STYLE: Record<string, string> = {
+  OPEN:      "text-amber-700 bg-amber-50 border-amber-200",
+  RESOLVED:  "text-emerald-700 bg-emerald-50 border-emerald-200",
+  DISMISSED: "text-slate-600 bg-slate-100 border-slate-200",
+};
+
+// ── Dispute submission modal ───────────────────────────────────────────────────
+function DisputeModal({
+  projectId,
+  token,
+  onClose,
+  onSubmitted,
+}: {
+  projectId: number;
+  token:     string;
+  onClose:   () => void;
+  onSubmitted: (d: DisputeRecord) => void;
+}) {
+  const [reason,   setReason]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error,    setError]    = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { textareaRef.current?.focus(); }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reason.trim()) { setError("Please describe the context for your instructor."); return; }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res  = await fetch("/api/disputes", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ projectId, reason: reason.trim() }),
+      });
+      const json = await res.json() as DisputeRecord & { error?: string };
+      if (!res.ok) { setError(json.error ?? "Could not submit dispute."); return; }
+      onSubmitted(json);
+    } catch {
+      setError("Network error — could not submit.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-800">Flag for review</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Describe context for your instructor. They will review and respond.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <textarea
+            ref={textareaRef}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="E.g. I was working offline and pushed everything at the end due to connectivity issues…"
+            rows={5}
+            maxLength={2000}
+            className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+          />
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !reason.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Submitting…" : "Submit dispute"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+const FUNCTIONAL_ROLE_META: Record<string, { label: string; activeClass: string; inactiveClass: string }> = {
+  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
+  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
+};
+
 export function StudentGroupPage({ projectId }: { projectId: number }) {
-  const { token }     = useAuth();
-  const { navigate }  = useRouter();
+  const { token, user } = useAuth();
+  const { navigate }    = useRouter();
 
   const [data, setData]           = useState<GroupDetail | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("contribution");
-  const [showManageModal, setShowManageModal] = useState(false);
-  const [refreshKey, setRefreshKey]           = useState(0);
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") === "document" ? "document" : "report";
+  });
+  const [showManageModal, setShowManageModal]   = useState(false);
+  const [refreshKey, setRefreshKey]             = useState(0);
+  const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  // Functional role suggestion state
+  const [myRoles, setMyRoles]             = useState<string[]>([]);
+  const [mySuggestion, setMySuggestion]   = useState<RoleSuggestionData | null>(null);
+  const [suggestDraft, setSuggestDraft]   = useState<string[]>([]);
+  const [suggestBusy, setSuggestBusy]     = useState(false);
+  const [suggestErr, setSuggestErr]       = useState("");
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -101,11 +236,56 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           return;
         }
         setData(json);
+        const roles = json.membership?.functionalRoles ?? [];
+        setMyRoles(roles);
+        setMySuggestion(json.membership?.roleSuggestion ?? null);
+        setSuggestDraft(roles);
       })
       .catch(() => setError("Network error — could not load group."))
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, projectId, refreshKey]);
+
+  // Fetch the student's disputes to find any existing one for this group
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/disputes/mine", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json() as { disputes: DisputeRecord[] };
+        const found = json.disputes.find((d) => d.projectId === projectId) ?? null;
+        setDispute(found);
+      })
+      .catch(() => setDispute(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, projectId]);
+
+  async function handleSuggestRole() {
+    if (!token) return;
+    const st = data?.assignment?.sourceType ?? "GITHUB";
+    const toSuggest = suggestDraft.filter((r) => {
+      if (st === "GITHUB") return r === "DEVELOPER";
+      if (st === "EDITOR") return r === "DOCUMENTATION";
+      return true;
+    });
+    if (toSuggest.length === 0) return;
+    setSuggestErr("");
+    setSuggestBusy(true);
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/role-suggestions`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ suggestedRoles: toSuggest }),
+      });
+      const json = await res.json() as RoleSuggestionData & { error?: string };
+      if (!res.ok) { setSuggestErr(json.error ?? "Could not submit suggestion."); return; }
+      setMySuggestion({ id: json.id, suggestedRoles: json.suggestedRoles, status: "PENDING", createdAt: json.createdAt });
+    } catch {
+      setSuggestErr("Network error — could not submit suggestion.");
+    } finally {
+      setSuggestBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -142,15 +322,15 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] =
-    sourceType === "EDITOR"   ? ["document"] :
-    sourceType === "COMBINED" ? ["contribution", "document"] :
-    ["contribution"]; // GITHUB (default)
+    sourceType === "EDITOR" || sourceType === "COMBINED"
+      ? ["report", "document"]
+      : ["report"]; // GITHUB (default)
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0]!;
 
   const equalShare   = report ? 1 / report.memberCount : 0;
   const myShare      = report?.myContribution?.contributionShare ?? null;
-  const mySharePct   = myShare !== null ? (myShare * 100).toFixed(0) : null;
-  const equalSharePct = (equalShare * 100).toFixed(0);
+  const mySharePct   = myShare !== null ? (myShare * 100).toFixed(1) : null;
+  const equalSharePct = (equalShare * 100).toFixed(1);
   const giniLabel    = report
     ? (report.gini < 0.2 ? "Healthy" : report.gini < 0.4 ? "Moderate Risk" : "High Risk")
     : null;
@@ -167,6 +347,18 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           onChanged={() => {
             setShowManageModal(false);
             setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {showDisputeModal && token && (
+        <DisputeModal
+          projectId={projectId}
+          token={token}
+          onClose={() => setShowDisputeModal(false)}
+          onSubmitted={(d) => {
+            setDispute(d);
+            setShowDisputeModal(false);
           }}
         />
       )}
@@ -237,14 +429,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     : "border-transparent text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {tab === "contribution" ? "My Contribution" : (
-                  <>
-                    FairTraze Docs
-                    <span className="ml-1.5 text-[9px] font-bold text-violet-500 bg-violet-50 border border-violet-200 rounded px-1 py-0.5 normal-case tracking-normal">
-                      Preview
-                    </span>
-                  </>
-                )}
+                {tab === "report" ? "Report" : "FairTraze Docs"}
               </button>
             ))}
           </div>
@@ -253,9 +438,132 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
 
-        {/* ── My Contribution tab ──────────────────────────────────────────────── */}
-        {effectiveTab === "contribution" && (
+        {/* ── Report tab ───────────────────────────────────────────────────────── */}
+        {effectiveTab === "report" && (
           <div className="space-y-6">
+
+            {/* Your Role */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Your Role</h3>
+
+              {/* Current applied role (always shown, read-only) */}
+              <div className="mb-3">
+                <p className="text-[11px] text-slate-400 mb-1.5">
+                  {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
+                </p>
+                <div className="flex items-center flex-wrap gap-2">
+                  {myRoles.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">No role assigned yet</span>
+                  ) : (
+                    myRoles.map((role) => {
+                      const meta = FUNCTIONAL_ROLE_META[role];
+                      if (!meta) return null;
+                      return (
+                        <span key={role} className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${meta.activeClass}`}>
+                          ✓ {meta.label}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Leader: informational note */}
+              {membership.role === "LEADER" && (
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Assign roles for all members, including yourself, through Manage Group. Roles are context only — they never affect contribution scores.
+                </p>
+              )}
+
+              {/* Member: suggestion flow */}
+              {membership.role === "MEMBER" && (
+                <div className="border-t border-slate-100 mt-3 pt-3">
+                  {suggestErr && <p className="text-xs text-red-600 mb-2">{suggestErr}</p>}
+
+                  {mySuggestion?.status === "PENDING" ? (
+                    /* Pending — awaiting leader action */
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-0.5">
+                        PENDING
+                      </span>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Your suggestion (
+                        <span className="font-medium">
+                          {mySuggestion.suggestedRoles
+                            .map((r) => FUNCTIONAL_ROLE_META[r]?.label ?? r)
+                            .join(" + ")}
+                        </span>
+                        ) is awaiting your leader's approval.
+                      </p>
+                    </div>
+                  ) : (
+                    /* Suggest / re-suggest flow */
+                    <>
+                      {mySuggestion?.status === "ACCEPTED" && (
+                        <p className="text-xs text-emerald-600 mb-2">✓ Your last suggestion was accepted.</p>
+                      )}
+                      {mySuggestion?.status === "DECLINED" && (
+                        <p className="text-xs text-red-600 mb-2">Your last suggestion was declined. You can suggest again.</p>
+                      )}
+
+                      <p className="text-[11px] text-slate-500 mb-2">
+                        Suggest a role to your leader for approval:
+                      </p>
+
+                      {/* Toggle chips — local draft, not applied until submitted */}
+                      <div className="flex items-center flex-wrap gap-2 mb-3">
+                        {(Object.keys(FUNCTIONAL_ROLE_META) as string[])
+                          .filter((role) => {
+                            if (sourceType === "GITHUB") return role === "DEVELOPER";
+                            if (sourceType === "EDITOR") return role === "DOCUMENTATION";
+                            return true;
+                          })
+                          .map((role) => {
+                            const selected = suggestDraft.includes(role);
+                            const meta     = FUNCTIONAL_ROLE_META[role]!;
+                            const next     = selected
+                              ? suggestDraft.filter((r) => r !== role)
+                              : [...suggestDraft, role];
+                            return (
+                              <button
+                                key={role}
+                                disabled={suggestBusy}
+                                onClick={() => setSuggestDraft(next)}
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
+                                  selected ? meta.activeClass : meta.inactiveClass
+                                }`}
+                              >
+                                {selected ? `✓ ${meta.label}` : meta.label}
+                              </button>
+                            );
+                          })}
+                      </div>
+
+                      <button
+                        onClick={() => void handleSuggestRole()}
+                        disabled={
+                          suggestBusy ||
+                          suggestDraft.length === 0 ||
+                          JSON.stringify([...suggestDraft].sort()) === JSON.stringify([...myRoles].sort())
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {suggestBusy ? (
+                          <>
+                            <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-white animate-spin" />
+                            Submitting…
+                          </>
+                        ) : "Submit suggestion →"}
+                      </button>
+
+                      <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                        Roles are context only — they never change contribution scores.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Not analyzed yet */}
             {!hasReport && (
@@ -410,10 +718,26 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 </svg>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
                                   <span className="text-[11px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5">
                                     {flag}
                                   </span>
+                                  {(() => {
+                                    const outcome = getFlagDisputeOutcome(flag, dispute);
+                                    if (!outcome) return null;
+                                    if (outcome === "RESOLVED") {
+                                      return (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-50 border-emerald-200">
+                                          Reviewed — Accepted
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-slate-50 border-slate-200">
+                                        Reviewed — Upheld
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                                 <p className="text-sm text-slate-700 leading-relaxed">
                                   {FLAG_DESCRIPTIONS[flag] ?? "A flag has been raised on your contribution pattern."}
@@ -421,25 +745,42 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 <p className="text-xs text-slate-400 mt-1.5">
                                   This flag is visible to your instructor. You may submit a note to provide context.
                                 </p>
-                                <div className="mt-4 space-y-2">
-                                  <textarea
-                                    disabled
-                                    placeholder="Explain context for your instructor (e.g. I was working offline and pushed at the end)…"
-                                    rows={2}
-                                    className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-400 placeholder-slate-300 resize-none cursor-not-allowed"
-                                  />
-                                  <div className="flex items-center gap-3 flex-wrap">
+                                <div className="mt-4">
+                                  {/* Existing dispute status */}
+                                  {dispute && (
+                                    <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-wide">Dispute status:</span>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${DISPUTE_STATUS_STYLE[dispute.status]}`}>
+                                          {dispute.status}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{dispute.reason}</p>
+                                      {dispute.instructorResponse && (
+                                        <div className="pt-1.5 border-t border-slate-200">
+                                          <p className="text-[10px] font-semibold text-slate-500 mb-0.5">Instructor response:</p>
+                                          <p className="text-xs text-slate-700 leading-relaxed">{dispute.instructorResponse}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Submit button — only if no OPEN dispute exists */}
+                                  {dispute?.status === "OPEN" ? (
+                                    <p className="text-[11px] text-amber-600">
+                                      Your dispute is open and awaiting instructor review.
+                                    </p>
+                                  ) : (
                                     <button
-                                      disabled
-                                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-100 text-indigo-400 text-xs font-semibold cursor-not-allowed border border-indigo-200"
+                                      onClick={() => setShowDisputeModal(true)}
+                                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
                                     >
                                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
                                       </svg>
-                                      Flag for review / Add a note
+                                      {dispute ? "Submit another note" : "Flag for review / Add a note"}
                                     </button>
-                                    <span className="text-[11px] text-slate-400">Coming soon — Phase C</span>
-                                  </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -459,9 +800,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
-                Preview
-              </span>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
                 Collaborative editor — document contributions recorded per author
               </span>

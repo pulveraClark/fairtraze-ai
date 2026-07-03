@@ -56,47 +56,58 @@ async function main() {
     console.log(`ClassSection: migrated "IT-ELEC2" → "IT-ELEC 2"`);
   }
 
+  // Model B: each ClassSection gets a stable class-level join code used by students to enroll.
+  // Hard-coded codes ensure re-seeding is idempotent.
+  const CLASS_JOIN_CODES: Record<string, string> = {
+    "31400": "FT-APPS-2026",
+    "21856": "FT-IMDB-2026",
+    "21936": "FT-ELEC-2026",
+  };
+
   const sectionAppsdev = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "31400" } },
-    update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", course: "BSIT", type: "LECTURE" },
+    update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["31400"] },
     create: {
       subjectCode: "CC-APPSDEV22",
       subjectName: "Applications Development",
       course:      "BSIT",
       edpCode:     "31400",
       type:        "LECTURE",
+      joinCode:    CLASS_JOIN_CODES["31400"],
       instructorId: instructor.id,
     },
   });
-  console.log(`ClassSection: ${sectionAppsdev.subjectCode} edpCode=${sectionAppsdev.edpCode} (id=${sectionAppsdev.id})`);
+  console.log(`ClassSection: ${sectionAppsdev.subjectCode} edpCode=${sectionAppsdev.edpCode} joinCode=${sectionAppsdev.joinCode} (id=${sectionAppsdev.id})`);
 
   const sectionImdb = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21856" } },
-    update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", course: "BSIT", type: "LECTURE" },
+    update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["21856"] },
     create: {
       subjectCode: "IT-IMDBSYS32",
       subjectName: "Information Management 2 (Database Systems)",
       course:      "BSIT",
       edpCode:     "21856",
       type:        "LECTURE",
+      joinCode:    CLASS_JOIN_CODES["21856"],
       instructorId: instructor.id,
     },
   });
-  console.log(`ClassSection: ${sectionImdb.subjectCode} edpCode=${sectionImdb.edpCode} (id=${sectionImdb.id})`);
+  console.log(`ClassSection: ${sectionImdb.subjectCode} edpCode=${sectionImdb.edpCode} joinCode=${sectionImdb.joinCode} (id=${sectionImdb.id})`);
 
   const sectionElec = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21936" } },
-    update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", course: "BSIT", type: "LECTURE" },
+    update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["21936"] },
     create: {
       subjectCode: "IT-ELEC 2",
       subjectName: "IT Elective 2",
       course:      "BSIT",
       edpCode:     "21936",
       type:        "LECTURE",
+      joinCode:    CLASS_JOIN_CODES["21936"],
       instructorId: instructor.id,
     },
   });
-  console.log(`ClassSection: ${sectionElec.subjectCode} edpCode=${sectionElec.edpCode} (id=${sectionElec.id})`);
+  console.log(`ClassSection: ${sectionElec.subjectCode} edpCode=${sectionElec.edpCode} joinCode=${sectionElec.joinCode} (id=${sectionElec.id})`);
 
   // ===== ASSIGNMENTS (one per class section) =====
   const assignmentAppsdev = await prisma.assignment.upsert({
@@ -279,6 +290,37 @@ async function main() {
   ]);
   for (const m of members5) {
     console.log(`  Member: ${m.studentName} (${m.githubUsername})`);
+  }
+
+  // ===== MODEL B BACKFILL — ClassEnrollment =====
+  // Any student who already belongs to a group should be enrolled in that group's class.
+  // This is idempotent: upsert (createOrSkip) so re-seeding doesn't break.
+  const existingMemberships = await prisma.groupMembership.findMany({
+    include: {
+      project: {
+        include: {
+          assignment: { select: { classSectionId: true } },
+        },
+      },
+    },
+  });
+
+  let enrollmentCount = 0;
+  for (const m of existingMemberships) {
+    const classSectionId = m.project.assignment?.classSectionId;
+    if (!classSectionId) continue;
+    const existing = await prisma.classEnrollment.findUnique({
+      where: { userId_classSectionId: { userId: m.userId, classSectionId } },
+    });
+    if (!existing) {
+      await prisma.classEnrollment.create({
+        data: { userId: m.userId, classSectionId },
+      });
+      enrollmentCount++;
+    }
+  }
+  if (enrollmentCount > 0) {
+    console.log(`ClassEnrollment: backfilled ${enrollmentCount} enrollment(s) from existing group memberships`);
   }
 }
 

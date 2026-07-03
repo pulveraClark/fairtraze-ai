@@ -1,5 +1,8 @@
+import { useEffect } from "react";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { UserMenu } from "../components/UserMenu";
+import logoUrl from "../assets/logo_transparent.png";
 
 // ── Static preview data ───────────────────────────────────────────────────────
 const PREVIEW_MEMBERS = [
@@ -143,6 +146,18 @@ export function LandingPage() {
       : "/dashboard"
       : null;
 
+  // Auto-redirect on fresh page load when authenticated.
+  // router.ts tags every internal navigate() with { intentional: true }, so
+  // logo clicks and browser-back land here without triggering this redirect.
+  useEffect(() => {
+    if (authLoading || !user || !dashboardPath) return;
+    const intentional = (window.history.state as { intentional?: boolean } | null)?.intentional;
+    if (intentional) return;
+    // Mark this history entry so browser-back here won't re-redirect.
+    history.replaceState({ intentional: true }, "", "/");
+    navigate(dashboardPath);
+  }, [authLoading, user, dashboardPath, navigate]);
+
   return (
     <div className="min-h-screen bg-white">
 
@@ -157,11 +172,7 @@ export function LandingPage() {
             onClick={() => navigate("/")}
             className="flex items-center gap-2.5 group shrink-0"
           >
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm shadow-indigo-600/25 group-hover:bg-indigo-700 transition-colors">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6" />
-              </svg>
-            </div>
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-9 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
               FAIR <span className="text-indigo-600">TRAZE</span>{" "}
               <span className="font-medium text-slate-400">AI</span>
@@ -170,17 +181,22 @@ export function LandingPage() {
 
           {/* Right actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {dashboardPath ? (
-              <button
-                onClick={() => navigate(dashboardPath)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.98]"
-              >
-                Dashboard
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                </svg>
-              </button>
-            ) : (
+            {!authLoading && user && dashboardPath ? (
+              /* Logged in: go-to-dashboard button + user menu */
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate(dashboardPath)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.98]"
+                >
+                  Go to Dashboard
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
+                  </svg>
+                </button>
+                <UserMenu theme="light" />
+              </div>
+            ) : !authLoading ? (
+              /* Logged out */
               <>
                 <button
                   onClick={() => navigate("/login")}
@@ -195,7 +211,7 @@ export function LandingPage() {
                   Get Started
                 </button>
               </>
-            )}
+            ) : null /* loading — render nothing to avoid flash */}
           </div>
         </div>
       </nav>
@@ -331,7 +347,7 @@ export function LandingPage() {
               </div>
               <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Connect Your Sources</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                Link a GitHub repository for your project. Students connect with a join code — no manual roster entry. FairTraze Docs support coming soon.
+                Link a GitHub repository for your project. Students connect with a join code — no manual roster entry.
               </p>
             </div>
 
@@ -481,11 +497,7 @@ export function LandingPage() {
             onClick={() => navigate("/")}
             className="flex items-center gap-2 group shrink-0"
           >
-            <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center group-hover:bg-indigo-700 transition-colors">
-              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6" />
-              </svg>
-            </div>
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-7 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
               FAIR <span className="text-indigo-600">TRAZE</span>{" "}
               <span className="text-slate-400 font-medium">AI</span>

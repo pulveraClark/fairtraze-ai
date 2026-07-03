@@ -77,7 +77,9 @@ interface Props { classId: number; assignmentId: number }
 
 export function AssignmentPage({ classId, assignmentId }: Props) {
   const { navigate } = useRouter();
-  const { token }    = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.systemRole === "ADMIN";
+  const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
   const [assignment, setAssignment] = useState<AssignmentMeta | null>(null);
   const [classInfo, setClassInfo]   = useState<ClassInfo | null>(null);
@@ -86,6 +88,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [loadError, setLoadError]   = useState<string | null>(null);
   const [sortMode, setSortMode]     = useState<SortMode>("risk");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [search, setSearch]         = useState("");
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
 
@@ -149,7 +152,10 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     }
   }
 
-  const processed   = filterItems(sortItems(summary, sortMode), filterMode);
+  const sorted      = filterItems(sortItems(summary, sortMode), filterMode);
+  const processed   = search.trim()
+    ? sorted.filter((i) => i.groupName.toLowerCase().includes(search.trim().toLowerCase()))
+    : sorted;
   const atRiskCount = classAtRiskCount(summary);
   const classUrl    = `/class/${classId}`;
 
@@ -170,8 +176,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <button onClick={() => navigate("/dashboard")} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
-              Dashboard
+            <button onClick={() => navigate(dashboardUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
+              {isAdmin ? "Admin" : "Dashboard"}
             </button>
             <span className="text-slate-300 text-xs shrink-0">›</span>
             <button onClick={() => navigate(classUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium font-mono">
@@ -197,26 +203,45 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
             </div>
           </div>
 
-          {atRiskCount > 0 && (
-            <button
-              onClick={() => setFilterMode(filterMode === "at-risk" ? "all" : "at-risk")}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
-                filterMode === "at-risk"
-                  ? "bg-red-100 border-red-300 text-red-800"
-                  : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-              }`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-              {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
-            </button>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {isAdmin && (
+              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+                Admin view — read only
+              </span>
+            )}
+            {atRiskCount > 0 && (
+              <button
+                onClick={() => setFilterMode(filterMode === "at-risk" ? "all" : "at-risk")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
+                  filterMode === "at-risk"
+                    ? "bg-red-100 border-red-300 text-red-800"
+                    : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
 
-        {/* Sort / filter controls */}
+        {/* Search + Sort / filter controls */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search groups…"
+              className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40"
+            />
+          </div>
+          <span className="text-slate-200 hidden sm:block">|</span>
           <span className="text-xs font-medium text-slate-500">Sort:</span>
           {(["risk", "name"] as SortMode[]).map((mode) => (
             <button key={mode} onClick={() => setSortMode(mode)}
@@ -253,7 +278,12 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
         {!loading && !loadError && processed.length === 0 && (
           <div className="text-center py-16 text-slate-400 text-sm">
-            {filterMode === "at-risk" ? (
+            {search.trim() ? (
+              <>
+                No groups match &ldquo;{search}&rdquo;.{" "}
+                <button onClick={() => setSearch("")} className="underline hover:text-slate-600">Clear search</button>
+              </>
+            ) : filterMode === "at-risk" ? (
               <>
                 No at-risk groups in this project.{" "}
                 <button onClick={() => setFilterMode("all")} className="underline hover:text-slate-600">Show all groups</button>
@@ -270,9 +300,9 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               <GroupSummaryCard
                 key={item.projectId}
                 item={item}
-                onAnalyze={handleReanalyze}
+                onAnalyze={isAdmin ? undefined : handleReanalyze}
                 analyzing={analyzing.has(item.projectId)}
-                onManage={(id) => setManagingGroupId(id)}
+                onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
               />
             ))}
           </div>

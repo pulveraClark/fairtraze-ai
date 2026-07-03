@@ -11,7 +11,7 @@ export function OverviewPage() {
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4">
           <h1 className="text-sm font-semibold text-slate-800">System Overview</h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Architecture, pipeline phases, and designed workflow
+            What's implemented, what's planned, and how the system works
           </p>
         </div>
       </div>

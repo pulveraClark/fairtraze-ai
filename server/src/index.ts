@@ -9,6 +9,9 @@ import { classesRouter } from "./routes/classes.js";
 import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
 import { groupsRouter } from "./routes/groups.js";
+import { alertsRouter } from "./routes/alerts.js";
+import { disputesRouter } from "./routes/disputes.js";
+import { adminRouter }    from "./routes/admin.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -28,6 +31,9 @@ app.use(classesRouter);
 app.use(assignmentsRouter);
 app.use(joinRouter);
 app.use(groupsRouter);
+app.use(alertsRouter);
+app.use(disputesRouter);
+app.use(adminRouter);
 
 app.use(
   (

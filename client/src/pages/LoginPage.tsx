@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
+import logoUrl from "../assets/logo_transparent.png";
 
 // ── Left-panel illustration: stylized contribution dashboard ──────────────────
 function AuthIllustration() {
@@ -120,10 +121,8 @@ export function LoginPage() {
 
         {/* Top: wordmark */}
         <div className="relative z-10 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6m8 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6" />
-            </svg>
+          <div className="rounded-lg bg-white/90 px-1.5 py-1 shrink-0 shadow-sm">
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-7 w-auto block" />
           </div>
           <span className="font-display font-bold text-white text-sm tracking-tight">FAIR TRAZE AI</span>
         </div>
@@ -166,9 +165,7 @@ export function LoginPage() {
 
           {/* Mobile wordmark */}
           <div className="lg:hidden text-center mb-8">
-            <span className="font-display font-bold text-slate-900 text-lg tracking-tight">
-              FAIR <span className="text-indigo-600">TRAZE</span> AI
-            </span>
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto" />
           </div>
 
           {/* Heading */}

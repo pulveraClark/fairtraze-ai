@@ -1,4 +1,4 @@
-import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, Flag } from "./types";
+import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, ScoringThresholds, Flag } from "./types";
 
 export const DEFAULT_WEIGHTS: ScoringWeights = { commits: 0.4, lines: 0.4, activeDays: 0.2 };
 
@@ -7,6 +7,12 @@ export const OVERLOAD_THRESHOLD = 1.75;
 export const DEADLINE_DRIVEN_THRESHOLD = 0.6;
 export const HEALTHY_GINI_THRESHOLD = 0.2;
 export const MODERATE_RISK_GINI_THRESHOLD = 0.4;
+
+export const DEFAULT_THRESHOLDS: ScoringThresholds = {
+  freeRider:      FREE_RIDER_THRESHOLD,
+  overload:       OVERLOAD_THRESHOLD,
+  deadlineDriven: DEADLINE_DRIVEN_THRESHOLD,
+};
 
 export function gini(values: number[]): number {
   const n = values.length;
@@ -28,7 +34,8 @@ function round3(n: number): number {
 
 export function computeTeamReport(
   rawMembers: RawMemberStats[],
-  weights: ScoringWeights = DEFAULT_WEIGHTS
+  weights: ScoringWeights = DEFAULT_WEIGHTS,
+  thresholds: ScoringThresholds = DEFAULT_THRESHOLDS
 ): TeamReport {
   if (rawMembers.length === 0) {
     return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy" };
@@ -123,10 +130,10 @@ export function computeTeamReport(
     if (m.commits === 0) {
       flags.push("inactive");
     } else {
-      if (m.contributionShare < FREE_RIDER_THRESHOLD * equalShare) flags.push("free-rider");
-      if (m.lastPhaseRatio > DEADLINE_DRIVEN_THRESHOLD) flags.push("deadline-driven");
+      if (m.contributionShare < thresholds.freeRider * equalShare) flags.push("free-rider");
+      if (m.lastPhaseRatio > thresholds.deadlineDriven) flags.push("deadline-driven");
     }
-    if (m.contributionShare > OVERLOAD_THRESHOLD * equalShare) flags.push("overload");
+    if (m.contributionShare > thresholds.overload * equalShare) flags.push("overload");
 
     const codeToCommentRatio =
       m.commentLinesAdded > 0

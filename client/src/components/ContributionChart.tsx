@@ -22,9 +22,10 @@ interface ChartDataPoint {
 }
 
 function barColor(flags: Flag[]): string {
-  if (flags.includes("inactive") || flags.includes("free-rider")) return "#ef4444";
-  if (flags.includes("overload")) return "#f97316";
-  return "#4f86c6";
+  if (flags.includes("inactive") || flags.includes("free-rider")) return "#ef4444"; // red
+  if (flags.includes("overload"))         return "#f97316"; // orange
+  if (flags.includes("deadline-driven"))  return "#f59e0b"; // amber
+  return "#6366f1"; // indigo — healthy / no flags
 }
 
 function ChartTooltip({
@@ -53,6 +54,13 @@ function ChartTooltip({
   );
 }
 
+const LEGEND_ENTRIES = [
+  { color: "#6366f1", label: "Healthy" },
+  { color: "#f59e0b", label: "Deadline-driven" },
+  { color: "#f97316", label: "Overload" },
+  { color: "#ef4444", label: "Inactive / Free-rider" },
+] as const;
+
 export function ContributionChart({ members }: Props) {
   const equalShare = members.length > 0 ? (1 / members.length) * 100 : 0;
 
@@ -62,7 +70,11 @@ export function ContributionChart({ members }: Props) {
     flags: m.flags,
   }));
 
+  const usedColors = new Set(data.map((d) => barColor(d.flags)));
+  const visibleLegend = LEGEND_ENTRIES.filter((e) => usedColors.has(e.color));
+
   return (
+    <>
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -99,5 +111,16 @@ export function ContributionChart({ members }: Props) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    {visibleLegend.length > 0 && (
+      <div className="flex items-center gap-4 px-1 pt-1 pb-2 flex-wrap">
+        {visibleLegend.map((e) => (
+          <span key={e.color} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: e.color }} />
+            {e.label}
+          </span>
+        ))}
+      </div>
+    )}
+    </>
   );
 }

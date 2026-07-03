@@ -29,6 +29,25 @@ enum ClassType {
   LABORATORY
 }
 
+enum AlertType {
+  HIGH_RISK
+  MODERATE_RISK
+  MEMBER_FLAGGED
+  DISPUTE_FILED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum JoinRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id               Int               @id @default(autoincrement())
   email            String            @unique
@@ -36,24 +55,44 @@ model User {
   name             String
   systemRole       SystemRole        @default(STUDENT)
   githubUsername   String?
+  active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
+  classEnrollments ClassEnrollment[]
+  alerts           Alert[]
+  disputes         Dispute[]
+  auditLogs        AuditLog[]
+  joinRequests     GroupJoinRequest[]
+  roleSuggestions  RoleSuggestion[]
 }
 
 model ClassSection {
-  id           Int          @id @default(autoincrement())
+  id           Int               @id @default(autoincrement())
   subjectCode  String
   subjectName  String
-  course       String       @default("BSIT")
-  edpCode      String       @default("")
-  type         ClassType    @default(LECTURE)
+  course       String            @default("BSIT")
+  edpCode      String            @default("")
+  type         ClassType         @default(LECTURE)
+  joinCode     String?           @unique
   instructorId Int
-  createdAt    DateTime     @default(now())
-  instructor   User         @relation(fields: [instructorId], references: [id])
+  createdAt    DateTime          @default(now())
+  instructor   User              @relation(fields: [instructorId], references: [id])
   assignments  Assignment[]
+  enrollments  ClassEnrollment[]
 
   @@unique([instructorId, edpCode])
+}
+
+model ClassEnrollment {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  classSectionId Int
+  joinedAt       DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, classSectionId])
 }
 
 model Assignment {
@@ -65,34 +104,51 @@ model Assignment {
   sourceType     SourceType   @default(GITHUB)
   joinCode       String       @unique
   createdAt      DateTime     @default(now())
-  classSection   ClassSection @relation(fields: [classSectionId], references: [id])
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   projects       Project[]
 }
 
 model GroupMembership {
-  id        Int            @id @default(autoincrement())
-  userId    Int
-  projectId Int
-  role      MembershipRole @default(MEMBER)
-  joinedAt  DateTime       @default(now())
-  user      User           @relation(fields: [userId], references: [id])
-  project   Project        @relation(fields: [projectId], references: [id])
+  id              Int            @id @default(autoincrement())
+  userId          Int
+  projectId       Int
+  role            MembershipRole @default(MEMBER)
+  // JSON array of functional roles: ["DEVELOPER"] | ["DOCUMENTATION"] | ["DEVELOPER","DOCUMENTATION"] | []
+  // Default ["DEVELOPER"]: all existing/new groups are GitHub-based; Developer is the correct starting point.
+  // The leader (or instructor) can always reassign. Never affects scoring — context only.
+  functionalRoles String         @default("[\"DEVELOPER\"]")
+  joinedAt        DateTime       @default(now())
+  user            User           @relation(fields: [userId], references: [id])
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
 }
 
 model Project {
-  id               Int               @id @default(autoincrement())
-  groupName        String            @default("")   // student team name, e.g. "Group 1"
-  name             String                            // app/project name, e.g. "FairTraze AI"
-  repoUrl          String                            // GitHub repository URL
-  assignmentLabel  String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
-  assignmentId     Int?
-  createdAt        DateTime          @default(now())
-  assignment       Assignment?       @relation(fields: [assignmentId], references: [id])
-  members          Member[]
-  reports          Report[]
-  groupMemberships GroupMembership[]
+  id                       Int               @id @default(autoincrement())
+  groupName                String            @default("")   // student team name, e.g. "Group 1"
+  name                     String                            // app/project name, e.g. "FairTraze AI"
+  repoUrl                  String                            // GitHub repository URL
+  assignmentLabel          String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
+  assignmentId             Int?
+  membershipChangedAt      DateTime?                         // updated when members join or leave; used to detect stale reports
+  // Per-project scoring configuration (defaults mirror shared/src/scoring.ts constants)
+  weightCommits            Float             @default(0.4)
+  weightLines              Float             @default(0.4)
+  weightActiveDays         Float             @default(0.2)
+  freeRiderThreshold       Float             @default(0.5)
+  overloadThreshold        Float             @default(1.75)
+  deadlineDrivenThreshold  Float             @default(0.6)
+  scoringConfigChangedAt   DateTime?                         // set when config changes after last analyze; cleared by re-analyze
+  createdAt                DateTime          @default(now())
+  assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  members                  Member[]
+  reports                  Report[]
+  groupMemberships         GroupMembership[]
+  alerts                   Alert[]
+  disputes                 Dispute[]
+  joinRequests             GroupJoinRequest[]
+  roleSuggestions          RoleSuggestion[]
 }
 
 model Member {
@@ -100,7 +156,7 @@ model Member {
   projectId      Int
   studentName    String
   githubUsername String
-  project        Project @relation(fields: [projectId], references: [id])
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Report {
@@ -110,5 +166,69 @@ model Report {
   gini        Float?
   teamHealth  String?
   content     String?
-  project     Project  @relation(fields: [projectId], references: [id])
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Alert {
+  id           Int       @id @default(autoincrement())
+  projectId    Int
+  instructorId Int
+  type         AlertType
+  message      String
+  teamHealth   String
+  read         Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  instructor   User      @relation(fields: [instructorId], references: [id])
+}
+
+model Dispute {
+  id                 Int           @id @default(autoincrement())
+  projectId          Int
+  studentUserId      Int
+  memberName         String
+  reason             String
+  status             DisputeStatus @default(OPEN)
+  instructorResponse String?
+  disputedFlags      String        @default("") // JSON array of Flag strings captured at submission time; "" means pre-feature (use fallback from latest report)
+  createdAt          DateTime      @default(now())
+  resolvedAt         DateTime?
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  student            User          @relation(fields: [studentUserId], references: [id])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int?
+  actorName  String
+  action     String
+  targetType String
+  targetId   String
+  details    String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+model GroupJoinRequest {
+  id         Int               @id @default(autoincrement())
+  userId     Int
+  projectId  Int
+  status     JoinRequestStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  resolvedAt DateTime?
+  user       User              @relation(fields: [userId], references: [id])
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model RoleSuggestion {
+  id             Int               @id @default(autoincrement())
+  userId         Int
+  projectId      Int
+  // JSON array: ["DEVELOPER"] | ["DOCUMENTATION"] | ["DEVELOPER","DOCUMENTATION"]
+  suggestedRoles String
+  status         JoinRequestStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  resolvedAt     DateTime?
+  user           User              @relation(fields: [userId], references: [id])
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

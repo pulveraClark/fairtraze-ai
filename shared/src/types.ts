@@ -44,6 +44,21 @@ export interface RawMemberStats {
 
 export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
 
+// Functional roles — context only; never affect contribution scores, Gini, or flags.
+// DEVELOPER  → expected source: GitHub (active now)
+// DOCUMENTATION → expected source: FairTraze Docs (planned — Phase D)
+export type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
+
+export interface MemberRoleInfo {
+  githubUsername:  string;
+  functionalRoles: FunctionalRole[];
+  isLeader:        boolean;
+  // Soft informational note for the instructor when a member's activity doesn't match
+  // their assigned role.  Never a contribution flag; never changes any score.
+  // null = no mismatch (or role not traceable yet)
+  mismatchNote: string | null;
+}
+
 export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";
 
 export interface ScoredMember {
@@ -85,6 +100,17 @@ export interface ScoringWeights {
   activeDays: number;
 }
 
+export interface ScoringThresholds {
+  freeRider: number;      // fraction of equal share; below → free-rider flag (default 0.5)
+  overload: number;       // multiple of equal share; above → overload flag (default 1.75)
+  deadlineDriven: number; // lastPhaseRatio above this → deadline-driven flag (default 0.6)
+}
+
+export interface ProjectScoringConfig {
+  weights: ScoringWeights;
+  thresholds: ScoringThresholds;
+}
+
 // API shapes
 
 export interface AnalyzeResponse {
@@ -109,6 +135,8 @@ export interface ProjectSummaryItem {
   groupName: string;      // student team name, e.g. "Group 1" — primary instructor-facing identifier
   name: string;           // app/project name, e.g. "FairTraze AI"
   assignmentLabel: string;
+  classId: number | null;      // ClassSection.id — for breadcrumb navigation
+  assignmentId: number | null; // Assignment.id   — for breadcrumb navigation
   memberCount: number;
   teamHealth: TeamHealth | null;
   gini: number | null;
@@ -120,6 +148,8 @@ export interface ProjectSummaryItem {
   flagsPresent: Flag[];
   lastAnalyzedAt: string | null;
   isAnalyzed: boolean;
+  membershipChangedAt: string | null; // set when members are added/removed; compare to lastAnalyzedAt to detect stale reports
+  scoringConfigChangedAt: string | null; // set when scoring config changes after last analyze
 }
 
 // Stored report — returned by GET /api/projects/:id/report.
@@ -134,4 +164,12 @@ export interface StoredReportResponse {
   narrative: string | null;
   unmatchedGitHubLogins: string[];
   sourceType: string | null; // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment)
+  // Scoring config stored with the report (what produced these numbers)
+  scoringConfig: ProjectScoringConfig | null;
+  // Current project config (may differ from scoringConfig if changed after last analyze)
+  currentConfig: ProjectScoringConfig;
+  // Set when config was changed after the last analysis run; cleared by re-analyze
+  scoringConfigChangedAt: string | null;
+  // Functional roles + soft mismatch notes per member (context only — never changes scores)
+  memberRoles: MemberRoleInfo[];
 }

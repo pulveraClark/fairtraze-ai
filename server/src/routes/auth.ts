@@ -50,7 +50,7 @@ authRouter.post("/api/auth/register", async (req, res) => {
 
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null },
   });
 });
 
@@ -77,11 +77,16 @@ authRouter.post("/api/auth/login", async (req, res) => {
     return;
   }
 
+  if (!user.active) {
+    res.status(403).json({ error: "Your account has been deactivated. Contact an administrator." });
+    return;
+  }
+
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null },
   });
 });
 
@@ -101,6 +106,11 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
   if (!user) {
     res.status(401).json({ error: "User no longer exists" });
+    return;
+  }
+
+  if (!user.active) {
+    res.status(403).json({ error: "Account deactivated" });
     return;
   }
 

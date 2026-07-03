@@ -124,3 +124,29 @@ body {
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+
+/* ── Print / Export styles ──────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 16mm 14mm 22mm 14mm;
+    size: A4 portrait;
+  }
+
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Prevent orphaned table rows */
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Keep section headings with their first content */
+  h1, h2, h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}
