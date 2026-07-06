@@ -34,7 +34,7 @@ async function main() {
   console.log(`Found ${projects.length} project(s). Starting pre-generation…\n`);
 
   for (const project of projects) {
-    console.log(`▸ ${project.name} (${project.repoUrl})`);
+    console.log(`▸ ${project.groupName || `Group ${project.id}`} (${project.repoUrl})`);
 
     // ── 1. Fetch GitHub data ──────────────────────────────────────────────
     let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
@@ -75,7 +75,7 @@ async function main() {
     // ── 3. Generate narrative ─────────────────────────────────────────────
     let narrative: string;
     try {
-      narrative = await generateFairnessNarrative(project.name, report);
+      narrative = await generateFairnessNarrative(project.groupName || `Group ${project.id}`, report);
       console.log(`  ✓ Narrative generated (${narrative.length} chars)`);
     } catch (err) {
       console.error(`  ✗ Gemini failed: ${(err as { message?: string }).message ?? String(err)}`);

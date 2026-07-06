@@ -223,7 +223,7 @@ analyzeRouter.post("/api/projects/:id/narrative", async (req, res) => {
 
   // Generate via Gemini
   try {
-    const narrative = await generateFairnessNarrative(project.name, stored.report);
+    const narrative = await generateFairnessNarrative(project.groupName || `Group ${projectId}`, stored.report);
     await prisma.report.update({
       where: { id: latestReport.id },
       data: { content: JSON.stringify({ ...stored, narrative }) },

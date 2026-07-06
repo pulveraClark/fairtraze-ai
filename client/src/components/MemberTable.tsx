@@ -1,15 +1,9 @@
 import React, { useState } from "react";
 import type { ReactNode } from "react";
-import type { ScoredMember, Flag, MemberRoleInfo } from "@shared/types";
-import { InfoTooltip, TipList } from "./InfoTooltip";
+import type { ScoredMember, MemberRoleInfo } from "@shared/types";
+import { InfoTooltip, TipList, WeightList } from "./InfoTooltip";
+import { FlagTag } from "./FlagTag";
 import { useRouter } from "../router";
-
-const flagStyles: Record<Flag, string> = {
-  inactive:          "bg-red-100 text-red-700",
-  "free-rider":      "bg-red-100 text-red-700",
-  overload:          "bg-orange-100 text-orange-700",
-  "deadline-driven": "bg-yellow-100 text-yellow-700",
-};
 
 const rolePill: Record<string, string> = {
   DEVELOPER:     "bg-indigo-50 border-indigo-200 text-indigo-700",
@@ -50,17 +44,20 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 function DetailSection({
   label,
   tooltip,
+  wide,
   children,
 }: {
   label: string;
   tooltip?: ReactNode;
+  // WeightList tooltips size to their own content so aligned columns never wrap
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div>
       <p className="font-semibold text-slate-400 uppercase tracking-wide mb-1.5 text-[10px] flex items-center">
         {label}
-        {tooltip && <InfoTooltip label={`About ${label}`} content={tooltip} />}
+        {tooltip && <InfoTooltip label={`About ${label}`} content={tooltip} width={wide ? "max-content" : undefined} />}
       </p>
       <div className="space-y-0.5">{children}</div>
     </div>
@@ -125,13 +122,14 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {members.map((m) => {
+          {members.map((m, i) => {
             const expanded = expandedRows.has(m.githubUsername);
+            const stripe   = i % 2 === 0 ? "bg-white" : "bg-gray-50";
             return (
               <React.Fragment key={m.githubUsername}>
                 {/* Primary row */}
                 <tr
-                  className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  className={`${stripe} hover:bg-slate-100 transition-colors cursor-pointer`}
                   onClick={() => toggleRow(m.githubUsername)}
                 >
                   <td className="px-6 py-3">
@@ -180,9 +178,7 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
                             const outcome = resolvedFlagOutcomes?.get(m.studentName)?.get(flag);
                             return (
                               <span key={flag} className="inline-flex items-center gap-1 flex-wrap">
-                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${flagStyles[flag]}`}>
-                                  {flag}
-                                </span>
+                                <FlagTag flag={flag} />
                                 {outcome === "RESOLVED" && (
                                   <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     Reviewed — Accepted
@@ -233,12 +229,16 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-4">
                         <DetailSection
                           label="Activity"
+                          wide
                           tooltip={
-                            <TipList items={[
-                              ["Commits", "commits made"],
-                              ["Churn", "lines added + deleted"],
-                              ["Active Days", "distinct days committed"],
-                            ]} />
+                            <WeightList
+                              header="How activity is measured"
+                              items={[
+                                ["Commits", "log-scaled (extra commits add less over time)"],
+                                ["Churn", "raw activity volume (not directly scored)"],
+                                ["Active Days", "1 point per distinct day committed"],
+                              ]}
+                            />
                           }
                         >
                           <Stat label="Commits" value={m.commits} />
@@ -248,13 +248,17 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
 
                         <DetailSection
                           label="Significance"
+                          wide
                           tooltip={
-                            <TipList items={[
-                              ["Weighted Lines", "lines counted by importance"],
-                              ["Self-Churn", "% of own lines later deleted"],
-                              ["Code Lines", "actual code added"],
-                              ["Comment Lines", "comments added (counted lightly)"],
-                            ]} />
+                            <WeightList
+                              header="Line scoring weights"
+                              items={[
+                                ["Weighted Lines", "combined score after all weights applied"],
+                                ["Self-Churn", "up to 0.5× penalty on own deleted lines"],
+                                ["Code Lines Added", "1.0 per line (full score)"],
+                                ["Comment Lines Added", "0.25 per line"],
+                              ]}
+                            />
                           }
                         >
                           <Stat
@@ -271,13 +275,17 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
 
                         <DetailSection
                           label="Commit Impact"
+                          wide
                           tooltip={
-                            <TipList items={[
-                              ["Structural", "new files / many files touched"],
-                              ["Functional", "work on existing code"],
-                              ["Cosmetic", "formatting / non-code edits"],
-                              ["Trivial", "tiny edits, e.g. a typo"],
-                            ]} />
+                            <WeightList
+                              header="Commit impact multiplier"
+                              items={[
+                                ["Structural", "1.5× (major changes — highest weight)"],
+                                ["Functional", "1.0× (normal code changes)"],
+                                ["Cosmetic", "0.5× (formatting, whitespace)"],
+                                ["Trivial", "0.2× (very small changes)"],
+                              ]}
+                            />
                           }
                         >
                           <Stat label="Structural" value={m.commitImpactBreakdown.structural} />
@@ -288,15 +296,19 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
 
                         <DetailSection
                           label="File Types"
+                          wide
                           tooltip={
-                            <TipList items={[
-                              ["src", "source code (counts fully)"],
-                              ["test", "test files"],
-                              ["style", "CSS/SCSS"],
-                              ["docs", "documentation"],
-                              ["config", "settings (counts little)"],
-                              ["other", "uncategorized (generated files excluded)"],
-                            ]} />
+                            <WeightList
+                              header="File weight per line"
+                              items={[
+                                ["src", "1.0 per line (source code — full score)"],
+                                ["test", "0.8 per line"],
+                                ["style", "0.7 per line"],
+                                ["docs", "0.6 per line"],
+                                ["config", "0.3 per line"],
+                                ["other", "0.0 per line (auto-generated, not counted)"],
+                              ]}
+                            />
                           }
                         >
                           <Stat label="src"    value={m.fileTypeBreakdown.source} />

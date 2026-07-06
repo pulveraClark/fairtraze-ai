@@ -31,7 +31,6 @@ interface ClassInfo {
 interface LifecycleGroup {
   id: number;
   groupName: string;
-  name: string;
   repoUrl: string;
   memberCount: number;
   lastAnalyzedAt: string | null;

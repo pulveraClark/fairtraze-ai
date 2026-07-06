@@ -158,7 +158,7 @@ async function main() {
     update: { groupName: "Group 1", name: "FairTraze AI", repoUrl: "https://github.com/lenizochristian8-afk/Sysarch", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
     create: { groupName: "Group 1", name: "FairTraze AI", repoUrl: "https://github.com/lenizochristian8-afk/Sysarch", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
   });
-  console.log(`Project: ${project.name} (id=${project.id}, assignmentId=${project.assignmentId})`);
+  console.log(`Project: ${project.groupName} (id=${project.id}, assignmentId=${project.assignmentId})`);
 
   const members = await Promise.all([
     prisma.member.upsert({
@@ -197,7 +197,7 @@ async function main() {
     update: { groupName: "Group 2", name: "PersonalFinanceTracker", repoUrl: "https://github.com/arcebal/PersonalFinanceTracker.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
     create: { groupName: "Group 2", name: "PersonalFinanceTracker", repoUrl: "https://github.com/arcebal/PersonalFinanceTracker.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
   });
-  console.log(`Project: ${project2.name} (id=${project2.id}, assignmentId=${project2.assignmentId})`);
+  console.log(`Project: ${project2.groupName} (id=${project2.id}, assignmentId=${project2.assignmentId})`);
 
   const members2 = await Promise.all([
     prisma.member.upsert({
@@ -221,7 +221,7 @@ async function main() {
     update: { groupName: "Group 3", name: "uConnect", repoUrl: "https://github.com/eyronc/uConnect.git", assignmentLabel: "IT-ELEC 2 — IT Elective 2", assignmentId: assignmentElec.id },
     create: { groupName: "Group 3", name: "uConnect", repoUrl: "https://github.com/eyronc/uConnect.git", assignmentLabel: "IT-ELEC 2 — IT Elective 2", assignmentId: assignmentElec.id },
   });
-  console.log(`Project: ${project3.name} (id=${project3.id}, assignmentId=${project3.assignmentId})`);
+  console.log(`Project: ${project3.groupName} (id=${project3.id}, assignmentId=${project3.assignmentId})`);
 
   const members3 = await Promise.all([
     prisma.member.upsert({
@@ -250,7 +250,7 @@ async function main() {
     update: { groupName: "PorkChop", name: "Porkhub", repoUrl: "https://github.com/eyronc/porkhub-ui.git", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
     create: { groupName: "PorkChop", name: "Porkhub", repoUrl: "https://github.com/eyronc/porkhub-ui.git", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
   });
-  console.log(`Project: ${project4.name} (id=${project4.id}, assignmentId=${project4.assignmentId})`);
+  console.log(`Project: ${project4.groupName} (id=${project4.id}, assignmentId=${project4.assignmentId})`);
 
   const members4 = await Promise.all([
     prisma.member.upsert({
@@ -274,7 +274,7 @@ async function main() {
     update: { groupName: "SmartBebe", name: "SkillSmart", repoUrl: "https://github.com/eyronc/SkillSmart.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
     create: { groupName: "SmartBebe", name: "SkillSmart", repoUrl: "https://github.com/eyronc/SkillSmart.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
   });
-  console.log(`Project: ${project5.name} (id=${project5.id}, assignmentId=${project5.assignmentId})`);
+  console.log(`Project: ${project5.groupName} (id=${project5.id}, assignmentId=${project5.assignmentId})`);
 
   const members5 = await Promise.all([
     prisma.member.upsert({

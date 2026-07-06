@@ -125,6 +125,16 @@ body {
   animation: float 6s ease-in-out infinite;
 }
 
+/* ── Toast / success feedback ──────────────────────────────────────────── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.15s ease-out both;
+}
+
 /* ── Print / Export styles ──────────────────────────────────────────────── */
 @media print {
   @page {

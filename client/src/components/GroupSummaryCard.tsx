@@ -1,18 +1,12 @@
-import type { ProjectSummaryItem, Flag, TeamHealth } from "@shared/types";
+import type { ProjectSummaryItem, TeamHealth } from "@shared/types";
 import { ContributionMiniBar } from "./ContributionMiniBar";
+import { FlagTag } from "./FlagTag";
 import { useRouter } from "../router";
 
 const HEALTH_BADGE: Record<TeamHealth, string> = {
   Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
   "Moderate Risk": "bg-amber-100 text-amber-800 border border-amber-300",
   "High Risk":     "bg-red-100 text-red-800 border border-red-300",
-};
-
-const FLAG_CHIP: Record<Flag, string> = {
-  inactive:          "bg-red-100 text-red-700 border border-red-200",
-  "free-rider":      "bg-red-100 text-red-700 border border-red-200",
-  overload:          "bg-orange-100 text-orange-700 border border-orange-200",
-  "deadline-driven": "bg-yellow-100 text-yellow-700 border border-yellow-200",
 };
 
 interface Props {
@@ -41,7 +35,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm font-semibold text-slate-600">{item.groupName}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{item.name} · {item.memberCount} members</p>
+            <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
           </div>
           <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
             Not analyzed
@@ -85,7 +79,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">
             {item.groupName}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">{item.name} · {item.memberCount} members</p>
+          <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
         </div>
         {item.teamHealth && (
           <span
@@ -115,12 +109,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
       {item.flagsPresent.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {item.flagsPresent.map((flag) => (
-            <span
-              key={flag}
-              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${FLAG_CHIP[flag]}`}
-            >
-              {flag}
-            </span>
+            <FlagTag key={flag} flag={flag} />
           ))}
         </div>
       )}

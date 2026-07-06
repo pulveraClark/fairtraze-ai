@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
+import { defaultFunctionalRoles } from "../lib/roles.js";
 import type { TeamReport } from "@shared/types.js";
 
 export const joinRouter = Router();
@@ -112,7 +113,6 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
             ? {
                 id:        myProject.id,
                 groupName: myProject.groupName || `Group ${myProject.id}`,
-                name:      myProject.name,
                 repoUrl:   myProject.repoUrl,
                 role:      myMembership.role,
                 report:    myProject.reports[0]
@@ -234,7 +234,6 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
         ? {
             id:                   myProject.id,
             groupName:            myProject.groupName || `Group ${myProject.id}`,
-            name:                 myProject.name,
             repoUrl:              myProject.repoUrl,
             role:                 myMembership.role,
             pendingRequestCount:  pendingCountByProject.get(myProject.id) ?? 0,
@@ -407,14 +406,19 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
   const project = await prisma.project.create({
     data: {
       groupName:    trimmedName,
-      name:         trimmedName,
+      name:         trimmedName, // legacy column, kept in sync with groupName — not surfaced anywhere
       repoUrl:      result.data.repoUrl.trim(),
       assignmentId: assignment.id,
     },
   });
 
   await prisma.groupMembership.create({
-    data: { userId, projectId: project.id, role: "LEADER" },
+    data: {
+      userId,
+      projectId:       project.id,
+      role:            "LEADER",
+      functionalRoles: defaultFunctionalRoles(assignment.sourceType),
+    },
   });
 
   await prisma.member.create({
@@ -499,7 +503,12 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
 
   await prisma.$transaction([
     prisma.groupMembership.create({
-      data: { userId, projectId: project.id, role: "MEMBER" },
+      data: {
+        userId,
+        projectId:       project.id,
+        role:            "MEMBER",
+        functionalRoles: defaultFunctionalRoles(project.assignment.sourceType),
+      },
     }),
     prisma.project.update({
       where: { id: project.id },
@@ -651,7 +660,6 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     project: {
       id: project.id,
       groupName: project.groupName || `Group ${project.id}`,
-      name:      project.name,
       repoUrl:   project.repoUrl,
     },
     membership: {

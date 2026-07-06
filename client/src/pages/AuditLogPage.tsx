@@ -145,8 +145,8 @@ export function AuditLogPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {entries.map((e) => (
-                    <tr key={e.id} className="hover:bg-slate-50/60 transition-colors">
+                  {entries.map((e, i) => (
+                    <tr key={e.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-slate-100 transition-colors`}>
                       <td className="px-5 py-3.5">
                         <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ACTION_BADGE[e.action] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
                           {e.action.replace(/_/g, " ")}

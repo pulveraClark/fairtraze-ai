@@ -132,8 +132,7 @@ export interface NarrativeResponse {
 // Never calls GitHub; reads stored report data only.
 export interface ProjectSummaryItem {
   projectId: number;
-  groupName: string;      // student team name, e.g. "Group 1" — primary instructor-facing identifier
-  name: string;           // app/project name, e.g. "FairTraze AI"
+  groupName: string;      // student team name, e.g. "Group 1" — the group's single name
   assignmentLabel: string;
   classId: number | null;      // ClassSection.id — for breadcrumb navigation
   assignmentId: number | null; // Assignment.id   — for breadcrumb navigation
@@ -156,8 +155,7 @@ export interface ProjectSummaryItem {
 // Reads the latest persisted analysis; no GitHub fetch.
 export interface StoredReportResponse {
   projectId: number;
-  groupName: string;  // student team name — primary identifier
-  name: string;       // app/project name
+  groupName: string;  // student team name — the group's single name
   repoUrl: string;
   analyzedAt: string;
   report: TeamReport;
@@ -170,6 +168,8 @@ export interface StoredReportResponse {
   currentConfig: ProjectScoringConfig;
   // Set when config was changed after the last analysis run; cleared by re-analyze
   scoringConfigChangedAt: string | null;
+  // Set when members were added/removed after the last analysis run; cleared by re-analyze
+  membershipChangedAt: string | null;
   // Functional roles + soft mismatch notes per member (context only — never changes scores)
   memberRoles: MemberRoleInfo[];
 }

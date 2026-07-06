@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { defaultFunctionalRoles } from "../lib/roles.js";
 
 export const groupsRouter = Router();
 
@@ -82,7 +83,6 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
   res.json({
     id:          project.id,
     groupName:   project.groupName || `Group ${project.id}`,
-    name:        project.name,
     repoUrl:     project.repoUrl,
     sourceType:  project.assignment?.sourceType ?? null,
     maxGroupSize: project.assignment?.maxGroupSize ?? null,
@@ -96,6 +96,50 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
       joinedAt:        m.joinedAt.toISOString(),
     })),
   });
+});
+
+// PATCH /api/groups/:id — rename the group (leader or instructor only)
+groupsRouter.patch("/api/groups/:id", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+
+  const bodyResult = z.object({ groupName: z.string().min(1) }).safeParse(req.body);
+  const trimmed = bodyResult.success ? bodyResult.data.groupName.trim() : "";
+  if (!bodyResult.success || !trimmed) {
+    res.status(400).json({ error: "Group name is required." });
+    return;
+  }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can rename the group." });
+    return;
+  }
+
+  if (project.assignmentId) {
+    const nameTaken = await prisma.project.findFirst({
+      where: { assignmentId: project.assignmentId, groupName: trimmed, NOT: { id: project.id } },
+    });
+    if (nameTaken) {
+      res.status(409).json({ error: "That group name is already taken. Choose a different name." });
+      return;
+    }
+  }
+
+  const updated = await prisma.project.update({
+    where: { id: idResult.data },
+    data:  { groupName: trimmed },
+  });
+
+  res.json({ id: updated.id, groupName: updated.groupName });
 });
 
 // POST /api/groups/:id/reassign-leader — demote current leader, promote chosen member
@@ -188,6 +232,11 @@ groupsRouter.put("/api/groups/:id/members/:userId/functional-roles", requireAuth
   }
 
   const functionalRoles = [...new Set(bodyResult.data.functionalRoles)];
+
+  if (functionalRoles.length === 0) {
+    res.status(400).json({ error: "At least one functional role is required" });
+    return;
+  }
 
   // Auto-decline any pending suggestion from that member since the leader/instructor is overriding directly
   await prisma.roleSuggestion.updateMany({
@@ -594,7 +643,12 @@ groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Re
 
   await prisma.$transaction([
     prisma.groupMembership.create({
-      data: { userId: joinReq.userId, projectId: joinReq.projectId, role: "MEMBER" },
+      data: {
+        userId:          joinReq.userId,
+        projectId:       joinReq.projectId,
+        role:            "MEMBER",
+        functionalRoles: defaultFunctionalRoles(project.assignment?.sourceType),
+      },
     }),
     prisma.project.update({
       where: { id: joinReq.projectId },

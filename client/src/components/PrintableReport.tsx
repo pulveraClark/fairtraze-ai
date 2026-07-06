@@ -42,7 +42,7 @@ interface Props {
 }
 
 export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
-  const { report, groupName, name, repoUrl, analyzedAt, sourceType } = stored;
+  const { report, groupName, repoUrl, analyzedAt, sourceType } = stored;
   const healthStyle = HEALTH_STYLE[report.teamHealth] ?? HEALTH_STYLE["Healthy"];
   const equalShare  = report.memberCount > 0 ? (100 / report.memberCount).toFixed(1) : "—";
   const analysisDate = new Date(analyzedAt).toLocaleString();
@@ -54,7 +54,6 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
 
   const summary = [
     { label: "Group",          value: groupName },
-    { label: "App / Project",  value: name },
     { label: "Repository",     value: repoDisplay },
     { label: "Class / Subject",value: assignmentLabel || "—" },
     { label: "Source",         value: SOURCE_LABEL[sourceType ?? ""] ?? "GitHub" },
@@ -128,7 +127,6 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
         </h1>
         <p style={{ fontSize: 12.5, margin: "5px 0 0", opacity: 0.85, fontWeight: 600 }}>
           {groupName}
-          {name && groupName !== name && <> · {name}</>}
         </p>
         {assignmentLabel && (
           <p style={{ fontSize: 10.5, margin: "3px 0 0", opacity: 0.55, fontWeight: 400 }}>

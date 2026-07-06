@@ -4,6 +4,7 @@ import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
 import { GroupManageModal } from "../components/GroupManageModal";
+import { FlagTag } from "../components/FlagTag";
 import type { Flag } from "@shared/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ interface RoleSuggestionData {
 interface GroupDetail {
   classSection: { id: number; subjectCode: string; subjectName: string; course: string; edpCode: string; };
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; };
-  project:      { id: number; groupName: string; name: string; repoUrl: string; };
+  project:      { id: number; groupName: string; repoUrl: string; };
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
   report: {
@@ -220,6 +221,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [suggestDraft, setSuggestDraft]   = useState<string[]>([]);
   const [suggestBusy, setSuggestBusy]     = useState(false);
   const [suggestErr, setSuggestErr]       = useState("");
+  // Group name rename (leader only)
+  const [editingGroupName, setEditingGroupName] = useState(false);
+  const [groupNameDraft, setGroupNameDraft]     = useState("");
+  const [groupNameBusy, setGroupNameBusy]       = useState(false);
+  const [groupNameErr, setGroupNameErr]         = useState("");
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -284,6 +290,36 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       setSuggestErr("Network error — could not submit suggestion.");
     } finally {
       setSuggestBusy(false);
+    }
+  }
+
+  function startEditGroupName() {
+    if (!data) return;
+    setGroupNameDraft(data.project.groupName);
+    setGroupNameErr("");
+    setEditingGroupName(true);
+  }
+
+  async function handleSaveGroupName() {
+    if (!token || !data) return;
+    const trimmed = groupNameDraft.trim();
+    if (!trimmed) { setGroupNameErr("Group name is required."); return; }
+    setGroupNameBusy(true);
+    setGroupNameErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ groupName: trimmed }),
+      });
+      const json = await res.json() as { groupName?: string; error?: string };
+      if (!res.ok) { setGroupNameErr(json.error ?? "Could not update name."); return; }
+      setData((d) => d ? { ...d, project: { ...d.project, groupName: json.groupName ?? trimmed } } : d);
+      setEditingGroupName(false);
+    } catch {
+      setGroupNameErr("Network error — could not update name.");
+    } finally {
+      setGroupNameBusy(false);
     }
   }
 
@@ -378,7 +414,51 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm font-semibold text-slate-800 truncate">My Project</h1>
+                {editingGroupName ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={groupNameDraft}
+                      onChange={(e) => { setGroupNameDraft(e.target.value); setGroupNameErr(""); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void handleSaveGroupName();
+                        if (e.key === "Escape") setEditingGroupName(false);
+                      }}
+                      disabled={groupNameBusy}
+                      className="text-sm font-semibold text-slate-800 border border-indigo-300 rounded-lg px-2 py-1 max-w-[220px] focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+                    />
+                    <button
+                      onClick={() => void handleSaveGroupName()}
+                      disabled={groupNameBusy}
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-1.5 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                    >
+                      {groupNameBusy ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setEditingGroupName(false)}
+                      disabled={groupNameBusy}
+                      className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <h1 className="text-sm font-semibold text-slate-800 truncate">{project.groupName}</h1>
+                    {membership.role === "LEADER" && (
+                      <button
+                        onClick={startEditGroupName}
+                        title="Rename group"
+                        aria-label="Rename group"
+                        className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+                      >
+                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                   {SOURCE_LABEL[assignment.sourceType] ?? assignment.sourceType}
                 </span>
@@ -390,8 +470,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   {membership.role === "LEADER" ? "Leader" : "Member"}
                 </span>
               </div>
+              {editingGroupName && groupNameErr && (
+                <p className="text-[11px] text-red-600 mt-1">{groupNameErr}</p>
+              )}
               <p className="text-xs text-slate-400 mt-0.5">
-                {classSection.subjectName} · {project.groupName}
+                {classSection.subjectName}
                 {assignment.deadline && (
                   <> · Due {new Date(assignment.deadline).toLocaleDateString()}</>
                 )}
@@ -597,7 +680,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       <div>
                         <h2 className="text-sm font-semibold text-slate-800">Your contribution share</h2>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {project.groupName} · {project.name} · {report.memberCount} members
+                          {project.groupName} · {report.memberCount} members
                         </p>
                       </div>
                       <span className="text-3xl font-bold text-indigo-600">{mySharePct}%</span>
@@ -719,9 +802,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <span className="text-[11px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5">
-                                    {flag}
-                                  </span>
+                                  <FlagTag flag={flag} />
                                   {(() => {
                                     const outcome = getFlagDisputeOutcome(flag, dispute);
                                     if (!outcome) return null;

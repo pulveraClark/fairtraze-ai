@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { ProjectScoringConfig } from "@shared/types";
+import { useToast } from "./Toast";
 
 const DEFAULTS: ProjectScoringConfig = {
   weights:    { commits: 0.4, lines: 0.4, activeDays: 0.2 },
@@ -18,6 +19,7 @@ function pct(v: number) {
 }
 
 export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSaved }: Props) {
+  const { showSuccessToast } = useToast();
   const [commits,        setCommits]        = useState(currentConfig.weights.commits);
   const [lines,          setLines]          = useState(currentConfig.weights.lines);
   const [activeDays,     setActiveDays]     = useState(currentConfig.weights.activeDays);
@@ -69,6 +71,7 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
         return;
       }
       onSaved(data.config!);
+      showSuccessToast("Scoring settings saved.");
     } catch {
       setSaveError("Network error — could not reach the server.");
     } finally {
@@ -133,8 +136,8 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
               />
             </div>
 
-            {/* Sum indicator */}
-            <div className={`mt-3 flex items-center gap-2 text-xs font-medium rounded-lg px-3 py-2 ${
+            {/* Sum indicator — real-time; blocks Save until the weights sum to exactly 1.0 */}
+            <div className={`mt-3 flex items-center gap-2 text-xs font-semibold rounded-lg px-3 py-2 ${
               sumOk
                 ? "bg-green-50 text-green-700 border border-green-200"
                 : "bg-red-50 text-red-700 border border-red-200"
@@ -142,7 +145,7 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
               <span className="text-base leading-none">{sumOk ? "✓" : "✕"}</span>
               <span>
                 Weights sum: <strong>{weightSum.toFixed(3)}</strong>
-                {!sumOk && " — must equal 1.000"}
+                {!sumOk && " — Weights must sum to 1.0."}
               </span>
             </div>
           </section>

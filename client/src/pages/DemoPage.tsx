@@ -26,6 +26,7 @@ interface LifecycleClass {
   course: string;
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
+  joinCode: string | null;
   instructorId: number;
   createdAt: string;
   assignments: LifecycleAssignment[];
@@ -511,7 +512,7 @@ export function DemoPage() {
       )
     : [];
   const matchedGroups = isSearchMode
-    ? summary.filter((i) => i.groupName.toLowerCase().includes(q) || i.name.toLowerCase().includes(q))
+    ? summary.filter((i) => i.groupName.toLowerCase().includes(q))
     : [];
 
   return (
@@ -681,6 +682,7 @@ export function DemoPage() {
                   onClick={() => navigate(`/class/${cls.id}`)}
                   edpCode={cls.edpCode || undefined}
                   classType={cls.type}
+                  joinCode={cls.joinCode || undefined}
                   onDelete={() => { setDeleteTarget(cls); setDeleteError(null); }}
                   projectCount={cls.assignments.length}
                 />

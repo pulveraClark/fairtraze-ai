@@ -69,7 +69,6 @@ projectsRouter.get("/api/projects/summary", async (_req, res) => {
     return {
       projectId:    p.id,
       groupName:    p.groupName || `Group ${p.id}`,
-      name:         p.name,
       assignmentLabel: p.assignmentLabel || "General Assignment",
       classId:      p.assignment?.classSectionId ?? null,
       assignmentId: p.assignment?.id ?? null,
@@ -164,7 +163,6 @@ projectsRouter.get("/api/projects/:id/report", async (req, res) => {
   const response: StoredReportResponse = {
     projectId,
     groupName: project.groupName || `Group ${projectId}`,
-    name: project.name,
     repoUrl: project.repoUrl,
     analyzedAt: latestReport.generatedAt.toISOString(),
     report: stored.report,
@@ -174,6 +172,7 @@ projectsRouter.get("/api/projects/:id/report", async (req, res) => {
     scoringConfig:          stored.scoringConfig ?? null,
     currentConfig:          currentCfg,
     scoringConfigChangedAt: project.scoringConfigChangedAt?.toISOString() ?? null,
+    membershipChangedAt:    project.membershipChangedAt?.toISOString() ?? null,
     memberRoles,
   };
 

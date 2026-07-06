@@ -348,10 +348,11 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {displayedUsers.map((u) => {
+                  {displayedUsers.map((u, i) => {
                     const isSelf = u.id === selfId;
+                    const stripe = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                     return (
-                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-50/60 ${!u.active ? "opacity-50" : ""}`}>
+                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-100 ${stripe} ${!u.active ? "opacity-50" : ""}`}>
 
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">
