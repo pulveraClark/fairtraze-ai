@@ -14,6 +14,8 @@ function projectConfig(p: {
   freeRiderThreshold: number;
   overloadThreshold: number;
   deadlineDrivenThreshold: number;
+  weightGithub: number;
+  weightDocs: number;
 }): ProjectScoringConfig {
   return {
     weights: {
@@ -25,6 +27,12 @@ function projectConfig(p: {
       freeRider:      p.freeRiderThreshold,
       overload:       p.overloadThreshold,
       deadlineDriven: p.deadlineDrivenThreshold,
+    },
+    // Always populated on currentConfig regardless of sourceType — only meaningful/shown for
+    // COMBINED projects (see client/src/components/ScoringSettingsModal.tsx).
+    blend: {
+      wGitHub: p.weightGithub,
+      wDocs:   p.weightDocs,
     },
   };
 }
@@ -44,7 +52,7 @@ projectsRouter.get("/api/projects/summary", async (_req, res) => {
     include: {
       members: true,
       reports: { orderBy: { generatedAt: "desc" }, take: 1 },
-      assignment: { select: { id: true, classSectionId: true } },
+      assignment: { select: { id: true, classSectionId: true, sourceType: true } },
     },
     orderBy: { id: "asc" },
   });
@@ -72,6 +80,7 @@ projectsRouter.get("/api/projects/summary", async (_req, res) => {
       assignmentLabel: p.assignmentLabel || "General Assignment",
       classId:      p.assignment?.classSectionId ?? null,
       assignmentId: p.assignment?.id ?? null,
+      sourceType:   p.assignment?.sourceType ?? null,
       memberCount:  p.members.length,
       teamHealth:   (latestReport?.teamHealth as TeamHealth | null) ?? null,
       gini:         latestReport?.gini ?? null,
@@ -200,6 +209,10 @@ projectsRouter.patch("/api/projects/:id/config", ...requireRole("INSTRUCTOR"), a
       overload:       z.number().min(1),
       deadlineDriven: z.number().min(0).max(1),
     }),
+    blend: z.object({
+      wGitHub: z.number().min(0).max(1),
+      wDocs:   z.number().min(0).max(1),
+    }),
   });
 
   const parsed = bodySchema.safeParse(req.body);
@@ -208,13 +221,23 @@ projectsRouter.patch("/api/projects/:id/config", ...requireRole("INSTRUCTOR"), a
     return;
   }
 
-  const { weights, thresholds } = parsed.data;
+  const { weights, thresholds, blend } = parsed.data;
 
   // Validate weights sum to 1.0 (tolerance ±0.001 for floating-point rounding)
   const weightSum = weights.commits + weights.lines + weights.activeDays;
   if (Math.abs(weightSum - 1.0) > 0.001) {
     res.status(400).json({
       error: `Weights must sum to 1.0 (got ${weightSum.toFixed(3)}). Adjust the three values so they add up to exactly 1.`,
+    });
+    return;
+  }
+
+  // Validate the GitHub/Docs blend sums to 1.0 (only meaningful for COMBINED projects, but
+  // always validated — same pattern as weights above)
+  const blendSum = blend.wGitHub + blend.wDocs;
+  if (Math.abs(blendSum - 1.0) > 0.001) {
+    res.status(400).json({
+      error: `Blend weights must sum to 1.0 (got ${blendSum.toFixed(3)}). Adjust wGitHub/wDocs so they add up to exactly 1.`,
     });
     return;
   }
@@ -245,6 +268,8 @@ projectsRouter.patch("/api/projects/:id/config", ...requireRole("INSTRUCTOR"), a
       freeRiderThreshold:      thresholds.freeRider,
       overloadThreshold:       thresholds.overload,
       deadlineDrivenThreshold: thresholds.deadlineDriven,
+      weightGithub:            blend.wGitHub,
+      weightDocs:              blend.wDocs,
       scoringConfigChangedAt:  new Date(),
     },
   });

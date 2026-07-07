@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { ReactNode } from "react";
-import type { ScoredMember, MemberRoleInfo } from "@shared/types";
+import type { ScoredMember, DocumentScoredMember, CombinedScoredMember, AnyScoredMember, MemberRoleInfo } from "@shared/types";
 import { InfoTooltip, TipList, WeightList } from "./InfoTooltip";
 import { FlagTag } from "./FlagTag";
 import { useRouter } from "../router";
@@ -18,13 +18,29 @@ const roleLabel: Record<string, string> = {
 type ResolvedFlagOutcomes = Map<string, Map<string, "RESOLVED" | "DISMISSED">>;
 
 interface Props {
-  members: ScoredMember[];
+  members: AnyScoredMember[];
+  // "document" renders FairTraze Docs stats (sessions/retained text) instead of GitHub stats;
+  // "combined" renders GitHub share + Docs share + blend weights for COMBINED projects.
+  variant?: "github" | "document" | "combined";
   // Set of studentNames that have at least one OPEN dispute (from the instructor's view)
   disputedMembers?: Set<string>;
   // Pre-computed review outcomes per member per flag (RESOLVED → Accepted, DISMISSED → Upheld)
   resolvedFlagOutcomes?: ResolvedFlagOutcomes;
-  // Functional roles + soft mismatch notes per member — context only, never affects scores
+  // Functional roles + soft mismatch notes per member — context only, never affects scores.
+  // GitHub-only concept (DEVELOPER/DOCUMENTATION mismatch); not used in the "document" variant.
   memberRoles?: MemberRoleInfo[];
+}
+
+function isDocumentMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is DocumentScoredMember {
+  return "sessionCount" in m;
+}
+
+function isCombinedMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is CombinedScoredMember {
+  return "githubContributionShare" in m;
+}
+
+function isGithubMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is ScoredMember {
+  return "commits" in m;
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -73,15 +89,15 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, memberRoles }: Props) {
+export function MemberTable({ members, variant = "github", disputedMembers, resolvedFlagOutcomes, memberRoles }: Props) {
   const { navigate } = useRouter();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  function toggleRow(username: string) {
+  function toggleRow(studentName: string) {
     setExpandedRows((prev) => {
       const next = new Set(prev);
-      if (next.has(username)) next.delete(username);
-      else next.add(username);
+      if (next.has(studentName)) next.delete(studentName);
+      else next.add(studentName);
       return next;
     });
   }
@@ -123,18 +139,19 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
         </thead>
         <tbody className="divide-y divide-slate-100">
           {members.map((m, i) => {
-            const expanded = expandedRows.has(m.githubUsername);
+            const expanded = expandedRows.has(m.studentName);
             const stripe   = i % 2 === 0 ? "bg-white" : "bg-gray-50";
             return (
-              <React.Fragment key={m.githubUsername}>
+              <React.Fragment key={m.studentName}>
                 {/* Primary row */}
                 <tr
                   className={`${stripe} hover:bg-slate-100 transition-colors cursor-pointer`}
-                  onClick={() => toggleRow(m.githubUsername)}
+                  onClick={() => toggleRow(m.studentName)}
                 >
                   <td className="px-6 py-3">
                     <div className="font-medium text-slate-800">{m.studentName}</div>
                     {(() => {
+                      if (variant === "document") return null;
                       const info = memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase());
                       if (!info || info.functionalRoles.length === 0) return null;
                       return (
@@ -206,6 +223,7 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
                     </div>
                     {/* Mismatch note — soft context only, distinct from contribution flags */}
                     {(() => {
+                      if (variant === "document") return null;
                       const note = memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase())?.mismatchNote;
                       if (!note) return null;
                       return (
@@ -223,7 +241,135 @@ export function MemberTable({ members, disputedMembers, resolvedFlagOutcomes, me
                 </tr>
 
                 {/* Expandable detail row */}
-                {expanded && (
+                {expanded && variant === "combined" && isCombinedMember(m) && (
+                  <tr className="bg-slate-50/70">
+                    <td colSpan={4} className="px-6 py-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-4">
+                        <DetailSection
+                          label="GitHub Share"
+                          wide
+                          tooltip={
+                            <WeightList
+                              header="GitHub-side contribution"
+                              items={[
+                                ["Share", "this member's share within the GitHub-only pipeline"],
+                                ["Commits", "raw commit count on this source"],
+                              ]}
+                            />
+                          }
+                        >
+                          <Stat label="Share" value={`${(m.githubContributionShare * 100).toFixed(1)}%`} />
+                          <Stat label="Commits" value={m.github?.commits ?? 0} />
+                          <Stat label="Active Days" value={m.github?.activeDays ?? 0} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="Docs Share"
+                          wide
+                          tooltip={
+                            <WeightList
+                              header="FairTraze Docs-side contribution"
+                              items={[
+                                ["Share", "this member's share within the Docs-only pipeline"],
+                                ["Sessions", "distinct editing sessions on this source"],
+                              ]}
+                            />
+                          }
+                        >
+                          <Stat label="Share" value={`${(m.documentContributionShare * 100).toFixed(1)}%`} />
+                          <Stat label="Sessions" value={m.document?.sessionCount ?? 0} />
+                          <Stat label="Retained Characters" value={(m.document?.retainedChars ?? 0).toLocaleString()} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="Blend Weights"
+                          wide
+                          tooltip={
+                            <WeightList
+                              header="How the combined share is built"
+                              items={[
+                                ["wGitHub", "weight applied to the GitHub share"],
+                                ["wDocs", "weight applied to the Docs share"],
+                              ]}
+                            />
+                          }
+                        >
+                          <Stat label="wGitHub" value={`${Math.round(m.wGitHub * 100)}%`} />
+                          <Stat label="wDocs" value={`${Math.round(m.wDocs * 100)}%`} />
+                        </DetailSection>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {expanded && variant !== "combined" && isDocumentMember(m) && (
+                  <tr className="bg-slate-50/70">
+                    <td colSpan={4} className="px-6 py-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-4">
+                        <DetailSection
+                          label="Activity"
+                          wide
+                          tooltip={
+                            <WeightList
+                              header="How activity is measured"
+                              items={[
+                                ["Sessions", "log-scaled (extra sessions add less over time)"],
+                                ["Churn", "raw activity volume (not directly scored)"],
+                                ["Active Days", "1 point per distinct day with a session"],
+                              ]}
+                            />
+                          }
+                        >
+                          <Stat label="Sessions" value={m.sessionCount} />
+                          <Stat label="Churn (chars)" value={m.churn.toLocaleString()} />
+                          <Stat label="Active Days" value={m.activeDays} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="Text Ownership"
+                          wide
+                          tooltip={
+                            <WeightList
+                              header="Retained text scoring"
+                              items={[
+                                ["Retained Characters", "chars this member wrote that survive in the current document"],
+                                ["Self-Churn", "up to 0.5× penalty on own deleted text"],
+                              ]}
+                            />
+                          }
+                        >
+                          <Stat label="Retained Characters" value={m.retainedChars.toLocaleString()} />
+                          <Stat label="Self-Churn" value={`${(m.selfChurnRatio * 100).toFixed(1)}%`} />
+                        </DetailSection>
+
+                        <DetailSection label="Timing" wide>
+                          <Stat label="Last-Phase Ratio" value={`${(m.lastPhaseRatio * 100).toFixed(1)}%`} />
+                        </DetailSection>
+
+                        <DetailSection
+                          label="Edit Significance"
+                          wide
+                          tooltip={
+                            <WeightList
+                              header="Edit type weight"
+                              items={[
+                                ["Substantive", "1.0× (new prose, original content)"],
+                                ["Revision", "0.7× (meaningful rewrite of existing content)"],
+                                ["Formatting", "0.3× (restructuring, reordering, spacing)"],
+                                ["Trivial", "0.1× (typo/punctuation fixes)"],
+                              ]}
+                            />
+                          }
+                        >
+                          <Stat label="Substantive" value={m.editTypeBreakdown.substantive} />
+                          <Stat label="Revision"    value={m.editTypeBreakdown.revision} />
+                          <Stat label="Formatting"  value={m.editTypeBreakdown.formatting} />
+                          <Stat label="Trivial"     value={m.editTypeBreakdown.trivial} />
+                        </DetailSection>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {expanded && variant !== "combined" && isGithubMember(m) && (
                   <tr className="bg-slate-50/70">
                     <td colSpan={4} className="px-6 py-4">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-4">

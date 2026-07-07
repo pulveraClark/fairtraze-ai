@@ -48,6 +48,22 @@ enum JoinRequestStatus {
   DECLINED
 }
 
+enum EditEventType {
+  INSERT
+  DELETE
+}
+
+// Rule-based classification of an INSERT edit's significance (Step 4b). Mirrors the GitHub
+// side's commit-impact classes (structural/functional/cosmetic/trivial). Only populated on
+// INSERT rows — DELETE rows and any edit predating this feature stay null (treated as a
+// neutral 1.0 weight so pre-migration data isn't retroactively penalized).
+enum EditType {
+  SUBSTANTIVE
+  REVISION
+  FORMATTING
+  TRIVIAL
+}
+
 model User {
   id               Int               @id @default(autoincrement())
   email            String            @unique
@@ -65,6 +81,8 @@ model User {
   auditLogs        AuditLog[]
   joinRequests     GroupJoinRequest[]
   roleSuggestions  RoleSuggestion[]
+  editEvents       EditEvent[]
+  editSessions     EditSession[]
 }
 
 model ClassSection {
@@ -139,6 +157,9 @@ model Project {
   freeRiderThreshold       Float             @default(0.5)
   overloadThreshold        Float             @default(1.75)
   deadlineDrivenThreshold  Float             @default(0.6)
+  // COMBINED-only blend weights (GitHub share vs. Docs share); harmless defaults for GITHUB/EDITOR-only projects
+  weightGithub             Float             @default(0.5)
+  weightDocs               Float             @default(0.5)
   scoringConfigChangedAt   DateTime?                         // set when config changes after last analyze; cleared by re-analyze
   createdAt                DateTime          @default(now())
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
@@ -149,6 +170,7 @@ model Project {
   disputes                 Dispute[]
   joinRequests             GroupJoinRequest[]
   roleSuggestions          RoleSuggestion[]
+  document                 Document?
 }
 
 model Member {
@@ -231,4 +253,59 @@ model RoleSuggestion {
   resolvedAt     DateTime?
   user           User              @relation(fields: [userId], references: [id])
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id        Int      @id @default(autoincrement())
+  groupId   Int      @unique
+  // TipTap/ProseMirror document JSON, stringified. Default is a valid empty doc.
+  // Legacy Step-1 field — superseded by yjsState once a collaboration room has run at least once.
+  content   String   @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  // Raw Yjs update state (Y.encodeStateAsUpdate). Source of truth for live collaborative content.
+  yjsState  Bytes?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  editEvents   EditEvent[]
+  editSessions EditSession[]
+}
+
+// Raw log of every insertion/deletion made in a Document's live text, attributed to the
+// authenticated user whose Yjs connection produced the update. position/length are offsets
+// into a flattened plain-text view of the document (concatenated text-node content, no
+// separator between blocks — see server/src/collab/authorshipCapture.ts). No text content is
+// stored: only shape, since the authorship map (Step 3) only needs to know whose insert
+// survives at a position, never what the text says.
+model EditEvent {
+  id         Int           @id @default(autoincrement())
+  documentId Int
+  userId     Int
+  eventType  EditEventType
+  position   Int
+  length     Int
+  timestamp  DateTime      @default(now())
+  // Significance classification (Step 4b) — set at capture time for INSERT events only.
+  editType   EditType?
+  document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id])
+
+  @@index([documentId, timestamp])
+}
+
+// A contiguous burst of editing activity by one user in one Document. Begins on a member's
+// first EditEvent after being idle; ends (endedAt set) after 30 minutes with no further
+// EditEvents from that member. Not FK-linked to EditEvent rows — both are independent logs
+// keyed by (documentId, userId, time).
+model EditSession {
+  id             Int       @id @default(autoincrement())
+  documentId     Int
+  userId         Int
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  // Gross characters inserted during this session (not net of deletions).
+  characterCount Int       @default(0)
+  document       Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id])
+
+  @@index([documentId, userId])
 }

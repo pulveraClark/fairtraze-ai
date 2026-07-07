@@ -5,11 +5,14 @@ import { useToast } from "./Toast";
 const DEFAULTS: ProjectScoringConfig = {
   weights:    { commits: 0.4, lines: 0.4, activeDays: 0.2 },
   thresholds: { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 },
+  blend:      { wGitHub: 0.5, wDocs: 0.5 },
 };
 
 interface Props {
   projectId: number;
   currentConfig: ProjectScoringConfig;
+  // "COMBINED" reveals the Source Blend section (wGitHub/wDocs); hidden for GITHUB/EDITOR-only.
+  sourceType: string | null;
   onClose: () => void;
   onSaved: (config: ProjectScoringConfig) => void;
 }
@@ -18,7 +21,7 @@ function pct(v: number) {
   return `${Math.round(v * 100)}%`;
 }
 
-export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSaved }: Props) {
+export function ScoringSettingsModal({ projectId, currentConfig, sourceType, onClose, onSaved }: Props) {
   const { showSuccessToast } = useToast();
   const [commits,        setCommits]        = useState(currentConfig.weights.commits);
   const [lines,          setLines]          = useState(currentConfig.weights.lines);
@@ -26,12 +29,19 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
   const [freeRider,      setFreeRider]      = useState(currentConfig.thresholds.freeRider);
   const [overload,       setOverload]       = useState(currentConfig.thresholds.overload);
   const [deadlineDriven, setDeadlineDriven] = useState(currentConfig.thresholds.deadlineDriven);
+  const [wGitHub,        setWGitHub]        = useState(currentConfig.blend?.wGitHub ?? DEFAULTS.blend!.wGitHub);
+  const [wDocs,          setWDocs]          = useState(currentConfig.blend?.wDocs ?? DEFAULTS.blend!.wDocs);
 
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const isCombined = sourceType === "COMBINED";
+
   const weightSum = Math.round((commits + lines + activeDays) * 1000) / 1000;
   const sumOk     = Math.abs(weightSum - 1.0) <= 0.001;
+
+  const blendSum   = Math.round((wGitHub + wDocs) * 1000) / 1000;
+  const blendSumOk = Math.abs(blendSum - 1.0) <= 0.001;
 
   // Close on Escape
   useEffect(() => {
@@ -49,11 +59,13 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
     setFreeRider(DEFAULTS.thresholds.freeRider);
     setOverload(DEFAULTS.thresholds.overload);
     setDeadlineDriven(DEFAULTS.thresholds.deadlineDriven);
+    setWGitHub(DEFAULTS.blend!.wGitHub);
+    setWDocs(DEFAULTS.blend!.wDocs);
     setSaveError(null);
   }
 
   async function handleSave() {
-    if (!sumOk) return;
+    if (!sumOk || (isCombined && !blendSumOk)) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -63,6 +75,7 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
         body: JSON.stringify({
           weights:    { commits, lines, activeDays },
           thresholds: { freeRider, overload, deadlineDriven },
+          blend:      { wGitHub, wDocs },
         }),
       });
       const data = (await res.json()) as { config?: ProjectScoringConfig; error?: string };
@@ -150,6 +163,46 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
             </div>
           </section>
 
+          {/* ── Source Blend (COMBINED projects only) ───────────────────────────── */}
+          {isCombined && (
+            <section>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Source Blend
+              </h3>
+              <p className="text-xs text-slate-400 mb-4">
+                These two values must sum to 1.0. They control how much a member's GitHub share
+                vs. their FairTraze Docs share counts toward their combined contribution share.
+              </p>
+
+              <div className="space-y-4">
+                <WeightRow
+                  label="GitHub weight"
+                  description="Weight on the member's GitHub-only contribution share."
+                  value={wGitHub}
+                  onChange={setWGitHub}
+                />
+                <WeightRow
+                  label="Docs weight"
+                  description="Weight on the member's FairTraze Docs-only contribution share."
+                  value={wDocs}
+                  onChange={setWDocs}
+                />
+              </div>
+
+              <div className={`mt-3 flex items-center gap-2 text-xs font-semibold rounded-lg px-3 py-2 ${
+                blendSumOk
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+                <span className="text-base leading-none">{blendSumOk ? "✓" : "✕"}</span>
+                <span>
+                  Blend sum: <strong>{blendSum.toFixed(3)}</strong>
+                  {!blendSumOk && " — wGitHub + wDocs must sum to 1.0."}
+                </span>
+              </div>
+            </section>
+          )}
+
           {/* ── Flag Thresholds ───────────────────────────────────────────────── */}
           <section>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -222,7 +275,7 @@ export function ScoringSettingsModal({ projectId, currentConfig, onClose, onSave
             </button>
             <button
               onClick={handleSave}
-              disabled={!sumOk || saving}
+              disabled={!sumOk || (isCombined && !blendSumOk) || saving}
               className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? "Saving…" : "Save settings"}

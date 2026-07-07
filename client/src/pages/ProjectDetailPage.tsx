@@ -7,7 +7,7 @@ import { ContributionChart } from "../components/ContributionChart";
 import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
-import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
+import { DocumentEditor } from "../components/DocumentEditor";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
@@ -172,8 +172,14 @@ export function ProjectDetailPage({ projectId }: Props) {
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
   // ── Source visibility & tabs ──────────────────────────────────────────────
-  const sourceType = stored?.sourceType ?? null;
-  const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub
+  // projectMeta comes from /api/projects/summary, available even before any report
+  // exists; stored.sourceType (from the report) is kept as a fallback for safety.
+  const sourceType = projectMeta?.sourceType ?? stored?.sourceType ?? null;
+  const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub (scoring settings button)
+  // The GitHub-only chart/table/narrative block below is for GITHUB/legacy projects only —
+  // COMBINED gets its own blended report block (chart+table+narrative) further down.
+  const showGithubOnly = sourceType === "GITHUB" || sourceType === null;
+  const showCombined   = sourceType === "COMBINED";
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
       ? ["report", "document"]
@@ -323,8 +329,9 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
-            {/* Scoring settings button — shown only when a report exists, not for admin */}
-            {stored && !reanalyzing && !isAdmin && (
+            {/* Scoring settings button — shown only when a report exists, not for admin.
+                Hidden for EDITOR reports: weight override isn't wired for document scoring yet. */}
+            {stored && !reanalyzing && !isAdmin && showGitHub && (
               <button
                 onClick={() => setShowScoringModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-xs font-semibold rounded-lg transition-colors"
@@ -469,15 +476,13 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* Stored report */}
         {stored && !reanalyzing && (
           <>
-            {/* Team health — the visual focal point of the report, shown first */}
-            {showGitHub && (
-              <TeamHealthBanner
-                teamHealth={stored.report.teamHealth}
-                gini={stored.report.gini}
-                projectName={stored.groupName}
-                memberCount={stored.report.memberCount}
-              />
-            )}
+            {/* Team health — the visual focal point of the report, shown first (source-agnostic) */}
+            <TeamHealthBanner
+              teamHealth={stored.report.teamHealth}
+              gini={stored.report.gini}
+              projectName={stored.groupName}
+              memberCount={stored.report.memberCount}
+            />
 
             {/* Report details */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
@@ -536,8 +541,8 @@ export function ProjectDetailPage({ projectId }: Props) {
               )}
             </div>
 
-            {/* GitHub-specific sections */}
-            {showGitHub && (
+            {/* GitHub-specific sections (GITHUB-only / legacy projects) */}
+            {showGithubOnly && (
               <>
                 {/* Contribution chart — the "quick picture" at a glance */}
                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -578,6 +583,86 @@ export function ProjectDetailPage({ projectId }: Props) {
               </>
             )}
 
+            {/* Combined (GitHub + Docs) sections — one blended report, not two separate ones */}
+            {showCombined && (
+              <>
+                {stored.scoringConfig?.blend && (
+                  <div className="flex items-center gap-1.5 flex-wrap -mt-2">
+                    <span className="text-[11px] text-slate-400 font-medium">Source blend:</span>
+                    <ScoredWithPill label="GitHub" display={`${Math.round(stored.scoringConfig.blend.wGitHub * 100)}%`} />
+                    <ScoredWithPill label="Docs" display={`${Math.round(stored.scoringConfig.blend.wDocs * 100)}%`} />
+                  </div>
+                )}
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — GitHub + Docs</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's blended share at a glance</p>
+                  </div>
+                  <div className="px-6 pt-4 pb-2">
+                    <ContributionChart members={stored.report.members} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — GitHub share, Docs share, blend weights, and flags</p>
+                  </div>
+                  <MemberTable
+                    members={stored.report.members}
+                    variant="combined"
+                    disputedMembers={disputedMembers}
+                    resolvedFlagOutcomes={resolvedFlagOutcomes}
+                    memberRoles={stored.memberRoles}
+                  />
+                </div>
+
+                <Narrative
+                  key={projectId}
+                  narrative={narrativeText}
+                  projectId={projectId}
+                  onNarrativeGenerated={(text) => setNarrativeText(text)}
+                />
+
+                {stored.unmatchedGitHubLogins.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                    <span className="font-semibold">Unmatched GitHub contributors: </span>
+                    {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
+                    repository but are not in the team member list.
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* FairTraze Docs (EDITOR) sections */}
+            {sourceType === "EDITOR" && (
+              <>
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — FairTraze Docs</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's share at a glance</p>
+                  </div>
+                  <div className="px-6 pt-4 pb-2">
+                    <ContributionChart members={stored.report.members} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — per-member stats and flags</p>
+                  </div>
+                  <MemberTable
+                    members={stored.report.members}
+                    variant="document"
+                    disputedMembers={disputedMembers}
+                    resolvedFlagOutcomes={resolvedFlagOutcomes}
+                  />
+                </div>
+              </>
+            )}
+
             {/* Timestamp */}
             <p className="text-xs text-slate-400 text-right">
               Report generated {new Date(stored.analyzedAt).toLocaleString()}
@@ -593,10 +678,13 @@ export function ProjectDetailPage({ projectId }: Props) {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — document contributions recorded per author
+                Collaborative editor — shared document for this group
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
+                Read-only — instructor view
               </span>
             </div>
-            <FairTrazeDocsPreview />
+            <DocumentEditor groupId={projectId} editable={false} />
           </div>
         )}
       </main>
@@ -629,6 +717,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         <ScoringSettingsModal
           projectId={projectId}
           currentConfig={stored.currentConfig}
+          sourceType={sourceType}
           onClose={() => setShowScoringModal(false)}
           onSaved={(newConfig: ProjectScoringConfig) => {
             setShowScoringModal(false);

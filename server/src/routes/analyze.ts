@@ -3,9 +3,12 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { fetchRepoStats } from "../lib/github.js";
 import { computeTeamReport } from "@shared/scoring.js";
+import { computeDocumentTeamReport } from "@shared/documentScoring.js";
+import { computeCombinedTeamReport } from "@shared/combinedScoring.js";
+import { computeDocumentRawStats } from "../collab/editStats.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
-import type { RawMemberStats, AnalyzeResponse, TeamReport, ProjectScoringConfig } from "@shared/types.js";
+import type { RawMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig } from "@shared/types.js";
 
 export const analyzeRouter = Router();
 
@@ -63,10 +66,182 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { members: true },
+    include: {
+      members: true,
+      assignment: { select: { sourceType: true } },
+      document: { select: { id: true } },
+      groupMemberships: { include: { user: { select: { id: true, name: true, githubUsername: true } } } },
+    },
   });
   if (!project) {
     res.status(404).json({ error: `Project ${projectId} not found` });
+    return;
+  }
+
+  const sourceType = project.assignment?.sourceType ?? null;
+
+  if (sourceType === "EDITOR") {
+    const roster = project.groupMemberships.map((m) => ({
+      userId: m.user.id,
+      studentName: m.user.name,
+      githubUsername: m.user.githubUsername ?? "",
+    }));
+    const rawMembers = await computeDocumentRawStats(project.document?.id ?? null, roster);
+    const report = computeDocumentTeamReport(rawMembers);
+
+    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
+    let savedNarrative: string | null = null;
+    if (existing) {
+      const stored = existing.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+      savedNarrative = stored.narrative ?? null;
+      await prisma.report.update({
+        where: { id: existing.id },
+        data: {
+          generatedAt: new Date(),
+          gini:       report.gini,
+          teamHealth: report.teamHealth,
+          content:    JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null }),
+        },
+      });
+    } else {
+      await prisma.report.create({
+        data: {
+          projectId,
+          gini:      report.gini,
+          teamHealth: report.teamHealth,
+          content:   JSON.stringify({ report, narrative: null, unmatchedLogins: [], scoringConfig: null }),
+        },
+      });
+    }
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+    });
+
+    generateAlertsForProject(projectId, report, {
+      groupName:      project.groupName,
+      assignmentLabel: project.assignmentLabel,
+      assignmentId:   project.assignmentId,
+    }).catch((err) => console.error("[alerts] generation failed:", err));
+
+    const response: AnalyzeResponse = {
+      projectId,
+      repoUrl:               project.repoUrl,
+      analyzedAt:            new Date().toISOString(),
+      unmatchedGitHubLogins: [],
+      report,
+      narrative:             savedNarrative,
+    };
+    res.status(200).json(response);
+    return;
+  }
+
+  if (sourceType === "COMBINED") {
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (!githubToken) {
+      res.status(500).json({ error: "GITHUB_TOKEN is not set" });
+      return;
+    }
+
+    const requiredLogins = project.members.map((m) => m.githubUsername);
+
+    let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
+    try {
+      rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins);
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      if (e.status === 404) {
+        res.status(404).json({ error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
+        return;
+      }
+      if (e.status === 403 || e.status === 429) {
+        res.status(429).json({ error: "GitHub rate limit exceeded" });
+        return;
+      }
+      res.status(502).json({ error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
+      return;
+    }
+
+    const { rawMembers: githubRaw, unmatchedLogins } = buildRawMembers(project.members, rawData.contributors);
+
+    const scoringConfig: ProjectScoringConfig = {
+      weights: {
+        commits:    project.weightCommits,
+        lines:      project.weightLines,
+        activeDays: project.weightActiveDays,
+      },
+      thresholds: {
+        freeRider:      project.freeRiderThreshold,
+        overload:       project.overloadThreshold,
+        deadlineDriven: project.deadlineDrivenThreshold,
+      },
+      blend: {
+        wGitHub: project.weightGithub,
+        wDocs:   project.weightDocs,
+      },
+    };
+
+    const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds);
+
+    const roster = project.groupMemberships.map((m) => ({
+      userId:         m.user.id,
+      studentName:    m.user.name,
+      githubUsername: m.user.githubUsername ?? "",
+    }));
+    const documentRaw    = await computeDocumentRawStats(project.document?.id ?? null, roster);
+    const documentReport = computeDocumentTeamReport(documentRaw);
+
+    const report = computeCombinedTeamReport(
+      roster, githubRaw, githubReport.members, documentRaw, documentReport.members,
+      scoringConfig.blend!, scoringConfig.thresholds
+    );
+
+    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
+    let savedNarrative: string | null = null;
+    if (existing) {
+      const stored = existing.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+      savedNarrative = stored.narrative ?? null;
+      await prisma.report.update({
+        where: { id: existing.id },
+        data: {
+          generatedAt: new Date(),
+          gini:       report.gini,
+          teamHealth: report.teamHealth,
+          content:    JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+        },
+      });
+    } else {
+      await prisma.report.create({
+        data: {
+          projectId,
+          gini:      report.gini,
+          teamHealth: report.teamHealth,
+          content:   JSON.stringify({ report, narrative: null, unmatchedLogins, scoringConfig }),
+        },
+      });
+    }
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+    });
+
+    generateAlertsForProject(projectId, report, {
+      groupName:      project.groupName,
+      assignmentLabel: project.assignmentLabel,
+      assignmentId:   project.assignmentId,
+    }).catch((err) => console.error("[alerts] generation failed:", err));
+
+    const response: AnalyzeResponse = {
+      projectId,
+      repoUrl:               project.repoUrl,
+      analyzedAt:            new Date().toISOString(),
+      unmatchedGitHubLogins: unmatchedLogins,
+      report,
+      narrative:             savedNarrative,
+    };
+    res.status(200).json(response);
     return;
   }
 

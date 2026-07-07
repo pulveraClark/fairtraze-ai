@@ -1,4 +1,4 @@
-import type { StoredReportResponse, Flag } from "@shared/types";
+import type { StoredReportResponse, Flag, ScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types";
 import logoUrl from "../assets/logo_transparent.png";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -26,6 +26,18 @@ function barColor(flags: Flag[]): string {
   return "#4f46e5";
 }
 
+function isDocumentMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is DocumentScoredMember {
+  return "sessionCount" in m;
+}
+
+function isCombinedMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is CombinedScoredMember {
+  return "githubContributionShare" in m;
+}
+
+function isGithubMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is ScoredMember {
+  return "commits" in m;
+}
+
 function stripMarkdown(text: string): string {
   return text
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -42,7 +54,9 @@ interface Props {
 }
 
 export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
-  const { report, groupName, repoUrl, analyzedAt, sourceType } = stored;
+  const { report, groupName, repoUrl, analyzedAt, sourceType, scoringConfig } = stored;
+  const isDocumentReport = sourceType === "EDITOR";
+  const isCombinedReport = sourceType === "COMBINED";
   const healthStyle = HEALTH_STYLE[report.teamHealth] ?? HEALTH_STYLE["Healthy"];
   const equalShare  = report.memberCount > 0 ? (100 / report.memberCount).toFixed(1) : "—";
   const analysisDate = new Date(analyzedAt).toLocaleString();
@@ -235,7 +249,106 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
           </span>
         </div>
 
-        {/* Member table */}
+        {/* Member table — combined report gets its own distinct table (GitHub/Docs/Combined columns) */}
+        {isCombinedReport && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: "#f1f5f9" }}>
+                {[
+                  { label: "Member",         align: "left",  width: "auto" },
+                  { label: "GitHub Share",   align: "right", width: 80 },
+                  { label: "Docs Share",     align: "right", width: 80 },
+                  { label: "",               align: "left",  width: 60 },
+                  { label: "Combined Share", align: "right", width: 90 },
+                  { label: "Flags",          align: "left",  width: 140 },
+                ].map(({ label, align, width }) => (
+                  <th
+                    key={label}
+                    style={{
+                      textAlign: align as "left" | "right",
+                      padding: "6px 8px",
+                      fontSize: 8, fontWeight: 700, color: "#475569",
+                      textTransform: "uppercase", letterSpacing: "0.06em",
+                      borderTop: "1px solid #e2e8f0",
+                      borderBottom: "1px solid #e2e8f0",
+                      whiteSpace: "nowrap",
+                      width: width === "auto" ? undefined : width,
+                    }}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {report.members.map((m, i) => {
+                if (!isCombinedMember(m)) return null;
+                const sharePct = (m.contributionShare * 100).toFixed(1);
+                const barFill  = Math.min(m.contributionShare * 100, 100);
+                return (
+                  <tr
+                    key={m.studentName}
+                    style={{
+                      background: i % 2 === 0 ? "#ffffff" : "#f8fafc",
+                      breakInside: "avoid",
+                      pageBreakInside: "avoid",
+                    }}
+                  >
+                    <td style={{ padding: "8px 8px", fontWeight: 700, color: "#1e293b", borderBottom: "1px solid #f1f5f9" }}>
+                      {m.studentName}
+                      {m.githubUsername && (
+                        <span style={{ display: "block", fontSize: 8.5, color: "#94a3b8", fontWeight: 400, marginTop: 1 }}>
+                          @{m.githubUsername}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", color: "#334155", borderBottom: "1px solid #f1f5f9" }}>
+                      {(m.githubContributionShare * 100).toFixed(1)}%
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", color: "#334155", borderBottom: "1px solid #f1f5f9" }}>
+                      {(m.documentContributionShare * 100).toFixed(1)}%
+                    </td>
+                    <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9" }}>
+                      <div style={{ height: 7, background: "#e2e8f0", borderRadius: 4, overflow: "hidden", minWidth: 50 }}>
+                        <div style={{ height: "100%", width: `${barFill}%`, background: barColor(m.flags), borderRadius: 4 }} />
+                      </div>
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", fontWeight: 800, fontSize: 12, color: "#1e293b", borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>
+                      {sharePct}%
+                    </td>
+                    <td style={{ padding: "8px 8px", borderBottom: "1px solid #f1f5f9" }}>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {m.flags.length === 0 ? (
+                          <span style={{ color: "#94a3b8", fontSize: 9.5, fontStyle: "italic" }}>No flags</span>
+                        ) : (
+                          m.flags.map((flag) => {
+                            const s = FLAG_STYLE[flag];
+                            return (
+                              <span key={flag} style={{
+                                display: "inline-block", padding: "2px 6px", borderRadius: 4,
+                                fontSize: 8.5, fontWeight: 700, background: s.bg, color: s.text,
+                                border: `1px solid ${s.border}`, whiteSpace: "nowrap",
+                              }}>
+                                {s.label}
+                              </span>
+                            );
+                          })
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        {isCombinedReport && scoringConfig?.blend && (
+          <p style={{ fontSize: 8.5, color: "#64748b", margin: "6px 0 0" }}>
+            Blend: <strong>{Math.round(scoringConfig.blend.wGitHub * 100)}% GitHub</strong> /{" "}
+            <strong>{Math.round(scoringConfig.blend.wDocs * 100)}% Docs</strong>
+          </p>
+        )}
+        {!isCombinedReport && (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
           <thead>
             <tr style={{ background: "#f1f5f9" }}>
@@ -243,9 +356,9 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
                 { label: "Member",            align: "left",   width: "auto" },
                 { label: "Share",             align: "right",  width: 40 },
                 { label: "",                  align: "left",   width: 72 },
-                { label: "Commits",           align: "right",  width: 56 },
+                { label: isDocumentReport ? "Sessions" : "Commits", align: "right", width: 56 },
                 { label: "Active Days",       align: "right",  width: 72 },
-                { label: "Weighted Lines",    align: "right",  width: 88 },
+                { label: isDocumentReport ? "Retained Chars" : "Weighted Lines", align: "right", width: 88 },
                 { label: "Flags",             align: "left",   width: 140 },
               ].map(({ label, align, width }) => (
                 <th
@@ -272,7 +385,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
               const barFill  = Math.min(m.contributionShare * 100, 100);
               return (
                 <tr
-                  key={m.githubUsername}
+                  key={m.studentName}
                   style={{
                     background: i % 2 === 0 ? "#ffffff" : "#f8fafc",
                     breakInside: "avoid",
@@ -286,12 +399,14 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
                     borderBottom: "1px solid #f1f5f9",
                   }}>
                     {m.studentName}
-                    <span style={{
-                      display: "block", fontSize: 8.5,
-                      color: "#94a3b8", fontWeight: 400, marginTop: 1,
-                    }}>
-                      @{m.githubUsername}
-                    </span>
+                    {m.githubUsername && (
+                      <span style={{
+                        display: "block", fontSize: 8.5,
+                        color: "#94a3b8", fontWeight: 400, marginTop: 1,
+                      }}>
+                        @{m.githubUsername}
+                      </span>
+                    )}
                   </td>
 
                   {/* Share % */}
@@ -321,13 +436,13 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
                     </div>
                   </td>
 
-                  {/* Commits */}
+                  {/* Commits / Sessions */}
                   <td style={{
                     padding: "8px 8px",
                     textAlign: "right", color: "#334155",
                     borderBottom: "1px solid #f1f5f9",
                   }}>
-                    {m.commits}
+                    {isDocumentMember(m) ? m.sessionCount : isGithubMember(m) ? m.commits : 0}
                   </td>
 
                   {/* Active days */}
@@ -336,16 +451,17 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
                     textAlign: "right", color: "#334155",
                     borderBottom: "1px solid #f1f5f9",
                   }}>
-                    {m.activeDays}
+                    {isDocumentMember(m) || isGithubMember(m) ? m.activeDays : 0}
                   </td>
 
-                  {/* Weighted lines */}
+                  {/* Weighted lines / Retained characters */}
                   <td style={{
                     padding: "8px 8px",
                     textAlign: "right", color: "#334155",
                     borderBottom: "1px solid #f1f5f9",
                   }}>
-                    {m.weightedAdditions.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    {(isDocumentMember(m) ? m.retainedChars : isGithubMember(m) ? m.weightedAdditions : 0)
+                      .toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </td>
 
                   {/* Flags */}
@@ -383,6 +499,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
             })}
           </tbody>
         </table>
+        )}
 
         {/* Table legend */}
         <div style={{
