@@ -160,3 +160,66 @@ body {
     page-break-after: avoid;
   }
 }
+
+/* ── TipTap document editor content ────────────────────────────────────────── */
+.ft-doc-content {
+  outline: none;
+}
+.ft-doc-content h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--brand-text-primary);
+  margin: 1.25rem 0 0.75rem;
+}
+.ft-doc-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brand-text-primary);
+  margin: 1rem 0 0.5rem;
+}
+.ft-doc-content p {
+  margin: 0 0 0.85rem;
+}
+.ft-doc-content ul, .ft-doc-content ol {
+  margin: 0 0 0.85rem;
+  padding-left: 1.5rem;
+}
+.ft-doc-content ul { list-style: disc; }
+.ft-doc-content ol { list-style: decimal; }
+.ft-doc-content li { margin-bottom: 0.25rem; }
+.ft-doc-content li > p { margin: 0; }
+
+/* ── Collaboration cursor (Yjs) ────────────────────────────────────────────
+   `.collaboration-cursor__caret` is an inline, zero-width marker inserted as a
+   ProseMirror widget decoration (never part of the document schema/content).
+   `.collaboration-cursor__label` is its floating name badge. It MUST stay
+   absolutely positioned and out of flow — without `position: absolute` a
+   bare <div> renders as a block, breaking onto its own full-width line and
+   shifting the surrounding text. */
+.collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px 3px 3px 0;
+  font-family: "Outfit", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  z-index: 20;
+}

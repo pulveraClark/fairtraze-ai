@@ -10,12 +10,19 @@
   },
   "dependencies": {
     "@fairtraze/shared": "*",
+    "@tiptap/extension-collaboration": "^3.27.2",
+    "@tiptap/pm": "^3.27.2",
+    "@tiptap/react": "^3.27.2",
+    "@tiptap/starter-kit": "^3.27.2",
+    "@tiptap/y-tiptap": "^3.0.6",
     "framer-motion": "^12.42.2",
     "qrcode.react": "^4.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",

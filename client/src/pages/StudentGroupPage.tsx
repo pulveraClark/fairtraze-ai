@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
-import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
+import { DocumentEditor } from "../components/DocumentEditor";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { FlagTag } from "../components/FlagTag";
 import type { Flag } from "@shared/types";
@@ -876,16 +876,16 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           </div>
         )}
 
-        {/* ── FairTraze Docs tab (preview) ─────────────────────────────────────── */}
+        {/* ── FairTraze Docs tab ────────────────────────────────────────────────── */}
         {effectiveTab === "document" && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — document contributions recorded per author
+                Collaborative editor — shared document for this group
               </span>
             </div>
-            <FairTrazeDocsPreview />
+            <DocumentEditor groupId={projectId} editable={true} />
           </div>
         )}
 
