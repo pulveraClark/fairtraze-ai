@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { requireRole } from "../middleware/auth.js";
 import { fetchRepoStats } from "../lib/github.js";
 import { computeTeamReport } from "@shared/scoring.js";
 import { computeDocumentTeamReport } from "@shared/documentScoring.js";
@@ -56,7 +57,7 @@ function buildRawMembers(
 // Does NOT call Gemini. Returns any previously saved narrative but never
 // generates a new one — use the /narrative endpoint for that.
 
-analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
+analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid project id" });
@@ -68,7 +69,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
     where: { id: projectId },
     include: {
       members: true,
-      assignment: { select: { sourceType: true, deadline: true } },
+      assignment: { select: { sourceType: true, deadline: true, classSection: { select: { instructorId: true } } } },
       document: { select: { id: true } },
       groupMemberships: { include: { user: { select: { id: true, name: true, githubUsername: true } } } },
     },
@@ -76,6 +77,14 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
   if (!project) {
     res.status(404).json({ error: `Project ${projectId} not found` });
     return;
+  }
+
+  // Ownership: if the project belongs to an assignment, the instructor must own that class
+  if (project.assignment) {
+    if (project.assignment.classSection.instructorId !== req.user!.sub) {
+      res.status(403).json({ error: "You do not have access to this project" });
+      return;
+    }
   }
 
   const sourceType = project.assignment?.sourceType ?? null;
@@ -356,7 +365,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
 // Generates (or returns cached) the AI narrative for the project's latest report.
 // Query: ?regenerate=true  — forces a fresh Gemini call even if one is saved.
 
-analyzeRouter.post("/api/projects/:id/narrative", async (req, res) => {
+analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid project id" });
@@ -367,10 +376,21 @@ analyzeRouter.post("/api/projects/:id/narrative", async (req, res) => {
   const regenerate =
     req.query.regenerate === "true" || (req.body as Record<string, unknown>)?.regenerate === true;
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { assignment: { select: { classSection: { select: { instructorId: true } } } } },
+  });
   if (!project) {
     res.status(404).json({ error: `Project ${projectId} not found` });
     return;
+  }
+
+  // Ownership: if the project belongs to an assignment, the instructor must own that class
+  if (project.assignment) {
+    if (project.assignment.classSection.instructorId !== req.user!.sub) {
+      res.status(403).json({ error: "You do not have access to this project" });
+      return;
+    }
   }
 
   const latestReport = await prisma.report.findFirst({
