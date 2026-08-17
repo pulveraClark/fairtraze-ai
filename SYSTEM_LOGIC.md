@@ -420,7 +420,7 @@ for each member:
 
 If `span = 0` (all commits have the same timestamp) or the member has no commits, `lastPhaseRatio = 0`.
 
-**Note**: the timeline window is the observed commit range (`minTime` to `maxTime`), not a fixed assignment deadline. A fixed-deadline anchor is a designed improvement documented in `CLAUDE.md` but not yet implemented in the code.
+**Note**: when the assignment has a `deadline` set, the "last third" window is anchored to it instead: `phaseStart = firstActivityTimestamp + (2/3) × (deadline - firstActivityTimestamp)`, with no upper bound (post-deadline activity still counts toward the last-phase bucket). This applies across all three scoring paths (GitHub, Editor, Combined). When no deadline is set, the window falls back to the observed activity span (`minTime` to `maxTime`) shown above. Each `TeamReport` discloses which basis produced it via `deadlineWindowBasis: "assignment-deadline" | "activity-span"`.
 
 ---
 
@@ -700,7 +700,7 @@ Single Prisma query: all `Project` rows with their `Member[]` and the single mos
 
 There is no server-side risk roll-up computation. The summary endpoint returns raw per-group data. Risk aggregation (e.g., "at-risk groups in a class") is performed client-side by the dashboard components reading `teamHealth` and `flagsPresent` from the summary array.
 
-The `AdminPage.tsx` at `/admin` shows a hardcoded sample dataset — it is **not** driven by a live `/api/admin/...` endpoint. Institution-level analytics are a designed future feature (Phase F) not yet implemented.
+The `AdminPage.tsx` at `/admin` is live-wired to `GET /api/admin/overview`, a real endpoint that aggregates data across every instructor's classes (not just the requesting admin's own) — user counts by role, class/group counts, a team-health distribution, flag totals, and a list of every currently at-risk group system-wide (with its owning instructor, health label, and Gini score). **Not yet implemented:** trend-over-time analytics — e.g. Gini trends across time or per-subject flag prevalence — which would require historical snapshots rather than the current point-in-time aggregation.
 
 ---
 

@@ -88,17 +88,17 @@ The instructor is the primary user of the system. They:
 - Receive automatic alerts when a group's health is Moderate or High Risk
 - Retain final authority on grading: the report informs their decision; it does not make it
 
-### Student *(planned)*
+### Student *(implemented)*
 
-In the fully-developed system, students interact with FairTraze AI to register their team and, for writing-based projects, to collaborate on documents inside the platform.
+Students interact with FairTraze AI to register their team and, for writing-based projects, to collaborate on documents inside the platform.
 
 - **Group leader:** The first student to use an assignment join code creates the group, sets the group name, and connects the GitHub repository. They become the group's leader for administrative purposes — this is a structural designation only and carries no contribution credit.
 - **Group member:** Subsequent students use the same join code to join their existing group. Each student registers their own GitHub username from their account profile, ensuring that identity mapping is accurate and self-attributed.
-- In the completed system, each student can view their own contribution report (their scores and flags only — not other members' data) and submit a short written dispute or note for the instructor to consider.
+- Each student can view their own contribution report (their scores and flags only — not other members' data) and submit a short written dispute or note for the instructor to consider.
 
-### Admin *(planned)*
+### Admin *(implemented)*
 
-The administrator role is intended for institutional oversight — a department coordinator or system administrator who needs a cross-section view across multiple instructors' classes. In the full system they can view aggregated participation trends, manage the instructor roster, and review system-wide health metrics. This role is designed but not yet implemented.
+The administrator role provides institutional oversight — a department coordinator or system administrator needs a cross-section view across multiple instructors' classes. The admin panel is live-wired to `GET /api/admin/overview`, a real endpoint returning aggregated data spanning every instructor's classes: user counts by role, total class sections and groups, a team-health distribution, flag totals, and a list of every currently at-risk group across the institution (with its owning instructor, health label, and Gini score). Admins also manage the instructor/user roster and system roles directly. **Not yet implemented:** trend-over-time analytics — e.g. Gini trends across time or per-subject flag prevalence — which would require historical snapshots rather than the current point-in-time aggregation.
 
 ---
 
@@ -163,7 +163,7 @@ Each student registers their own GitHub username in their FairTraze AI account p
 
 ---
 
-## 5. Data Source 2 — FairTraze Docs *(planned)*
+## 5. Data Source 2 — FairTraze Docs *(implemented)*
 
 ### Plain-language explanation
 
@@ -171,7 +171,7 @@ Not every valuable contribution to a group project appears in a code repository.
 
 FairTraze Docs is a built-in collaborative document editor — similar in experience to Google Docs — that lives directly inside the FairTraze AI platform. Because it is built into the system, it can record exactly who wrote what, when, and whether that writing survived to the final version of the document.
 
-In the fully-developed system, when a student types in FairTraze Docs, their text appears in their assigned colour. A student reading the document can see at a glance which sections were written by whom, just as colour-coded author highlighting works in collaborative editors. Every character, insertion, and deletion is attributed to the logged-in user's account — not a username that someone else could enter, but the actual account.
+When a student types in FairTraze Docs, their text appears in their assigned colour when authorship highlighting is toggled on. A student reading the document can see at a glance which sections were written by whom, just as colour-coded author highlighting works in collaborative editors. Every character, insertion, and deletion is attributed to the logged-in user's account — not a username that someone else could enter, but the actual account.
 
 ### What FairTraze Docs measures
 
@@ -181,10 +181,11 @@ Secondary signals include:
 - Characters and words inserted and deleted, with per-user attribution
 - Active editing days — how many distinct calendar days a student made edits
 - Edit-session timing — whether editing was spread across the project or concentrated near the deadline
-- Comments written and suggestions made (and whether those suggestions were accepted by others, indicating influence on the document's direction)
 - Self-churn — writing text and then deleting it before it survives; penalised the same way as in the GitHub model
 
-### Edit-type weighting *(planned)*
+**Not yet implemented:** comments authored and tracked-change suggestions (accepted/rejected) — there is no comment/suggestion data model; only insert/delete edits are captured.
+
+### Edit-type weighting *(implemented)*
 
 Not all writing effort is equally substantive. FairTraze Docs classifies each edit into one of four categories:
 
@@ -197,7 +198,7 @@ Not all writing effort is equally substantive. FairTraze Docs classifies each ed
 
 This weighting mirrors the commit-impact classification in GitHub scoring.
 
-### Mapping FairTraze Docs signals to the GitHub model *(planned)*
+### Mapping FairTraze Docs signals to the GitHub model *(implemented)*
 
 The GitHub and Docs scoring models are deliberately parallel:
 
@@ -222,7 +223,7 @@ These are documented measurement challenges in the FairTraze Docs design, not bu
 
 ---
 
-## 6. Combined Scoring *(planned)*
+## 6. Combined Scoring *(implemented)*
 
 When an assignment's source type is set to **Combined**, FairTraze AI collects both GitHub activity and FairTraze Docs edits and blends them into a single contribution score per member.
 
@@ -236,11 +237,11 @@ The default blend is **50% GitHub, 50% FairTraze Docs**. The instructor can adju
 
 The math-scores-AI-explains principle applies fully to combined scoring. The blending formula is deterministic; the AI only narrates the result.
 
-### Role-aware mismatch detection *(planned)*
+### Role-aware mismatch detection *(implemented)*
 
-In the full system, each member of a group can be assigned a **functional role** — Developer, Documentation Lead, Designer, Researcher, Project Manager, or a custom label. These roles imply an expected primary data source: a Developer is expected to contribute primarily on GitHub; a Documentation Lead is expected to contribute primarily in FairTraze Docs.
+Each member of a group can be assigned a **functional role**, restricted to a fixed two-value set — `DEVELOPER` and/or `DOCUMENTATION` — not the free-form labels (Designer, Researcher, Project Manager, custom labels) described in earlier drafts of this document; extending the value set remains a real future task. These roles imply an expected primary data source: a Developer is expected to contribute primarily on GitHub; a Documentation member is expected to contribute primarily in FairTraze Docs.
 
-For Combined assignments, the system can detect and surface a **role-source mismatch**: for example, a member assigned as Developer but with almost no GitHub commits, or a Documentation Lead who made almost no edits in FairTraze Docs. This mismatch is reported as a flag for the instructor to consider — it does **not** automatically re-weight that member's score. The default scoring is always role-agnostic; role-based re-weighting requires explicit instructor configuration.
+For Combined (and single-source) assignments, the system detects and surfaces a **role-source mismatch** as a soft, informational note: for example, a member assigned Developer with zero recorded GitHub commits, or a Documentation member with zero recorded editor sessions. This note is surfaced for the instructor to consider — it does **not** automatically re-weight that member's score, and never becomes a contribution flag (`free-rider`, `overload`, etc.). The default scoring is always role-agnostic; role-based re-weighting requires explicit instructor configuration and remains undesigned/unbuilt.
 
 ---
 
@@ -332,9 +333,9 @@ Each group's report page shows:
 - The **AI narrative** (generated on demand)
 - The **unmatched logins list** — GitHub contributors found in the repository who are not matched to any registered member, a signal that someone's GitHub username may be missing or incorrect
 
-### Print and PDF export *(planned)*
+### Print and PDF export *(implemented)*
 
-In the fully-developed system, the instructor can print or export any report to PDF directly from the report page for inclusion in grading records.
+The instructor can print or export any report to PDF directly from the report page (via the browser's print dialog, with a dedicated print-only report layout) for inclusion in grading records.
 
 ### CSV/Excel export *(planned)*
 
@@ -356,15 +357,15 @@ The instructor is the single point of authority. They:
 - Can override any interpretation the AI narrative offers (the narrative is advisory text, not a decision)
 - Can lock the roster before final grading to prevent late changes
 
-### Student view and dispute *(planned)*
+### Student view and dispute *(implemented)*
 
-In the fully-developed system, each student can view their own contribution report — their scores and flags only, not other members' data. If a student believes the analysis does not accurately reflect their contribution (for example, due to offline work not captured in digital traces, or a GitHub username mapping error), they can submit a short written note or dispute through the platform. The instructor is notified and retains final authority over the response.
+Each student can view their own contribution report — their scores and flags only, not other members' data. If a student believes the analysis does not accurately reflect their contribution (for example, due to offline work not captured in digital traces, or a GitHub username mapping error), they can submit a short written note or dispute through the platform. The instructor is notified and retains final authority over the response.
 
 ### Identity integrity
 
 Two design choices strengthen the integrity of the attribution:
 
-**FairTraze Docs ties edits to the logged-in account.** *(planned)* A student cannot attribute their document edits to a different account. The identity is the session, not a username they entered.
+**FairTraze Docs ties edits to the logged-in account.** *(implemented)* A student cannot attribute their document edits to a different account. The identity is the session, not a username they entered.
 
 **GitHub usernames are self-registered.** *(implemented)* Each student registers their own GitHub username from their account profile. This is the strongest GitHub identity guarantee the system can provide — the person best placed to know their own username is the owner. The system surfaces any GitHub contributors in the repository who are not matched to a registered student, making attribution gaps visible.
 
@@ -382,17 +383,13 @@ The instructor is expected to bring their own observation and judgment to fill i
 
 ## 12. Near-Term Roadmap *(planned)*
 
-These features are designed or specified and are expected to be built in the near term.
+These features are designed or specified but not yet built. (Several items formerly on this roadmap — instructor-adjustable weights/thresholds in the UI, the student dispute workflow, the FairTraze Docs editor, and the student read-only report view — have since shipped; see their `*(implemented)*` sections above.)
 
 | Feature | Description |
 |---|---|
 | Email notifications | Automated email to instructors when a High Risk alert fires; confirmation email to students upon joining a group |
 | CSV / Excel export | Export all group scores for a class to a spreadsheet for gradebook integration |
 | Per-student semester view | A student's profile page summarising their contribution records across all groups and projects they participated in during the semester |
-| Instructor-adjustable weights and thresholds in the UI | Allow the instructor to configure scoring weights (commit / lines / active days), flag thresholds, Gini band boundaries, and GitHub-Docs blend ratio directly from the assignment settings page, without requiring code changes |
-| Student dispute workflow | Formal in-platform path for a student to flag a concern about their report; creates a notification for the instructor and records the dispute in the report history |
-| FairTraze Docs editor | The built-in live collaborative editor (TipTap + Yjs), with per-character authorship tracking, color-coded contributor highlighting, and the full document scoring model |
-| Student read-only report view | Each student can see their own scores and flags (not other members' data) after the instructor releases the report |
 
 ---
 
@@ -606,26 +603,26 @@ Applied to the vector of `contributionShare` values across the team.
 | 0.20 – 0.39 | Moderate Risk |
 | ≥ 0.40 | High Risk |
 
-### 14.5 FairTraze Docs Scoring Model *(planned)*
+### 14.5 FairTraze Docs Scoring Model *(implemented)*
 
-The FairTraze Docs scoring model is designed to mirror the GitHub model as closely as possible. The four MVP signals are:
+The FairTraze Docs scoring model mirrors the GitHub model's structure. The four signals are:
 
-1. **Net retained text** — primary lines-equivalent signal (text contributed that survives to the final document)
+1. **Net retained text** — primary lines-equivalent signal (text contributed that survives, weighted by edit-type significance)
 2. **Active editing days** — participation rhythm
 3. **Edit-timing distribution** — deadline-driven detection
 4. **Self-churn ratio** — own text written and later deleted
 
-The same `contributionShare` formula applies within the editor source:
+The same `contributionShare` formula applies within the editor source, via `DOCUMENT_DEFAULT_WEIGHTS`:
 
 ```
-editorShare = 0.4 × sessionShare + 0.4 × retainedTextShare + 0.2 × activeDaysShare
+editorShare = 0.4 × retainedTextShare + 0.2 × sessionShare + 0.4 × activeDaysShare
 ```
 
-(subject to final design; mirrors `commitShare`, `linesShare`, `activeDaysShare`)
+Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — editor scoring deliberately weights active-days participation more heavily than session count.
 
 The editor is implemented using **TipTap** (rich-text editor framework) and **Yjs** (CRDT for real-time collaborative editing). The Yjs document tracks per-user operations with user attribution derived from the authenticated session.
 
-### 14.6 Combined Scoring *(planned)*
+### 14.6 Combined Scoring *(implemented)*
 
 ```
 combinedShare_i = wGitHub × githubShare_i + wEditor × editorShare_i
