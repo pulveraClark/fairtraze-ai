@@ -129,11 +129,11 @@ Yields:
 
 These dates drive `activeDays` and `lastPhaseRatio` in scoring.
 
-### 2.3 Step 3 — Per-commit diffs (capped at 50)
+### 2.3 Step 3 — Per-commit diffs (capped at 100)
 
 **Endpoint**: `GET /repos/{owner}/{repo}/commits/{sha}` — called for each SHA in the sample
 
-Cap: only the first 50 SHAs are sampled (`shas.slice(0, 50)`). If a member has more than 50 commits only the 50 most-recent are diff-sampled. The rationale (in-code comment): "to stay well within the 5000 req/hr rate limit."
+Cap: only the first 100 SHAs are sampled (`shas.slice(0, COMMIT_DIFF_SAMPLE_CAP)`). If a member has more than 100 commits only the 100 most-recent are diff-sampled. The rationale (in-code comment): kept well within the 5000 req/hr rate limit.
 
 Processing is done **oldest-first** (`[...shas].reverse()`) so that self-churn tracking is chronologically correct.
 

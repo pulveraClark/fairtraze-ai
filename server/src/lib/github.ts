@@ -3,6 +3,11 @@ import { classifyAddedLines } from "@shared/lineClassifier.js";
 import { getFileWeight, categorizeFile } from "@shared/fileWeights.js";
 import { classifyCommit, COMMIT_IMPACT } from "@shared/commitClassifier.js";
 
+// Cap on how many of a member's commits get diff-sampled for line-level analysis.
+// Kept well within GitHub's 5,000 req/hr authenticated rate limit — see CLAUDE.md's
+// "Meaningful Contribution Analysis" section for the rate-limit math behind this number.
+const COMMIT_DIFF_SAMPLE_CAP = 100;
+
 export interface GitHubContributorData {
   githubUsername: string;
   commits: number;
@@ -123,7 +128,7 @@ async function fetchCommitShasAndDates(
 
 // Fetches per-commit diffs for the given SHAs.
 // Processes oldest-first for accurate self-churn tracking.
-// Cap: caller must pass at most 50 SHAs.
+// Cap: caller must pass at most COMMIT_DIFF_SAMPLE_CAP SHAs.
 async function fetchCommitDiffs(
   octokit: Octokit,
   owner: string,
@@ -278,8 +283,7 @@ export async function fetchRepoStats(
       login
     );
 
-    // Cap diff sampling at 50 commits to stay well within the 5000 req/hr rate limit
-    const shasToSample = shas.slice(0, 50);
+    const shasToSample = shas.slice(0, COMMIT_DIFF_SAMPLE_CAP);
     const lineCounts = await fetchCommitDiffs(octokit, owner, repo, shasToSample);
 
     contributors.push({
@@ -311,7 +315,7 @@ export async function fetchRepoStats(
       continue;
     }
 
-    const shasToSample = shas.slice(0, 50);
+    const shasToSample = shas.slice(0, COMMIT_DIFF_SAMPLE_CAP);
     const lineCounts = await fetchCommitDiffs(octokit, owner, repo, shasToSample);
 
     // additions/deletions come from the weekly stats breakdown in the stats API.
