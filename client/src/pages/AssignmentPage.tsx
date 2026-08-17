@@ -94,11 +94,11 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const fetchSummaryForAssignment = useCallback(
     async (groups: LifecycleGroup[]) => {
       const ids       = new Set(groups.map((g) => g.id));
-      const res       = await fetch("/api/projects/summary");
+      const res       = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
       const data      = (await res.json()) as { summary: ProjectSummaryItem[] };
       setSummary(data.summary.filter((i) => ids.has(i.projectId)));
     },
-    []
+    [token]
   );
 
   const fetchData = useCallback(async () => {
@@ -135,7 +135,10 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   async function handleReanalyze(projectId: number) {
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, { method: "POST" });
+      await fetch(`/api/projects/${projectId}/analyze`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       // Re-fetch just the summary after re-analysis
       if (assignment) {
         const res  = await fetch(`/api/assignments/${assignmentId}`, { headers: { Authorization: `Bearer ${token}` } });

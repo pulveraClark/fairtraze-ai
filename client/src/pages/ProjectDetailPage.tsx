@@ -56,7 +56,9 @@ export function ProjectDetailPage({ projectId }: Props) {
     setNarrativeText(null);   // clear immediately so no previous group's text bleeds through
     setReportStale(false);
     try {
-      const res = await fetch(`/api/projects/${projectId}/report`);
+      const res = await fetch(`/api/projects/${projectId}/report`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 404) { setNotFound(true); return; }
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
@@ -70,11 +72,11 @@ export function ProjectDetailPage({ projectId }: Props) {
     } catch {
       setFetchError("Network error — could not reach the server.");
     }
-  }, [projectId]);
+  }, [projectId, token]);
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res  = await fetch("/api/projects/summary");
+      const res  = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
       const data = (await res.json()) as { summary: ProjectSummaryItem[] };
       const current = data.summary.find((g) => g.projectId === projectId) ?? null;
       setProjectMeta(current);
@@ -87,7 +89,7 @@ export function ProjectDetailPage({ projectId }: Props) {
     } catch {
       // non-critical — breadcrumb degrades to Dashboard only
     }
-  }, [projectId]);
+  }, [projectId, token]);
 
   // Fetch all disputes for this project (OPEN + resolved) for the instructor view.
   // OPEN → shows "Disputed" badge in MemberTable.
@@ -150,7 +152,10 @@ export function ProjectDetailPage({ projectId }: Props) {
     setStepperDone(false);
     setReanalyzeError(null);
     try {
-      const res  = await fetch(`/api/projects/${projectId}/analyze`, { method: "POST" });
+      const res  = await fetch(`/api/projects/${projectId}/analyze`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) {
         setReanalyzeError((data as { error?: string }).error ?? `Server error ${res.status}`);

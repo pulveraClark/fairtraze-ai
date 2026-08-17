@@ -443,7 +443,7 @@ export function ClassPage({ classId }: Props) {
     try {
       const [classRes, summaryRes] = await Promise.all([
         fetch(`/api/classes/${classId}/assignments`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/projects/summary"),
+        fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (!classRes.ok) {
         setLoadError(classRes.status === 403 ? "You do not have access to this class section." : "Class section not found.");

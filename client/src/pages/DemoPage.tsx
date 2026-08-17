@@ -415,16 +415,16 @@ export function DemoPage() {
   const [deleteError, setDeleteError]   = useState<string | null>(null);
 
   const fetchSummary = useCallback(async () => {
-    const res  = await fetch("/api/projects/summary");
+    const res  = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
     const data = (await res.json()) as { summary: ProjectSummaryItem[] };
     setSummary(data.summary);
-  }, []);
+  }, [token]);
 
   const fetchData = useCallback(async () => {
     try {
       const [classesRes, summaryRes] = await Promise.all([
         fetch("/api/classes", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/projects/summary"),
+        fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (!classesRes.ok) throw new Error("Could not load classes");
       const classesData = (await classesRes.json()) as { classes: LifecycleClass[] };
@@ -467,7 +467,10 @@ export function DemoPage() {
   async function handleReanalyze(projectId: number) {
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, { method: "POST" });
+      await fetch(`/api/projects/${projectId}/analyze`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       await fetchSummary();
     } finally {
       setAnalyzing((prev) => {
