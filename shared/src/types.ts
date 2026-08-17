@@ -46,7 +46,7 @@ export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
 
 // Functional roles — context only; never affect contribution scores, Gini, or flags.
 // DEVELOPER  → expected source: GitHub (active now)
-// DOCUMENTATION → expected source: FairTraze Docs (planned — Phase D)
+// DOCUMENTATION → expected source: FairTraze Docs (active now)
 export type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
 
 export interface MemberRoleInfo {
@@ -55,7 +55,7 @@ export interface MemberRoleInfo {
   isLeader:        boolean;
   // Soft informational note for the instructor when a member's activity doesn't match
   // their assigned role.  Never a contribution flag; never changes any score.
-  // null = no mismatch (or role not traceable yet)
+  // null = no mismatch
   mismatchNote: string | null;
 }
 

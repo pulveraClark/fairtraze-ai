@@ -164,7 +164,20 @@ projectsRouter.get("/api/projects/:id/report", async (req, res) => {
         mismatchNote = "Developer — no recorded GitHub activity";
       }
     }
-    // DOCUMENTATION mismatch detection is deferred to Phase D (editor data source not yet built)
+    // TODO: two known limitations, both inherited/mirrored from the Developer check above,
+    // not fixed here — flagged for future work:
+    //  1. On COMBINED reports, this checks top-level fields only (rm.commits / docActivity.sessionCount),
+    //     not the nested per-source breakdown (rm.github?.commits / rm.document?.sessionCount) — same gap
+    //     as the Developer check above has on COMBINED reports.
+    //  2. mismatchNote is a single string: a member holding both DEVELOPER and DOCUMENTATION roles who
+    //     mismatches on both only keeps the note from whichever check ran last (this one overwrites Developer's).
+    if (functionalRoles.includes("DOCUMENTATION")) {
+      const docActivity = (reportMembers as unknown as Array<{ userId?: number; sessionCount?: number }>)
+        .find((rm) => rm.userId === m.user.id);
+      if (!docActivity || docActivity.sessionCount === 0) {
+        mismatchNote = "Documentation — no recorded editor activity";
+      }
+    }
 
     return { githubUsername: github ?? "", functionalRoles, isLeader, mismatchNote };
   });
