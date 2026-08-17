@@ -39,7 +39,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.use(["/api/auth/login", "/api/auth/register"], authLimiter);
+app.use(["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password"], authLimiter);
 app.use(["/api/projects/:id/analyze", "/api/projects/:id/narrative"], analysisLimiter);
 
 app.use(projectsRouter);

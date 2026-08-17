@@ -84,9 +84,19 @@ model User {
   editEvents       EditEvent[]
   editSessions     EditSession[]
   refreshTokens    RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
   id        Int      @id @default(autoincrement())
   userId    Int
   tokenHash String   @unique

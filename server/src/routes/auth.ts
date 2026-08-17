@@ -7,6 +7,8 @@ import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
+import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
+import { sendPasswordResetEmail } from "../lib/email.js";
 
 export const authRouter = Router();
 
@@ -42,6 +44,15 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email:    z.string().email(),
   password: z.string().min(1),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token:       z.string().min(1),
+  newPassword: z.string().min(8),
 });
 
 // POST /api/auth/register
@@ -154,6 +165,59 @@ authRouter.post("/api/auth/logout", async (req, res) => {
   }
   clearRefreshCookie(res);
   res.json({ message: "Logged out successfully" });
+});
+
+const GENERIC_FORGOT_PASSWORD_MESSAGE = "If an account exists for that email, a password reset link has been sent.";
+
+// POST /api/auth/forgot-password
+authRouter.post("/api/auth/forgot-password", async (req, res) => {
+  const result = forgotPasswordSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: "Invalid input", details: result.error.flatten() });
+    return;
+  }
+
+  const { email } = result.data;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (user && user.active) {
+    const rawToken = await issueResetToken(user.id);
+    const resetLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/reset-password?token=${rawToken}`;
+    // A delivery failure must not change the response — that would leak
+    // whether the email is registered, and would break the UX besides.
+    sendPasswordResetEmail(user.email, user.name, resetLink).catch((err) =>
+      console.error("[auth] failed to send password reset email", err)
+    );
+  }
+
+  res.json({ message: GENERIC_FORGOT_PASSWORD_MESSAGE });
+});
+
+// POST /api/auth/reset-password
+authRouter.post("/api/auth/reset-password", async (req, res) => {
+  const result = resetPasswordSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: "Invalid input", details: result.error.flatten() });
+    return;
+  }
+
+  const { token, newPassword } = result.data;
+
+  const userId = await consumeResetToken(token);
+  if (!userId) {
+    res.status(400).json({ error: "This reset link is invalid or has expired." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+  // A password reset should terminate every existing session, not just
+  // prompt a normal re-login — in case the reset was triggered because
+  // credentials were compromised.
+  await prisma.refreshToken.deleteMany({ where: { userId } });
+
+  res.json({ message: "Password reset successful. Please log in with your new password." });
 });
 
 // GET /api/auth/me — return current user from token
