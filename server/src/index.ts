@@ -17,16 +17,28 @@ import { adminRouter }    from "./routes/admin.js";
 import { attachYjsCollabServer } from "./collab/yjsServer.js";
 import { attachAuthorshipBroadcastServer } from "./collab/authorshipBroadcast.js";
 import { closeDanglingSessions, startAuthorshipIdleSweep } from "./collab/authorshipCapture.js";
+import {
+  corsOptions,
+  helmetMiddleware,
+  authLimiter,
+  analysisLimiter,
+  globalLimiter,
+} from "./middleware/security.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-app.use(cors());
+app.use(helmetMiddleware);
+app.use(cors(corsOptions));
 app.use(express.json());
+app.use(globalLimiter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+app.use(["/api/auth/login", "/api/auth/register"], authLimiter);
+app.use(["/api/projects/:id/analyze", "/api/projects/:id/narrative"], analysisLimiter);
 
 app.use(projectsRouter);
 app.use(analyzeRouter);
