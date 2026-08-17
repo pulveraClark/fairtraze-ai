@@ -28,6 +28,7 @@ interface GroupDetail {
     teamHealth:  string;
     analyzedAt:  string;
     memberCount: number;
+    deadlineWindowBasis: "assignment-deadline" | "activity-span";
     myContribution: {
       contributionShare: number;
       commits:           number;
@@ -823,6 +824,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 <p className="text-sm text-slate-700 leading-relaxed">
                                   {FLAG_DESCRIPTIONS[flag] ?? "A flag has been raised on your contribution pattern."}
                                 </p>
+                                {flag === "deadline-driven" && (
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {report.deadlineWindowBasis === "assignment-deadline"
+                                      ? "Based on the assignment deadline."
+                                      : "Based on observed activity span (no deadline was set for this assignment)."}
+                                  </p>
+                                )}
                                 <p className="text-xs text-slate-400 mt-1.5">
                                   This flag is visible to your instructor. You may submit a note to provide context.
                                 </p>

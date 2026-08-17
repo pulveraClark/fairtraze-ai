@@ -11,10 +11,11 @@ export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
 export function computeDocumentTeamReport(
   rawMembers: RawDocumentMemberStats[],
   weights: DocumentScoringWeights = DOCUMENT_DEFAULT_WEIGHTS,
-  thresholds: ScoringThresholds = DEFAULT_THRESHOLDS
+  thresholds: ScoringThresholds = DEFAULT_THRESHOLDS,
+  deadline?: number | null
 ): TeamReport<DocumentScoredMember> {
   if (rawMembers.length === 0) {
-    return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy" };
+    return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" };
   }
 
   const memberCount = rawMembers.length;
@@ -42,11 +43,17 @@ export function computeDocumentTeamReport(
 
   const allTimestamps = rawMembers.flatMap((m) => m.sessionDates).map((d) => new Date(d).getTime());
   let phaseStart: number | null = null;
+  let deadlineWindowBasis: "assignment-deadline" | "activity-span" = "activity-span";
   if (allTimestamps.length > 0) {
     const minTime = Math.min(...allTimestamps);
-    const maxTime = Math.max(...allTimestamps);
-    const span = maxTime - minTime;
-    if (span > 0) phaseStart = minTime + (2 / 3) * span;
+    if (deadline != null && deadline > minTime) {
+      phaseStart = minTime + (2 / 3) * (deadline - minTime);
+      deadlineWindowBasis = "assignment-deadline";
+    } else {
+      const maxTime = Math.max(...allTimestamps);
+      const span = maxTime - minTime;
+      if (span > 0) phaseStart = minTime + (2 / 3) * span;
+    }
   }
 
   const withShares = baseStats.map((m) => {
@@ -96,5 +103,5 @@ export function computeDocumentTeamReport(
     };
   });
 
-  return { members, memberCount, gini: round3(giniValue), teamHealth };
+  return { members, memberCount, gini: round3(giniValue), teamHealth, deadlineWindowBasis };
 }

@@ -705,6 +705,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       teamHealth:  teamReport.teamHealth,
       analyzedAt:  latestReport.generatedAt.toISOString(),
       memberCount: teamReport.memberCount,
+      deadlineWindowBasis: teamReport.deadlineWindowBasis,
       myContribution: myScoredMember ? {
         contributionShare: myScoredMember.contributionShare,
         commits:           myScoredMember.commits,

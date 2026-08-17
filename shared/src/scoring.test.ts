@@ -324,6 +324,65 @@ describe("computeTeamReport", () => {
     const early = report.members.find((m) => m.githubUsername === "early")!;
     expect(late.flags).toContain("deadline-driven");
     expect(early.flags).not.toContain("deadline-driven");
+    expect(report.deadlineWindowBasis).toBe("activity-span");
+  });
+
+  it("with no deadline passed, falls back to activity-span basis (unchanged default)", () => {
+    const members: RawMemberStats[] = [
+      { studentName: "A", githubUsername: "a", commits: 1, additions: 10, deletions: 0, commitDates: ["2024-01-01T00:00:00Z"] },
+    ];
+    const report = computeTeamReport(members, undefined, undefined, undefined);
+    expect(report.deadlineWindowBasis).toBe("activity-span");
+  });
+
+  it("a deadline far after all observed activity suppresses a flag that activity-span-only logic would raise", () => {
+    // Same commit dates as the "near the end is deadline-driven" test above — under the current
+    // activity-span-only calculation, "late" trips the flag purely because their commits happen to
+    // fall in the last third of a *compressed* observed window, not because they were actually close
+    // to the real deadline. Anchoring to a deadline far in the future should suppress that false positive.
+    const earlyDates = ["2024-01-05T00:00:00Z", "2024-01-20T00:00:00Z", "2024-02-10T00:00:00Z"];
+    const lateDates = ["2024-03-05T00:00:00Z", "2024-03-15T00:00:00Z", "2024-03-25T00:00:00Z"];
+    const members: RawMemberStats[] = [
+      { studentName: "Early", githubUsername: "early", commits: 3, additions: 100, deletions: 0, commitDates: earlyDates },
+      { studentName: "Late", githubUsername: "late", commits: 3, additions: 100, deletions: 0, commitDates: lateDates },
+    ];
+    const farFutureDeadline = new Date("2024-12-25T00:00:00Z").getTime();
+    const report = computeTeamReport(members, undefined, undefined, farFutureDeadline);
+    const late = report.members.find((m) => m.githubUsername === "late")!;
+    const early = report.members.find((m) => m.githubUsername === "early")!;
+    expect(late.flags).not.toContain("deadline-driven");
+    expect(early.flags).not.toContain("deadline-driven");
+    expect(report.deadlineWindowBasis).toBe("assignment-deadline");
+  });
+
+  it("a nearby deadline can flag activity that activity-span-only logic would NOT flag", () => {
+    // Group envelope (min/max) is set by "strawman"'s day-0 and day-30 commits. "onTimeButDiluted"
+    // has a single commit on day 5 — early in absolute terms, but very close to a day-6 deadline.
+    // Activity-span-only logic dilutes the "last third" window across the full day-0..day-30 span
+    // (phaseStart ≈ day 20), so day 5 never counts as last-phase. Anchored to the real (early)
+    // deadline, the window is much narrower (phaseStart ≈ day 4), and day 5 correctly counts.
+    const day = 24 * 60 * 60 * 1000;
+    const base = new Date("2024-01-01T00:00:00Z").getTime();
+    const members: RawMemberStats[] = [
+      {
+        studentName: "Strawman", githubUsername: "strawman", commits: 2, additions: 100, deletions: 0,
+        commitDates: [new Date(base).toISOString(), new Date(base + 30 * day).toISOString()],
+      },
+      {
+        studentName: "OnTimeButDiluted", githubUsername: "ontimebutdiluted", commits: 1, additions: 50, deletions: 0,
+        commitDates: [new Date(base + 5 * day).toISOString()],
+      },
+    ];
+
+    const activitySpanReport = computeTeamReport(members);
+    const diluted1 = activitySpanReport.members.find((m) => m.githubUsername === "ontimebutdiluted")!;
+    expect(diluted1.flags).not.toContain("deadline-driven");
+
+    const nearbyDeadline = base + 6 * day;
+    const deadlineReport = computeTeamReport(members, undefined, undefined, nearbyDeadline);
+    const diluted2 = deadlineReport.members.find((m) => m.githubUsername === "ontimebutdiluted")!;
+    expect(diluted2.flags).toContain("deadline-driven");
+    expect(deadlineReport.deadlineWindowBasis).toBe("assignment-deadline");
   });
 
   it("codeLinesAdded drives linesShare; pure blank lines contribute nothing", () => {

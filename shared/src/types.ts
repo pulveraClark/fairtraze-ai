@@ -92,6 +92,11 @@ export interface TeamReport<M = ScoredMember> {
   memberCount: number;
   gini: number;
   teamHealth: TeamHealth;
+  // Discloses which basis produced the deadline-driven flag's "last third" window for this
+  // report: anchored to the real Assignment.deadline, or (when no deadline is set) falling
+  // back to a 2/3 split of the group's own observed activity span. Never per-member — one
+  // window applies to the whole report.
+  deadlineWindowBasis: "assignment-deadline" | "activity-span";
 }
 
 export interface ScoringWeights {

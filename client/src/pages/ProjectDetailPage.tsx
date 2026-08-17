@@ -561,7 +561,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                     <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
                     <p className="text-[11px] text-slate-400 mt-0.5">Detail view — per-member stats, significance, and flags</p>
                   </div>
-                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} resolvedFlagOutcomes={resolvedFlagOutcomes} memberRoles={stored.memberRoles} />
+                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} resolvedFlagOutcomes={resolvedFlagOutcomes} memberRoles={stored.memberRoles} deadlineWindowBasis={stored.report.deadlineWindowBasis} />
                 </div>
 
                 {/* AI narrative — keyed to projectId so it always reflects the current group */}
@@ -615,6 +615,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                     disputedMembers={disputedMembers}
                     resolvedFlagOutcomes={resolvedFlagOutcomes}
                     memberRoles={stored.memberRoles}
+                    deadlineWindowBasis={stored.report.deadlineWindowBasis}
                   />
                 </div>
 
@@ -658,6 +659,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                     variant="document"
                     disputedMembers={disputedMembers}
                     resolvedFlagOutcomes={resolvedFlagOutcomes}
+                    deadlineWindowBasis={stored.report.deadlineWindowBasis}
                   />
                 </div>
               </>

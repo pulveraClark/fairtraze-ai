@@ -110,13 +110,17 @@ async function main() {
   console.log(`ClassSection: ${sectionElec.subjectCode} edpCode=${sectionElec.edpCode} joinCode=${sectionElec.joinCode} (id=${sectionElec.id})`);
 
   // ===== ASSIGNMENTS (one per class section) =====
+  // Deadline set close to Group 1 (Sysarch)'s real observed commit activity (last real commit:
+  // 2026-04-23T02:53:11Z) rather than the far-future placeholder the other two assignments still
+  // use — this is what makes the deadline-driven flag demonstrable in demo data after anchoring
+  // the "last third" window to Assignment.deadline instead of the observed activity span alone.
   const assignmentAppsdev = await prisma.assignment.upsert({
     where:  { joinCode: "APPS-2026-FP" },
-    update: { title: "Final Application Project", classSectionId: sectionAppsdev.id },
+    update: { title: "Final Application Project", classSectionId: sectionAppsdev.id, deadline: new Date("2026-04-23T06:00:00Z") },
     create: {
       classSectionId: sectionAppsdev.id,
       title:          "Final Application Project",
-      deadline:       new Date("2026-07-15T23:59:00Z"),
+      deadline:       new Date("2026-04-23T06:00:00Z"),
       maxGroupSize:   5,
       sourceType:     "GITHUB",
       joinCode:       "APPS-2026-FP",

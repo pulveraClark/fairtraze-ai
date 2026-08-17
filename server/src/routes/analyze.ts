@@ -68,7 +68,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
     where: { id: projectId },
     include: {
       members: true,
-      assignment: { select: { sourceType: true } },
+      assignment: { select: { sourceType: true, deadline: true } },
       document: { select: { id: true } },
       groupMemberships: { include: { user: { select: { id: true, name: true, githubUsername: true } } } },
     },
@@ -79,6 +79,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
   }
 
   const sourceType = project.assignment?.sourceType ?? null;
+  const deadlineMs = project.assignment?.deadline ? project.assignment.deadline.getTime() : null;
 
   if (sourceType === "EDITOR") {
     const roster = project.groupMemberships.map((m) => ({
@@ -87,7 +88,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
       githubUsername: m.user.githubUsername ?? "",
     }));
     const rawMembers = await computeDocumentRawStats(project.document?.id ?? null, roster);
-    const report = computeDocumentTeamReport(rawMembers);
+    const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
     let savedNarrative: string | null = null;
@@ -182,7 +183,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
       },
     };
 
-    const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds);
+    const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
 
     const roster = project.groupMemberships.map((m) => ({
       userId:         m.user.id,
@@ -190,11 +191,11 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
       githubUsername: m.user.githubUsername ?? "",
     }));
     const documentRaw    = await computeDocumentRawStats(project.document?.id ?? null, roster);
-    const documentReport = computeDocumentTeamReport(documentRaw);
+    const documentReport = computeDocumentTeamReport(documentRaw, undefined, undefined, deadlineMs);
 
     const report = computeCombinedTeamReport(
       roster, githubRaw, githubReport.members, documentRaw, documentReport.members,
-      scoringConfig.blend!, scoringConfig.thresholds
+      scoringConfig.blend!, scoringConfig.thresholds, deadlineMs
     );
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
@@ -290,7 +291,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
     },
   };
 
-  const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds);
+  const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);
 
   // Upsert: update existing report row for this project (preserving narrative),

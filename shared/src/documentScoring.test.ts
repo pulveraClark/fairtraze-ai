@@ -92,4 +92,57 @@ describe("computeDocumentTeamReport", () => {
     expect(report.members[0].flags).toContain("inactive");
     expect(report.memberCount).toBe(1);
   });
+
+  // ── deadline-driven / lastPhaseRatio (previously untested for the document path) ──────────
+
+  function docMember(studentName: string, userId: number, githubUsername: string, sessionDates: string[]): RawDocumentMemberStats {
+    return {
+      studentName, userId, githubUsername,
+      retainedChars: 10 * sessionDates.length, totalInsertedChars: 10 * sessionDates.length,
+      totalDeletedChars: 0, selfDeletedChars: 0,
+      sessionCount: sessionDates.length, sessionDates,
+    };
+  }
+
+  it("member whose sessions are all near the end is deadline-driven (activity-span basis, unchanged)", () => {
+    const earlyDates = ["2024-01-05T00:00:00Z", "2024-01-20T00:00:00Z", "2024-02-10T00:00:00Z"];
+    const lateDates = ["2024-03-05T00:00:00Z", "2024-03-15T00:00:00Z", "2024-03-25T00:00:00Z"];
+    const members = [docMember("Early", 1, "early", earlyDates), docMember("Late", 2, "late", lateDates)];
+    const report = computeDocumentTeamReport(members);
+    const late = report.members.find((m) => m.userId === 2)!;
+    const early = report.members.find((m) => m.userId === 1)!;
+    expect(late.flags).toContain("deadline-driven");
+    expect(early.flags).not.toContain("deadline-driven");
+    expect(report.deadlineWindowBasis).toBe("activity-span");
+  });
+
+  it("a deadline far after all observed session activity suppresses a flag activity-span-only logic would raise", () => {
+    const earlyDates = ["2024-01-05T00:00:00Z", "2024-01-20T00:00:00Z", "2024-02-10T00:00:00Z"];
+    const lateDates = ["2024-03-05T00:00:00Z", "2024-03-15T00:00:00Z", "2024-03-25T00:00:00Z"];
+    const members = [docMember("Early", 1, "early", earlyDates), docMember("Late", 2, "late", lateDates)];
+    const farFutureDeadline = new Date("2024-12-25T00:00:00Z").getTime();
+    const report = computeDocumentTeamReport(members, undefined, undefined, farFutureDeadline);
+    const late = report.members.find((m) => m.userId === 2)!;
+    expect(late.flags).not.toContain("deadline-driven");
+    expect(report.deadlineWindowBasis).toBe("assignment-deadline");
+  });
+
+  it("a nearby deadline can flag session activity that activity-span-only logic would NOT flag", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const base = new Date("2024-01-01T00:00:00Z").getTime();
+    const members = [
+      docMember("Strawman", 1, "strawman", [new Date(base).toISOString(), new Date(base + 30 * day).toISOString()]),
+      docMember("OnTimeButDiluted", 2, "ontimebutdiluted", [new Date(base + 5 * day).toISOString()]),
+    ];
+
+    const activitySpanReport = computeDocumentTeamReport(members);
+    const diluted1 = activitySpanReport.members.find((m) => m.userId === 2)!;
+    expect(diluted1.flags).not.toContain("deadline-driven");
+
+    const nearbyDeadline = base + 6 * day;
+    const deadlineReport = computeDocumentTeamReport(members, undefined, undefined, nearbyDeadline);
+    const diluted2 = deadlineReport.members.find((m) => m.userId === 2)!;
+    expect(diluted2.flags).toContain("deadline-driven");
+    expect(deadlineReport.deadlineWindowBasis).toBe("assignment-deadline");
+  });
 });

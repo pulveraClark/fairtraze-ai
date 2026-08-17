@@ -29,6 +29,9 @@ interface Props {
   // Functional roles + soft mismatch notes per member — context only, never affects scores.
   // GitHub-only concept (DEVELOPER/DOCUMENTATION mismatch); not used in the "document" variant.
   memberRoles?: MemberRoleInfo[];
+  // Discloses which basis produced the deadline-driven flag's window for this report —
+  // surfaced in the Flags legend tooltip, next to the "Deadline-driven" definition.
+  deadlineWindowBasis?: "assignment-deadline" | "activity-span";
 }
 
 function isDocumentMember(m: ScoredMember | DocumentScoredMember | CombinedScoredMember): m is DocumentScoredMember {
@@ -89,7 +92,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export function MemberTable({ members, variant = "github", disputedMembers, resolvedFlagOutcomes, memberRoles }: Props) {
+export function MemberTable({ members, variant = "github", disputedMembers, resolvedFlagOutcomes, memberRoles, deadlineWindowBasis }: Props) {
   const { navigate } = useRouter();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -125,12 +128,21 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
               <InfoTooltip
                 label="What are Flags?"
                 content={
-                  <TipList items={[
-                    ["Inactive", "no commits"],
-                    ["Free-rider", "below fair share"],
-                    ["Overload", "well above fair share"],
-                    ["Deadline-driven", "work crammed near the deadline"],
-                  ]} />
+                  <>
+                    <TipList items={[
+                      ["Inactive", "no commits"],
+                      ["Free-rider", "below fair share"],
+                      ["Overload", "well above fair share"],
+                      ["Deadline-driven", "work crammed near the deadline"],
+                    ]} />
+                    {deadlineWindowBasis && (
+                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid #334155", color: "#94a3b8", fontSize: 11 }}>
+                        Deadline-driven basis: {deadlineWindowBasis === "assignment-deadline"
+                          ? "the assignment deadline."
+                          : "observed activity span (no deadline set)."}
+                      </div>
+                    )}
+                  </>
                 }
               />
             </th>

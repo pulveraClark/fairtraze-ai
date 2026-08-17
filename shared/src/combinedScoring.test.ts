@@ -161,6 +161,40 @@ describe("computeCombinedTeamReport", () => {
     // 4 of Anna's 5 unified timestamps fall in the last phase (0.8 > 0.6 threshold).
     expect(anna.lastPhaseRatio).toBeGreaterThan(0.6);
     expect(anna.flags).toContain("deadline-driven");
+    expect(report.deadlineWindowBasis).toBe("activity-span");
+  });
+
+  it("anchors the unified-timeline phase boundary to a deadline, suppressing a false positive from a compressed span", () => {
+    const roster: CombinedRosterMember[] = [
+      { userId: 1, studentName: "Anna", githubUsername: "anna" },
+      { userId: 2, studentName: "Ben", githubUsername: "ben" },
+    ];
+    const githubRaw = [
+      gh("Anna", "anna", { commits: 1, codeLinesAdded: 20, commitDates: ["2024-01-01T00:00:00Z"] }),
+      gh("Ben", "ben", { commits: 1, codeLinesAdded: 20, commitDates: ["2024-01-15T00:00:00Z"] }),
+    ];
+    const documentRaw = [
+      doc("Anna", 1, "anna", {
+        sessionCount: 4, retainedChars: 40, totalInsertedChars: 40,
+        sessionDates: ["2024-01-26T00:00:00Z", "2024-01-27T00:00:00Z", "2024-01-28T00:00:00Z", "2024-01-29T00:00:00Z"],
+      }),
+      doc("Ben", 2, "ben"),
+    ];
+    const githubScored   = computeTeamReport(githubRaw).members;
+    const documentScored = computeDocumentTeamReport(documentRaw).members;
+
+    // A deadline far after all this activity (unlike the activity-span-only version of this test
+    // above) should recognize none of it as actually last-minute — Anna's late document sessions
+    // happened in late January, months before this deadline.
+    const farFutureDeadline = new Date("2024-12-25T00:00:00Z").getTime();
+    const report = computeCombinedTeamReport(
+      roster, githubRaw, githubScored, documentRaw, documentScored,
+      undefined, undefined, farFutureDeadline
+    );
+    const anna = report.members.find((m) => m.userId === 1)!;
+
+    expect(anna.flags).not.toContain("deadline-driven");
+    expect(report.deadlineWindowBasis).toBe("assignment-deadline");
   });
 
   it("keeps combined shares summing to ~1.0 across a mixed 3-member team", () => {
@@ -190,6 +224,6 @@ describe("computeCombinedTeamReport", () => {
 
   it("returns the empty-team shape when the roster is empty", () => {
     const report = computeCombinedTeamReport([], [], [], [], []);
-    expect(report).toEqual({ members: [], memberCount: 0, gini: 0, teamHealth: "Healthy" });
+    expect(report).toEqual({ members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" });
   });
 });
