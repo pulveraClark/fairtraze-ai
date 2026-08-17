@@ -9,10 +9,10 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import type { ScoredMember, Flag } from "@shared/types";
+import type { Flag } from "@shared/types";
 
 interface Props {
-  members: ScoredMember[];
+  members: Array<{ studentName: string; contributionShare: number; flags: Flag[] }>;
 }
 
 interface ChartDataPoint {
