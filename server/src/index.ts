@@ -2,6 +2,7 @@ import "dotenv/config";
 import http from "http";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { analyzeRouter } from "./routes/analyze.js";
 import { projectsRouter } from "./routes/projects.js";
 import { authRouter } from "./routes/auth.js";
@@ -31,6 +32,7 @@ const PORT = process.env.PORT ?? 3001;
 app.use(helmetMiddleware);
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(cookieParser());
 app.use(globalLimiter);
 
 app.get("/health", (_req, res) => {

@@ -1,12 +1,36 @@
 import { Router } from "express";
+import type { Response } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import type { SystemRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { authenticateToken } from "../middleware/auth.js";
+import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 
 export const authRouter = Router();
+
+const REFRESH_COOKIE_NAME = "ft_refresh_token";
+const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+  });
+}
+
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/auth",
+  });
+}
 
 const registerSchema = z.object({
   email:    z.string().email(),
@@ -47,6 +71,8 @@ authRouter.post("/api/auth/register", async (req, res) => {
   });
 
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
+  const refreshToken = await issueRefreshToken(user.id);
+  setRefreshCookie(res, refreshToken);
 
   res.status(201).json({
     token,
@@ -83,6 +109,8 @@ authRouter.post("/api/auth/login", async (req, res) => {
   }
 
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
+  const refreshToken = await issueRefreshToken(user.id);
+  setRefreshCookie(res, refreshToken);
 
   res.json({
     token,
@@ -90,8 +118,41 @@ authRouter.post("/api/auth/login", async (req, res) => {
   });
 });
 
-// POST /api/auth/logout — stateless; client drops its token
-authRouter.post("/api/auth/logout", (_req, res) => {
+// POST /api/auth/refresh — exchange a valid refresh token cookie for a new access token
+authRouter.post("/api/auth/refresh", async (req, res) => {
+  const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+  if (!rawToken) {
+    res.status(401).json({ error: "No refresh token provided" });
+    return;
+  }
+
+  const rotated = await rotateRefreshToken(rawToken);
+  if (!rotated) {
+    clearRefreshCookie(res);
+    res.status(401).json({ error: "Invalid or expired refresh token" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: rotated.userId } });
+  if (!user || !user.active) {
+    clearRefreshCookie(res);
+    res.status(401).json({ error: "Account no longer available" });
+    return;
+  }
+
+  const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
+  setRefreshCookie(res, rotated.newRawToken);
+
+  res.json({ token });
+});
+
+// POST /api/auth/logout — revokes the refresh token server-side
+authRouter.post("/api/auth/logout", async (req, res) => {
+  const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+  if (rawToken) {
+    await revokeRefreshToken(rawToken);
+  }
+  clearRefreshCookie(res);
   res.json({ message: "Logged out successfully" });
 });
 
