@@ -10,7 +10,7 @@ export const groupsRouter = Router();
 const idParam = z.coerce.number().int().positive();
 
 // ── Shared loader ─────────────────────────────────────────────────────────────
-async function loadGroup(projectId: number) {
+export async function loadGroup(projectId: number) {
   return prisma.project.findUnique({
     where: { id: projectId },
     include: {
@@ -33,7 +33,7 @@ async function loadGroup(projectId: number) {
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
-function isInstructorOf(
+export function isInstructorOf(
   req: Request,
   project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>
 ): boolean {
@@ -43,7 +43,7 @@ function isInstructorOf(
   );
 }
 
-function leaderMembership(
+export function leaderMembership(
   req: Request,
   project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>
 ) {

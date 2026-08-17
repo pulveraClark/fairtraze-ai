@@ -21,11 +21,16 @@
     "@google/genai": "^2.8.0",
     "@octokit/rest": "^21.0.2",
     "@prisma/client": "^6.7.0",
+    "@tiptap/y-tiptap": "^3.0.6",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
+    "prosemirror-model": "^1.25.10",
+    "ws": "^8.21.0",
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.31",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -34,6 +39,7 @@
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.0",
+    "@types/ws": "^8.18.1",
     "prisma": "^6.7.0",
     "tsx": "^4.19.1",
     "typescript": "^5.8.3"

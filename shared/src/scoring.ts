@@ -28,7 +28,7 @@ export function gini(values: number[]): number {
   return sum / (2 * n * total);
 }
 
-function round3(n: number): number {
+export function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
