@@ -59,7 +59,7 @@ interface ClassDetail {
     id: number;
     subjectCode: string;
     subjectName: string;
-    course: string;
+    department: { id: number; name: string; code: string } | null;
     edpCode: string;
     joinCode: string | null;
   };
@@ -557,9 +557,11 @@ export function StudentClassPage({ classId }: Props) {
                     {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
                   </span>
                   <h1 className="text-sm font-semibold text-slate-800">{cls.subjectName}</h1>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
-                    {cls.course}
-                  </span>
+                  {cls.department && (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                      {cls.department.code}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <h1 className="text-sm font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>

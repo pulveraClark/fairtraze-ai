@@ -13,6 +13,7 @@ import { documentsRouter } from "./routes/documents.js";
 import { alertsRouter } from "./routes/alerts.js";
 import { disputesRouter } from "./routes/disputes.js";
 import { adminRouter } from "./routes/admin.js";
+import { departmentsRouter } from "./routes/departments.js";
 import {
   corsOptions,
   helmetMiddleware,
@@ -52,6 +53,7 @@ export function createApp() {
   app.use(alertsRouter);
   app.use(disputesRouter);
   app.use(adminRouter);
+  app.use(departmentsRouter);
 
   app.use(
     (

@@ -46,7 +46,7 @@ interface EnrolledClass {
   id: number;
   subjectCode: string;
   subjectName: string;
-  course: string;
+  department: { id: number; name: string; code: string } | null;
   edpCode: string;
   joinCode: string | null;
   joinedAt: string;
@@ -231,7 +231,7 @@ function ClassCard({
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">
             {cls.subjectName}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">{cls.course}</p>
+          {cls.department && <p className="text-xs text-slate-400 mt-0.5">{cls.department.name}</p>}
         </div>
 
         {/* Class join code — always visible with copy button */}

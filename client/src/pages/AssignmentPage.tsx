@@ -23,7 +23,7 @@ interface ClassInfo {
   id: number;
   subjectCode: string;
   subjectName: string;
-  course: string;
+  department: { id: number; name: string; code: string } | null;
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
 }

@@ -23,7 +23,7 @@ interface LifecycleClass {
   id: number;
   subjectCode: string;
   subjectName: string;
-  course: string;
+  department: { id: number; name: string; code: string } | null;
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
   joinCode: string | null;
@@ -74,6 +74,12 @@ function sortClasses(
 }
 
 // ── Create Class Section modal ────────────────────────────────────────────────
+interface DepartmentOption {
+  id:   number;
+  name: string;
+  code: string;
+}
+
 function CreateClassModal({
   token,
   onClose,
@@ -85,7 +91,9 @@ function CreateClassModal({
 }) {
   const [subjectCode, setSubjectCode] = useState("");
   const [subjectName, setSubjectName] = useState("");
-  const [course, setCourse]           = useState("BSIT");
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(true);
+  const [departmentId, setDepartmentId] = useState<number | "">("");
   const [edpCode, setEdpCode]         = useState("");
   const [classType, setClassType]     = useState<"LECTURE" | "LABORATORY">("LECTURE");
   const [submitting, setSubmitting]   = useState(false);
@@ -100,9 +108,21 @@ function CreateClassModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, createdCode]);
 
+  useEffect(() => {
+    fetch("/api/departments", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        const data = (await r.json()) as { departments?: DepartmentOption[] };
+        const list = data.departments ?? [];
+        setDepartments(list);
+        if (list.length === 1) setDepartmentId(list[0].id);
+      })
+      .catch(() => setDepartments([]))
+      .finally(() => setDepartmentsLoading(false));
+  }, [token]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!subjectCode.trim() || !subjectName.trim() || !edpCode.trim()) return;
+    if (!subjectCode.trim() || !subjectName.trim() || !edpCode.trim() || !departmentId) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -110,11 +130,11 @@ function CreateClassModal({
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({
-          subjectCode: subjectCode.trim(),
-          subjectName: subjectName.trim(),
-          course:      course.trim() || "BSIT",
-          edpCode:     edpCode.trim(),
-          type:        classType,
+          subjectCode:  subjectCode.trim(),
+          subjectName:  subjectName.trim(),
+          departmentId,
+          edpCode:      edpCode.trim(),
+          type:         classType,
         }),
       });
       if (res.ok) {
@@ -268,13 +288,25 @@ function CreateClassModal({
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Program / Course</label>
-                  <input
-                    value={course}
-                    onChange={(e) => setCourse(e.target.value)}
-                    placeholder="e.g. BSIT"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                  />
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Department</label>
+                  {!departmentsLoading && departments.length === 0 ? (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                      Ask your admin to create a department first.
+                    </p>
+                  ) : (
+                    <select
+                      required
+                      value={departmentId}
+                      onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : "")}
+                      disabled={departmentsLoading}
+                      className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="" disabled>{departmentsLoading ? "Loading…" : "Select a department"}</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Type</label>
@@ -294,7 +326,7 @@ function CreateClassModal({
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
               <button
                 type="submit"
-                disabled={submitting || !subjectCode.trim() || !subjectName.trim() || !edpCode.trim()}
+                disabled={submitting || !subjectCode.trim() || !subjectName.trim() || !edpCode.trim() || !departmentId}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
               >
                 {submitting ? (

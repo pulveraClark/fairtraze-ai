@@ -105,17 +105,26 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Department {
+  id            Int            @id @default(autoincrement())
+  name          String
+  code          String
+  createdAt     DateTime       @default(now())
+  classSections ClassSection[]
+}
+
 model ClassSection {
   id           Int               @id @default(autoincrement())
   subjectCode  String
   subjectName  String
-  course       String            @default("BSIT")
+  departmentId Int
   edpCode      String            @default("")
   type         ClassType         @default(LECTURE)
   joinCode     String?           @unique
   instructorId Int
   createdAt    DateTime          @default(now())
   instructor   User              @relation(fields: [instructorId], references: [id])
+  department   Department        @relation(fields: [departmentId], references: [id])
   assignments  Assignment[]
   enrollments  ClassEnrollment[]
 

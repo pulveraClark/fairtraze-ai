@@ -8,11 +8,11 @@ import { generateUniqueJoinCode } from "../lib/joinCode.js";
 export const classesRouter = Router();
 
 const createClassSchema = z.object({
-  subjectCode: z.string().min(1),
-  subjectName: z.string().min(1),
-  course:      z.string().min(1).default("BSIT"),
-  edpCode:     z.string().min(1),
-  type:        z.enum(["LECTURE", "LABORATORY"]).default("LECTURE"),
+  subjectCode:  z.string().min(1),
+  subjectName:  z.string().min(1),
+  departmentId: z.number().int().positive(),
+  edpCode:      z.string().min(1),
+  type:         z.enum(["LECTURE", "LABORATORY"]).default("LECTURE"),
 });
 
 const idParam = z.coerce.number().int().positive();
@@ -25,8 +25,14 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
     return;
   }
 
-  const { subjectCode, subjectName, course, edpCode, type } = result.data;
+  const { subjectCode, subjectName, departmentId, edpCode, type } = result.data;
   const instructorId = req.user!.sub;
+
+  const department = await prisma.department.findUnique({ where: { id: departmentId } });
+  if (!department) {
+    res.status(400).json({ error: "Selected department does not exist." });
+    return;
+  }
 
   const existing = await prisma.classSection.findUnique({
     where: { instructorId_edpCode: { instructorId, edpCode } },
@@ -41,7 +47,7 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
   const joinCode = await generateUniqueJoinCode();
 
   const cls = await prisma.classSection.create({
-    data: { subjectCode, subjectName, course, edpCode, type, instructorId, joinCode },
+    data: { subjectCode, subjectName, departmentId, edpCode, type, instructorId, joinCode },
   });
 
   res.status(201).json(cls);
@@ -100,6 +106,7 @@ classesRouter.get("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res)
     where:   { instructorId },
     orderBy: { createdAt: "asc" },
     include: {
+      department: { select: { id: true, name: true, code: true } },
       assignments: {
         orderBy: { createdAt: "asc" },
         include: { _count: { select: { projects: true } } },
@@ -121,18 +128,21 @@ classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "
   const cls = await assertOwnsClass(req, res, idResult.data);
   if (!cls) return;
 
-  const assignments = await prisma.assignment.findMany({
-    where:   { classSectionId: cls.id },
-    orderBy: { createdAt: "asc" },
-    include: { _count: { select: { projects: true } } },
-  });
+  const [assignments, department] = await Promise.all([
+    prisma.assignment.findMany({
+      where:   { classSectionId: cls.id },
+      orderBy: { createdAt: "asc" },
+      include: { _count: { select: { projects: true } } },
+    }),
+    prisma.department.findUnique({ where: { id: cls.departmentId }, select: { id: true, name: true, code: true } }),
+  ]);
 
   res.json({
     class: {
       id:          cls.id,
       subjectCode: cls.subjectCode,
       subjectName: cls.subjectName,
-      course:      cls.course,
+      department,
       edpCode:     cls.edpCode,
       type:        cls.type,
       joinCode:    cls.joinCode,

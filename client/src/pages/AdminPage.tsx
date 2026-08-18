@@ -31,11 +31,19 @@ interface ClassSectionItem {
   subjectCode: string;
   subjectName: string;
   edpCode:     string;
-  course:      string;
+  department:  { id: number; name: string; code: string } | null;
   type:        string;
   createdAt:   string;
   instructor:  { id: number; name: string; email: string };
   assignments: Array<{ id: number; title: string; _count: { projects: number } }>;
+}
+
+interface DepartmentItem {
+  id:        number;
+  name:      string;
+  code:      string;
+  createdAt: string;
+  _count:    { classSections: number };
 }
 
 interface OverviewData {
@@ -225,6 +233,53 @@ export function AdminPage() {
   }, [token]);
 
   useEffect(() => { loadClasses(); }, [loadClasses]);
+
+  // ── Departments state ──────────────────────────────────────────────────────
+  const [departments,        setDepartments]        = useState<DepartmentItem[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(true);
+  const [departmentsError,   setDepartmentsError]   = useState("");
+  const [showDeptForm,       setShowDeptForm]       = useState(false);
+  const [deptName,           setDeptName]           = useState("");
+  const [deptCode,           setDeptCode]           = useState("");
+  const [deptSubmitting,     setDeptSubmitting]     = useState(false);
+
+  const loadDepartments = useCallback(() => {
+    if (!token) return;
+    setDepartmentsLoading(true);
+    setDepartmentsError("");
+    fetch("/api/admin/departments", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        const json = await r.json() as { departments?: DepartmentItem[]; error?: string };
+        if (!r.ok) { setDepartmentsError(json.error ?? "Could not load departments."); return; }
+        setDepartments(json.departments ?? []);
+      })
+      .catch(() => setDepartmentsError("Network error — could not load departments."))
+      .finally(() => setDepartmentsLoading(false));
+  }, [token]);
+
+  useEffect(() => { loadDepartments(); }, [loadDepartments]);
+
+  async function createDepartment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deptName.trim() || !deptCode.trim()) return;
+    setDeptSubmitting(true);
+    try {
+      const res  = await fetch("/api/admin/departments", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ name: deptName.trim(), code: deptCode.trim() }),
+      });
+      const json = await res.json() as { name?: string; error?: string };
+      if (!res.ok) { showToast("error", json.error ?? "Could not create department."); return; }
+      showToast("success", `Department "${json.name}" created.`);
+      setDeptName(""); setDeptCode(""); setShowDeptForm(false);
+      loadDepartments();
+    } catch {
+      showToast("error", "Network error.");
+    } finally {
+      setDeptSubmitting(false);
+    }
+  }
 
   const [atRiskPage, setAtRiskPage] = useState(1);
   const AT_RISK_PAGE_SIZE = 8;
@@ -702,7 +757,9 @@ export function AdminPage() {
                         <span className="text-[10px] text-indigo-400 font-mono">EDP {cls.edpCode}</span>
                       )}
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
-                      <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.course}</span>
+                      {cls.department && (
+                        <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
+                      )}
                       <span className="text-[10px] text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -728,13 +785,62 @@ export function AdminPage() {
             Hierarchy Management
           </h2>
           <p className="text-xs text-slate-400 mb-5">
-            Create and manage institutions, departments, and instructors. Coming soon.
+            Create and manage departments and instructors.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Departments</p>
-              <p className="text-xs text-slate-400 mb-3">Create or rename departments within the institution.</p>
-              <DisabledBtn>Create Department</DisabledBtn>
+            <div className="border border-slate-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-semibold text-slate-600">Departments</p>
+                <button
+                  onClick={() => setShowDeptForm((v) => !v)}
+                  className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  {showDeptForm ? "Cancel" : "+ New"}
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">Instructors pick from this list when creating a class section.</p>
+
+              {showDeptForm && (
+                <form onSubmit={(e) => void createDepartment(e)} className="space-y-2 mb-3">
+                  <input
+                    required
+                    value={deptName}
+                    onChange={(e) => setDeptName(e.target.value)}
+                    placeholder="e.g. College of Computer Studies"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                  <input
+                    required
+                    value={deptCode}
+                    onChange={(e) => setDeptCode(e.target.value)}
+                    placeholder="e.g. CCS"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                  <button
+                    type="submit"
+                    disabled={deptSubmitting || !deptName.trim() || !deptCode.trim()}
+                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold transition-colors"
+                  >
+                    {deptSubmitting ? "Creating…" : "Create"}
+                  </button>
+                </form>
+              )}
+
+              {departmentsLoading && <p className="text-[11px] text-slate-400">Loading…</p>}
+              {!departmentsLoading && departmentsError && <p className="text-[11px] text-red-600">{departmentsError}</p>}
+              {!departmentsLoading && !departmentsError && departments.length === 0 && (
+                <p className="text-[11px] text-slate-400">No departments yet.</p>
+              )}
+              {!departmentsLoading && !departmentsError && departments.length > 0 && (
+                <ul className="space-y-1 max-h-32 overflow-y-auto">
+                  {departments.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-700 truncate">{d.name}</span>
+                      <span className="text-slate-400 font-mono ml-2 shrink-0">{d.code}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="border border-dashed border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-600 mb-1">Instructors</p>
@@ -753,7 +859,7 @@ export function AdminPage() {
             </div>
           </div>
           <p className="text-[11px] text-slate-400 mt-4">
-            All management actions are disabled in this preview.
+            Departments are live. Instructor invitations, cross-department class management, and report export remain disabled in this preview.
           </p>
         </section>
 

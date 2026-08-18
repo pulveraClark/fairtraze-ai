@@ -21,7 +21,7 @@ interface ClassInfo {
   id: number;
   subjectCode: string;
   subjectName: string;
-  course: string;
+  department: { id: number; name: string; code: string } | null;
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
   joinCode: string | null;
@@ -574,9 +574,11 @@ export function ClassPage({ classId }: Props) {
                     )}
                   </span>
                   <span className="shrink-0 text-xs font-semibold text-slate-800">{classInfo.subjectName}</span>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
-                    {classInfo.course}
-                  </span>
+                  {classInfo.department && (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                      {classInfo.department.code}
+                    </span>
+                  )}
                   {classInfo.type && (
                     <span className="shrink-0 text-[10px] text-slate-400 font-mono">
                       {classInfo.type.charAt(0) + classInfo.type.slice(1).toLowerCase()}

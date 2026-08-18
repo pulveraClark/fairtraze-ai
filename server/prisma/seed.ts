@@ -29,6 +29,14 @@ async function main() {
   });
   console.log(`User: ${admin.name} <${admin.email}> (${admin.systemRole})`);
 
+  // ===== DEPARTMENTS =====
+  const departmentCCS = await prisma.department.upsert({
+    where:  { id: 1 },
+    update: { name: "College of Computer Studies", code: "CCS" },
+    create: { name: "College of Computer Studies", code: "CCS" },
+  });
+  console.log(`Department: ${departmentCCS.name} (${departmentCCS.code})`);
+
   // ===== CLASS SECTIONS =====
   // Migrate any rows that were seeded before EDP codes were added (LEGACY-X placeholder)
   // and update them to their real EDP codes by matching on subjectCode.
@@ -66,11 +74,11 @@ async function main() {
 
   const sectionAppsdev = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "31400" } },
-    update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["31400"] },
+    update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["31400"] },
     create: {
       subjectCode: "CC-APPSDEV22",
       subjectName: "Applications Development",
-      course:      "BSIT",
+      departmentId: departmentCCS.id,
       edpCode:     "31400",
       type:        "LECTURE",
       joinCode:    CLASS_JOIN_CODES["31400"],
@@ -81,11 +89,11 @@ async function main() {
 
   const sectionImdb = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21856" } },
-    update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["21856"] },
+    update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["21856"] },
     create: {
       subjectCode: "IT-IMDBSYS32",
       subjectName: "Information Management 2 (Database Systems)",
-      course:      "BSIT",
+      departmentId: departmentCCS.id,
       edpCode:     "21856",
       type:        "LECTURE",
       joinCode:    CLASS_JOIN_CODES["21856"],
@@ -96,11 +104,11 @@ async function main() {
 
   const sectionElec = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21936" } },
-    update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["21936"] },
+    update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["21936"] },
     create: {
       subjectCode: "IT-ELEC 2",
       subjectName: "IT Elective 2",
-      course:      "BSIT",
+      departmentId: departmentCCS.id,
       edpCode:     "21936",
       type:        "LECTURE",
       joinCode:    CLASS_JOIN_CODES["21936"],

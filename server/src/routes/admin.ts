@@ -322,6 +322,7 @@ adminRouter.get("/api/admin/classes", ...requireRole("ADMIN"), async (_req, res)
     orderBy: [{ instructorId: "asc" }, { createdAt: "asc" }],
     include: {
       instructor:  { select: { id: true, name: true, email: true } },
+      department:  { select: { id: true, name: true, code: true } },
       assignments: {
         orderBy: { createdAt: "asc" },
         select:  { id: true, title: true, _count: { select: { projects: true } } },
@@ -330,6 +331,53 @@ adminRouter.get("/api/admin/classes", ...requireRole("ADMIN"), async (_req, res)
   });
 
   res.json({ classes });
+});
+
+// ── GET /api/admin/departments ────────────────────────────────────────────────
+// List all departments (institutional taxonomy — pre-created by admins).
+
+adminRouter.get("/api/admin/departments", ...requireRole("ADMIN"), async (_req, res) => {
+  const departments = await prisma.department.findMany({
+    orderBy: { name: "asc" },
+    include: { _count: { select: { classSections: true } } },
+  });
+
+  res.json({ departments });
+});
+
+// ── POST /api/admin/departments ───────────────────────────────────────────────
+// Create a department. Instructors select from this list when creating a class
+// section — they cannot create departments themselves (see CLAUDE.md rationale).
+
+adminRouter.post("/api/admin/departments", ...requireRole("ADMIN"), async (req, res) => {
+  const bodyResult = z.object({
+    name: z.string().trim().min(1),
+    code: z.string().trim().min(1),
+  }).safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "Invalid input", details: bodyResult.error.flatten() });
+    return;
+  }
+
+  const { name, code } = bodyResult.data;
+
+  const [department, actorName] = await Promise.all([
+    prisma.department.create({ data: { name, code } }),
+    getActorName(req.user!.sub),
+  ]);
+
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     "DEPARTMENT_CREATED",
+      targetType: "DEPARTMENT",
+      targetId:   String(department.id),
+      details:    `${department.name} (${department.code})`,
+    },
+  });
+
+  res.status(201).json(department);
 });
 
 // ── GET /api/admin/audit ──────────────────────────────────────────────────────

@@ -24,7 +24,8 @@ joinRouter.post("/api/join/class", ...requireRole("STUDENT"), async (req, res) =
     where: { joinCode: code },
     select: {
       id: true, subjectCode: true, subjectName: true,
-      course: true, edpCode: true, joinCode: true,
+      department: { select: { id: true, name: true, code: true } },
+      edpCode: true, joinCode: true,
     },
   });
   if (!cls) {
@@ -48,7 +49,7 @@ joinRouter.post("/api/join/class", ...requireRole("STUDENT"), async (req, res) =
     classSectionId: cls.id,
     subjectCode:    cls.subjectCode,
     subjectName:    cls.subjectName,
-    course:         cls.course,
+    department:     cls.department,
     edpCode:        cls.edpCode,
     joinedAt:       enrollment.joinedAt.toISOString(),
   });
@@ -66,6 +67,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
     include: {
       classSection: {
         include: {
+          department: { select: { id: true, name: true, code: true } },
           assignments: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -93,7 +95,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
       id:          cs.id,
       subjectCode: cs.subjectCode,
       subjectName: cs.subjectName,
-      course:      cs.course,
+      department:  cs.department,
       edpCode:     cs.edpCode,
       joinCode:    cs.joinCode,
       joinedAt:    e.joinedAt.toISOString(),
@@ -156,6 +158,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
   const cs = await prisma.classSection.findUnique({
     where: { id: classSectionId },
     include: {
+      department: { select: { id: true, name: true, code: true } },
       assignments: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -274,7 +277,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
       id:          cs.id,
       subjectCode: cs.subjectCode,
       subjectName: cs.subjectName,
-      course:      cs.course,
+      department:  cs.department,
       edpCode:     cs.edpCode,
       joinCode:    cs.joinCode,
     },
@@ -628,7 +631,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        assignment: { include: { classSection: true } },
+        assignment: { include: { classSection: { include: { department: true } } } },
         reports: { orderBy: { generatedAt: "desc" }, take: 1 },
       },
     }),
@@ -650,7 +653,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   const base = {
     classSection: {
       id: cs.id, subjectCode: cs.subjectCode, subjectName: cs.subjectName,
-      course: cs.course, edpCode: cs.edpCode,
+      department: { id: cs.department.id, name: cs.department.name, code: cs.department.code },
+      edpCode: cs.edpCode,
     },
     assignment: {
       id: asgn.id, title: asgn.title,
