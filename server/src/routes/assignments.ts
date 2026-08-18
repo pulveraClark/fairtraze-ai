@@ -12,7 +12,7 @@ const createAssignmentSchema = z.object({
   title:          z.string().min(1),
   deadline:       z.string({ required_error: "Deadline is required" }).datetime({ offset: true, message: "Deadline is required" }),
   maxGroupSize:   z.number().int().positive().default(5),
-  sourceType:     z.enum(["GITHUB", "EDITOR", "COMBINED"]).default("GITHUB"),
+  sourceType:     z.enum(["GITHUB", "EDITOR", "COMBINED"]),
 });
 
 const idParam = z.coerce.number().int().positive();

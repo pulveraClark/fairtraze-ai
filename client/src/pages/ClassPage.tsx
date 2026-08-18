@@ -102,7 +102,8 @@ function CreateAssignmentModal({
   const [deadline, setDeadline]     = useState("");
   const [deadlineErr, setDeadlineErr] = useState<string | null>(null);
   const [maxGroupSize, setMaxSize]  = useState("5");
-  const [sourceType, setSourceType] = useState<"GITHUB" | "EDITOR" | "COMBINED">("GITHUB");
+  const [sourceType, setSourceType] = useState<"GITHUB" | "EDITOR" | "COMBINED" | null>(null);
+  const [sourceTypeErr, setSourceTypeErr] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
@@ -122,6 +123,8 @@ function CreateAssignmentModal({
     if (!title.trim()) return;
     if (!deadline) { setDeadlineErr("Deadline is required"); return; }
     setDeadlineErr(null);
+    if (!sourceType) { setSourceTypeErr("Please choose an analysis source"); return; }
+    setSourceTypeErr(null);
     setSubmitting(true);
     setError(null);
     try {
@@ -255,7 +258,7 @@ function CreateAssignmentModal({
                         type="radio"
                         name="modal_sourceType"
                         checked={sourceType === opt.value}
-                        onChange={() => setSourceType(opt.value)}
+                        onChange={() => { setSourceType(opt.value); if (sourceTypeErr) setSourceTypeErr(null); }}
                         className="accent-indigo-500"
                       />
                       <span className={`text-sm font-medium ${sourceType === opt.value ? "text-indigo-700" : "text-slate-600"}`}>
@@ -264,6 +267,7 @@ function CreateAssignmentModal({
                     </label>
                   ))}
                 </div>
+                {sourceTypeErr && <p className="text-[11px] text-red-600 mt-1">{sourceTypeErr}</p>}
               </div>
 
             </div>

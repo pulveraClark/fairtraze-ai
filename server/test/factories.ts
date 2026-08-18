@@ -45,12 +45,16 @@ export async function createClassSection(instructorId: number, overrides: { subj
   });
 }
 
-export async function createAssignment(classSectionId: number, overrides: { title?: string } = {}) {
+export async function createAssignment(
+  classSectionId: number,
+  overrides: { title?: string; sourceType?: "GITHUB" | "EDITOR" | "COMBINED" } = {}
+) {
   joinCodeCounter += 1;
   return prisma.assignment.create({
     data: {
       classSectionId,
       title: overrides.title ?? "Test Assignment",
+      sourceType: overrides.sourceType ?? "GITHUB",
       joinCode: `JOIN${joinCodeCounter}`,
     },
   });

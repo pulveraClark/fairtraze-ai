@@ -139,7 +139,7 @@ model Assignment {
   title          String
   deadline       DateTime?
   maxGroupSize   Int          @default(5)
-  sourceType     SourceType   @default(GITHUB)
+  sourceType     SourceType
   joinCode       String       @unique
   createdAt      DateTime     @default(now())
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
