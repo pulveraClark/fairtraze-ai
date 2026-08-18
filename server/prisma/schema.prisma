@@ -64,6 +64,13 @@ enum EditType {
   TRIVIAL
 }
 
+// Distinguishes live-typed rows from a future .docx-import feature. IMPORT is schema
+// groundwork only — nothing produces it yet; every row today is LIVE.
+enum EditSource {
+  LIVE
+  IMPORT
+}
+
 model User {
   id               Int               @id @default(autoincrement())
   email            String            @unique
@@ -315,6 +322,8 @@ model EditEvent {
   timestamp  DateTime      @default(now())
   // Significance classification (Step 4b) — set at capture time for INSERT events only.
   editType   EditType?
+  // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
+  source     EditSource    @default(LIVE)
   document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
   user       User          @relation(fields: [userId], references: [id])
 
@@ -333,6 +342,8 @@ model EditSession {
   endedAt        DateTime?
   // Gross characters inserted during this session (not net of deletions).
   characterCount Int       @default(0)
+  // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
+  source         EditSource @default(LIVE)
   document       Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   user           User      @relation(fields: [userId], references: [id])
 
