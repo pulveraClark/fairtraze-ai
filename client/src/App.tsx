@@ -4,7 +4,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-import { DemoPage } from "./pages/DemoPage";
+import { InstructorDashboardPage } from "./pages/InstructorDashboardPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ClassPage } from "./pages/ClassPage";
@@ -65,7 +65,7 @@ export default function App() {
 
   if (pathname === "/dashboard") return (
     <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
-      <DemoPage />
+      <InstructorDashboardPage />
     </ProtectedRoute>
   );
 

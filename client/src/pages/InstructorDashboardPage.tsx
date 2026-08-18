@@ -397,7 +397,7 @@ function ConfirmDialog({
 }
 
 // ── Page component ────────────────────────────────────────────────────────────
-export function DemoPage() {
+export function InstructorDashboardPage() {
   const { navigate }    = useRouter();
   const { token }       = useAuth();
 
