@@ -30,7 +30,7 @@ export const authorshipPluginKey = new PluginKey<DecorationSet>("authorshipHighl
 // `doc.textContent`). There's no built-in ProseMirror helper for this direction (offset -> pos);
 // `textBetween`/`textContent` only go the other way. So we walk the doc ourselves, keeping a
 // running plain-text counter alongside each node's real position.
-function plainTextRangeToPMRange(doc: PMNode, start: number, end: number): { from: number; to: number } | null {
+export function plainTextRangeToPMRange(doc: PMNode, start: number, end: number): { from: number; to: number } | null {
   let textOffset = 0;
   let from = -1;
   let to = -1;
