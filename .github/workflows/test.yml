@@ -14,6 +14,12 @@ jobs:
       # Configure this as a repo secret (Settings -> Secrets and variables ->
       # Actions) with the branch's direct (non-pooled) connection string.
       TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      # Prisma reads DATABASE_URL, not TEST_DATABASE_URL. Locally, vitest.config.ts
+      # and test/globalSetup.ts derive DATABASE_URL from TEST_DATABASE_URL — set it
+      # directly here too so every process in this job (prisma migrate deploy,
+      # vitest, each test file's PrismaClient) gets it without depending on that
+      # derivation chain.
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
       # Fixed non-production value — only signs/verifies tokens within this
       # ephemeral run, so it doesn't need to be a real secret.
       AUTH_SECRET: test-secret-do-not-use-in-prod
