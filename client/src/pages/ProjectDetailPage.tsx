@@ -3,6 +3,7 @@ import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig } f
 import { useAuth } from "../context/AuthContext";
 import { AppTopBar } from "../components/AppTopBar";
 import { TeamHealthBanner } from "../components/TeamHealthBanner";
+import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { ContributionChart } from "../components/ContributionChart";
 import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
@@ -81,8 +82,12 @@ export function ProjectDetailPage({ projectId }: Props) {
       const current = data.summary.find((g) => g.projectId === projectId) ?? null;
       setProjectMeta(current);
       if (current) {
+        // assignmentId, not assignmentLabel — assignmentLabel is a display string shared at the
+        // subject/class level ("CODE — Subject Name"), not guaranteed unique per Assignment, so
+        // matching on it could pull in siblings from a different assignment under the same
+        // subject (or miss real siblings on a label mismatch). assignmentId is the actual FK.
         const list = data.summary
-          .filter((g) => g.assignmentLabel === current.assignmentLabel)
+          .filter((g) => g.assignmentId === current.assignmentId)
           .sort((a, b) => a.groupName.localeCompare(b.groupName));
         setSiblings(list);
       }
@@ -200,6 +205,10 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   const classUrl      = classId      ? `/class/${classId}`                              : "/dashboard";
   const assignmentUrl = classId && assignmentId ? `/class/${classId}/assignment/${assignmentId}` : classUrl;
+
+  // This group's Gini vs. the average across its other analyzed siblings under the same
+  // assignment — omitted entirely (averageGini: null) when there are no such siblings.
+  const benchmark = computeAssignmentBenchmark(siblings, assignmentId, { excludeProjectId: projectId });
 
   const groupName = projectMeta?.groupName ?? stored?.groupName ?? `Project ${projectId}`;
 
@@ -487,6 +496,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               gini={stored.report.gini}
               projectName={stored.groupName}
               memberCount={stored.report.memberCount}
+              benchmark={benchmark}
             />
 
             {/* Report details */}

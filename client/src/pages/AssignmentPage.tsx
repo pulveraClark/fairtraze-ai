@@ -5,6 +5,7 @@ import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
 import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
+import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 
@@ -262,6 +263,9 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     : sorted;
   const atRiskCount = classAtRiskCount(summary);
   const classUrl    = `/class/${classId}`;
+  // Page-level reference stat — average across every analyzed group in this assignment
+  // (self-inclusive; `summary` is already scoped to this one assignment).
+  const benchmark   = computeAssignmentBenchmark(summary, assignmentId);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -305,6 +309,14 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}
                 {summary.length} group{summary.length !== 1 ? "s" : ""}
                 {assignment?.deadline && <span className="ml-1">· Deadline: {fmtDeadline(assignment.deadline)}</span>}
+                {/* Require at least 2 analyzed groups — a page-level "average" of just one
+                    group's own Gini would misleadingly imply a comparison that doesn't exist. */}
+                {benchmark.averageGini !== null && benchmark.analyzedPeerCount > 1 && (
+                  <span className="ml-1">
+                    · Assignment average Gini: <span className="font-semibold text-slate-500">{benchmark.averageGini.toFixed(3)}</span>{" "}
+                    ({benchmark.analyzedPeerCount} of {summary.length} analyzed)
+                  </span>
+                )}
               </p>
             </div>
           </div>

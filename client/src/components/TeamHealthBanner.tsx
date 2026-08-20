@@ -26,9 +26,12 @@ interface Props {
   gini: number;
   projectName: string;
   memberCount?: number;
+  // Average Gini across this group's other analyzed siblings under the same assignment —
+  // omitted (averageGini: null) when there are no siblings, or no analyzed siblings yet.
+  benchmark?: { averageGini: number | null; analyzedPeerCount: number };
 }
 
-export function TeamHealthBanner({ teamHealth, gini, projectName, memberCount }: Props) {
+export function TeamHealthBanner({ teamHealth, gini, projectName, memberCount, benchmark }: Props) {
   return (
     <div className={`border-2 rounded-xl shadow-sm p-6 ${cardStyles[teamHealth]}`}>
       <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${labelStyles[teamHealth]}`}>
@@ -72,6 +75,30 @@ export function TeamHealthBanner({ teamHealth, gini, projectName, memberCount }:
           <span className="text-slate-600 text-sm">{memberCount} members</span>
         )}
       </div>
+
+      {benchmark && benchmark.averageGini !== null && (
+        <div className="mt-3 pt-3 border-t border-black/10 flex items-center gap-1.5 text-xs">
+          <span className="text-slate-500 font-medium">Assignment average:</span>
+          <span className="font-semibold text-slate-700">{benchmark.averageGini.toFixed(3)}</span>
+          <span
+            className={`font-semibold ${
+              gini > benchmark.averageGini
+                ? "text-red-600"
+                : gini < benchmark.averageGini
+                ? "text-emerald-600"
+                : "text-slate-500"
+            }`}
+          >
+            {gini > benchmark.averageGini ? "▲ higher" : gini < benchmark.averageGini ? "▼ lower" : "— equal"}
+          </span>
+          <InfoTooltip
+            label="About this comparison"
+            content={`Average Gini across ${benchmark.analyzedPeerCount} other analyzed group${
+              benchmark.analyzedPeerCount === 1 ? "" : "s"
+            } under the same assignment (this group excluded). "Higher" means more imbalance than its peers, not necessarily a problem on its own — some assignments are unevenly-graded by nature.`}
+          />
+        </div>
+      )}
     </div>
   );
 }
