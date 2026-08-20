@@ -14,6 +14,7 @@ import { alertsRouter } from "./routes/alerts.js";
 import { disputesRouter } from "./routes/disputes.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
+import { authenticateToken } from "./middleware/auth.js";
 import {
   corsOptions,
   helmetMiddleware,
@@ -44,7 +45,13 @@ export function createApp() {
   });
 
   app.use(["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password"], authLimiter);
-  app.use(["/api/projects/:id/analyze", "/api/projects/:id/narrative"], analysisLimiter);
+  // authenticateToken runs first here so analysisLimiter can key by instructor id
+  // (req.user.sub) instead of IP — see the comment on analysisLimiter itself.
+  app.use(
+    ["/api/projects/:id/analyze", "/api/projects/:id/narrative"],
+    authenticateToken,
+    analysisLimiter
+  );
 
   app.use(projectsRouter);
   app.use(analyzeRouter);

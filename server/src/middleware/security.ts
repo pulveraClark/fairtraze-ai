@@ -1,5 +1,5 @@
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { CorsOptions } from "cors";
 
 const allowedOrigins = (process.env.FRONTEND_URL ?? "http://localhost:5173")
@@ -32,10 +32,16 @@ export const authLimiter = rateLimit({
   max: 10,
 });
 
+// Keyed by instructor id (not IP) so bulk-analyze runs get their own quota and
+// instructors sharing an institutional NAT/IP don't share one bucket. Requires
+// authenticateToken to have already run for this request (see app.ts) so
+// req.user is populated; falls back to IP only for the rare unauthenticated
+// case, where the route itself will 401 regardless.
 export const analysisLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 80,
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
 export const globalLimiter = rateLimit({

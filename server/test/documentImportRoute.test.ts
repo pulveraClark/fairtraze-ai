@@ -27,17 +27,23 @@ const app = createApp();
 // on are actually visible via the same Prisma client, so the assertions below (and the manual
 // room cleanup that follows) never race an in-flight write against the next test's global
 // TRUNCATE (server/test/setupEnv.ts's afterEach).
+//
+// Waits for EditSession rows too, not just EditEvent — authorshipCapture's flush writes both,
+// but not necessarily in the same instant/transaction from the caller's point of view, so
+// polling on events alone could still return between the two writes landing (observed once as a
+// full-suite-only flake: events present, sessions still empty).
 async function waitForDocumentEvents(groupId: number, { timeoutMs = 15000, intervalMs = 200 } = {}) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const doc = await prisma.document.findUnique({ where: { groupId } });
     if (doc) {
       const events = await prisma.editEvent.findMany({ where: { documentId: doc.id } });
-      if (events.length > 0) return doc;
+      const sessions = await prisma.editSession.findMany({ where: { documentId: doc.id } });
+      if (events.length > 0 && sessions.length > 0) return doc;
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new Error(`Timed out waiting for document/editEvent rows for group ${groupId}`);
+  throw new Error(`Timed out waiting for document/editEvent/editSession rows for group ${groupId}`);
 }
 
 // The import route reaches the room's live Y.Doc via y-websocket/bin/utils' getYDoc(), which

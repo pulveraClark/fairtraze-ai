@@ -14,6 +14,11 @@ interface Props {
   onAnalyze?: (projectId: number) => void;
   analyzing: boolean;
   onManage?: (projectId: number) => void;
+  // Bulk-select mode (AssignmentPage) — omitted entirely outside that context,
+  // so the checkbox never appears on pages that don't support bulk actions.
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (projectId: number) => void;
 }
 
 function isMembershipStale(item: ProjectSummaryItem): boolean {
@@ -21,7 +26,7 @@ function isMembershipStale(item: ProjectSummaryItem): boolean {
   return new Date(item.membershipChangedAt) > new Date(item.lastAnalyzedAt);
 }
 
-export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props) {
+export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, selectable, selected, onToggleSelect }: Props) {
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
 
@@ -29,13 +34,27 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
     navigate(`/project/${item.projectId}`);
   }
 
+  const checkbox = selectable && (
+    <input
+      type="checkbox"
+      checked={!!selected}
+      onChange={() => onToggleSelect?.(item.projectId)}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={`Select ${item.groupName}`}
+      className="shrink-0 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0 mt-0.5"
+    />
+  );
+
   if (!item.isAnalyzed) {
     return (
       <div className="bg-white border border-dashed border-slate-300 rounded-xl p-5 flex flex-col gap-3 opacity-80">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-slate-600">{item.groupName}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+          <div className="flex items-start gap-2 min-w-0">
+            {checkbox}
+            <div>
+              <p className="text-sm font-semibold text-slate-600">{item.groupName}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+            </div>
           </div>
           <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
             Not analyzed
@@ -75,11 +94,14 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage }: Props
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">
-            {item.groupName}
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+        <div className="flex items-start gap-2 min-w-0">
+          {checkbox}
+          <div>
+            <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">
+              {item.groupName}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+          </div>
         </div>
         {item.teamHealth && (
           <span

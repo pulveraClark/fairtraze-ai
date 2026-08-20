@@ -51,9 +51,15 @@ interface Props {
   stored: StoredReportResponse;
   narrative: string | null;
   assignmentLabel: string;
+  // When composing several reports into one combined print pass (bulk export),
+  // only one instance should render the `position: fixed` footer — with more
+  // than one in the DOM at once, a browser's print engine will draw them all
+  // stacked on top of each other on every page. Defaults to true so the
+  // single-project export flow (ProjectDetailPage) is unaffected.
+  showFooter?: boolean;
 }
 
-export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
+export function PrintableReport({ stored, narrative, assignmentLabel, showFooter = true }: Props) {
   const { report, groupName, repoUrl, analyzedAt, sourceType, scoringConfig } = stored;
   const isDocumentReport = sourceType === "EDITOR";
   const isCombinedReport = sourceType === "COMBINED";
@@ -86,6 +92,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
       } as React.CSSProperties}
     >
       {/* ── Fixed page footer — repeats on every printed page ─────────────────── */}
+      {showFooter && (
       <div
         style={{
           position: "fixed",
@@ -109,6 +116,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel }: Props) {
         </span>
         <span>Generated {printDate}</span>
       </div>
+      )}
 
       {/* ── Header band ────────────────────────────────────────────────────────── */}
       <div
