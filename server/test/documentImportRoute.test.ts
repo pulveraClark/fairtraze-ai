@@ -18,6 +18,28 @@ import {
 
 const app = createApp();
 
+// Polls the DB for the rows a debounced write is expected to produce, instead of guessing a
+// fixed sleep duration. authorshipCapture's flush (1500ms) and persistence.ts's persist debounce
+// (3000ms) are real timers doing real async DB work; under a full-suite run (many prior
+// sequential test files sharing one Neon connection — see fileParallelism: false in
+// vitest.config.ts) that chain can occasionally take longer than any fixed margin comfortable in
+// isolation. Polling removes the guessed margin: this only returns once the rows being asserted
+// on are actually visible via the same Prisma client, so the assertions below (and the manual
+// room cleanup that follows) never race an in-flight write against the next test's global
+// TRUNCATE (server/test/setupEnv.ts's afterEach).
+async function waitForDocumentEvents(groupId: number, { timeoutMs = 15000, intervalMs = 200 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const doc = await prisma.document.findUnique({ where: { groupId } });
+    if (doc) {
+      const events = await prisma.editEvent.findMany({ where: { documentId: doc.id } });
+      if (events.length > 0) return doc;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Timed out waiting for document/editEvent rows for group ${groupId}`);
+}
+
 // The import route reaches the room's live Y.Doc via y-websocket/bin/utils' getYDoc(), which
 // only calls persistence.bindState() for a newly-created room if something has previously called
 // its module-level setPersistence(). In production that happens once at server boot
@@ -59,17 +81,14 @@ describe("POST /api/groups/:id/document/import", () => {
     expect(res.status).toBe(200);
     expect(res.body.chunkCount).toBe(3);
 
-    // Give both debounced writers time to settle: authorshipCapture's flush (1500ms, writes
-    // EditEvent/EditSession) AND persistence.ts's separate, longer persist debounce (3000ms,
-    // writes Document.yjsState) — the explicit cleanup below still handles the case where
-    // persistence's timer is somehow still pending regardless.
-    await new Promise((resolve) => setTimeout(resolve, 3500));
+    // Wait for both debounced writers to actually finish, not just fire: authorshipCapture's
+    // flush (1500ms, writes EditEvent/EditSession) AND persistence.ts's separate, longer persist
+    // debounce (3000ms, writes Document.yjsState). The explicit cleanup below still handles the
+    // case where persistence's timer is somehow still pending regardless.
+    const doc = await waitForDocumentEvents(project.id);
 
-    const doc = await prisma.document.findUnique({ where: { groupId: project.id } });
-    expect(doc).not.toBeNull();
-
-    const events = await prisma.editEvent.findMany({ where: { documentId: doc!.id } });
-    const sessions = await prisma.editSession.findMany({ where: { documentId: doc!.id } });
+    const events = await prisma.editEvent.findMany({ where: { documentId: doc.id } });
+    const sessions = await prisma.editSession.findMany({ where: { documentId: doc.id } });
 
     expect(events.length).toBeGreaterThan(0);
     expect(events.every((e) => e.userId === member.id && e.source === "IMPORT")).toBe(true);
@@ -77,7 +96,7 @@ describe("POST /api/groups/:id/document/import", () => {
     expect(sessions.every((s) => s.userId === member.id && s.source === "IMPORT")).toBe(true);
 
     const roster = [{ userId: member.id, studentName: member.name, githubUsername: "" }];
-    const rawStats = await computeDocumentRawStats(doc!.id, roster);
+    const rawStats = await computeDocumentRawStats(doc.id, roster);
     const report = computeDocumentTeamReport(rawStats);
     const scored = report.members.find((m) => m.userId === member.id)!;
 
