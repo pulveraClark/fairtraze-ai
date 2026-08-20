@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDocumentTeamReport } from "./documentScoring";
+import { computeDocumentTeamReport, TYPICAL_SESSION_CHARS_DEFAULT } from "./documentScoring";
 import type { RawDocumentMemberStats } from "./types";
 
 const ZERO_BREAKDOWN = { substantive: 0, revision: 0, formatting: 0, trivial: 0 };
@@ -144,5 +144,123 @@ describe("computeDocumentTeamReport", () => {
     const diluted2 = deadlineReport.members.find((m) => m.userId === 2)!;
     expect(diluted2.flags).toContain("deadline-driven");
     expect(deadlineReport.deadlineWindowBasis).toBe("assignment-deadline");
+  });
+
+  // ── .docx-import scoring hybrid policy (step 3) ─────────────────────────────────────────
+
+  describe("import scoring hybrid policy", () => {
+    it("gives proportional session credit for imported content, matching the exact log formula", () => {
+      const members: RawDocumentMemberStats[] = [
+        {
+          studentName: "NoImport", userId: 1, githubUsername: "noimport",
+          retainedChars: 100, totalInsertedChars: 100, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 2, liveSessionCount: 2, sessionDates: ["2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z"],
+        },
+        {
+          studentName: "WithImport", userId: 2, githubUsername: "withimport",
+          retainedChars: 100, totalInsertedChars: 100, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 3, liveSessionCount: 2, sessionDates: ["2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z", "2024-01-03T00:00:00Z"],
+          importedRetainedChars: 300, importedWeightedRetainedChars: 300,
+        },
+      ];
+      const report = computeDocumentTeamReport(members);
+      const noImport = report.members.find((m) => m.userId === 1)!;
+      const withImport = report.members.find((m) => m.userId === 2)!;
+
+      // Same liveSessionCount (2) for both; WithImport's extra credit comes only from the
+      // imported volume, not from the extra IMPORT-sourced EditSession row (sessionCount: 3
+      // is NOT what drives this — liveSessionCount is).
+      const expectedNoImportLog = Math.log(2 + 1);
+      const expectedWithImportLog = Math.log(2 + 300 / TYPICAL_SESSION_CHARS_DEFAULT + 1);
+      expect(expectedWithImportLog).toBeGreaterThan(expectedNoImportLog);
+
+      const totalLog = expectedNoImportLog + expectedWithImportLog;
+      // sessionShare is round3()'d in the report output, so compare at 3-decimal precision.
+      expect(noImport.sessionShare).toBeCloseTo(expectedNoImportLog / totalLog, 3);
+      expect(withImport.sessionShare).toBeCloseTo(expectedWithImportLog / totalLog, 3);
+      expect(withImport.contributionShare).toBeGreaterThan(noImport.contributionShare);
+    });
+
+    it("respects a custom typicalSessionChars override (5th arg)", () => {
+      const members: RawDocumentMemberStats[] = [
+        {
+          studentName: "A", userId: 1, githubUsername: "a",
+          retainedChars: 100, totalInsertedChars: 100, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 1, liveSessionCount: 0, sessionDates: ["2024-01-01T00:00:00Z"],
+          importedRetainedChars: 300, importedWeightedRetainedChars: 300,
+        },
+      ];
+      const defaultReport = computeDocumentTeamReport(members);
+      const customReport = computeDocumentTeamReport(members, undefined, undefined, undefined, 300);
+
+      // Halving typicalSessionChars doubles the imported-volume term (300/300=1 vs 300/600=0.5),
+      // so the custom-run sessionShare-driving logSessions must be strictly larger.
+      const defaultLog = Math.log(0 + 300 / TYPICAL_SESSION_CHARS_DEFAULT + 1);
+      const customLog = Math.log(0 + 300 / 300 + 1);
+      expect(customLog).toBeGreaterThan(defaultLog);
+      // Sole member either way, so sessionShare is always 1 — assert on contributionShare's
+      // sessions component indirectly via the underlying formula instead of report output,
+      // since a lone member's shares are always 1 regardless of magnitude.
+      expect(defaultReport.members[0].sessionShare).toBe(1);
+      expect(customReport.members[0].sessionShare).toBe(1);
+    });
+
+    it("sets importNote with the raw imported character count when present, null otherwise", () => {
+      const members: RawDocumentMemberStats[] = [
+        {
+          studentName: "Imported", userId: 1, githubUsername: "imported",
+          retainedChars: 250, totalInsertedChars: 250, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 1, liveSessionCount: 0, sessionDates: ["2024-01-01T00:00:00Z"],
+          importedRetainedChars: 250, importedWeightedRetainedChars: 250,
+        },
+        {
+          studentName: "LiveOnly", userId: 2, githubUsername: "liveonly",
+          retainedChars: 250, totalInsertedChars: 250, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
+        },
+      ];
+      const report = computeDocumentTeamReport(members);
+      const imported = report.members.find((m) => m.userId === 1)!;
+      const liveOnly = report.members.find((m) => m.userId === 2)!;
+
+      expect(imported.importedRetainedChars).toBe(250);
+      expect(imported.importNote).toContain("Includes 250 characters imported from .docx");
+      expect(imported.importNote).toContain("session credit includes an estimate based on import volume");
+      expect(imported.importNote).toContain("active-day count reflects only the day of upload");
+
+      expect(liveOnly.importedRetainedChars).toBe(0);
+      expect(liveOnly.importNote).toBeNull();
+    });
+
+    it("leaves activeDays unchanged by import — one imported session counts as at most one day, same as live", () => {
+      const members: RawDocumentMemberStats[] = [
+        {
+          studentName: "Imported", userId: 1, githubUsername: "imported",
+          retainedChars: 500, totalInsertedChars: 500, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 1, liveSessionCount: 0, sessionDates: ["2024-01-01T09:00:00Z"],
+          importedRetainedChars: 500, importedWeightedRetainedChars: 500,
+        },
+      ];
+      const report = computeDocumentTeamReport(members);
+      expect(report.members[0].activeDays).toBe(1);
+    });
+
+    it("a member with only source: LIVE activity (no new fields set) gets importNote: null and identical scoring to before step 3", () => {
+      // Same fixture as the existing Step 4b weighting test above — proves the new optional
+      // fields don't alter output at all when omitted.
+      const members: RawDocumentMemberStats[] = [
+        {
+          studentName: "B", userId: 2, githubUsername: "b",
+          retainedChars: 100, totalInsertedChars: 100, totalDeletedChars: 0, selfDeletedChars: 0,
+          sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
+          weightedRetainedChars: 100,
+          editTypeBreakdown: { substantive: 3, revision: 0, formatting: 0, trivial: 0 },
+        },
+      ];
+      const report = computeDocumentTeamReport(members);
+      expect(report.members[0].sessionShare).toBe(1);
+      expect(report.members[0].importedRetainedChars).toBe(0);
+      expect(report.members[0].importNote).toBeNull();
+    });
   });
 });

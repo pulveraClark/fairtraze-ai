@@ -8,11 +8,16 @@ export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
   retainedText: 0.4, sessions: 0.2, activeDays: 0.4,
 };
 
+// Reference volume for converting imported character count into proportional "phantom" session
+// credit (step 3, docx-import hybrid policy) — see computeDocumentTeamReport's logSessions.
+export const TYPICAL_SESSION_CHARS_DEFAULT = 600;
+
 export function computeDocumentTeamReport(
   rawMembers: RawDocumentMemberStats[],
   weights: DocumentScoringWeights = DOCUMENT_DEFAULT_WEIGHTS,
   thresholds: ScoringThresholds = DEFAULT_THRESHOLDS,
-  deadline?: number | null
+  deadline?: number | null,
+  typicalSessionChars: number = TYPICAL_SESSION_CHARS_DEFAULT
 ): TeamReport<DocumentScoredMember> {
   if (rawMembers.length === 0) {
     return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" };
@@ -31,10 +36,17 @@ export function computeDocumentTeamReport(
     const weightedRetainedChars = m.weightedRetainedChars ?? m.retainedChars;
     const effectiveRetainedChars = weightedRetainedChars * (1 - 0.5 * selfChurnRatio);
     const editTypeBreakdown = m.editTypeBreakdown ?? { substantive: 0, revision: 0, formatting: 0, trivial: 0 };
-    const logSessions = Math.log(m.sessionCount + 1);
+    const liveSessionCount = m.liveSessionCount ?? m.sessionCount;
+    const importedRetainedChars = m.importedRetainedChars ?? 0;
+    const importedWeightedRetainedChars = m.importedWeightedRetainedChars ?? 0;
+    // Hybrid policy (step 3): real sessions count as before; imported volume converts into
+    // proportional "phantom" session credit (importedWeightedRetainedChars / typicalSessionChars)
+    // inside the same log-scale diminishing-returns treatment, rather than stacking a full
+    // session's credit on top for the one bookkeeping EditSession row an import produces.
+    const logSessions = Math.log(liveSessionCount + importedWeightedRetainedChars / typicalSessionChars + 1);
     const activeDays = new Set(m.sessionDates.map((d) => d.slice(0, 10))).size;
     const churn = m.totalInsertedChars + m.totalDeletedChars;
-    return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn };
+    return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars };
   });
 
   const totalLogSessions            = baseStats.reduce((s, m) => s + m.logSessions, 0);
@@ -100,6 +112,10 @@ export function computeDocumentTeamReport(
       selfChurnRatio: round3(m.selfChurnRatio), flags,
       weightedRetainedChars: round3(m.weightedRetainedChars),
       editTypeBreakdown: m.editTypeBreakdown,
+      importedRetainedChars: m.importedRetainedChars,
+      importNote: m.importedRetainedChars > 0
+        ? `Includes ${m.importedRetainedChars} characters imported from .docx — session credit includes an estimate based on import volume; active-day count reflects only the day of upload, not offline drafting time.`
+        : null,
     };
   });
 

@@ -138,6 +138,10 @@ export interface RawDocumentMemberStats {
   // Edit-type significance (Step 4b; optional so existing test fixtures without them still compile)
   weightedRetainedChars?: number;
   editTypeBreakdown?: { substantive: number; revision: number; formatting: number; trivial: number };
+  // .docx-import scoring (step 3; optional, falls back to pre-step-3 behavior when absent)
+  liveSessionCount?: number;              // EditSession count with source: LIVE only; falls back to sessionCount when absent
+  importedRetainedChars?: number;         // of retainedChars, how many originated from source: IMPORT rows (unweighted, for display)
+  importedWeightedRetainedChars?: number; // of weightedRetainedChars, the IMPORT-origin portion (drives session credit)
 }
 
 export interface DocumentScoredMember {
@@ -161,6 +165,9 @@ export interface DocumentScoredMember {
   weightedRetainedChars: number;
   editTypeBreakdown: { substantive: number; revision: number; formatting: number; trivial: number };
   flags: Flag[];
+  // .docx-import scoring (step 3)
+  importedRetainedChars: number; // echoes the raw imported count used in importNote's {N}
+  importNote: string | null;
 }
 
 export type DocumentTeamReport = TeamReport<DocumentScoredMember>;
