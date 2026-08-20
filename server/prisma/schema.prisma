@@ -349,3 +349,18 @@ model EditSession {
 
   @@index([documentId, userId])
 }
+
+// Persistent cache of raw per-commit GitHub diff data (server/src/lib/github.ts's
+// fetchCommitDiffs). A commit SHA is immutable and globally unique within a repo, so once
+// fetched a row is valid forever — no invalidation path exists or is needed. Caches the raw
+// `files` array as returned by GitHub, not any derived/weighted score, so every read still
+// flows through the same classification/weighting code as a fresh fetch.
+model CachedCommitDiff {
+  id        Int      @id @default(autoincrement())
+  repo      String   // "owner/repo", lowercased
+  sha       String
+  files     String   // JSON.stringify of the commit's raw `files` array
+  createdAt DateTime @default(now())
+
+  @@unique([repo, sha])
+}

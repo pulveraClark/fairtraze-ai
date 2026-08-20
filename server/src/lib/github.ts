@@ -1,4 +1,6 @@
 import { Octokit } from "@octokit/rest";
+import type { PrismaClient } from "@prisma/client";
+import { prisma as defaultPrisma } from "./prisma.js";
 import { classifyAddedLines } from "@shared/lineClassifier.js";
 import { getFileWeight, categorizeFile } from "@shared/fileWeights.js";
 import { classifyCommit, COMMIT_IMPACT } from "@shared/commitClassifier.js";
@@ -126,14 +128,57 @@ async function fetchCommitShasAndDates(
   return { dates, shas };
 }
 
-// Fetches per-commit diffs for the given SHAs.
-// Processes oldest-first for accurate self-churn tracking.
-// Cap: caller must pass at most COMMIT_DIFF_SAMPLE_CAP SHAs.
-async function fetchCommitDiffs(
+type CommitFiles = NonNullable<GitHubCommitDetail["files"]>;
+
+// Commit diffs are immutable — a SHA never changes, so its diff never needs invalidating.
+// Reads/writes the raw `files` array as GitHub returns it (never a derived/weighted value),
+// so every row — cached or freshly fetched — flows through the same classification code
+// below. Batched: one read + one write per fetchCommitDiffs call, not one per SHA.
+async function getFilesForShas(
+  prisma: PrismaClient,
   octokit: Octokit,
   owner: string,
   repo: string,
   shas: string[]
+): Promise<Map<string, CommitFiles>> {
+  const repoKey = `${owner}/${repo}`.toLowerCase();
+  const filesBySha = new Map<string, CommitFiles>();
+
+  const cached = await prisma.cachedCommitDiff.findMany({
+    where: { repo: repoKey, sha: { in: shas } },
+  });
+  for (const row of cached) {
+    filesBySha.set(row.sha, JSON.parse(row.files) as CommitFiles);
+  }
+
+  const toInsert: { repo: string; sha: string; files: string }[] = [];
+  for (const sha of shas) {
+    if (filesBySha.has(sha)) continue;
+    const response = await octokit.request(
+      "GET /repos/{owner}/{repo}/commits/{ref}",
+      { owner, repo, ref: sha }
+    );
+    const files = (response.data as GitHubCommitDetail).files ?? [];
+    filesBySha.set(sha, files);
+    toInsert.push({ repo: repoKey, sha, files: JSON.stringify(files) });
+  }
+
+  if (toInsert.length > 0) {
+    await prisma.cachedCommitDiff.createMany({ data: toInsert, skipDuplicates: true });
+  }
+
+  return filesBySha;
+}
+
+// Fetches per-commit diffs for the given SHAs (via the cache above, populating it on miss).
+// Processes oldest-first for accurate self-churn tracking.
+// Cap: caller must pass at most COMMIT_DIFF_SAMPLE_CAP SHAs.
+export async function fetchCommitDiffs(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  shas: string[],
+  prisma: PrismaClient = defaultPrisma
 ): Promise<{
   codeLinesAdded: number;
   commentLinesAdded: number;
@@ -158,15 +203,10 @@ async function fetchCommitDiffs(
 
   // Process oldest-first so self-churn tracking is chronologically correct
   const orderedShas = [...shas].reverse();
+  const filesBySha = await getFilesForShas(prisma, octokit, owner, repo, orderedShas);
 
   for (const sha of orderedShas) {
-    const response = await octokit.request(
-      "GET /repos/{owner}/{repo}/commits/{ref}",
-      { owner, repo, ref: sha }
-    );
-
-    const detail = response.data as GitHubCommitDetail;
-    const files  = detail.files ?? [];
+    const files = filesBySha.get(sha) ?? [];
 
     // Commit-level aggregates for classifyCommit
     let commitFilesChanged    = 0;
