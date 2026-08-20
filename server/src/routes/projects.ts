@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
-import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole } from "@shared/types.js";
+import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
 
 export const projectsRouter = Router();
 
@@ -35,6 +35,24 @@ function projectConfig(p: {
       wDocs:   p.weightDocs,
     },
   };
+}
+
+// Mismatch-note helpers: AnyScoredMember is a union of ScoredMember (flat `commits`),
+// DocumentScoredMember (flat `sessionCount`), and CombinedScoredMember (no flat commits/
+// sessionCount — nested under `.github`/`.document`). The "github"/"document" checks are safe
+// discriminators since only CombinedScoredMember has those keys.
+export function githubCommitsOf(m: AnyScoredMember | undefined | null): number | undefined {
+  if (!m) return undefined;
+  if ("github" in m) return m.github?.commits;
+  if ("commits" in m) return m.commits;
+  return undefined;
+}
+
+export function editorSessionCountOf(m: AnyScoredMember | undefined | null): number | undefined {
+  if (!m) return undefined;
+  if ("document" in m) return m.document?.sessionCount;
+  if ("sessionCount" in m) return m.sessionCount;
+  return undefined;
 }
 
 // GET /api/projects — list all projects (used by legacy selector, kept for compat)
@@ -160,7 +178,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
 
   const stored = latestReport.content
     ? (JSON.parse(latestReport.content) as {
-        report?: TeamReport;
+        report?: TeamReport<AnyScoredMember>;
         narrative?: string;
         unmatchedLogins?: string[];
         scoringConfig?: ProjectScoringConfig;
@@ -189,21 +207,18 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
 
     let mismatchNote: string | null = null;
     if (functionalRoles.includes("DEVELOPER")) {
-      if (!scored || scored.commits === 0) {
+      const commits = githubCommitsOf(scored);
+      if (commits === undefined || commits === 0) {
         mismatchNote = "Developer — no recorded GitHub activity";
       }
     }
-    // TODO: two known limitations, both inherited/mirrored from the Developer check above,
-    // not fixed here — flagged for future work:
-    //  1. On COMBINED reports, this checks top-level fields only (rm.commits / docActivity.sessionCount),
-    //     not the nested per-source breakdown (rm.github?.commits / rm.document?.sessionCount) — same gap
-    //     as the Developer check above has on COMBINED reports.
-    //  2. mismatchNote is a single string: a member holding both DEVELOPER and DOCUMENTATION roles who
-    //     mismatches on both only keeps the note from whichever check ran last (this one overwrites Developer's).
+    // TODO: not fixed here — flagged for future work: mismatchNote is a single string, so a
+    // member holding both DEVELOPER and DOCUMENTATION roles who mismatches on both only keeps
+    // the note from whichever check ran last (this one overwrites Developer's).
     if (functionalRoles.includes("DOCUMENTATION")) {
-      const docActivity = (reportMembers as unknown as Array<{ userId?: number; sessionCount?: number }>)
-        .find((rm) => rm.userId === m.user.id);
-      if (!docActivity || docActivity.sessionCount === 0) {
+      const docActivity = reportMembers.find((rm) => "userId" in rm && rm.userId === m.user.id);
+      const sessionCount = editorSessionCountOf(docActivity);
+      if (sessionCount === undefined || sessionCount === 0) {
         mismatchNote = "Documentation — no recorded editor activity";
       }
     }
