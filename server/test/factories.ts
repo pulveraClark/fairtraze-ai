@@ -84,3 +84,7 @@ export async function createProject(overrides: { assignmentId?: number | null; g
     },
   });
 }
+
+export async function createMembership(userId: number, projectId: number) {
+  return prisma.groupMembership.create({ data: { userId, projectId } });
+}

@@ -23,10 +23,10 @@ interface PendingEvent {
   source: EditSource;
 }
 
-// Synthetic transact() origin for the (not-yet-built) .docx import route. A real WebSocket
-// connection is the only other origin the update listener below recognizes; this lets a
-// server-side import call attribute its writes to a user without opening a socket. The `type`
-// discriminant avoids ever mistaking an unrelated plain object for this marker.
+// Synthetic transact() origin used by the .docx import route (server/src/collab/docxImport.ts).
+// A real WebSocket connection is the only other origin the update listener below recognizes;
+// this lets a server-side import call attribute its writes to a user without opening a socket.
+// The `type` discriminant avoids ever mistaking an unrelated plain object for this marker.
 export interface ImportOrigin {
   readonly type: "import";
   readonly userId: number;

@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf } from "./groups.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
+import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
 
 export const documentsRouter = Router();
 
@@ -16,7 +17,7 @@ const contentBody = z.object({
   content: z.object({ type: z.literal("doc") }).passthrough(),
 });
 
-function isMemberOf(
+export function isMemberOf(
   req: Request,
   project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>
 ): boolean {
@@ -130,4 +131,96 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
 
   const map = await computeAuthorshipMap(doc.id);
   res.json(map);
+});
+
+const importBody = z.object({
+  filename: z.string().min(1),
+  fileBase64: z.string().min(1),
+});
+
+// 5MB raw file cap, matching the client-side pre-check in DocumentEditor.tsx. The route-scoped
+// express.json({limit:"8mb"}) registered in app.ts (before the app-wide 100kb default) is the
+// hard backstop for the base64-inflated JSON body; this is the second, independent check against
+// the decoded byte count — never trust the client-side check alone.
+const MAX_DOCX_BYTES = 5 * 1024 * 1024;
+
+// POST /api/groups/:id/document/import — .docx import (docx-import step 4). Any group member may
+// import content for THEMSELVES only (self-attributed, same rule as PATCH /document) into the
+// group's live collaborative document. See server/src/collab/docxImport.ts for how this reaches
+// the same live Y.Doc a connected WebSocket client would sync to.
+documentsRouter.post("/api/groups/:id/document/import", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const bodyResult = importBody.safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "filename and fileBase64 are required." });
+    return;
+  }
+  const { filename, fileBase64 } = bodyResult.data;
+
+  if (!/\.docx$/i.test(filename)) {
+    res.status(400).json({ error: "Only .docx files are supported." });
+    return;
+  }
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isMemberOf(req, project)) {
+    res.status(403).json({ error: "Only group members can import a document." });
+    return;
+  }
+
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Document import is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+
+  const buffer = Buffer.from(fileBase64, "base64");
+
+  if (buffer.length === 0) {
+    res.status(400).json({ error: "This document appears to be empty — nothing to import." });
+    return;
+  }
+  if (buffer.length > MAX_DOCX_BYTES) {
+    res.status(413).json({ error: `File is too large — the limit is ${MAX_DOCX_BYTES / (1024 * 1024)}MB.` });
+    return;
+  }
+
+  let chunks;
+  try {
+    chunks = await parseDocxToChunks(buffer);
+  } catch (err) {
+    console.error(`[documents] docx parse failed for group ${projectId}`, err);
+    res.status(400).json({ error: "This file could not be read as a valid .docx document." });
+    return;
+  }
+
+  if (chunks.length === 0) {
+    res.status(400).json({ error: "This document appears to be empty — nothing to import." });
+    return;
+  }
+
+  try {
+    const result = await importDocxIntoRoom(projectId, req.user!.sub, chunks);
+    res.json({ chunkCount: result.chunkCount });
+  } catch (err) {
+    if (err instanceof DocxImportPartialFailureError) {
+      console.error(`[documents] partial docx import failure for group ${projectId}`, err.cause);
+      res.status(500).json({
+        error: `Import failed after ${err.importedCount} of ${err.totalCount} section(s) were already added to the document — check the document, as some content may already be visible even though the import did not complete.`,
+      });
+      return;
+    }
+    console.error(`[documents] docx import failed for group ${projectId}`, err);
+    res.status(500).json({ error: "Import failed unexpectedly." });
+  }
 });

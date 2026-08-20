@@ -30,6 +30,11 @@ export function createApp() {
 
   app.use(helmetMiddleware);
   app.use(cors(corsOptions));
+  // .docx import (docx-import step 4) carries a base64-encoded file in its JSON body, well past
+  // the 100kb default below. Registered here, before the app-wide express.json(), so it "claims"
+  // this one path with a larger limit — body-parser skips re-parsing once req._body is already
+  // set, so the global default limit still governs every other route untouched.
+  app.use("/api/groups/:id/document/import", express.json({ limit: "8mb" }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(globalLimiter);

@@ -90,6 +90,8 @@ function AuthorshipLegend({ users }: { users: AuthorshipUser[] }) {
   );
 }
 
+const MAX_DOCX_BYTES = 5 * 1024 * 1024; // 5MB — must match server/src/routes/documents.ts's MAX_DOCX_BYTES
+
 function Toolbar({
   editor,
   editable,
@@ -97,6 +99,8 @@ function Toolbar({
   presentUsers,
   showAuthorship,
   onToggleAuthorship,
+  onImportClick,
+  importing,
 }: {
   editor: Editor;
   editable: boolean;
@@ -104,6 +108,8 @@ function Toolbar({
   presentUsers: PresentUser[];
   showAuthorship: boolean;
   onToggleAuthorship: () => void;
+  onImportClick: () => void;
+  importing: boolean;
 }) {
   const statusLabel = connStatus === "connected" ? "" : connStatus === "connecting" ? "Connecting…" : "Reconnecting…";
 
@@ -155,6 +161,21 @@ function Toolbar({
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M4 6h1v2M4 10h2l-2 2h2M4 18h2M4 16h2" />
             </svg>
           </ToolbarButton>
+
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
+
+          <ToolbarButton label="Import .docx" active={false} onClick={onImportClick}>
+            {importing ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+              </svg>
+            )}
+          </ToolbarButton>
         </>
       )}
       {!editable && <span className="text-[11px] text-slate-400 font-medium">Viewing (read-only)</span>}
@@ -191,10 +212,13 @@ function Toolbar({
 export function DocumentEditor({ groupId, editable }: Props) {
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
   const [showAuthorship, setShowAuthorship] = useState(false);
   const [authorshipUsers, setAuthorshipUsers] = useState<AuthorshipUser[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   // Lazily (re)create the Yjs doc + WebSocket provider whenever groupId changes,
   // tearing down the previous room's connection first. Avoided in an effect so the
@@ -323,6 +347,62 @@ export function DocumentEditor({ groupId, editable }: Props) {
     };
   }, [editor, showAuthorship, groupId, token]);
 
+  const handleImportClick = () => {
+    if (importing) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file (or re-trying after an error)
+    if (!file || !token) return;
+
+    if (!/\.docx$/i.test(file.name)) {
+      setImportMessage({ kind: "error", text: "Only .docx files are supported." });
+      return;
+    }
+    if (file.size > MAX_DOCX_BYTES) {
+      setImportMessage({
+        kind: "error",
+        text: `File is too large — the limit is ${MAX_DOCX_BYTES / (1024 * 1024)}MB.`,
+      });
+      return;
+    }
+
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string; // "data:<mime>;base64,<data>"
+          resolve(result.slice(result.indexOf(",") + 1));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch(`/api/groups/${groupId}/document/import`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, fileBase64 }),
+      });
+      const data = (await res.json().catch(() => null)) as { chunkCount?: number; error?: string } | null;
+
+      if (!res.ok) {
+        setImportMessage({ kind: "error", text: data?.error ?? "Import failed." });
+        return;
+      }
+      const count = data?.chunkCount ?? 0;
+      setImportMessage({ kind: "success", text: `Imported ${count} section${count === 1 ? "" : "s"}.` });
+    } catch (err) {
+      console.error("[docx import] failed", err);
+      setImportMessage({ kind: "error", text: "Import failed — check your connection and try again." });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (!editor) return null;
 
   return (
@@ -334,7 +414,35 @@ export function DocumentEditor({ groupId, editable }: Props) {
         presentUsers={presentUsers}
         showAuthorship={showAuthorship}
         onToggleAuthorship={() => setShowAuthorship((v) => !v)}
+        onImportClick={handleImportClick}
+        importing={importing}
       />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      {importMessage && (
+        <div
+          className={`flex items-center justify-between gap-3 px-3 py-1.5 border-b text-[11px] ${
+            importMessage.kind === "success"
+              ? "bg-emerald-50 border-emerald-100 text-emerald-700"
+              : "bg-red-50 border-red-100 text-red-700"
+          }`}
+        >
+          <span>{importMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setImportMessage(null)}
+            className="opacity-60 hover:opacity-100"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {showAuthorship && <AuthorshipLegend users={authorshipUsers} />}
       <EditorContent editor={editor} />
     </div>
