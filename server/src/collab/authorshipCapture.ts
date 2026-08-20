@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import type * as YTypes from "yjs";
-import { EditEventType, EditType as PrismaEditType } from "@prisma/client";
+import { EditEventType, EditType as PrismaEditType, EditSource } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { Y } from "./yjsCjs.js";
 import { wsUserId } from "./connectionRegistry.js";
@@ -20,6 +20,25 @@ interface PendingEvent {
   length: number;
   timestamp: Date;
   editType?: PrismaEditType; // classification (Step 4b) — set on INSERT events only
+  source: EditSource;
+}
+
+// Synthetic transact() origin for the (not-yet-built) .docx import route. A real WebSocket
+// connection is the only other origin the update listener below recognizes; this lets a
+// server-side import call attribute its writes to a user without opening a socket. The `type`
+// discriminant avoids ever mistaking an unrelated plain object for this marker.
+export interface ImportOrigin {
+  readonly type: "import";
+  readonly userId: number;
+}
+
+function isImportOrigin(origin: unknown): origin is ImportOrigin {
+  return (
+    typeof origin === "object" &&
+    origin !== null &&
+    (origin as { type?: unknown }).type === "import" &&
+    typeof (origin as { userId?: unknown }).userId === "number"
+  );
 }
 
 // classifyEdit returns lowercase EditType keys; the Prisma enum is uppercase.
@@ -37,6 +56,7 @@ interface SessionState {
   startedAt: number; // epoch ms
   lastEventAt: number; // epoch ms
   pendingCharacterCount: number; // gross characters inserted since last flush
+  source: EditSource;
 }
 
 interface ClosedSession {
@@ -110,9 +130,9 @@ function diffText(
   return { position: start, deleteLength, insertLength };
 }
 
-function touchSession(state: RoomState, userId: number, insertedChars: number, nowEpoch: number): void {
+function touchSession(state: RoomState, userId: number, insertedChars: number, nowEpoch: number, source: EditSource): void {
   const existing = state.sessions.get(userId);
-  if (existing && nowEpoch - existing.lastEventAt <= SESSION_IDLE_MS) {
+  if (existing && existing.source === source && nowEpoch - existing.lastEventAt <= SESSION_IDLE_MS) {
     existing.lastEventAt = nowEpoch;
     existing.pendingCharacterCount += insertedChars;
     return;
@@ -133,6 +153,7 @@ function touchSession(state: RoomState, userId: number, insertedChars: number, n
     startedAt: nowEpoch,
     lastEventAt: nowEpoch,
     pendingCharacterCount: insertedChars,
+    source,
   });
 }
 
@@ -185,6 +206,7 @@ async function flushRoom(room: string): Promise<void> {
             userId,
             startedAt: new Date(session.startedAt),
             characterCount: delta,
+            source: session.source,
           },
         });
         session.sessionId = created.id;
@@ -259,8 +281,14 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     // the wire from that connection (verified against y-websocket/y-protocols source). Updates
     // applied locally with no origin (persisted-state restore, legacy-content migration) are
     // naturally excluded here, so they're never misattributed to a "user".
-    if (!(origin instanceof WebSocket)) return;
-    const userId = wsUserId.get(origin);
+    let userId: number | undefined;
+    let source: EditSource = EditSource.LIVE;
+    if (origin instanceof WebSocket) {
+      userId = wsUserId.get(origin);
+    } else if (isImportOrigin(origin)) {
+      userId = origin.userId;
+      source = EditSource.IMPORT;
+    }
     if (userId === undefined) return;
     if (!diff) return;
 
@@ -273,6 +301,7 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
         position: diff.position,
         length: diff.deleteLength,
         timestamp: now,
+        source,
       });
     }
     if (diff.insertLength > 0) {
@@ -284,10 +313,11 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
         length: diff.insertLength,
         timestamp: now,
         editType: EDIT_TYPE_TO_PRISMA[editType],
+        source,
       });
     }
 
-    touchSession(state, userId, diff.insertLength, now.getTime());
+    touchSession(state, userId, diff.insertLength, now.getTime(), source);
     scheduleFlush(room);
   });
 
