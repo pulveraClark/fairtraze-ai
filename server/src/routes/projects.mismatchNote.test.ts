@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { githubCommitsOf, editorSessionCountOf } from "./projects.js";
-import type { AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types.js";
+import { githubCommitsOf, editorSessionCountOf, buildMismatchNotes } from "./projects.js";
+import type { AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember, FunctionalRole } from "@shared/types.js";
 
 // Minimal fixtures — only the fields these two helpers read are populated;
 // the rest are irrelevant to field-access correctness.
@@ -73,5 +73,37 @@ describe("editorSessionCountOf", () => {
   it("returns undefined when there is no doc activity record", () => {
     expect(editorSessionCountOf(undefined)).toBeUndefined();
     expect(editorSessionCountOf(null)).toBeUndefined();
+  });
+});
+
+describe("buildMismatchNotes", () => {
+  const BOTH: FunctionalRole[] = ["DEVELOPER", "DOCUMENTATION"];
+
+  it("produces both notes for a dual-role member who mismatches on both, without either overwriting the other", () => {
+    const notes = buildMismatchNotes(BOTH, github(0), document(0));
+    expect(notes).toEqual([
+      "Developer — no recorded GitHub activity",
+      "Documentation — no recorded editor activity",
+    ]);
+  });
+
+  it("produces only the Developer note when only GitHub activity is missing", () => {
+    const notes = buildMismatchNotes(BOTH, github(0), document(5));
+    expect(notes).toEqual(["Developer — no recorded GitHub activity"]);
+  });
+
+  it("produces only the Documentation note when only editor activity is missing", () => {
+    const notes = buildMismatchNotes(BOTH, github(10), document(0));
+    expect(notes).toEqual(["Documentation — no recorded editor activity"]);
+  });
+
+  it("produces no notes for a dual-role member with real activity on both sides", () => {
+    const notes = buildMismatchNotes(BOTH, github(10), document(5));
+    expect(notes).toEqual([]);
+  });
+
+  it("only evaluates the roles the member actually holds", () => {
+    const notes = buildMismatchNotes(["DEVELOPER"], github(0), document(0));
+    expect(notes).toEqual(["Developer — no recorded GitHub activity"]);
   });
 });

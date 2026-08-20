@@ -55,6 +55,29 @@ export function editorSessionCountOf(m: AnyScoredMember | undefined | null): num
   return undefined;
 }
 
+// Accumulates independently — a member holding both DEVELOPER and DOCUMENTATION who
+// mismatches on both gets both notes, neither overwrites the other.
+export function buildMismatchNotes(
+  functionalRoles: FunctionalRole[],
+  githubMember: AnyScoredMember | undefined | null,
+  docMember: AnyScoredMember | undefined | null,
+): string[] {
+  const notes: string[] = [];
+  if (functionalRoles.includes("DEVELOPER")) {
+    const commits = githubCommitsOf(githubMember);
+    if (commits === undefined || commits === 0) {
+      notes.push("Developer — no recorded GitHub activity");
+    }
+  }
+  if (functionalRoles.includes("DOCUMENTATION")) {
+    const sessionCount = editorSessionCountOf(docMember);
+    if (sessionCount === undefined || sessionCount === 0) {
+      notes.push("Documentation — no recorded editor activity");
+    }
+  }
+  return notes;
+}
+
 // GET /api/projects — list all projects (used by legacy selector, kept for compat)
 // requireRole(INSTRUCTOR) + scoped to the requesting instructor's own projects.
 // TODO: assignment-less projects (assignmentId: null) are accessible to any
@@ -205,25 +228,10 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
       ? reportMembers.find((rm) => rm.githubUsername.toLowerCase() === github.toLowerCase())
       : null;
 
-    let mismatchNote: string | null = null;
-    if (functionalRoles.includes("DEVELOPER")) {
-      const commits = githubCommitsOf(scored);
-      if (commits === undefined || commits === 0) {
-        mismatchNote = "Developer — no recorded GitHub activity";
-      }
-    }
-    // TODO: not fixed here — flagged for future work: mismatchNote is a single string, so a
-    // member holding both DEVELOPER and DOCUMENTATION roles who mismatches on both only keeps
-    // the note from whichever check ran last (this one overwrites Developer's).
-    if (functionalRoles.includes("DOCUMENTATION")) {
-      const docActivity = reportMembers.find((rm) => "userId" in rm && rm.userId === m.user.id);
-      const sessionCount = editorSessionCountOf(docActivity);
-      if (sessionCount === undefined || sessionCount === 0) {
-        mismatchNote = "Documentation — no recorded editor activity";
-      }
-    }
+    const docActivity = reportMembers.find((rm) => "userId" in rm && rm.userId === m.user.id);
+    const mismatchNotes = buildMismatchNotes(functionalRoles, scored, docActivity);
 
-    return { githubUsername: github ?? "", functionalRoles, isLeader, mismatchNote };
+    return { githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes };
   });
 
   const response: StoredReportResponse = {

@@ -240,21 +240,27 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                         </>
                       )}
                     </div>
-                    {/* Mismatch note — soft context only, distinct from contribution flags */}
+                    {/* Mismatch notes — soft context only, distinct from contribution flags.
+                        A member can hold both DEVELOPER and DOCUMENTATION and mismatch on
+                        both at once, so each note gets its own stacked line. */}
                     {(() => {
                       if (variant === "document") return null;
-                      const note = memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase())?.mismatchNote;
-                      if (!note) return null;
+                      const notes = memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase())?.mismatchNotes;
+                      if (!notes || notes.length === 0) return null;
                       return (
-                        <p className="mt-1.5 text-[10px] text-sky-600 font-medium flex items-start gap-1">
-                          <span className="shrink-0">Context:</span>
-                          <span className="font-normal text-sky-500">{note}</span>
-                        </p>
+                        <>
+                          {notes.map((note) => (
+                            <p key={note} className="mt-1.5 text-[10px] text-sky-600 font-medium flex items-start gap-1">
+                              <span className="shrink-0">Context:</span>
+                              <span className="font-normal text-sky-500">{note}</span>
+                            </p>
+                          ))}
+                        </>
                       );
                     })()}
                     {/* .docx-import disclosure — always visible (not gated behind expand), since
                         this is a disclosed scoring estimate, not incidental detail. Distinct
-                        amber styling from the sky-toned mismatchNote above: that one flags
+                        amber styling from the sky-toned mismatchNotes above: those flag
                         something to investigate, this one discloses how a score was computed.
                         Visible text is built from importedRetainedChars directly (not parsed out
                         of importNote) — see IMPORT_NOTE_TOOLTIP's comment. importNote's presence

@@ -53,10 +53,11 @@ export interface MemberRoleInfo {
   githubUsername:  string;
   functionalRoles: FunctionalRole[];
   isLeader:        boolean;
-  // Soft informational note for the instructor when a member's activity doesn't match
-  // their assigned role.  Never a contribution flag; never changes any score.
-  // null = no mismatch
-  mismatchNote: string | null;
+  // Soft informational notes for the instructor when a member's activity doesn't match
+  // their assigned role(s). Never a contribution flag; never changes any score.
+  // Empty array = no mismatch. A member holding both DEVELOPER and DOCUMENTATION can
+  // mismatch on both at once — each gets its own entry, none overwrite each other.
+  mismatchNotes: string[];
 }
 
 export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";
