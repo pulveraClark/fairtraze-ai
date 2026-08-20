@@ -74,6 +74,17 @@ function scheduleDebouncedPersist(room: string, ydoc: YTypes.Doc): void {
 export const yjsPersistence = {
   async bindState(room: string, ydoc: YTypes.Doc): Promise<void> {
     const groupId = groupIdFromRoom(room);
+
+    // Both listeners are wired up before any `await` below — including the call into
+    // attachAuthorshipTracking, which synchronously registers its own listener as the very
+    // first thing it does (see its comment for the full story). A user can start typing the
+    // instant the editor connects, well before the Document.findUnique() below resolves under
+    // real latency; anything registered only after that point would miss those edits entirely,
+    // since Yjs never replays past updates to a listener added later. This mirrors, one level
+    // up, the exact same fix already applied inside attachAuthorshipTracking.
+    ydoc.on("update", () => scheduleDebouncedPersist(room, ydoc));
+    const authorshipTracking = attachAuthorshipTracking(room, groupId, ydoc);
+
     const doc = await prisma.document.findUnique({ where: { groupId } });
 
     if (doc?.yjsState) {
@@ -87,9 +98,7 @@ export const yjsPersistence = {
       }
     }
 
-    ydoc.on("update", () => scheduleDebouncedPersist(room, ydoc));
-
-    await attachAuthorshipTracking(room, groupId, ydoc);
+    await authorshipTracking;
   },
 
   async writeState(room: string, ydoc: YTypes.Doc): Promise<void> {
