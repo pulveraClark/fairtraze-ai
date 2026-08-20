@@ -13,6 +13,13 @@ const roleLabel: Record<string, string> = {
   DEVELOPER: "Developer", DOCUMENTATION: "Documentation",
 };
 
+// Boilerplate explanation for the .docx-import disclosure tooltip — identical regardless of the
+// member or character count, so it's a static constant rather than parsed out of
+// DocumentScoredMember.importNote (shared/src/documentScoring.ts's full sentence, which stays
+// untouched as the source of truth for any other consumer).
+const IMPORT_NOTE_TOOLTIP =
+  "Session credit includes an estimate based on import volume; active-day count reflects only the day of upload, not offline drafting time.";
+
 // Map from studentName → flag → "RESOLVED" | "DISMISSED"
 // Built from resolved/dismissed disputes so the instructor sees review outcomes on flags.
 type ResolvedFlagOutcomes = Map<string, Map<string, "RESOLVED" | "DISMISSED">>;
@@ -245,6 +252,32 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                         </p>
                       );
                     })()}
+                    {/* .docx-import disclosure — always visible (not gated behind expand), since
+                        this is a disclosed scoring estimate, not incidental detail. Distinct
+                        amber styling from the sky-toned mismatchNote above: that one flags
+                        something to investigate, this one discloses how a score was computed.
+                        Visible text is built from importedRetainedChars directly (not parsed out
+                        of importNote) — see IMPORT_NOTE_TOOLTIP's comment. importNote's presence
+                        is still the trigger condition, since it's the single source of truth for
+                        "did this member import anything". */}
+                    {(() => {
+                      const importedChars =
+                        variant === "document" && isDocumentMember(m)
+                          ? (m.importNote ? m.importedRetainedChars : null)
+                          : variant === "combined" && isCombinedMember(m)
+                          ? (m.document?.importNote ? m.document.importedRetainedChars : null)
+                          : null;
+                      if (importedChars === null) return null;
+                      return (
+                        <p className="mt-1.5 text-[10px] text-amber-700 font-medium flex items-center gap-1">
+                          <span className="shrink-0">Import:</span>
+                          <span className="font-normal text-amber-600">
+                            {importedChars.toLocaleString()} characters imported from .docx
+                          </span>
+                          <InfoTooltip label="About this import" content={IMPORT_NOTE_TOOLTIP} width={220} />
+                        </p>
+                      );
+                    })()}
                   </td>
 
                   <td className="px-4 py-3 text-slate-400">
@@ -284,6 +317,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                               items={[
                                 ["Share", "this member's share within the Docs-only pipeline"],
                                 ["Sessions", "distinct editing sessions on this source"],
+                                ["Imported Characters", "of the retained characters, how many came from a .docx import — see the Import disclosure note"],
                               ]}
                             />
                           }
@@ -291,6 +325,9 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                           <Stat label="Share" value={`${(m.documentContributionShare * 100).toFixed(1)}%`} />
                           <Stat label="Sessions" value={m.document?.sessionCount ?? 0} />
                           <Stat label="Retained Characters" value={(m.document?.retainedChars ?? 0).toLocaleString()} />
+                          {(m.document?.importedRetainedChars ?? 0) > 0 && (
+                            <Stat label="Imported Characters" value={(m.document!.importedRetainedChars).toLocaleString()} />
+                          )}
                         </DetailSection>
 
                         <DetailSection
@@ -345,12 +382,16 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                               items={[
                                 ["Retained Characters", "chars this member wrote that survive in the current document"],
                                 ["Self-Churn", "up to 0.5× penalty on own deleted text"],
+                                ["Imported Characters", "of the above, how many came from a .docx import — see the Import disclosure note"],
                               ]}
                             />
                           }
                         >
                           <Stat label="Retained Characters" value={m.retainedChars.toLocaleString()} />
                           <Stat label="Self-Churn" value={`${(m.selfChurnRatio * 100).toFixed(1)}%`} />
+                          {m.importedRetainedChars > 0 && (
+                            <Stat label="Imported Characters" value={m.importedRetainedChars.toLocaleString()} />
+                          )}
                         </DetailSection>
 
                         <DetailSection label="Timing" wide>
