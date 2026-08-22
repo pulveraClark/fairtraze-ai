@@ -545,8 +545,9 @@ export function LandingPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </div>
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-100 border border-indigo-200 rounded-full px-2.5 py-1">
-                  In development
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  Active
                 </span>
               </div>
               <h3 className="font-display font-bold text-slate-900 text-xl mb-2">FairTraze Docs</h3>
@@ -554,7 +555,7 @@ export function LandingPage() {
                 A built-in collaborative editor that records per-user, timestamped document traces — capturing writing and documentation contributions that GitHub misses entirely. Essential for documentation-focused members.
               </p>
               <div className="flex flex-wrap gap-2">
-                {["Net retained text", "Edit sessions", "Comments & suggestions", "Revision history"].map((tag) => (
+                {["Net retained text", "Edit sessions", "Edit-type classification", ".docx import"].map((tag) => (
                   <span key={tag} className="text-[11px] font-semibold text-indigo-700/70 bg-indigo-100/60 rounded-full px-2.5 py-1">
                     {tag}
                   </span>

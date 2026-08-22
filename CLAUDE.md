@@ -315,7 +315,7 @@ The user is an **instructor**. Both the UI and the AI report must be professiona
 
 ## Institutional Hierarchy (target structure)
 
-**Partially implemented.** `ClassSection`, `Assignment`, `GroupMembership`, `User`, and `Report` all exist and match this shape today. **Not implemented:** the `School` and `Department` levels above `ClassSection` (a `ClassSection` currently points directly at its owning `instructorId`, with no department/school layer), and the `Project` → `Group` rename (the model is still called `Project` in the live schema). Do not build School/Department or rename `Project` without an explicit task instruction.
+**Partially implemented.** `ClassSection`, `Assignment`, `GroupMembership`, `User`, `Department`, and `Report` all exist and match this shape today. `Department` is fully implemented — a real Prisma model (`server/prisma/schema.prisma`), with CRUD in `AdminPage.tsx` and a selector in `InstructorDashboardPage.tsx`; `ClassSection` has both `departmentId` and `instructorId`. **Not implemented:** the `School` level above `Department`, and the `Project` → `Group` rename (the model is still called `Project` in the live schema). Do not build School or rename `Project` without an explicit task instruction.
 
 ### Hierarchy
 
@@ -344,12 +344,12 @@ School
 | `Project` | `Group` (rename only — already sits under `Assignment` via `assignmentId`) | Purely a naming gap; the parent-child relationship already exists. |
 | `Member.githubUsername` (still present, kept in sync) | `User.githubUsername` only | `User.githubUsername` is already the identity source of truth; the legacy per-group `Member` row has not been removed. |
 | `Report.projectId` | `Report.groupId` | Naming gap only, once `Project` is renamed. |
-| *(none)* | `School`, `Department` | The only structural levels genuinely not built — `ClassSection` currently points directly at `instructorId` with no institution/department layer above it. |
+| *(none)* | `School` | `Department` is already implemented and wired via `ClassSection.departmentId`; `School` is the only structural level genuinely not built. |
 
 ### Phase mapping
 
 - **Phase A — Auth & Roles** *(IMPLEMENTED)*: `User` model, email/password auth (bcryptjs + JWT), `AuthContext`, `ProtectedRoute`, `/dashboard` authenticated area. `analyze`/`narrative` endpoints now enforce `requireRole("INSTRUCTOR")` plus ownership checks (see `analyze.ts`). Deferred: Google OAuth (see "Identity & Authentication").
-- **Phase B — Team Formation** *(IMPLEMENTED)*: `ClassSection`, `Assignment`, `GroupMembership`; join-code flow; student group creation (LEADER) and joining (MEMBER); leader reassignment (`POST /api/groups/:id/reassign-leader`); member removal/leave (`DELETE /api/groups/:id/members/:userId`); `GroupManageModal` on both instructor and student views. Analyzer and scoring unchanged. `School`/`Department` hierarchy deferred.
+- **Phase B — Team Formation** *(IMPLEMENTED)*: `ClassSection`, `Assignment`, `GroupMembership`; join-code flow; student group creation (LEADER) and joining (MEMBER); leader reassignment (`POST /api/groups/:id/reassign-leader`); member removal/leave (`DELETE /api/groups/:id/members/:userId`); `GroupManageModal` on both instructor and student views. Analyzer and scoring unchanged. `School` hierarchy deferred (`Department` is implemented).
 - **Phase C — Student Dashboards** *(IMPLEMENTED)*: student read-only view of own report and flags (`StudentPage`, `StudentClassPage`, `StudentGroupPage`); flag-for-review dispute workflow (`disputes.ts`, `DisputesPage.tsx`, `Dispute` model).
 - **Phase D — Combined Analysis** *(IMPLEMENTED)*: FAIR TRAZE Collaborative Editor (TipTap + Yjs); editor data collection and blended scoring for `COMBINED` assignments (`shared/src/documentScoring.ts`, `shared/src/combinedScoring.ts`). Role-aware mismatch detection: both Developer→GitHub and Documentation→Editor checks are implemented (see "Group Roles" above).
 - **Phase F — Institutional Analytics**: cross-group/section dashboards and aggregated Gini trends — **not implemented**. Basic account administration (user CRUD, role assignment, audit log) already exists via `admin.ts`/`AdminPage.tsx` but is not the cross-section analytics this phase describes.

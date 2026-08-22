@@ -89,8 +89,8 @@ function DataSources() {
           </div>
           <p className="text-xs text-indigo-700 leading-relaxed">
             A writing environment built directly into FAIR TRAZE AI that records per-user,
-            timestamped collaboration traces — text inserted and deleted, edit sessions, comments,
-            and suggestions — to produce an independent editor contribution share.
+            timestamped collaboration traces — text inserted and deleted, edit sessions, and
+            edit-type classification — to produce an independent editor contribution share.
           </p>
         </div>
       </div>
