@@ -215,7 +215,10 @@ export function DocumentEditor({ groupId, editable }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
-  const [showAuthorship, setShowAuthorship] = useState(false);
+  // Read-only (instructor/observer) views default to showing authorship, since reviewing who
+  // wrote what is the point of viewing read-only; the editable (member) view defaults off so
+  // it doesn't distract from active writing.
+  const [showAuthorship, setShowAuthorship] = useState(!editable);
   const [authorshipUsers, setAuthorshipUsers] = useState<AuthorshipUser[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);

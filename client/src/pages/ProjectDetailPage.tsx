@@ -695,7 +695,8 @@ export function ProjectDetailPage({ projectId }: Props) {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — shared document for this group
+                Collaborative editor — shared document for this group. Highlighting shows who wrote
+                each part of the current text — it does not show edit history or deleted content.
               </span>
               <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
                 Read-only — instructor view
