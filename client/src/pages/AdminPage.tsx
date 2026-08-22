@@ -787,7 +787,7 @@ export function AdminPage() {
           <p className="text-xs text-slate-400 mb-5">
             Create and manage departments and instructors.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="border border-slate-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-semibold text-slate-600">Departments</p>
@@ -848,18 +848,13 @@ export function AdminPage() {
               <DisabledBtn>Invite Instructor</DisabledBtn>
             </div>
             <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Classes</p>
-              <p className="text-xs text-slate-400 mb-3">View and manage all class sections across departments.</p>
-              <DisabledBtn>Manage Classes</DisabledBtn>
-            </div>
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-600 mb-1">Reports</p>
               <p className="text-xs text-slate-400 mb-3">Export aggregated fairness data across the institution.</p>
               <DisabledBtn>Export Reports</DisabledBtn>
             </div>
           </div>
           <p className="text-[11px] text-slate-400 mt-4">
-            Departments are live. Instructor invitations, cross-department class management, and report export remain disabled in this preview.
+            Departments are live. Instructor invitations and report export remain disabled in this preview.
           </p>
         </section>
 
