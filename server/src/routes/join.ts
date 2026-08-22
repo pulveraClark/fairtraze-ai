@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { requireRole } from "../middleware/auth.js";
+import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import type { TeamReport } from "@shared/types.js";
 
@@ -341,7 +341,7 @@ joinRouter.get("/api/student/requests", ...requireRole("STUDENT"), async (req, r
 // Student creates a new group for an assignment, becoming the leader.
 // Body: { projectId (the assignment id), groupName, repoUrl }
 // Requires enrollment in the assignment's class.
-joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req, res) => {
+joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVerifiedEmail, async (req, res) => {
   const result = z.object({
     assignmentId: z.number().int().positive(),
     groupName:    z.string().min(1, "Group name is required"),
@@ -439,7 +439,7 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
 // Student joins an existing group as a member.
 // Body: { projectGroupId } — the project (group) id.
 // Requires enrollment in the group's class.
-joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, res) => {
+joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), requireVerifiedEmail, async (req, res) => {
   const result = z.object({
     projectGroupId: z.number().int().positive(),
   }).safeParse(req.body);

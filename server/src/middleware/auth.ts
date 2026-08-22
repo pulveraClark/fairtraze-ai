@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { SystemRole } from "@prisma/client";
 import { verifyToken } from "../lib/jwt.js";
+import { prisma } from "../lib/prisma.js";
 
 export function authenticateToken(req: Request, _res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
@@ -38,4 +39,24 @@ export function requireRole(...roles: SystemRole[]) {
       next();
     },
   ];
+}
+
+// Soft gate for the small set of state-changing routes (group creation/join,
+// triggering analysis) that require a verified email. Reads live from the DB
+// rather than the JWT so a just-verified user is unblocked immediately,
+// without waiting for the 15-minute access-token refresh cycle. Must run
+// after requireAuth/requireRole so req.user is populated.
+export async function requireVerifiedEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { emailVerified: true } });
+  if (!user?.emailVerified) {
+    res.status(403).json({ error: "Please verify your email before doing this.", code: "EMAIL_NOT_VERIFIED" });
+    return;
+  }
+
+  next();
 }

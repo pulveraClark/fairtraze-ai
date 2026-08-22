@@ -79,6 +79,11 @@ model User {
   systemRole       SystemRole        @default(STUDENT)
   githubUsername   String?
   active           Boolean           @default(true)
+  // Default true so a migration backfills every pre-existing row (seeded demo
+  // accounts, any real accounts registered before this feature shipped) as
+  // already verified. The register route explicitly overrides this to false
+  // for newly created accounts — see server/src/routes/auth.ts.
+  emailVerified    Boolean           @default(true)
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
@@ -92,6 +97,7 @@ model User {
   editSessions     EditSession[]
   refreshTokens    RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
 }
 
 model RefreshToken {
@@ -104,6 +110,15 @@ model RefreshToken {
 }
 
 model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerificationToken {
   id        Int      @id @default(autoincrement())
   userId    Int
   tokenHash String   @unique

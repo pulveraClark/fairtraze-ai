@@ -13,6 +13,7 @@ vi.mock("../src/lib/github.js", () => ({
 
 vi.mock("../src/lib/email.js", () => ({
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
+  sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 afterEach(async () => {

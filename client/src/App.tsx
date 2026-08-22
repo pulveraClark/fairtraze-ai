@@ -4,6 +4,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { InstructorDashboardPage } from "./pages/InstructorDashboardPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
@@ -61,6 +62,7 @@ export default function App() {
   if (pathname === "/register")  return <RegisterPage />;
   if (pathname === "/forgot-password") return <ForgotPasswordPage />;
   if (pathname === "/reset-password")  return <ResetPasswordPage />;
+  if (pathname === "/verify-email")    return <VerifyEmailPage />;
   if (pathname === "/overview")  return <OverviewPage />;
 
   if (pathname === "/dashboard") return (

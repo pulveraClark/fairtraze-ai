@@ -12,6 +12,7 @@ export async function createUser(overrides: {
   name?: string;
   systemRole?: SystemRole;
   active?: boolean;
+  emailVerified?: boolean;
 } = {}) {
   emailCounter += 1;
   const password = overrides.password ?? "password123";
@@ -23,6 +24,7 @@ export async function createUser(overrides: {
       name: overrides.name ?? `Test User ${emailCounter}`,
       systemRole: overrides.systemRole ?? "INSTRUCTOR",
       active: overrides.active ?? true,
+      ...(overrides.emailVerified !== undefined ? { emailVerified: overrides.emailVerified } : {}),
     },
   });
   return { user, password };

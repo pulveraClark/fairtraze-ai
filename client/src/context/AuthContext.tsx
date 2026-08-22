@@ -7,6 +7,7 @@ export interface AuthUser {
   name: string;
   systemRole: "ADMIN" | "INSTRUCTOR" | "STUDENT";
   githubUsername?: string | null;
+  emailVerified?: boolean;
 }
 
 interface AuthContextValue {

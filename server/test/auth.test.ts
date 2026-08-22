@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
-import { createUser } from "./factories.js";
+import { createUser, authHeaderFor } from "./factories.js";
 
 // This file exercises auth-flow correctness (many login/register/forgot-password
 // calls per test file), not rate limiting — that's rateLimit.test.ts's job.
@@ -38,6 +38,20 @@ describe("POST /api/auth/register", () => {
     expect(res.body.token).toBeTruthy();
     expect(res.body.user.email).toBe("new@example.com");
     expect(extractRefreshCookie(res)).toContain("ft_refresh_token=");
+  });
+
+  it("creates a newly-registered account as unverified (emailVerified: false)", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      email: "unverified@example.com",
+      password: "password123",
+      name: "Unverified User",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.emailVerified).toBe(false);
+
+    const dbUser = await prisma.user.findUnique({ where: { email: "unverified@example.com" } });
+    expect(dbUser?.emailVerified).toBe(false);
   });
 
   it("rejects a duplicate email with 409", async () => {
@@ -230,6 +244,112 @@ describe("password reset flow", () => {
       newPassword: "whatever123",
     });
     expect(secondAttempt.status).toBe(400);
+  });
+});
+
+describe("email verification — grandfathering existing users", () => {
+  it("a user row created without an explicit emailVerified value reads true (schema default)", async () => {
+    // Mirrors how every pre-existing account (seeded demo users, any real
+    // account created before this feature shipped) is grandfathered by the
+    // migration's column default — not by a separate backfill script.
+    const { user } = await createUser({ email: "grandfathered@example.com" });
+    expect(user.emailVerified).toBe(true);
+  });
+
+  it("a user created through the register route reads false (explicit override at that call site)", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      email: "freshsignup@example.com",
+      password: "password123",
+      name: "Fresh Signup",
+    });
+    expect(res.body.user.emailVerified).toBe(false);
+  });
+});
+
+describe("email verification flow", () => {
+  it("verifies email with a valid token, consuming it (single-use)", async () => {
+    const { user } = await createUser({ email: "toverify@example.com", emailVerified: false });
+    const { issueVerificationToken } = await import("../src/lib/emailVerification.js");
+    const rawToken = await issueVerificationToken(user.id);
+
+    const verifyRes = await request(app).post("/api/auth/verify-email").send({ token: rawToken });
+    expect(verifyRes.status).toBe(200);
+
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(dbUser?.emailVerified).toBe(true);
+
+    // Replaying the same (now-deleted) token must fail.
+    const replayRes = await request(app).post("/api/auth/verify-email").send({ token: rawToken });
+    expect(replayRes.status).toBe(400);
+  });
+
+  it("rejects an invalid/unknown token with 400", async () => {
+    const res = await request(app).post("/api/auth/verify-email").send({ token: "not-a-real-token" });
+    expect(res.status).toBe(400);
+  });
+
+  it("consumes an expired verification token on first lookup instead of leaving it replayable", async () => {
+    const { user } = await createUser({ email: "expiredverify@example.com", emailVerified: false });
+    const { issueVerificationToken } = await import("../src/lib/emailVerification.js");
+    const rawToken = await issueVerificationToken(user.id);
+
+    const crypto = await import("crypto");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    await prisma.emailVerificationToken.update({
+      where: { tokenHash },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const firstAttempt = await request(app).post("/api/auth/verify-email").send({ token: rawToken });
+    expect(firstAttempt.status).toBe(400);
+
+    const secondAttempt = await request(app).post("/api/auth/verify-email").send({ token: rawToken });
+    expect(secondAttempt.status).toBe(400);
+
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(dbUser?.emailVerified).toBe(false);
+  });
+
+  it("requires authentication to resend a verification email", async () => {
+    const res = await request(app).post("/api/auth/resend-verification");
+    expect(res.status).toBe(401);
+  });
+
+  it("issues a new, usable token when an unverified user resends", async () => {
+    const { user } = await createUser({ email: "resend@example.com", emailVerified: false });
+
+    const { sendVerificationEmail } = await import("../src/lib/email.js");
+    const mockedSend = vi.mocked(sendVerificationEmail);
+    mockedSend.mockClear();
+
+    const resendRes = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", authHeaderFor(user));
+    expect(resendRes.status).toBe(200);
+    expect(mockedSend).toHaveBeenCalledTimes(1);
+
+    const verifyLink = mockedSend.mock.calls[0][2];
+    const rawToken = new URL(verifyLink).searchParams.get("token")!;
+
+    const verifyRes = await request(app).post("/api/auth/verify-email").send({ token: rawToken });
+    expect(verifyRes.status).toBe(200);
+
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(dbUser?.emailVerified).toBe(true);
+  });
+
+  it("resending for an already-verified user is idempotent and issues no new token", async () => {
+    const { user } = await createUser({ email: "alreadyverified@example.com", emailVerified: true });
+
+    const before = await prisma.emailVerificationToken.count({ where: { userId: user.id } });
+
+    const res = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", authHeaderFor(user));
+    expect(res.status).toBe(200);
+
+    const after = await prisma.emailVerificationToken.count({ where: { userId: user.id } });
+    expect(after).toBe(before);
   });
 });
 

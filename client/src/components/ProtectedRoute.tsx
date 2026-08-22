@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
+import { VerifyEmailBanner } from "./VerifyEmailBanner";
 
 type SystemRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
 
@@ -47,5 +48,10 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   if (!user) return null;
   if (allowedRoles && !allowedRoles.includes(user.systemRole)) return null;
 
-  return <>{children}</>;
+  return (
+    <>
+      <VerifyEmailBanner />
+      {children}
+    </>
+  );
 }

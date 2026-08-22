@@ -8,7 +8,8 @@ import { signToken } from "../lib/jwt.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
-import { sendPasswordResetEmail } from "../lib/email.js";
+import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
 
 export const authRouter = Router();
 
@@ -55,6 +56,10 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
+const verifyEmailSchema = z.object({
+  token: z.string().min(1),
+});
+
 // POST /api/auth/register
 authRouter.post("/api/auth/register", async (req, res) => {
   const result = registerSchema.safeParse(req.body);
@@ -78,6 +83,7 @@ authRouter.post("/api/auth/register", async (req, res) => {
       passwordHash,
       name,
       systemRole: (role ?? "STUDENT") as SystemRole,
+      emailVerified: false,
     },
   });
 
@@ -85,9 +91,17 @@ authRouter.post("/api/auth/register", async (req, res) => {
   const refreshToken = await issueRefreshToken(user.id);
   setRefreshCookie(res, refreshToken);
 
+  const rawVerifyToken = await issueVerificationToken(user.id);
+  const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
+  // A delivery failure must not block registration — the account is already
+  // created; the user can request a fresh link via resend-verification.
+  sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
+    console.error("[auth] failed to send verification email", err)
+  );
+
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
   });
 });
 
@@ -125,7 +139,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
   });
 });
 
@@ -245,6 +259,55 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
     name:           user.name,
     systemRole:     user.systemRole,
     githubUsername: user.githubUsername,
+    emailVerified:  user.emailVerified,
     createdAt:      user.createdAt,
   });
+});
+
+// POST /api/auth/verify-email
+authRouter.post("/api/auth/verify-email", async (req, res) => {
+  const result = verifyEmailSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: "Invalid input", details: result.error.flatten() });
+    return;
+  }
+
+  const userId = await consumeVerificationToken(result.data.token);
+  if (!userId) {
+    res.status(400).json({ error: "This verification link is invalid or has expired." });
+    return;
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { emailVerified: true } });
+
+  res.json({ message: "Email verified successfully." });
+});
+
+// POST /api/auth/resend-verification — authenticated, so it can't be used to
+// probe which emails are registered (unlike forgot-password, which must stay
+// generic because it's reachable while logged out).
+authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  if (!user) {
+    res.status(401).json({ error: "User no longer exists" });
+    return;
+  }
+
+  if (user.emailVerified) {
+    res.json({ message: "Your email is already verified." });
+    return;
+  }
+
+  const rawVerifyToken = await issueVerificationToken(user.id);
+  const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
+  sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
+    console.error("[auth] failed to send verification email", err)
+  );
+
+  res.json({ message: "Verification email sent." });
 });
