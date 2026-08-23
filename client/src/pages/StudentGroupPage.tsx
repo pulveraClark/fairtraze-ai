@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
-import { DocumentEditor } from "../components/DocumentEditor";
+import { DocumentGate } from "../components/DocumentGate";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { FlagTag } from "../components/FlagTag";
 import type { Flag } from "@shared/types";
@@ -893,7 +893,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 Collaborative editor — shared document for this group
               </span>
             </div>
-            <DocumentEditor groupId={projectId} editable={true} />
+            <DocumentGate groupId={projectId} editable={true} canChooseTemplate={membership.role === "LEADER"} />
           </div>
         )}
 

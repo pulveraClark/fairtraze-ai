@@ -8,7 +8,7 @@ import { ContributionChart } from "../components/ContributionChart";
 import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
-import { DocumentEditor } from "../components/DocumentEditor";
+import { DocumentGate } from "../components/DocumentGate";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
@@ -714,7 +714,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                 Read-only — instructor view
               </span>
             </div>
-            <DocumentEditor groupId={projectId} editable={false} />
+            <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} />
           </div>
         )}
       </main>

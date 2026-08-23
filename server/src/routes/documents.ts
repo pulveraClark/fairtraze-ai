@@ -3,9 +3,10 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
-import { loadGroup, isInstructorOf } from "./groups.js";
+import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
+import { findDocumentTemplate } from "@shared/documentTemplates.js";
 
 export const documentsRouter = Router();
 
@@ -52,6 +53,104 @@ documentsRouter.get("/api/groups/:id/document", requireAuth, async (req: Request
   });
 
   res.json({
+    content:   JSON.parse(doc.content) as unknown,
+    updatedAt: doc.updatedAt.toISOString(),
+  });
+});
+
+// GET /api/groups/:id/document/status — whether a Document row exists yet, WITHOUT creating one
+// (unlike GET /document above, which auto-creates on first fetch). The client must call this
+// before ever calling GET /document or mounting the live editor, so the leader still has a chance
+// to pick a starting template — see POST /document/init below.
+documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+
+  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
+  res.json({ exists: !!doc });
+});
+
+const initBody = z.object({
+  templateId: z.string().min(1).optional(),
+});
+
+// POST /api/groups/:id/document/init — create the group's Document row, optionally seeded from a
+// template (see shared/src/documentTemplates.ts). Leader or instructor only — this is a
+// structural choice for the whole group, unlike the self-attributed PATCH/import routes below.
+//
+// This never touches the live Yjs room: it only sets the Document.content column at row-creation
+// time. persistence.ts's bindState() migrates that JSON into the Y.Doc, with no origin, the first
+// time the room is ever bound — the same no-attribution path that already makes today's default
+// empty document invisible to scoring. So template boilerplate can never produce an
+// EditEvent/EditSession row or count toward any member's score.
+//
+// The upsert's `update: {}` makes this idempotent: if a Document row already exists (created by
+// this route, by the auto-creating GET /document, or by a concurrent call), this is a no-op and
+// never overwrites existing content — `created: false` tells the caller its choice didn't apply.
+documentsRouter.post("/api/groups/:id/document/init", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const bodyResult = initBody.safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "templateId, if provided, must be a non-empty string." });
+    return;
+  }
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isInstructorOf(req, project) && !leaderMembership(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can start the document." });
+    return;
+  }
+
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Document creation is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+
+  let content: string | undefined;
+  if (bodyResult.data.templateId) {
+    const template = findDocumentTemplate(bodyResult.data.templateId);
+    if (!template) {
+      res.status(400).json({ error: "Unknown templateId." });
+      return;
+    }
+    content = JSON.stringify(template.content);
+  }
+
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId } });
+  const doc = await prisma.document.upsert({
+    where:  { groupId: projectId },
+    update: {},
+    create: content !== undefined ? { groupId: projectId, content } : { groupId: projectId },
+  });
+
+  res.json({
+    created:   !existing,
     content:   JSON.parse(doc.content) as unknown,
     updatedAt: doc.updatedAt.toISOString(),
   });

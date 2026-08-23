@@ -8,6 +8,7 @@
     ".": "./src/types.ts",
     "./scoring": "./src/scoring.ts",
     "./documentScoring": "./src/documentScoring.ts",
+    "./documentTemplates": "./src/documentTemplates.ts",
     "./lineClassifier": "./src/lineClassifier.ts",
     "./fileWeights": "./src/fileWeights.ts",
     "./commitClassifier": "./src/commitClassifier.ts",

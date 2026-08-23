@@ -16,7 +16,9 @@ const { prosemirrorJSONToYXmlFragment } = require("@tiptap/y-tiptap") as {
 
 // Mirrors the default @tiptap/starter-kit node/mark set used by DocumentEditor.tsx in Step 1.
 // Only used to parse legacy Step-1 `content` JSON once, when a room has no yjsState yet.
-const legacySchema = new Schema({
+// Exported so tests can validate content (e.g. document templates, shared/src/documentTemplates.ts)
+// parses cleanly under this exact schema before it ever reaches bindState below.
+export const legacySchema = new Schema({
   nodes: {
     doc: { content: "block+" },
     paragraph: { group: "block", content: "inline*" },
