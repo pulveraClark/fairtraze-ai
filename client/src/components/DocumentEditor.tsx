@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
+import { Table } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import TextAlign from "@tiptap/extension-text-align";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { useAuth } from "../context/AuthContext";
@@ -47,19 +56,13 @@ function wsUrl(path: string): string {
   return `${protocol}//${window.location.host}${path}`;
 }
 
-function ToolbarButton({
-  onClick,
-  active,
-  label,
-  children,
-}: {
-  onClick: () => void;
-  active: boolean;
-  label: string;
-  children: React.ReactNode;
-}) {
+const ToolbarButton = forwardRef<
+  HTMLButtonElement,
+  { onClick: () => void; active: boolean; label: string; children: React.ReactNode }
+>(function ToolbarButton({ onClick, active, label, children }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       title={label}
@@ -72,6 +75,106 @@ function ToolbarButton({
     >
       {children}
     </button>
+  );
+});
+
+const FONT_COLORS = ["#0f172a", "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#2563eb", "#7c3aed"];
+const HIGHLIGHT_COLORS = ["#fef08a", "#fecaca", "#fed7aa", "#bbf7d0", "#bfdbfe", "#e9d5ff"];
+
+function ColorMenu({
+  label,
+  icon,
+  colors,
+  activeColor,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  colors: string[];
+  activeColor: string | null;
+  onPick: (color: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Portaled to document.body and positioned via getBoundingClientRect, exactly like
+  // InfoTooltip.tsx — the toolbar's overflow-x-auto (see Toolbar's root div) computes
+  // overflow-y as auto too per the CSS spec, which would silently clip an absolutely
+  // positioned dropdown nested inside it (found via manual verification: the swatch
+  // buttons were clickable but invisible).
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const btn = btnRef.current.getBoundingClientRect();
+    setPos({ top: btn.bottom + 4, left: btn.left });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: MouseEvent) => {
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        menuRef.current && !menuRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [open]);
+
+  return (
+    <>
+      <ToolbarButton
+        ref={btnRef}
+        label={label}
+        active={open || !!activeColor}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {icon}
+      </ToolbarButton>
+      {open && pos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="p-1.5 bg-white border border-slate-200 rounded-lg shadow-md flex items-center gap-1"
+        >
+          <button
+            type="button"
+            title="Clear"
+            aria-label="Clear color"
+            onClick={() => {
+              onClear();
+              setOpen(false);
+            }}
+            className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 shrink-0"
+          >
+            ✕
+          </button>
+          <span className="w-px h-4 bg-slate-200 mx-0.5" />
+          {colors.map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={c}
+              aria-label={`Color ${c}`}
+              onClick={() => {
+                onPick(c);
+                setOpen(false);
+              }}
+              className={`w-5 h-5 rounded-full border shrink-0 ${
+                activeColor === c ? "ring-2 ring-offset-1 ring-indigo-400" : "border-slate-200"
+              }`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -190,6 +293,101 @@ function Toolbar({
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M4 6h1v2M4 10h2l-2 2h2M4 18h2M4 16h2" />
             </svg>
           </ToolbarButton>
+
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
+
+          <ToolbarButton
+            label="Align left"
+            active={editor.isActive({ textAlign: "left" })}
+            onClick={() => editor.chain().focus().setTextAlign("left").run()}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h13" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Align center"
+            active={editor.isActive({ textAlign: "center" })}
+            onClick={() => editor.chain().focus().setTextAlign("center").run()}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M7 12h10M5.5 18h13" />
+            </svg>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Align right"
+            active={editor.isActive({ textAlign: "right" })}
+            onClick={() => editor.chain().focus().setTextAlign("right").run()}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M10 12h10M7 18h13" />
+            </svg>
+          </ToolbarButton>
+
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
+
+          <ColorMenu
+            label="Text color"
+            icon={<span className="font-bold text-sm leading-none">A</span>}
+            colors={FONT_COLORS}
+            activeColor={editor.getAttributes("textStyle").color ?? null}
+            onPick={(c) => editor.chain().focus().setColor(c).run()}
+            onClear={() => editor.chain().focus().unsetColor().run()}
+          />
+          <ColorMenu
+            label="Highlight color"
+            icon={
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 11l6-6 4 4-6 6m-4-4l-4 10 10-4m-6-6l6 6" />
+              </svg>
+            }
+            colors={HIGHLIGHT_COLORS}
+            activeColor={editor.getAttributes("highlight").color ?? null}
+            onPick={(c) => editor.chain().focus().toggleHighlight({ color: c }).run()}
+            onClear={() => editor.chain().focus().unsetHighlight().run()}
+          />
+
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
+
+          <ToolbarButton
+            label="Insert table"
+            active={editor.isActive("table")}
+            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="4" width="18" height="16" rx="1" />
+              <path strokeLinecap="round" d="M3 10h18M3 16h18M9 4v16M15 4v16" />
+            </svg>
+          </ToolbarButton>
+          {editor.isActive("table") && (
+            <>
+              <ToolbarButton label="Add row" active={false} onClick={() => editor.chain().focus().addRowAfter().run()}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v10m0 0l-3-3m3 3l3-3M4 20h16" />
+                </svg>
+              </ToolbarButton>
+              <ToolbarButton label="Delete row" active={false} onClick={() => editor.chain().focus().deleteRow().run()}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 20v-10m0 0l-3 3m3-3l3 3M4 4h16" />
+                </svg>
+              </ToolbarButton>
+              <ToolbarButton label="Add column" active={false} onClick={() => editor.chain().focus().addColumnAfter().run()}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h10m0 0l-3-3m3 3l-3 3M20 4v16" />
+                </svg>
+              </ToolbarButton>
+              <ToolbarButton label="Delete column" active={false} onClick={() => editor.chain().focus().deleteColumn().run()}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H10m0 0l3-3m-3 3l3 3M4 4v16" />
+                </svg>
+              </ToolbarButton>
+              <ToolbarButton label="Delete table" active={false} onClick={() => editor.chain().focus().deleteTable().run()}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </ToolbarButton>
+            </>
+          )}
 
           <span className="w-px h-4 bg-slate-200 mx-1.5" />
 
@@ -393,6 +591,14 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             CommentHighlight.configure({
               onCommentClick: (commentId: number) => onCommentClickRef.current(commentId),
             }),
+            Table.configure({ resizable: true }),
+            TableRow,
+            TableHeader,
+            TableCell,
+            TextAlign.configure({ types: ["heading", "paragraph"] }),
+            TextStyle,
+            Color,
+            Highlight.configure({ multicolor: true }),
           ]
         : [StarterKit],
       editable: effectiveEditable,

@@ -188,6 +188,27 @@ body {
 .ft-doc-content ol { list-style: decimal; }
 .ft-doc-content li { margin-bottom: 0.25rem; }
 .ft-doc-content li > p { margin: 0; }
+.ft-doc-content table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0 0 0.85rem;
+}
+.ft-doc-content th, .ft-doc-content td {
+  border: 1px solid var(--brand-border, #e2e8f0);
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+  position: relative;
+}
+.ft-doc-content th {
+  background-color: rgba(99, 102, 241, 0.06);
+  font-weight: 700;
+  text-align: left;
+}
+.ft-doc-content td > p, .ft-doc-content th > p { margin: 0; }
+.ft-doc-content .selectedCell {
+  background-color: rgba(99, 102, 241, 0.12);
+}
 
 /* ── Comment highlight (ProseMirror decoration — see client/src/lib/commentHighlight.ts,
    never part of document content) ─────────────────────────────────────────────────────── */
