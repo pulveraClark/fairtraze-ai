@@ -41,6 +41,17 @@ const legacySchema = new Schema({
 const DEBOUNCE_MS = 3000;
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// Tracks, per room, whether bindState's own restore (Document.findUnique + Y.applyUpdate below)
+// has had the chance to run. writeState awaits this before ever persisting — otherwise a fast
+// connect/disconnect cycle on a room that isn't cached yet (e.g. y-websocket's docs map was
+// reset by a server restart since a .docx import last touched it, and the very first real
+// connection afterward is a brief instructor read-only view) can call writeState while the
+// in-memory ydoc is still empty, silently overwriting real persisted content with an empty
+// encoded state. Never cleaned up per-room: entries are cheap settled promises and the number of
+// distinct rooms is bounded by how many groups this server process ever serves, which is
+// negligible at this project's scale.
+const restoreReady = new Map<string, Promise<void>>();
+
 export function groupIdFromRoom(room: string): number {
   const match = /^group-doc-(\d+)$/.exec(room);
   if (!match) throw new Error(`Invalid collab room name: ${room}`);
@@ -85,20 +96,32 @@ export const yjsPersistence = {
     ydoc.on("update", () => scheduleDebouncedPersist(room, ydoc));
     const authorshipTracking = attachAuthorshipTracking(room, groupId, ydoc);
 
-    const doc = await prisma.document.findUnique({ where: { groupId } });
+    // Set synchronously, before the first await below, so a writeState() that fires the instant
+    // this room is created (a fast connect/disconnect cycle) always finds this entry and waits
+    // on it rather than persisting a not-yet-restored, still-empty ydoc. See restoreReady's
+    // declaration above and its consumer in writeState below.
+    const restorePromise = (async () => {
+      const doc = await prisma.document.findUnique({ where: { groupId } });
 
-    if (doc?.yjsState) {
-      Y.applyUpdate(ydoc, doc.yjsState);
-    } else if (doc?.content) {
-      try {
-        const json = JSON.parse(doc.content) as Record<string, unknown>;
-        prosemirrorJSONToYXmlFragment(legacySchema, json, ydoc.getXmlFragment("default"));
-      } catch (err) {
-        console.error(`[collab] failed to migrate legacy content for ${room}`, err);
+      if (doc?.yjsState) {
+        Y.applyUpdate(ydoc, doc.yjsState);
+      } else if (doc?.content) {
+        try {
+          const json = JSON.parse(doc.content) as Record<string, unknown>;
+          prosemirrorJSONToYXmlFragment(legacySchema, json, ydoc.getXmlFragment("default"));
+        } catch (err) {
+          console.error(`[collab] failed to migrate legacy content for ${room}`, err);
+        }
       }
-    }
+    })();
+    restoreReady.set(
+      room,
+      restorePromise.catch((err) => {
+        console.error(`[collab] restore failed for ${room}`, err);
+      })
+    );
 
-    await authorshipTracking;
+    await Promise.all([authorshipTracking, restorePromise]);
   },
 
   async writeState(room: string, ydoc: YTypes.Doc): Promise<void> {
@@ -107,6 +130,11 @@ export const yjsPersistence = {
       clearTimeout(existing);
       debounceTimers.delete(room);
     }
+    // Never persist a room's state before its own restore (above) has had a chance to run —
+    // otherwise a fast connect/disconnect cycle on a not-yet-restored room persists the
+    // still-empty in-memory doc, silently overwriting real content already sitting in Postgres.
+    const restore = restoreReady.get(room);
+    if (restore) await restore;
     await persist(room, ydoc);
   },
 };
