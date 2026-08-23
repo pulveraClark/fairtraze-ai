@@ -100,6 +100,8 @@ model User {
   refreshTokens    RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  tasksAssigned    Task[]            @relation("TaskAssignee")
+  tasksCreated     Task[]            @relation("TaskCreator")
 }
 
 model RefreshToken {
@@ -224,6 +226,28 @@ model Project {
   joinRequests             GroupJoinRequest[]
   roleSuggestions          RoleSuggestion[]
   document                 Document?
+  tasks                    Task[]
+}
+
+// Leader/instructor-assigned sub-tasks for deliverables GitHub and the
+// Collaborative Editor can't see (a poster, a physical prototype, a
+// presentation). Purely informational — self-reported completion is
+// trivially gameable, so it is never read by shared/src/scoring.ts and
+// never fed into contributionShare/flags/Gini. See taskSummary on the
+// report for how it's surfaced instead (context only, like functionalRoles).
+model Task {
+  id               Int       @id @default(autoincrement())
+  projectId        Int
+  title            String
+  description      String?
+  assignedToUserId Int?
+  createdByUserId  Int
+  done             Boolean   @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo       User?     @relation("TaskAssignee", fields: [assignedToUserId], references: [id])
+  createdBy        User      @relation("TaskCreator", fields: [createdByUserId], references: [id])
 }
 
 model Member {

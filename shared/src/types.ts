@@ -50,6 +50,7 @@ export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
 export type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
 
 export interface MemberRoleInfo {
+  userId:          number;
   githubUsername:  string;
   functionalRoles: FunctionalRole[];
   isLeader:        boolean;
@@ -58,6 +59,10 @@ export interface MemberRoleInfo {
   // Empty array = no mismatch. A member holding both DEVELOPER and DOCUMENTATION can
   // mismatch on both at once — each gets its own entry, none overwrite each other.
   mismatchNotes: string[];
+  // Leader/instructor-assigned checklist completion (server/src/routes/groups.ts Task
+  // endpoints). Purely informational, self-reported — never a scoring input, same as
+  // mismatchNotes above. { completed: 0, total: 0 } when no tasks are assigned.
+  taskSummary: { completed: number; total: number };
 }
 
 export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";

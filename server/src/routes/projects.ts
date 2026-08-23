@@ -78,6 +78,16 @@ export function buildMismatchNotes(
   return notes;
 }
 
+// Purely informational — see MemberRoleInfo.taskSummary. Never read by
+// shared/src/scoring.ts and never folded into contributionShare/flags/Gini.
+export function buildTaskSummary(
+  tasks: { assignedToUserId: number | null; done: boolean }[],
+  userId: number,
+): { completed: number; total: number } {
+  const assigned = tasks.filter((t) => t.assignedToUserId === userId);
+  return { completed: assigned.filter((t) => t.done).length, total: assigned.length };
+}
+
 // GET /api/projects — list all projects (used by legacy selector, kept for compat)
 // requireRole(INSTRUCTOR) + scoped to the requesting instructor's own projects.
 // TODO: assignment-less projects (assignmentId: null) are accessible to any
@@ -218,6 +228,10 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   // Build memberRoles — context-only; never affects scores, flags, Gini, or team health.
   // Mismatch note: Developer assigned but member has 0 commits in the stored report.
   const reportMembers = stored.report.members;
+  const tasks = await prisma.task.findMany({
+    where:  { projectId },
+    select: { assignedToUserId: true, done: true },
+  });
   const memberRoles: MemberRoleInfo[] = project.groupMemberships.map((m) => {
     const functionalRoles = JSON.parse(m.functionalRoles) as FunctionalRole[];
     const isLeader = m.role === "LEADER";
@@ -230,8 +244,9 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
 
     const docActivity = reportMembers.find((rm) => "userId" in rm && rm.userId === m.user.id);
     const mismatchNotes = buildMismatchNotes(functionalRoles, scored, docActivity);
+    const taskSummary = buildTaskSummary(tasks, m.user.id);
 
-    return { githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes };
+    return { userId: m.user.id, githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes, taskSummary };
   });
 
   const response: StoredReportResponse = {

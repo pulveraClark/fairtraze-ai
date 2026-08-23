@@ -423,6 +423,200 @@ groupsRouter.post("/api/groups/role-suggestions/:id/decline", requireAuth, async
   res.json({ message: "Role suggestion declined." });
 });
 
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+// Leader/instructor-assigned checklist items for deliverables GitHub and the
+// Collaborative Editor can't see (a poster, a physical prototype, a
+// presentation). Purely informational — never read by shared/src/scoring.ts,
+// never affects contributionShare/flags/Gini. See buildTaskSummary in
+// projects.ts for how completion is surfaced on the report instead.
+
+function serializeTask(task: {
+  id: number; projectId: number; title: string; description: string | null;
+  assignedToUserId: number | null; createdByUserId: number; done: boolean;
+  completedAt: Date | null; createdAt: Date;
+}) {
+  return {
+    id:               task.id,
+    projectId:        task.projectId,
+    title:            task.title,
+    description:      task.description,
+    assignedToUserId: task.assignedToUserId,
+    createdByUserId:  task.createdByUserId,
+    done:             task.done,
+    completedAt:      task.completedAt ? task.completedAt.toISOString() : null,
+    createdAt:        task.createdAt.toISOString(),
+  };
+}
+
+// POST /api/groups/:id/tasks — create a task (leader or instructor only)
+groupsRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const bodyResult = z.object({
+    title:            z.string().trim().min(1).max(200),
+    description:      z.string().trim().max(2000).optional(),
+    assignedToUserId: idParam.optional(),
+  }).safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "title is required (max 200 chars); assignedToUserId must be a valid id if provided" });
+    return;
+  }
+
+  const projectId = idResult.data;
+  const project = await loadGroup(projectId);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can create tasks." });
+    return;
+  }
+
+  const { assignedToUserId } = bodyResult.data;
+  if (assignedToUserId !== undefined && !project.groupMemberships.some((m) => m.userId === assignedToUserId)) {
+    res.status(400).json({ error: "assignedToUserId must be a member of this group." });
+    return;
+  }
+
+  const task = await prisma.task.create({
+    data: {
+      projectId,
+      title:            bodyResult.data.title,
+      description:      bodyResult.data.description ?? null,
+      assignedToUserId: assignedToUserId ?? null,
+      createdByUserId:  req.user!.sub,
+    },
+  });
+
+  res.status(201).json(serializeTask(task));
+});
+
+// GET /api/groups/:id/tasks — list tasks (any member or instructor)
+groupsRouter.get("/api/groups/:id/tasks", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const isAdmin  = req.user!.role === "ADMIN";
+  const isMember = project.groupMemberships.some((m) => m.userId === req.user!.sub);
+  if (!isAdmin && !isMember && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this group." });
+    return;
+  }
+
+  const tasks = await prisma.task.findMany({
+    where:   { projectId: idResult.data },
+    orderBy: { createdAt: "asc" },
+  });
+
+  res.json({ tasks: tasks.map(serializeTask) });
+});
+
+// PUT /api/groups/:id/tasks/:taskId — edit title/description/assignee (leader or instructor only)
+groupsRouter.put("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
+  const idResult     = idParam.safeParse(req.params.id);
+  const taskIdResult = idParam.safeParse(req.params.taskId);
+  if (!idResult.success || !taskIdResult.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const bodyResult = z.object({
+    title:            z.string().trim().min(1).max(200).optional(),
+    description:      z.string().trim().max(2000).nullable().optional(),
+    assignedToUserId: idParam.nullable().optional(),
+  }).safeParse(req.body);
+  if (!bodyResult.success) { res.status(400).json({ error: "Invalid task update" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const task = await prisma.task.findUnique({ where: { id: taskIdResult.data } });
+  if (!task || task.projectId !== idResult.data) {
+    res.status(404).json({ error: "Task not found." });
+    return;
+  }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can edit tasks." });
+    return;
+  }
+
+  const { assignedToUserId } = bodyResult.data;
+  if (assignedToUserId != null && !project.groupMemberships.some((m) => m.userId === assignedToUserId)) {
+    res.status(400).json({ error: "assignedToUserId must be a member of this group." });
+    return;
+  }
+
+  const updated = await prisma.task.update({
+    where: { id: task.id },
+    data: {
+      ...(bodyResult.data.title !== undefined ? { title: bodyResult.data.title } : {}),
+      ...(bodyResult.data.description !== undefined ? { description: bodyResult.data.description } : {}),
+      ...(assignedToUserId !== undefined ? { assignedToUserId } : {}),
+    },
+  });
+
+  res.json(serializeTask(updated));
+});
+
+// PATCH /api/groups/:id/tasks/:taskId — toggle completion (the assignee, or leader/instructor override)
+groupsRouter.patch("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
+  const idResult     = idParam.safeParse(req.params.id);
+  const taskIdResult = idParam.safeParse(req.params.taskId);
+  if (!idResult.success || !taskIdResult.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const bodyResult = z.object({ done: z.boolean() }).safeParse(req.body);
+  if (!bodyResult.success) { res.status(400).json({ error: "done must be a boolean" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const task = await prisma.task.findUnique({ where: { id: taskIdResult.data } });
+  if (!task || task.projectId !== idResult.data) {
+    res.status(404).json({ error: "Task not found." });
+    return;
+  }
+
+  const isAssignee = task.assignedToUserId === req.user!.sub;
+  if (!isAssignee && !canManage(req, project)) {
+    res.status(403).json({ error: "Only the assigned member, group leader, or instructor can update this task's status." });
+    return;
+  }
+
+  const { done } = bodyResult.data;
+  const updated = await prisma.task.update({
+    where: { id: task.id },
+    data:  { done, completedAt: done ? new Date() : null },
+  });
+
+  res.json(serializeTask(updated));
+});
+
+// DELETE /api/groups/:id/tasks/:taskId — delete a task (leader or instructor only)
+groupsRouter.delete("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
+  const idResult     = idParam.safeParse(req.params.id);
+  const taskIdResult = idParam.safeParse(req.params.taskId);
+  if (!idResult.success || !taskIdResult.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const task = await prisma.task.findUnique({ where: { id: taskIdResult.data } });
+  if (!task || task.projectId !== idResult.data) {
+    res.status(404).json({ error: "Task not found." });
+    return;
+  }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can delete tasks." });
+    return;
+  }
+
+  await prisma.task.delete({ where: { id: task.id } });
+
+  res.json({ message: "Task deleted." });
+});
+
 // DELETE /api/groups/:id/members/:userId — remove a member (leader/instructor) or leave (self)
 groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: Request, res: Response) => {
   const idResult     = idParam.safeParse(req.params.id);

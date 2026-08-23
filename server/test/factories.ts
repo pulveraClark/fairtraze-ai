@@ -87,6 +87,6 @@ export async function createProject(overrides: { assignmentId?: number | null; g
   });
 }
 
-export async function createMembership(userId: number, projectId: number) {
-  return prisma.groupMembership.create({ data: { userId, projectId } });
+export async function createMembership(userId: number, projectId: number, role: "LEADER" | "MEMBER" = "MEMBER") {
+  return prisma.groupMembership.create({ data: { userId, projectId, role } });
 }

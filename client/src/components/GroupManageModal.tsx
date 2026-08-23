@@ -26,6 +26,20 @@ interface RoleSuggestion {
   createdAt: string;
 }
 
+// Leader/instructor-assigned checklist item. Purely informational — completion
+// never affects contribution scores (see server/src/routes/groups.ts Task routes).
+interface GroupTask {
+  id: number;
+  projectId: number;
+  title: string;
+  description: string | null;
+  assignedToUserId: number | null;
+  createdByUserId: number;
+  done: boolean;
+  completedAt: string | null;
+  createdAt: string;
+}
+
 const ROLE_META: Record<FunctionalRole, { label: string; activeClass: string; inactiveClass: string }> = {
   DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
   DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
@@ -105,6 +119,14 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const [nameDraft, setNameDraft]     = useState("");
   const [nameBusy, setNameBusy]       = useState(false);
   const [nameErr, setNameErr]         = useState("");
+  const [tasks, setTasks]             = useState<GroupTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksErr, setTasksErr]       = useState("");
+  const [taskBusy, setTaskBusy]       = useState<number | null>(null);
+  const [newTaskTitle, setNewTaskTitle]         = useState("");
+  const [newTaskAssignee, setNewTaskAssignee]   = useState<number | "">("");
+  const [createTaskBusy, setCreateTaskBusy]     = useState(false);
+  const [createTaskErr, setCreateTaskErr]       = useState("");
 
   const currentUserId = user?.id ?? 0;
 
@@ -142,6 +164,23 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     }
   }
 
+  async function fetchTasks() {
+    setTasksLoading(true);
+    setTasksErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { tasks?: GroupTask[]; error?: string };
+      if (!res.ok) { setTasksErr(data.error ?? "Could not load tasks."); return; }
+      setTasks(data.tasks ?? []);
+    } catch {
+      setTasksErr("Network error — could not load tasks.");
+    } finally {
+      setTasksLoading(false);
+    }
+  }
+
   async function fetchGroup() {
     setLoading(true);
     setFetchErr("");
@@ -160,6 +199,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         void fetchRequests();
         void fetchRoleSuggestions();
       }
+      // Every member can view the checklist and toggle their own assigned tasks.
+      void fetchTasks();
     } catch {
       setFetchErr("Network error — could not load group.");
     } finally {
@@ -361,6 +402,69 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       setRoleErr("Network error — could not update role.");
     } finally {
       setRoleBusy(null);
+    }
+  }
+
+  // ── Tasks (leader/instructor create+manage; assignee toggles their own) ───
+  async function handleCreateTask() {
+    const title = newTaskTitle.trim();
+    if (!title) { setCreateTaskErr("Task title is required."); return; }
+    setCreateTaskBusy(true);
+    setCreateTaskErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ title, assignedToUserId: newTaskAssignee === "" ? undefined : newTaskAssignee }),
+      });
+      const data = await res.json() as GroupTask & { error?: string };
+      if (!res.ok) { setCreateTaskErr(data.error ?? "Could not create task."); return; }
+      setTasks((prev) => [...prev, data]);
+      setNewTaskTitle("");
+      setNewTaskAssignee("");
+    } catch {
+      setCreateTaskErr("Network error — could not create task.");
+    } finally {
+      setCreateTaskBusy(false);
+    }
+  }
+
+  async function handleToggleTask(task: GroupTask) {
+    setTaskBusy(task.id);
+    const prevTasks = tasks;
+    // Optimistic update
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, done: !t.done } : t));
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks/${task.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ done: !task.done }),
+      });
+      const data = await res.json() as GroupTask & { error?: string };
+      if (!res.ok) { setTasks(prevTasks); setTasksErr(data.error ?? "Could not update task."); return; }
+      setTasks((prev) => prev.map((t) => t.id === task.id ? data : t));
+    } catch {
+      setTasks(prevTasks);
+      setTasksErr("Network error — could not update task.");
+    } finally {
+      setTaskBusy(null);
+    }
+  }
+
+  async function handleDeleteTask(taskId: number) {
+    setTaskBusy(taskId);
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks/${taskId}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setTasksErr(data.error ?? "Could not delete task."); return; }
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch {
+      setTasksErr("Network error — could not delete task.");
+    } finally {
+      setTaskBusy(null);
     }
   }
 
@@ -609,6 +713,105 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 Leave and delete group
               </button>
             </div>
+          )}
+        </div>
+
+        {/* ── Tasks — visible to everyone; only leader/instructor manage, each
+               member toggles their own assigned task. Purely informational:
+               completion never affects contribution scores. ─────────────── */}
+        <div className="mb-5 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-2 mb-2.5">
+            <h3 className="text-xs font-semibold text-slate-700">Tasks</h3>
+            {tasks.filter((t) => !t.done).length > 0 && (
+              <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-violet-600 text-white text-[9px] font-bold px-1 leading-none">
+                {tasks.filter((t) => !t.done).length}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400 mb-2.5">
+            Context only — task completion never affects contribution scores.
+          </p>
+
+          {tasksErr && (
+            <p className="text-[11px] text-red-500 mb-2">{tasksErr}</p>
+          )}
+
+          {tasksLoading ? (
+            <p className="text-[11px] text-slate-400">Loading tasks…</p>
+          ) : tasks.length === 0 ? (
+            <p className="text-[11px] text-slate-400 italic mb-2">No tasks yet.</p>
+          ) : (
+            <ul className="space-y-2 mb-3">
+              {tasks.map((t) => {
+                const assignee  = group.members.find((m) => m.userId === t.assignedToUserId);
+                const canToggle = canManage || t.assignedToUserId === currentUserId;
+                return (
+                  <li
+                    key={t.id}
+                    className={`flex items-start gap-3 px-3 py-2.5 rounded-xl border ${
+                      t.done ? "border-violet-100 bg-violet-50" : "border-slate-100 bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={t.done}
+                      disabled={!canToggle || taskBusy === t.id}
+                      onChange={() => void handleToggleTask(t)}
+                      className="mt-0.5 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold truncate ${t.done ? "text-slate-500 line-through" : "text-slate-800"}`}>
+                        {t.title}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {assignee ? assignee.name : "Unassigned"}
+                      </p>
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => void handleDeleteTask(t.id)}
+                        disabled={taskBusy === t.id}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="New task title…"
+                className="flex-1 min-w-0 text-xs rounded-lg border border-slate-200 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              />
+              <select
+                value={newTaskAssignee}
+                onChange={(e) => setNewTaskAssignee(e.target.value ? Number(e.target.value) : "")}
+                className="text-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
+              >
+                <option value="">Unassigned</option>
+                {group.members.map((m) => (
+                  <option key={m.userId} value={m.userId}>{m.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handleCreateTask()}
+                disabled={createTaskBusy}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50 shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          )}
+          {createTaskErr && (
+            <p className="text-[11px] text-red-500 mt-1.5">{createTaskErr}</p>
           )}
         </div>
 

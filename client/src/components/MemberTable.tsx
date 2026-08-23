@@ -258,6 +258,23 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                         </>
                       );
                     })()}
+                    {/* Task/checklist completion — leader/instructor-assigned, self-reported
+                        by the member. Purely informational, same as mismatchNotes above: never
+                        a contribution flag, never affects scores. Shown across all variants
+                        (github/document/combined) since tasks are independent of data source. */}
+                    {(() => {
+                      const info = "userId" in m
+                        ? memberRoles?.find((r) => r.userId === m.userId)
+                        : memberRoles?.find((r) => r.githubUsername.toLowerCase() === m.githubUsername.toLowerCase());
+                      const summary = info?.taskSummary;
+                      if (!summary || summary.total === 0) return null;
+                      return (
+                        <p className="mt-1.5 text-[10px] text-violet-700 font-medium flex items-center gap-1">
+                          <span className="shrink-0">Tasks:</span>
+                          <span className="font-normal text-violet-600">{summary.completed} of {summary.total} completed</span>
+                        </p>
+                      );
+                    })()}
                     {/* .docx-import disclosure — always visible (not gated behind expand), since
                         this is a disclosed scoring estimate, not incidental detail. Distinct
                         amber styling from the sky-toned mismatchNotes above: those flag
