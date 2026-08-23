@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { DocumentEditor } from "./DocumentEditor";
-import { DOCUMENT_TEMPLATES } from "@shared/documentTemplates";
+import { DOCUMENT_TEMPLATES, findDocumentTemplate } from "@shared/documentTemplates";
 import type { DocumentTemplate } from "@shared/documentTemplates";
 
 interface Props {
@@ -22,6 +22,12 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
   const [exists, setExists] = useState<boolean | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only when THIS browser session just created the document via handleChoose below — never
+  // on the initial /status load. Tells DocumentEditor how many top-level nodes to wait for before
+  // accepting input, so a leader typing immediately after picking a template can't land text
+  // ahead of the template content while its initial Yjs sync is still in flight. Reopening an
+  // already-started document never sets this, so that path is unaffected (see DocumentEditor.tsx).
+  const [justCreatedNodeCount, setJustCreatedNodeCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -56,6 +62,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
         setError(data?.error ?? "Could not start the document.");
         return;
       }
+      setJustCreatedNodeCount(templateId ? (findDocumentTemplate(templateId)?.content.content.length ?? 0) : 0);
       setExists(true);
     } catch {
       setError("Could not start the document — check your connection and try again.");
@@ -73,7 +80,13 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
   }
 
   if (exists) {
-    return <DocumentEditor groupId={groupId} editable={editable} />;
+    return (
+      <DocumentEditor
+        groupId={groupId}
+        editable={editable}
+        awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
+      />
+    );
   }
 
   if (!canChooseTemplate) {

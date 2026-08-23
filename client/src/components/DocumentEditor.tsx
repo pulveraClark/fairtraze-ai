@@ -14,6 +14,13 @@ import type { AuthorshipUpdate, AuthorshipUser } from "../lib/authorshipHighligh
 interface Props {
   groupId: number;
   editable: boolean; // false = instructor read-only/observer view, true = member edit view
+  // Set only right after THIS session created the document (see DocumentGate.tsx) — the number of
+  // top-level nodes its initial content (a template, or 0 for blank) should produce once the
+  // fresh room's Yjs sync lands. While the doc's actual node count is below this, the editor stays
+  // non-editable so a fast typist can't land text ahead of content still arriving asynchronously
+  // (see DocumentEditor.tsx's AWAIT_INITIAL_CONTENT_TIMEOUT_MS comment for why `provider.synced`
+  // alone can't be used for this). Undefined (the normal reopen path) skips this entirely.
+  awaitInitialNodeCount?: number;
 }
 
 type ConnStatus = "connecting" | "connected" | "disconnected";
@@ -91,6 +98,15 @@ function AuthorshipLegend({ users }: { users: AuthorshipUser[] }) {
 }
 
 const MAX_DOCX_BYTES = 5 * 1024 * 1024; // 5MB — must match server/src/routes/documents.ts's MAX_DOCX_BYTES
+
+// Safety net for awaitInitialNodeCount below: y-websocket's server-side getYDoc() calls
+// persistence.bindState() without awaiting it, so a freshly-created room's initial sync (which
+// flips WebsocketProvider's `synced` to true) can complete before bindState's migrated content
+// actually lands in the doc — `synced` alone is not a reliable "content has arrived" signal for a
+// fresh room. This timeout just bounds the worst case (unusually slow sync) so typing is never
+// blocked indefinitely; it never fires in the common case, where the content check below resolves
+// almost immediately.
+const AWAIT_INITIAL_CONTENT_TIMEOUT_MS = 5000;
 
 function Toolbar({
   editor,
@@ -209,12 +225,13 @@ function Toolbar({
   );
 }
 
-export function DocumentEditor({ groupId, editable }: Props) {
+export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Props) {
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
+  const [awaitingInitialContent, setAwaitingInitialContent] = useState(awaitInitialNodeCount !== undefined);
   // Read-only (instructor/observer) views default to showing authorship, since reviewing who
   // wrote what is the point of viewing read-only; the editable (member) view defaults off so
   // it doesn't distract from active writing.
@@ -276,6 +293,46 @@ export function DocumentEditor({ groupId, editable }: Props) {
     };
   }, [collab, user]);
 
+  // Only armed right after this session created the document (awaitInitialNodeCount set — see
+  // DocumentGate.tsx). Waits for the fresh room's Yjs sync to actually deliver its initial content
+  // (checked directly against the doc, not against WebsocketProvider's `synced` event — see
+  // AWAIT_INITIAL_CONTENT_TIMEOUT_MS above for why that signal isn't reliable here) before letting
+  // the editor accept input, so a fast typist can't land text ahead of content still arriving.
+  useEffect(() => {
+    if (!collab || awaitInitialNodeCount === undefined) {
+      setAwaitingInitialContent(false);
+      return;
+    }
+
+    const fragment = collab.ydoc.getXmlFragment("default");
+    const isReady = () => fragment.length >= awaitInitialNodeCount;
+
+    if (isReady()) {
+      setAwaitingInitialContent(false);
+      return;
+    }
+
+    setAwaitingInitialContent(true);
+    const onUpdate = () => {
+      if (isReady()) {
+        setAwaitingInitialContent(false);
+        collab.ydoc.off("update", onUpdate);
+      }
+    };
+    collab.ydoc.on("update", onUpdate);
+    const timeout = setTimeout(() => {
+      setAwaitingInitialContent(false);
+      collab.ydoc.off("update", onUpdate);
+    }, AWAIT_INITIAL_CONTENT_TIMEOUT_MS);
+
+    return () => {
+      collab.ydoc.off("update", onUpdate);
+      clearTimeout(timeout);
+    };
+  }, [collab, awaitInitialNodeCount]);
+
+  const effectiveEditable = editable && !awaitingInitialContent;
+
   const editor = useEditor(
     {
       extensions: collab
@@ -289,7 +346,7 @@ export function DocumentEditor({ groupId, editable }: Props) {
             AuthorshipHighlight,
           ]
         : [StarterKit],
-      editable,
+      editable: effectiveEditable,
       editorProps: {
         attributes: {
           class: "ft-doc-content px-8 py-6 text-base leading-relaxed text-slate-700 min-h-[20rem]",
@@ -301,8 +358,8 @@ export function DocumentEditor({ groupId, editable }: Props) {
 
   // Keep TipTap's editable state in sync — it isn't reactive to the initial option alone.
   useEffect(() => {
-    editor?.setEditable(editable);
-  }, [editor, editable]);
+    editor?.setEditable(effectiveEditable);
+  }, [editor, effectiveEditable]);
 
   // While the toggle is on: fetch the current authorship map once (immediate snapshot), then
   // open a dedicated push socket (separate from the Yjs sync socket — see
@@ -412,7 +469,7 @@ export function DocumentEditor({ groupId, editable }: Props) {
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
       <Toolbar
         editor={editor}
-        editable={editable}
+        editable={effectiveEditable}
         connStatus={connStatus}
         presentUsers={presentUsers}
         showAuthorship={showAuthorship}
@@ -420,6 +477,11 @@ export function DocumentEditor({ groupId, editable }: Props) {
         onImportClick={handleImportClick}
         importing={importing}
       />
+      {awaitingInitialContent && (
+        <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-[11px] text-slate-400 font-medium">
+          Loading document…
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"
