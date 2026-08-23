@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
+import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
 import { findDocumentTemplate } from "@shared/documentTemplates.js";
 
 export const documentsRouter = Router();
@@ -230,6 +231,77 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
 
   const map = await computeAuthorshipMap(doc.id);
   res.json(map);
+});
+
+// GET /api/groups/:id/document/export — download the document's current content as a file.
+// Read-then-convert only: readDocumentStructure builds a scratch, never-registered Y.Doc from
+// Document.yjsState (falling back to legacy Document.content) and never calls getYDoc() — so this
+// has zero interaction with authorshipCapture.ts or the live collab room. Readable by group
+// members and the class instructor, mirroring GET /document.
+documentsRouter.get("/api/groups/:id/document/export", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Document export is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+
+  const format = typeof req.query.format === "string" ? req.query.format : "docx";
+  if (format !== "docx") {
+    res.status(400).json({ error: "Unsupported export format — only 'docx' is available." });
+    return;
+  }
+
+  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
+  if (!doc) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+
+  const commentRows = await prisma.comment.findMany({
+    where:   { documentId: doc.id },
+    orderBy: { createdAt: "asc" },
+    include: { author: { select: { name: true } } },
+  });
+  const commentsById = new Map(commentRows.map((c) => [c.id, c]));
+  const comments: ExportComment[] = commentRows.map((c) => ({
+    author:       c.author.name,
+    text:         c.text,
+    resolved:     !!c.resolvedAt,
+    createdAt:    c.createdAt.toISOString(),
+    parentAuthor: c.parentId ? commentsById.get(c.parentId)?.author.name : undefined,
+  }));
+
+  let buffer: Buffer;
+  try {
+    const blocks = readDocumentStructure({ content: doc.content, yjsState: doc.yjsState });
+    buffer = await buildDocxBuffer(blocks, comments);
+  } catch (err) {
+    console.error(`[documents] export failed for group ${projectId}`, err);
+    res.status(500).json({ error: "Export failed unexpectedly." });
+    return;
+  }
+
+  const safeName = (project.groupName || `group-${projectId}`).replace(/[^a-z0-9-_ ]/gi, "").trim() || `group-${projectId}`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}.docx"`);
+  res.send(buffer);
 });
 
 const importBody = z.object({

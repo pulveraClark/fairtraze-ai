@@ -225,6 +225,9 @@ function Toolbar({
   onToggleAuthorship,
   onImportClick,
   importing,
+  onExportDocx,
+  exporting,
+  onExportPdf,
   showComments,
   onToggleComments,
   onAddComment,
@@ -238,6 +241,9 @@ function Toolbar({
   onToggleAuthorship: () => void;
   onImportClick: () => void;
   importing: boolean;
+  onExportDocx: () => void;
+  exporting: boolean;
+  onExportPdf: () => void;
   showComments: boolean;
   onToggleComments: () => void;
   onAddComment: () => void;
@@ -423,6 +429,26 @@ function Toolbar({
 
       <span className="w-px h-4 bg-slate-200 mx-1.5" />
 
+      <ToolbarButton label="Export .docx" active={false} onClick={onExportDocx}>
+        {exporting ? (
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+          </svg>
+        )}
+      </ToolbarButton>
+      <ToolbarButton label="Export PDF" active={false} onClick={onExportPdf}>
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
+        </svg>
+      </ToolbarButton>
+
+      <span className="w-px h-4 bg-slate-200 mx-1.5" />
+
       <ToolbarButton label="Highlight authorship" active={showAuthorship} onClick={onToggleAuthorship}>
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
           <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -460,6 +486,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const printContentRef = useRef<HTMLDivElement | null>(null);
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
   const [awaitingInitialContent, setAwaitingInitialContent] = useState(awaitInitialNodeCount !== undefined);
@@ -470,6 +497,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const [authorshipUsers, setAuthorshipUsers] = useState<AuthorshipUser[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
@@ -838,7 +866,70 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     }
   };
 
+  const handleExportDocx = async () => {
+    if (exporting || !token) return;
+    setExporting(true);
+    setImportMessage(null);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/document/export?format=docx`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setImportMessage({ kind: "error", text: data?.error ?? "Export failed." });
+        return;
+      }
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("Content-Disposition");
+      const match = contentDisposition ? /filename="([^"]+)"/.exec(contentDisposition) : null;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = match ? match[1] : "document.docx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("[docx export] failed", err);
+      setImportMessage({ kind: "error", text: "Export failed — check your connection and try again." });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // PDF export reuses the exact print-driven pattern already proven for the fairness report
+  // (PrintableReport.tsx: a hidden print:block view + window.print(), no new library). Because
+  // this button lives inside the live editor, the document's already-synced TipTap content is
+  // already in the DOM — editor.getHTML() hands that same content to the printable portal
+  // verbatim, so this is purely a read of already-rendered content, never a write.
+  //
+  // Populated imperatively here (not via a JSX dangerouslySetInnerHTML computed at render time):
+  // Yjs content updates land straight in ProseMirror's view state and never trigger a React
+  // re-render of this component, so a JSX-computed snapshot would silently go stale (observed:
+  // it stayed empty forever after the very first, pre-sync render). Reading editor.getHTML()
+  // right here guarantees it reflects whatever's on screen at the moment of the click.
+  const handleExportPdf = () => {
+    if (printContentRef.current) printContentRef.current.innerHTML = editor?.getHTML() ?? "";
+    document.body.classList.add("ft-printing-document");
+    const cleanup = () => {
+      document.body.classList.remove("ft-printing-document");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
   if (!editor) return null;
+
+  const rootComments = comments.filter((c) => c.parentId === null);
+  const repliesByParent = new Map<number, CommentRecord[]>();
+  for (const c of comments) {
+    if (c.parentId === null) continue;
+    const list = repliesByParent.get(c.parentId) ?? [];
+    list.push(c);
+    repliesByParent.set(c.parentId, list);
+  }
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -851,6 +942,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         onToggleAuthorship={() => setShowAuthorship((v) => !v)}
         onImportClick={handleImportClick}
         importing={importing}
+        onExportDocx={handleExportDocx}
+        exporting={exporting}
+        onExportPdf={handleExportPdf}
         showComments={showComments}
         onToggleComments={() => setShowComments((v) => !v)}
         onAddComment={handleAddCommentClick}
@@ -908,6 +1002,30 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           />
         )}
       </div>
+      {createPortal(
+        <div className="hidden print:block px-8 py-6">
+          <div className="ft-doc-content" ref={printContentRef} />
+          {rootComments.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-lg font-bold mb-3">Comments</h2>
+              {rootComments.map((c) => (
+                <div key={c.id} className="mb-3">
+                  <p className="text-sm font-semibold text-slate-700">
+                    {c.author.name} — {new Date(c.createdAt).toLocaleString()} {c.resolvedAt ? "(resolved)" : "(open)"}
+                  </p>
+                  <p className="text-sm text-slate-700">{c.text}</p>
+                  {(repliesByParent.get(c.id) ?? []).map((r) => (
+                    <p key={r.id} className="text-sm text-slate-600 ml-4 mt-1">
+                      ↳ {r.author.name}: {r.text}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

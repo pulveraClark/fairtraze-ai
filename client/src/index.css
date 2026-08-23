@@ -148,6 +148,15 @@ body {
     print-color-adjust: exact !important;
   }
 
+  /* DocumentEditor's PDF export: its printable content is portaled to a direct sibling of #root
+     (see DocumentEditor.tsx's handleExportPdf), so hiding the app shell here — rather than
+     relying on every page that embeds DocumentEditor to mark its own chrome print:hidden, the
+     way ProjectDetailPage.tsx/AssignmentPage.tsx do for PrintableReport — keeps this export
+     self-contained to DocumentEditor.tsx alone. */
+  body.ft-printing-document #root {
+    display: none !important;
+  }
+
   /* Prevent orphaned table rows */
   tr {
     break-inside: avoid;
