@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@fairtraze/shared": "*",
+    "@tiptap/extension-character-count": "^3.30.2",
     "@tiptap/extension-collaboration": "^3.27.2",
     "@tiptap/extension-color": "^3.27.2",
+    "@tiptap/extension-font-family": "^3.30.2",
     "@tiptap/extension-highlight": "^3.27.2",
     "@tiptap/extension-table": "^3.27.2",
     "@tiptap/extension-table-cell": "^3.27.2",
