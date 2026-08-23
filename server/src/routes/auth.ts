@@ -16,6 +16,15 @@ export const authRouter = Router();
 const REFRESH_COOKIE_NAME = "ft_refresh_token";
 const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Per-account lockout — complements authLimiter's per-IP rate limit (security.ts),
+// which doesn't stop a patient attacker spreading guesses across IPs against one
+// account. 6 gives room for genuine mistakes (autofill/caps-lock) while capping a
+// distributed attacker to 6 guesses per account per 15 minutes. Auto-expiring
+// (no explicit unlock required) so a locked-out student isn't blocked on an admin.
+const MAX_FAILED_LOGIN_ATTEMPTS = 6;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+const INVALID_CREDENTIALS_RESPONSE = { error: "Invalid email or password" } as const;
+
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,
@@ -118,15 +127,38 @@ authRouter.post("/api/auth/login", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
     // Generic message — don't reveal whether the email exists
-    res.status(401).json({ error: "Invalid email or password" });
+    res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
+    return;
+  }
+
+  // Locked accounts get the exact same response as any other failed login —
+  // a distinct "account locked" message would both confirm the email is
+  // registered (breaking the no-enumeration guarantee above) and tell an
+  // attacker their guessing was detected.
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
     return;
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
-    res.status(401).json({ error: "Invalid email or password" });
+    const failedLoginAttempts = user.failedLoginAttempts + 1;
+    const locked = failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts,
+        lockedUntil: locked ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null,
+      },
+    });
+    res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
     return;
   }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { failedLoginAttempts: 0, lockedUntil: null },
+  });
 
   if (!user.active) {
     res.status(403).json({ error: "Your account has been deactivated. Contact an administrator." });
@@ -224,7 +256,12 @@ authRouter.post("/api/auth/reset-password", async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  // Resetting proves account ownership, so clear any lockout the same as a
+  // successful login would.
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null },
+  });
 
   // A password reset should terminate every existing session, not just
   // prompt a normal re-login — in case the reset was triggered because

@@ -84,6 +84,8 @@ model User {
   // already verified. The register route explicitly overrides this to false
   // for newly created accounts — see server/src/routes/auth.ts.
   emailVerified    Boolean           @default(true)
+  failedLoginAttempts Int            @default(0)
+  lockedUntil      DateTime?
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]

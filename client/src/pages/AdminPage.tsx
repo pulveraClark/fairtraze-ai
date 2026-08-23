@@ -12,6 +12,7 @@ interface UserRecord {
   systemRole:     "ADMIN" | "INSTRUCTOR" | "STUDENT";
   githubUsername: string | null;
   active:         boolean;
+  lockedUntil:    string | null;
   createdAt:      string;
 }
 
@@ -169,6 +170,21 @@ export function AdminPage() {
       if (!res.ok) { showToast("error", json.error ?? `Could not ${action} user.`); return; }
       setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, active: json.active } : x));
       showToast("success", `${u.name} ${json.active ? "activated" : "deactivated"}.`);
+    } catch {
+      showToast("error", "Network error.");
+    }
+  }
+
+  async function unlockUser(u: UserRecord) {
+    try {
+      const res  = await fetch(`/api/admin/users/${u.id}/unlock`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json() as UserRecord & { error?: string };
+      if (!res.ok) { showToast("error", json.error ?? "Could not unlock account."); return; }
+      setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, lockedUntil: json.lockedUntil } : x));
+      showToast("success", `${u.name}'s account unlocked.`);
     } catch {
       showToast("error", "Network error.");
     }
@@ -434,13 +450,23 @@ export function AdminPage() {
 
                         {/* Status */}
                         <td className="px-5 py-3.5">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                            u.active
-                              ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                              : "text-slate-500 bg-slate-100 border-slate-200"
-                          }`}>
-                            {u.active ? "Active" : "Inactive"}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                              u.active
+                                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                : "text-slate-500 bg-slate-100 border-slate-200"
+                            }`}>
+                              {u.active ? "Active" : "Inactive"}
+                            </span>
+                            {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
+                              <span
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
+                                title="Too many failed login attempts — auto-unlocks after a cooldown, or unlock now below"
+                              >
+                                Locked
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Joined */}
@@ -480,6 +506,17 @@ export function AdminPage() {
                               >
                                 {u.active ? "Deactivate" : "Activate"}
                               </button>
+
+                              {/* Unlock */}
+                              {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
+                                <button
+                                  onClick={() => { void unlockUser(u); }}
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-amber-200 hover:text-amber-600 hover:bg-amber-50 font-medium transition-colors"
+                                  title="Clear login lockout now"
+                                >
+                                  Unlock
+                                </button>
+                              )}
 
                               {/* Delete */}
                               <button
