@@ -102,6 +102,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   tasksAssigned    Task[]            @relation("TaskAssignee")
   tasksCreated     Task[]            @relation("TaskCreator")
+  comments         Comment[]
 }
 
 model RefreshToken {
@@ -345,6 +346,29 @@ model Document {
   project   Project  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   editEvents   EditEvent[]
   editSessions EditSession[]
+  comments     Comment[]
+}
+
+// Discussion attached to a point in a Document's content — pure metadata, never document
+// content itself. Anchored via an encoded Yjs RelativePosition (or CollaborationMappablePosition
+// JSON), resolved to a live position client-side; the anchor bytes are opaque to the server and
+// never read or written by authorshipCapture.ts or any Yjs update listener. Comments are reached
+// only through plain REST routes (server/src/routes/comments.ts) — the same "context only" shape
+// as Task/Dispute/RoleSuggestion. Purely informational — never read by shared/src/scoring.ts and
+// never folded into contributionShare/flags/Gini.
+model Comment {
+  id         Int       @id @default(autoincrement())
+  documentId Int
+  authorId   Int
+  text       String
+  anchor     Bytes
+  parentId   Int?      // null = thread root; set = reply (flat, one level deep)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author     User      @relation(fields: [authorId], references: [id])
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
 }
 
 // Raw log of every insertion/deletion made in a Document's live text, attributed to the

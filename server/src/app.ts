@@ -10,6 +10,7 @@ import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
 import { groupsRouter } from "./routes/groups.js";
 import { documentsRouter } from "./routes/documents.js";
+import { commentsRouter } from "./routes/comments.js";
 import { alertsRouter } from "./routes/alerts.js";
 import { disputesRouter } from "./routes/disputes.js";
 import { adminRouter } from "./routes/admin.js";
@@ -62,6 +63,7 @@ export function createApp() {
   app.use(joinRouter);
   app.use(groupsRouter);
   app.use(documentsRouter);
+  app.use(commentsRouter);
   app.use(alertsRouter);
   app.use(disputesRouter);
   app.use(adminRouter);

@@ -35,9 +35,10 @@ The Collaborative Editor is a writing environment built directly into FAIR TRAZE
 - Character-level insert/delete events (`EditEvent`: position, length, timestamp), attributed to the logged-in account
 - Edit sessions — contiguous editing bursts per user, closed after 30 minutes idle (`EditSession`)
 - Rule-based significance classification of each insert (`EditType`: substantive / revision / formatting / trivial)
+- Comments — see "Comments — IMPLEMENTED" under "Editor Scoring Model" below
 
 ### Not implemented (documented as a limitation, not a bug)
-- Comments authored and tracked-change suggestions (accepted/rejected) — no `Comment` or `Suggestion` model exists; only insert/delete shape is captured
+- Tracked-change suggestions (accepted/rejected) — no `Suggestion` model exists; only insert/delete shape is captured. Deliberately deferred — see "Tracked-change suggestions — NOT implemented (deliberately deferred)" below for why.
 - Full document revision history / snapshots — the system replays the `EditEvent` log to reconstruct current ownership, it does not store point-in-time document snapshots
 
 ### Why it matters — the system's main differentiator
@@ -88,8 +89,15 @@ Each INSERT event is classified by substance, analogous to commit-impact classif
 
 DELETE events and pre-migration rows have no `editType` (treated as neutral 1.0 weight).
 
-### Collaboration-specific (NOT implemented)
-Comments, tracked-change suggestions, and edits-to-others'-text review credit are not built — there is no `Comment` or `Suggestion` data model. See "What it records" above.
+### Comments — IMPLEMENTED
+A group member can attach a comment (with flat, one-level-deep replies) to a range of text in the document, and resolve/reopen the thread. **Fully orthogonal to the collab write path**, by design: `Comment` (`server/prisma/schema.prisma`) is a plain Prisma model reached only through plain REST routes (`server/src/routes/comments.ts` — `GET`/`POST /api/groups/:id/document/comments`, `PATCH .../comments/:commentId/resolve`, `DELETE .../comments/:commentId`), following the exact same "context-only metadata" shape as `Task`/`Dispute`/`RoleSuggestion`. A comment's text lives in Postgres, never in the shared `Y.XmlFragment` — zero changes to `authorshipCapture.ts`, zero new `EditSource` value, zero interaction with `getYDoc()`/`ydoc.transact()`. **Never affects scoring**, structurally, not just by convention: there is no code path from a `Comment` row into `shared/src/documentScoring.ts`.
+
+The hard problem — keeping a comment anchored to "this sentence" as other members concurrently edit the document — is solved with Yjs's own `RelativePosition` API (via `@tiptap/y-tiptap`'s public `absolutePositionToRelativePosition`/`relativePositionToAbsolutePosition`, the same mechanism `@tiptap/extension-collaboration` itself uses internally — see `client/src/lib/commentAnchor.ts`), not a raw offset pair, which would silently drift. The rendering side reuses `authorshipHighlight.ts`'s exact proven ProseMirror-decoration pattern (`client/src/lib/commentHighlight.ts`) — a non-intrusive highlight, never real document content.
+
+**Known limitation**: if the exact text a comment was anchored to is later deleted entirely, Yjs's `RelativePosition` does not reliably signal this with a clean failure — confirmed by `client/src/lib/commentAnchor.test.ts` — it commonly resolves to a zero-width position near where the deleted content used to be, rather than an outright null. `decodeCommentAnchor` normalizes both cases to `null`; the comment stays visible in the side panel (nothing is silently lost) but its inline highlight disappears.
+
+### Tracked-change suggestions — NOT implemented (deliberately deferred)
+Unlike Comments, a "suggestion" is provisional content that becomes real document content on accept — indistinguishable, once accepted, from a normal typed edit to `authorshipCapture.ts`'s diffing. That means accept/reject cannot avoid interacting with the same collab write path this project has needed four real rounds of hardening on (the writeState/bindState restore race, the authorshipCapture registration-lag race, the room-eviction limitation, the template-picker typing race) — either a new origin/`EditSource` variant would need to thread through `authorshipCapture.ts`'s origin-dispatch logic, or the existing origin-based attribution would silently (and very likely wrongly) credit whoever's WebSocket connection performs the accept transaction, not who wrote the suggested words. Separately, "who gets credit for an accepted suggestion — the suggester, the accepter, or a split" has no safe default and needs an explicit instructor-facing policy decision made outside of an implementation PR, the same way role-based score re-weighting is already treated as "optional and not the default... requires explicit instructor configuration" (see "Roles never change scores" above). Revisit only once both an explicit scoring policy exists and there's a specific reason to believe the collab pipeline has stopped surfacing new timing bugs — neither is true today. Edits-to-others'-text review credit is out of scope for the same reason: it's a variant of the same suggestion-acceptance problem, not a separate one.
 
 ### Default weights (`DOCUMENT_DEFAULT_WEIGHTS`)
 `retainedText: 0.4, sessions: 0.2, activeDays: 0.4` — note this differs from a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2); editor scoring weights active-days participation more heavily than session count.
@@ -228,7 +236,7 @@ This is low-stakes precisely because roles only add context: a mis-assigned func
 - **shared**: shared TypeScript types and the deterministic scoring module
 
 ## Data model (Prisma)
-The full schema (`server/prisma/schema.prisma`) is substantially larger than the original prototype — `User`, `ClassSection`, `ClassEnrollment`, `Assignment`, `GroupMembership`, `GroupJoinRequest`, `RoleSuggestion`, `Alert`, `Dispute`, `AuditLog`, `Document`, `EditEvent`, and `EditSession` are all real models, not just `Project`/`Member`/`Report`. The three below are the original core and remain central to the GitHub-side pipeline:
+The full schema (`server/prisma/schema.prisma`) is substantially larger than the original prototype — `User`, `ClassSection`, `ClassEnrollment`, `Assignment`, `GroupMembership`, `GroupJoinRequest`, `RoleSuggestion`, `Alert`, `Dispute`, `AuditLog`, `Document`, `EditEvent`, `EditSession`, and `Comment` are all real models, not just `Project`/`Member`/`Report`. The three below are the original core and remain central to the GitHub-side pipeline:
 - `Project { id, groupName, name, repoUrl, assignmentLabel, assignmentId, weightCommits/weightLines/weightActiveDays, freeRiderThreshold/overloadThreshold/deadlineDrivenThreshold, weightGithub/weightDocs, createdAt }` — the "Group" in the target Institutional Hierarchy below; per-project scoring config now lives on this row.
 - `Member { id, projectId, studentName, githubUsername }` — legacy per-group GitHub identity row, kept in sync with `GroupMembership`/`User.githubUsername`.
 - `Report { id, projectId, generatedAt, gini, teamHealth, content }`

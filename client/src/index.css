@@ -189,6 +189,18 @@ body {
 .ft-doc-content li { margin-bottom: 0.25rem; }
 .ft-doc-content li > p { margin: 0; }
 
+/* ── Comment highlight (ProseMirror decoration — see client/src/lib/commentHighlight.ts,
+   never part of document content) ─────────────────────────────────────────────────────── */
+.ft-comment-highlight {
+  background-color: rgba(251, 191, 36, 0.28);
+  border-bottom: 2px solid rgba(217, 119, 6, 0.5);
+  cursor: pointer;
+}
+.ft-comment-highlight-resolved {
+  background-color: rgba(148, 163, 184, 0.18);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.4);
+}
+
 /* ── Collaboration cursor (Yjs) ────────────────────────────────────────────
    `.collaboration-cursor__caret` is an inline, zero-width marker inserted as a
    ProseMirror widget decoration (never part of the document schema/content).

@@ -10,6 +10,11 @@ import { getUserColor } from "../lib/collabColors";
 import { CollaborationCursor } from "../lib/collaborationCursor";
 import { AuthorshipHighlight, authorshipPluginKey } from "../lib/authorshipHighlight";
 import type { AuthorshipUpdate, AuthorshipUser } from "../lib/authorshipHighlight";
+import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighlight";
+import type { CommentDecorationRange } from "../lib/commentHighlight";
+import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
+import { CommentPanel } from "./CommentPanel";
+import type { CommentRecord } from "./CommentPanel";
 
 interface Props {
   groupId: number;
@@ -117,6 +122,10 @@ function Toolbar({
   onToggleAuthorship,
   onImportClick,
   importing,
+  showComments,
+  onToggleComments,
+  onAddComment,
+  hasSelection,
 }: {
   editor: Editor;
   editable: boolean;
@@ -126,6 +135,10 @@ function Toolbar({
   onToggleAuthorship: () => void;
   onImportClick: () => void;
   importing: boolean;
+  showComments: boolean;
+  onToggleComments: () => void;
+  onAddComment: () => void;
+  hasSelection: boolean;
 }) {
   const statusLabel = connStatus === "connected" ? "" : connStatus === "connecting" ? "Connecting…" : "Reconnecting…";
 
@@ -192,6 +205,20 @@ function Toolbar({
               </svg>
             )}
           </ToolbarButton>
+
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
+
+          <ToolbarButton label="Add comment" active={false} onClick={onAddComment}>
+            <svg
+              className={`w-4 h-4 ${hasSelection ? "" : "opacity-40"}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </ToolbarButton>
         </>
       )}
       {!editable && <span className="text-[11px] text-slate-400 font-medium">Viewing (read-only)</span>}
@@ -204,6 +231,12 @@ function Toolbar({
           <rect x="14" y="3" width="7" height="7" rx="1.5" />
           <rect x="3" y="14" width="7" height="7" rx="1.5" />
           <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+      </ToolbarButton>
+
+      <ToolbarButton label="Comments" active={showComments} onClick={onToggleComments}>
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       </ToolbarButton>
 
@@ -239,6 +272,19 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const [authorshipUsers, setAuthorshipUsers] = useState<AuthorshipUser[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [comments, setComments] = useState<CommentRecord[]>([]);
+  const [showComments, setShowComments] = useState(false);
+  const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  // Extension options are captured at construction time by TipTap and don't hot-update, so the
+  // click handler goes through a ref instead — kept current every render, called from inside the
+  // (effectively static) CommentHighlight extension instance.
+  const onCommentClickRef = useRef<(commentId: number) => void>(() => {});
+  onCommentClickRef.current = (commentId: number) => {
+    setActiveThreadId(commentId);
+    setShowComments(true);
+  };
 
   // Lazily (re)create the Yjs doc + WebSocket provider whenever groupId changes,
   // tearing down the previous room's connection first. Avoided in an effect so the
@@ -344,6 +390,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
               user: { name: user?.name ?? "Unknown", color: getUserColor(user?.id ?? 0) },
             }),
             AuthorshipHighlight,
+            CommentHighlight.configure({
+              onCommentClick: (commentId: number) => onCommentClickRef.current(commentId),
+            }),
           ]
         : [StarterKit],
       editable: effectiveEditable,
@@ -351,6 +400,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         attributes: {
           class: "ft-doc-content px-8 py-6 text-base leading-relaxed text-slate-700 min-h-[20rem]",
         },
+      },
+      onSelectionUpdate: ({ editor: e }) => {
+        setHasSelection(!e.state.selection.empty);
       },
     },
     [collab]
@@ -406,6 +458,123 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       ws.close();
     };
   }, [editor, showAuthorship, groupId, token]);
+
+  // Fetch the comment list once per group/session. Unlike authorship, there's no live push
+  // channel for other members' newly-added comments (out of scope for v1 — see the comments
+  // feature plan) — the list refreshes on mount and after this session's own create/reply/
+  // resolve/delete actions below.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    fetch(`/api/groups/${groupId}/document/comments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? (res.json() as Promise<{ comments: CommentRecord[] }>) : null))
+      .then((data) => {
+        if (!cancelled && data) setComments(data.comments);
+      })
+      .catch((err) => console.error("[comments] fetch failed", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, token]);
+
+  // Re-resolves every comment's stored anchor against the CURRENT document on every Yjs update
+  // (not just once) — anchors are content-relative, so a comment's highlighted range can shift as
+  // other members edit around it, and must be recomputed rather than cached. A comment whose
+  // anchored text was deleted entirely resolves to null and is simply skipped here (dropped from
+  // the inline highlight only — it still renders in the side panel, per the documented "known
+  // limitation": nothing is silently lost, only the in-text highlight goes away).
+  useEffect(() => {
+    if (!editor || !collab) return;
+
+    const applyDecorations = () => {
+      const ranges: CommentDecorationRange[] = [];
+      for (const c of comments) {
+        const resolved = decodeCommentAnchor(editor.state, c.anchor);
+        if (!resolved) continue;
+        ranges.push({ commentId: c.id, from: resolved.start, to: resolved.end, resolved: !!c.resolvedAt });
+      }
+      editor.view.dispatch(editor.state.tr.setMeta(commentHighlightPluginKey, ranges));
+    };
+
+    applyDecorations();
+    collab.ydoc.on("update", applyDecorations);
+    return () => {
+      collab.ydoc.off("update", applyDecorations);
+    };
+  }, [editor, collab, comments]);
+
+  const handleAddCommentClick = () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) return;
+    setPendingSelection({ from, to });
+    setShowComments(true);
+  };
+
+  const handleSubmitNewComment = async (text: string) => {
+    if (!editor || !token || !pendingSelection) return;
+    const anchor = encodeCommentAnchor(editor.state, pendingSelection.from, pendingSelection.to);
+    if (!anchor) return;
+    const res = await fetch(`/api/groups/${groupId}/document/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ text, anchor }),
+    });
+    if (res.ok) {
+      const created = (await res.json()) as CommentRecord;
+      setComments((prev) => [...prev, created]);
+      setPendingSelection(null);
+    }
+  };
+
+  const handleReply = async (parentId: number, text: string) => {
+    if (!editor || !token) return;
+    // Replies aren't independently anchored — they inherit the thread's anchor for display
+    // purposes (the panel groups by parentId, not by anchor), so re-encode the root's own anchor.
+    const parent = comments.find((c) => c.id === parentId);
+    if (!parent) return;
+    const res = await fetch(`/api/groups/${groupId}/document/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ text, anchor: parent.anchor, parentId }),
+    });
+    if (res.ok) {
+      const created = (await res.json()) as CommentRecord;
+      setComments((prev) => [...prev, created]);
+    }
+  };
+
+  const handleResolveToggle = async (commentId: number, resolved: boolean) => {
+    if (!token) return;
+    const res = await fetch(`/api/groups/${groupId}/document/comments/${commentId}/resolve`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ resolved }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as CommentRecord;
+      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (!token) return;
+    const res = await fetch(`/api/groups/${groupId}/document/comments/${commentId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+    }
+  };
+
+  const handleSelectThread = (commentId: number) => {
+    setActiveThreadId(commentId);
+    const el = editor?.view.dom.querySelector(`[data-comment-id="${commentId}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const handleImportClick = () => {
     if (importing) return;
@@ -476,6 +645,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         onToggleAuthorship={() => setShowAuthorship((v) => !v)}
         onImportClick={handleImportClick}
         importing={importing}
+        showComments={showComments}
+        onToggleComments={() => setShowComments((v) => !v)}
+        onAddComment={handleAddCommentClick}
+        hasSelection={hasSelection}
       />
       {awaitingInitialContent && (
         <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-[11px] text-slate-400 font-medium">
@@ -509,7 +682,26 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         </div>
       )}
       {showAuthorship && <AuthorshipLegend users={authorshipUsers} />}
-      <EditorContent editor={editor} />
+      <div className="flex items-stretch">
+        <div className="flex-1 min-w-0">
+          <EditorContent editor={editor} />
+        </div>
+        {showComments && (
+          <CommentPanel
+            comments={comments}
+            currentUserId={user?.id ?? -1}
+            canModerate={!editable}
+            pendingSelection={pendingSelection}
+            onCancelPending={() => setPendingSelection(null)}
+            onSubmitNew={handleSubmitNewComment}
+            onReply={handleReply}
+            onResolveToggle={handleResolveToggle}
+            onDelete={handleDeleteComment}
+            onSelectThread={handleSelectThread}
+            activeThreadId={activeThreadId}
+          />
+        )}
+      </div>
     </div>
   );
 }
