@@ -123,6 +123,11 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // doesn't clip content or break click/selection/cursor positioning before treating this as done
   // (a real risk with CSS transforms on contentEditable content, not just a hypothetical one).
   const [zoom, setZoom] = useState(1);
+  // Advisory, visual-only page-break overlay (full-screen only) — see the ResizeObserver effect
+  // below. Purely a DOM-height measurement; never reads or writes editor/Yjs state, so it cannot
+  // race with local or remote edits the way a synced page-break model would.
+  const paperRef = useRef<HTMLDivElement>(null);
+  const [pageBreaks, setPageBreaks] = useState<number[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -297,6 +302,44 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   useEffect(() => {
     if (editor) setTocHeadings(computeHeadings(editor));
   }, [editor]);
+
+  // Advisory page-break overlay (full-screen only). ResizeObserver watches the paper container's
+  // actual rendered height directly — it fires on ANY cause of a height change (local typing, a
+  // remote Yjs update landing, an image finishing load), so this needs no coupling at all to
+  // editor.on("update") or the Yjs doc, and therefore can't race with local/remote edits the way
+  // a synced page-break model would. Debounced (not per-keystroke) — see the debounce-timer-leak
+  // bug fixed earlier this session; this is deliberately not treated as a solved problem here.
+  useEffect(() => {
+    if (!focusMode || !paperRef.current) {
+      setPageBreaks([]);
+      return;
+    }
+    const el = paperRef.current;
+    const perPage = pageSize === "long" ? 1248 : 1056;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+
+    const recompute = () => {
+      const breaks: number[] = [];
+      for (let y = perPage; y < el.scrollHeight; y += perPage) breaks.push(y);
+      setPageBreaks(breaks);
+    };
+
+    // ResizeObserver alone won't fire when only `pageSize` changes while content already exceeds
+    // both page heights (no actual resize occurs) — so also recompute immediately on mount/dep
+    // change, not just on observed resize events.
+    recompute();
+
+    const observer = new ResizeObserver(() => {
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(recompute, 400);
+    });
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      if (pending) clearTimeout(pending);
+    };
+  }, [focusMode, pageSize]);
 
   // While the toggle is on: fetch the current authorship map once (immediate snapshot), then
   // open a dedicated push socket (separate from the Yjs sync socket — see
@@ -741,7 +784,8 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             <div className="bg-white border-b border-slate-200 shadow-sm shrink-0">{toolbar}</div>
             <div className="flex-1 flex justify-center px-4 py-10">
               <div
-                className="w-full max-w-[816px] h-fit bg-white shadow-xl rounded-sm"
+                ref={paperRef}
+                className="relative w-full max-w-[816px] h-fit bg-white shadow-xl rounded-sm"
                 style={{
                   minHeight: pageSize === "long" ? 1248 : 1056,
                   transform: zoom !== 1 ? `scale(${zoom})` : undefined,
@@ -749,6 +793,20 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
                 }}
               >
                 <div className="px-8 py-10">{editorContentArea}</div>
+                {/* Advisory only — approximate, debounced, never touches the Y.Doc/schema. Not a
+                    WYSIWYG guarantee; print/export pagination (index.css's @page rule) is a
+                    separate, already-existing mechanism and stays fully decoupled from this. */}
+                {pageBreaks.map((y, i) => (
+                  <div
+                    key={y}
+                    className="absolute inset-x-0 pointer-events-none border-t border-dashed border-slate-300"
+                    style={{ top: y }}
+                  >
+                    <span className="absolute right-2 top-1 text-[10px] text-slate-400 bg-white px-1">
+                      Page {i + 2}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>,
