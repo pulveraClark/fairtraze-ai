@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import { Table } from "@tiptap/extension-table";
@@ -14,20 +15,25 @@ import Highlight from "@tiptap/extension-highlight";
 import Image from "@tiptap/extension-image";
 import FontFamily from "@tiptap/extension-font-family";
 import CharacterCount from "@tiptap/extension-character-count";
+import Superscript from "@tiptap/extension-superscript";
+import Subscript from "@tiptap/extension-subscript";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { useAuth } from "../context/AuthContext";
 import { getUserColor } from "../lib/collabColors";
 import { CollaborationCursor } from "../lib/collaborationCursor";
 import { FontSize } from "../lib/fontSize";
+import { LineHeight } from "../lib/lineHeight";
 import { AuthorshipHighlight, authorshipPluginKey } from "../lib/authorshipHighlight";
 import type { AuthorshipUpdate, AuthorshipUser } from "../lib/authorshipHighlight";
 import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighlight";
 import type { CommentDecorationRange } from "../lib/commentHighlight";
 import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
-import { isSupportedImageHeader } from "../lib/imageSniff";
+import { insertImageFile } from "../lib/imageInsert";
 import { CommentPanel } from "./CommentPanel";
 import type { CommentRecord } from "./CommentPanel";
+import { TocPanel } from "./TocPanel";
+import type { TocHeading } from "./TocPanel";
 import { Toolbar, AuthorshipLegend } from "./DocumentEditorToolbar";
 import type { ConnStatus, PresentUser } from "./DocumentEditorToolbar";
 
@@ -54,12 +60,20 @@ function wsUrl(path: string): string {
   return `${protocol}//${window.location.host}${path}`;
 }
 
-const MAX_DOCX_BYTES = 5 * 1024 * 1024; // 5MB — must match server/src/routes/documents.ts's MAX_DOCX_BYTES
+// Pure client-side derivation from current editor state — no new data model. Recomputed on
+// every doc update (see onUpdate below) so the table of contents stays live as the shared
+// document is edited, including by other members.
+function computeHeadings(editor: Editor): TocHeading[] {
+  const headings: TocHeading[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === "heading" && (node.attrs.level === 1 || node.attrs.level === 2)) {
+      headings.push({ pos, level: node.attrs.level, text: node.textContent });
+    }
+  });
+  return headings;
+}
 
-// 2MB — client-side only. Image insertion never hits a REST route (it's written straight into
-// the live Yjs doc, see handleImageFileChange), so unlike docx import there is no server-side
-// re-check of this cap — a modified client could bypass it. Documented limitation, see CLAUDE.md.
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_DOCX_BYTES = 5 * 1024 * 1024; // 5MB — must match server/src/routes/documents.ts's MAX_DOCX_BYTES
 
 // Safety net for awaitInitialNodeCount below: y-websocket's server-side getYDoc() calls
 // persistence.bindState() without awaiting it, so a freshly-created room's initial sync (which
@@ -89,6 +103,26 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const [exporting, setExporting] = useState(false);
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [showComments, setShowComments] = useState(false);
+  const [showToc, setShowToc] = useState(false);
+  const [tocHeadings, setTocHeadings] = useState<TocHeading[]>([]);
+  // Purely a container/CSS toggle — same `editor` instance, same Yjs doc, no collab/data-model
+  // interaction. See the render below: the toolbar + EditorContent tree is only ever mounted in
+  // ONE place at a time (inline, or inside the full-viewport portal) — TipTap's EditorContent
+  // binds one DOM node per editor instance, so mounting it twice at once would be a real bug, not
+  // just a cosmetic one.
+  const [focusMode, setFocusMode] = useState(false);
+  // Cosmetic only — a min-height silhouette on the full-screen "paper" container (see the
+  // focusMode render branch below). Width is identical for both sizes (8.5in = 816px); Long
+  // (Philippine long bond, 8.5x13in — distinct from US Legal's 8.5x14in) is taller than Short
+  // (8.5x11in). No pagination exists, so content can still overflow past this height. Local UI
+  // preference only, not persisted.
+  const [pageSize, setPageSize] = useState<"short" | "long">("short");
+  // Full-screen only, same as pageSize — a CSS transform: scale() on the paper container.
+  // Transforms don't affect layout box size, only paint, so the container's reserved space in
+  // its scrolling ancestor stays at 100% regardless of zoom; verified in the browser that this
+  // doesn't clip content or break click/selection/cursor positioning before treating this as done
+  // (a real risk with CSS transforms on contentEditable content, not just a hypothetical one).
+  const [zoom, setZoom] = useState(1);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -219,6 +253,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             Image.configure({ allowBase64: true }),
             FontFamily,
             FontSize,
+            LineHeight,
+            Superscript,
+            Subscript,
             CharacterCount,
           ]
         : [StarterKit],
@@ -227,9 +264,24 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         attributes: {
           class: "ft-doc-content px-8 py-6 text-base leading-relaxed text-slate-700 min-h-[20rem]",
         },
+        // Reuses the exact same size-cap/content-sniff validation and setImage() write path as
+        // the toolbar's file-picker insert (see insertImageFile in lib/imageInsert.ts) — this is
+        // just a second entry point into that one function, not a parallel implementation.
+        // References the `editor` var assigned below via closure: not invoked until a real paste
+        // event fires, well after useEditor has returned and assigned it.
+        handlePaste: (_view, event) => {
+          const files = Array.from(event.clipboardData?.files ?? []);
+          const imageFile = files.find((f) => f.type.startsWith("image/"));
+          if (!imageFile || !editor) return false;
+          void insertImageFile(imageFile, editor, (text) => setImportMessage({ kind: "error", text }));
+          return true;
+        },
       },
       onSelectionUpdate: ({ editor: e }) => {
         setHasSelection(!e.state.selection.empty);
+      },
+      onUpdate: ({ editor: e }) => {
+        setTocHeadings(computeHeadings(e));
       },
     },
     [collab]
@@ -239,6 +291,12 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   useEffect(() => {
     editor?.setEditable(effectiveEditable);
   }, [editor, effectiveEditable]);
+
+  // Seed the table of contents once the editor (and its initial/synced content) is available —
+  // onUpdate above only fires on subsequent changes, not for content already present at mount.
+  useEffect(() => {
+    if (editor) setTocHeadings(computeHeadings(editor));
+  }, [editor]);
 
   // While the toggle is on: fetch the current authorship map once (immediate snapshot), then
   // open a dedicated push socket (separate from the Yjs sync socket — see
@@ -403,6 +461,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
+  // Resolved at click-time, not when the TOC list was built — the doc is live and collaborative,
+  // so a cached position can go stale between render and click. nodeDOM(pos) re-resolves against
+  // the editor's current state.
+  const handleSelectHeading = (pos: number) => {
+    const dom = editor?.view.nodeDOM(pos);
+    if (dom instanceof HTMLElement) {
+      dom.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const handleImportClick = () => {
     if (importing) return;
     fileInputRef.current?.click();
@@ -465,39 +533,12 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
 
   // No REST route: the base64 data URL is inserted straight into the live collaborative
   // document via editor.chain().setImage(), the same way any other live typed content is
-  // written. Size and type are only ever checked here, client-side — see MAX_IMAGE_BYTES.
+  // written. Size and type are only ever checked here, client-side — see insertImageFile.
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file (or re-trying after an error)
     if (!file || !editor) return;
-
-    if (file.size > MAX_IMAGE_BYTES) {
-      setImportMessage({
-        kind: "error",
-        text: `Image is too large — the limit is ${MAX_IMAGE_BYTES / (1024 * 1024)}MB.`,
-      });
-      return;
-    }
-
-    try {
-      const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-      if (!isSupportedImageHeader(header)) {
-        setImportMessage({ kind: "error", text: "Only PNG, JPEG, and WebP images are supported." });
-        return;
-      }
-
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string); // "data:<mime>;base64,<data>"
-        reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
-        reader.readAsDataURL(file);
-      });
-
-      editor.chain().focus().setImage({ src: dataUrl }).run();
-    } catch (err) {
-      console.error("[image insert] failed", err);
-      setImportMessage({ kind: "error", text: "Could not insert image — check the file and try again." });
-    }
+    await insertImageFile(file, editor, (text) => setImportMessage({ kind: "error", text }));
   };
 
   const handleExportDocx = async () => {
@@ -565,26 +606,41 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     repliesByParent.set(c.parentId, list);
   }
 
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <Toolbar
-        editor={editor}
-        editable={effectiveEditable}
-        connStatus={connStatus}
-        presentUsers={presentUsers}
-        showAuthorship={showAuthorship}
-        onToggleAuthorship={() => setShowAuthorship((v) => !v)}
-        onImportClick={handleImportClick}
-        importing={importing}
-        onInsertImageClick={handleInsertImageClick}
-        onExportDocx={handleExportDocx}
-        exporting={exporting}
-        onExportPdf={handleExportPdf}
-        showComments={showComments}
-        onToggleComments={() => setShowComments((v) => !v)}
-        onAddComment={handleAddCommentClick}
-        hasSelection={hasSelection}
-      />
+  const toolbar = (
+    <Toolbar
+      editor={editor}
+      editable={effectiveEditable}
+      connStatus={connStatus}
+      presentUsers={presentUsers}
+      showAuthorship={showAuthorship}
+      onToggleAuthorship={() => setShowAuthorship((v) => !v)}
+      onImportClick={handleImportClick}
+      importing={importing}
+      onInsertImageClick={handleInsertImageClick}
+      onExportDocx={handleExportDocx}
+      exporting={exporting}
+      onExportPdf={handleExportPdf}
+      showComments={showComments}
+      onToggleComments={() => setShowComments((v) => !v)}
+      onAddComment={handleAddCommentClick}
+      showToc={showToc}
+      onToggleToc={() => setShowToc((v) => !v)}
+      hasSelection={hasSelection}
+      focusMode={focusMode}
+      onToggleFocusMode={() => setFocusMode((v) => !v)}
+      pageSize={pageSize}
+      onChangePageSize={setPageSize}
+      zoom={zoom}
+      onChangeZoom={setZoom}
+    />
+  );
+
+  // Inputs, banners, EditorContent, comment panel — everything except the toolbar (rendered
+  // separately above so focus mode can pin it above the scrolling "paper" instead of inside it).
+  // This tree must only ever be mounted in ONE of the two branches below, never both, since
+  // EditorContent binds the same `editor` instance to one DOM node.
+  const editorContentArea = (
+    <>
       {awaitingInitialContent && (
         <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-[11px] text-slate-400 font-medium">
           Loading document…
@@ -643,31 +699,71 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             activeThreadId={activeThreadId}
           />
         )}
+        {showToc && <TocPanel headings={tocHeadings} onSelect={handleSelectHeading} />}
       </div>
-      {createPortal(
-        <div className="hidden print:block px-8 py-6">
-          <div className="ft-doc-content" ref={printContentRef} />
-          {rootComments.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-lg font-bold mb-3">Comments</h2>
-              {rootComments.map((c) => (
-                <div key={c.id} className="mb-3">
-                  <p className="text-sm font-semibold text-slate-700">
-                    {c.author.name} — {new Date(c.createdAt).toLocaleString()} {c.resolvedAt ? "(resolved)" : "(open)"}
-                  </p>
-                  <p className="text-sm text-slate-700">{c.text}</p>
-                  {(repliesByParent.get(c.id) ?? []).map((r) => (
-                    <p key={r.id} className="text-sm text-slate-600 ml-4 mt-1">
-                      ↳ {r.author.name}: {r.text}
-                    </p>
-                  ))}
-                </div>
+    </>
+  );
+
+  const printPortal = createPortal(
+    <div className="hidden print:block px-8 py-6">
+      <div className="ft-doc-content" ref={printContentRef} />
+      {rootComments.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-bold mb-3">Comments</h2>
+          {rootComments.map((c) => (
+            <div key={c.id} className="mb-3">
+              <p className="text-sm font-semibold text-slate-700">
+                {c.author.name} — {new Date(c.createdAt).toLocaleString()} {c.resolvedAt ? "(resolved)" : "(open)"}
+              </p>
+              <p className="text-sm text-slate-700">{c.text}</p>
+              {(repliesByParent.get(c.id) ?? []).map((r) => (
+                <p key={r.id} className="text-sm text-slate-600 ml-4 mt-1">
+                  ↳ {r.author.name}: {r.text}
+                </p>
               ))}
             </div>
-          )}
-        </div>,
-        document.body
+          ))}
+        </div>
       )}
+    </div>,
+    document.body
+  );
+
+  if (focusMode) {
+    return (
+      <>
+        {createPortal(
+          // Light "paper" backdrop (not the dark bg-black/40 modal-scrim convention used by
+          // ScoringSettingsModal.tsx/GroupManageModal.tsx — this isn't a dialog, it's an
+          // immersive canvas) with the toolbar's own bg-slate-50 pinned at the top and the page
+          // scrolling beneath it.
+          <div className="fixed inset-0 z-50 bg-slate-300 overflow-y-auto flex flex-col">
+            <div className="bg-white border-b border-slate-200 shadow-sm shrink-0">{toolbar}</div>
+            <div className="flex-1 flex justify-center px-4 py-10">
+              <div
+                className="w-full max-w-[816px] h-fit bg-white shadow-xl rounded-sm"
+                style={{
+                  minHeight: pageSize === "long" ? 1248 : 1056,
+                  transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                  transformOrigin: "top center",
+                }}
+              >
+                <div className="px-8 py-10">{editorContentArea}</div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+        {printPortal}
+      </>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      {toolbar}
+      {editorContentArea}
+      {printPortal}
     </div>
   );
 }

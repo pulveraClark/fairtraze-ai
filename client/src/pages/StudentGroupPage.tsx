@@ -360,9 +360,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["report", "document"]
+      ? ["document", "report"]
       : ["report"]; // GITHUB (default)
-  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0]!;
+  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
   const equalShare   = report ? 1 / report.memberCount : 0;
   const myShare      = report?.myContribution?.contributionShare ?? null;

@@ -45,6 +45,13 @@ const FONT_FAMILIES: { label: string; value: string | null }[] = [
   { label: "Comic Sans", value: "'Comic Sans MS', 'Comic Sans', cursive" },
 ];
 
+const LINE_HEIGHTS: { label: string; value: string | null }[] = [
+  { label: "Default", value: null },
+  { label: "Single", value: "1" },
+  { label: "1.5", value: "1.5" },
+  { label: "Double", value: "2" },
+];
+
 const FONT_SIZES: { label: string; value: string | null }[] = [
   { label: "Default", value: null },
   { label: "12", value: "12px" },
@@ -272,6 +279,27 @@ function MoreMenu({
                 </select>
               </div>
 
+              <div className="px-1.5 pb-2 flex items-center gap-2">
+                <span className="text-slate-500 w-14 shrink-0">Spacing</span>
+                <select
+                  title="Line spacing"
+                  aria-label="Line spacing"
+                  value={editor.getAttributes("textStyle").lineHeight ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) editor.chain().focus().unsetLineHeight().run();
+                    else editor.chain().focus().setLineHeight(value).run();
+                  }}
+                  className="h-6 text-[11px] text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
+                >
+                  {LINE_HEIGHTS.map((s) => (
+                    <option key={s.label} value={s.value ?? ""}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="border-t border-slate-100 my-1" />
             </>
           )}
@@ -365,7 +393,15 @@ export function Toolbar({
   showComments,
   onToggleComments,
   onAddComment,
+  showToc,
+  onToggleToc,
   hasSelection,
+  focusMode,
+  onToggleFocusMode,
+  pageSize,
+  onChangePageSize,
+  zoom,
+  onChangeZoom,
 }: {
   editor: Editor;
   editable: boolean;
@@ -382,7 +418,15 @@ export function Toolbar({
   showComments: boolean;
   onToggleComments: () => void;
   onAddComment: () => void;
+  showToc: boolean;
+  onToggleToc: () => void;
   hasSelection: boolean;
+  focusMode: boolean;
+  onToggleFocusMode: () => void;
+  pageSize: "short" | "long";
+  onChangePageSize: (size: "short" | "long") => void;
+  zoom: number;
+  onChangeZoom: (zoom: number) => void;
 }) {
   const statusLabel = connStatus === "connected" ? "" : connStatus === "connecting" ? "Connecting…" : "Reconnecting…";
   const wordCount = editor.storage.characterCount?.words?.() ?? 0;
@@ -398,6 +442,20 @@ export function Toolbar({
           </ToolbarButton>
           <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
             <span className="italic">I</span>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Superscript"
+            active={editor.isActive("superscript")}
+            onClick={() => editor.chain().focus().toggleSuperscript().run()}
+          >
+            <span className="text-xs">x<sup>2</sup></span>
+          </ToolbarButton>
+          <ToolbarButton
+            label="Subscript"
+            active={editor.isActive("subscript")}
+            onClick={() => editor.chain().focus().toggleSubscript().run()}
+          >
+            <span className="text-xs">x<sub>2</sub></span>
           </ToolbarButton>
 
           <span className="w-px h-4 bg-slate-200 mx-1.5" />
@@ -577,6 +635,68 @@ export function Toolbar({
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       </ToolbarButton>
+
+      <ToolbarButton label="Table of contents" active={showToc} onClick={onToggleToc}>
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h7" />
+        </svg>
+      </ToolbarButton>
+
+      <ToolbarButton
+        label={focusMode ? "Exit full screen" : "Full screen"}
+        active={focusMode}
+        onClick={onToggleFocusMode}
+      >
+        {focusMode ? (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 4v4a1 1 0 01-1 1H4M4 9V4m0 5l6-6m9 1v4a1 1 0 001 1h4m0-5v4m0-4l-6 6M15 20v-4a1 1 0 011-1h4M20 15v5m0-5l-6 6M9 20v-4a1 1 0 00-1-1H4m5 5v-5m0 5l-6-6" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3" />
+          </svg>
+        )}
+      </ToolbarButton>
+
+      {focusMode && (
+        <div className="flex items-center rounded border border-slate-200 overflow-hidden ml-1" role="group" aria-label="Paper size">
+          {(["short", "long"] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              title={size === "short" ? "Short — 8.5×11in" : "Long — 8.5×13in"}
+              onClick={() => onChangePageSize(size)}
+              className={`px-2 h-7 text-[11px] font-semibold capitalize transition-colors ${
+                pageSize === size
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+              }`}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {focusMode && (
+        <div className="flex items-center rounded border border-slate-200 overflow-hidden ml-1" role="group" aria-label="Zoom">
+          {[0.75, 1, 1.25].map((level) => (
+            <button
+              key={level}
+              type="button"
+              title={`${Math.round(level * 100)}%`}
+              onClick={() => onChangeZoom(level)}
+              className={`px-2 h-7 text-[11px] font-semibold transition-colors ${
+                zoom === level
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+              }`}
+            >
+              {Math.round(level * 100)}%
+            </button>
+          ))}
+        </div>
+      )}
 
       <span className="text-[11px] text-slate-400 whitespace-nowrap pl-1">
         {wordCount} word{wordCount === 1 ? "" : "s"} · {charCount} char{charCount === 1 ? "" : "s"}

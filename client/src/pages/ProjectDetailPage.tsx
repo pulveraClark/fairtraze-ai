@@ -192,7 +192,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   const showCombined   = sourceType === "COMBINED";
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["report", "document"]
+      ? ["document", "report"]
       : ["report"]; // GITHUB or legacy
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
