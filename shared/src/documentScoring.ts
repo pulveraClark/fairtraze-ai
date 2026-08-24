@@ -39,6 +39,7 @@ export function computeDocumentTeamReport(
     const liveSessionCount = m.liveSessionCount ?? m.sessionCount;
     const importedRetainedChars = m.importedRetainedChars ?? 0;
     const importedWeightedRetainedChars = m.importedWeightedRetainedChars ?? 0;
+    const insertedImageCount = m.insertedImageCount ?? 0;
     // Hybrid policy (step 3): real sessions count as before; imported volume converts into
     // proportional "phantom" session credit (importedWeightedRetainedChars / typicalSessionChars)
     // inside the same log-scale diminishing-returns treatment, rather than stacking a full
@@ -46,7 +47,7 @@ export function computeDocumentTeamReport(
     const logSessions = Math.log(liveSessionCount + importedWeightedRetainedChars / typicalSessionChars + 1);
     const activeDays = new Set(m.sessionDates.map((d) => d.slice(0, 10))).size;
     const churn = m.totalInsertedChars + m.totalDeletedChars;
-    return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars };
+    return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars, insertedImageCount };
   });
 
   const totalLogSessions            = baseStats.reduce((s, m) => s + m.logSessions, 0);
@@ -116,6 +117,7 @@ export function computeDocumentTeamReport(
       importNote: m.importedRetainedChars > 0
         ? `Includes ${m.importedRetainedChars} characters imported from .docx — session credit includes an estimate based on import volume; active-day count reflects only the day of upload, not offline drafting time.`
         : null,
+      insertedImageCount: m.insertedImageCount,
     };
   });
 

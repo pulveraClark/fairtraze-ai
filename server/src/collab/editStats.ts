@@ -31,6 +31,7 @@ export async function computeDocumentRawStats(
       weightedRetainedChars: 0,
       importedRetainedChars: 0,
       importedWeightedRetainedChars: 0,
+      insertedImageCount: 0,
       editTypeBreakdown: { ...EMPTY_EDIT_TYPE_BREAKDOWN },
     }));
   }
@@ -52,17 +53,18 @@ export async function computeDocumentRawStats(
   }
 
   const sessions = await prisma.editSession.findMany({ where: { documentId } });
-  const sessionsByUser = new Map<number, { count: number; liveCount: number; dates: string[] }>();
+  const sessionsByUser = new Map<number, { count: number; liveCount: number; dates: string[]; imageInsertCount: number }>();
   for (const s of sessions) {
-    const entry = sessionsByUser.get(s.userId) ?? { count: 0, liveCount: 0, dates: [] };
+    const entry = sessionsByUser.get(s.userId) ?? { count: 0, liveCount: 0, dates: [], imageInsertCount: 0 };
     entry.count += 1;
     if (s.source === "LIVE") entry.liveCount += 1;
     entry.dates.push(s.startedAt.toISOString());
+    entry.imageInsertCount += s.imageInsertCount;
     sessionsByUser.set(s.userId, entry);
   }
 
   return roster.map((r) => {
-    const sess = sessionsByUser.get(r.userId) ?? { count: 0, liveCount: 0, dates: [] };
+    const sess = sessionsByUser.get(r.userId) ?? { count: 0, liveCount: 0, dates: [], imageInsertCount: 0 };
     return {
       studentName: r.studentName,
       userId: r.userId,
@@ -74,6 +76,7 @@ export async function computeDocumentRawStats(
       weightedRetainedChars: weightedRetainedChars.get(r.userId) ?? 0,
       importedRetainedChars: importedRetainedChars.get(r.userId) ?? 0,
       importedWeightedRetainedChars: importedWeightedRetainedChars.get(r.userId) ?? 0,
+      insertedImageCount: sess.imageInsertCount,
       editTypeBreakdown: editTypeBreakdown.get(r.userId) ?? { ...EMPTY_EDIT_TYPE_BREAKDOWN },
       sessionCount: sess.count,
       liveSessionCount: sess.liveCount,

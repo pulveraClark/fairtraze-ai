@@ -20,6 +20,10 @@ const roleLabel: Record<string, string> = {
 const IMPORT_NOTE_TOOLTIP =
   "Session credit includes an estimate based on import volume; active-day count reflects only the day of upload, not offline drafting time.";
 
+// Boilerplate for the image-insertion disclosure — a pure count, never a scoring input.
+const IMAGE_NOTE_TOOLTIP =
+  "Disclosed for context only — image insertions are never scored or counted toward contribution share.";
+
 // Map from studentName → flag → "RESOLVED" | "DISMISSED"
 // Built from resolved/dismissed disputes so the instructor sees review outcomes on flags.
 type ResolvedFlagOutcomes = Map<string, Map<string, "RESOLVED" | "DISMISSED">>;
@@ -301,6 +305,27 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                         </p>
                       );
                     })()}
+                    {/* Image-insertion disclosure — same "context only, never scored" treatment
+                        as the import note above, distinct cyan styling so it reads as its own
+                        note rather than a continuation of the import line. */}
+                    {(() => {
+                      const insertedImages =
+                        variant === "document" && isDocumentMember(m)
+                          ? m.insertedImageCount
+                          : variant === "combined" && isCombinedMember(m)
+                          ? m.document?.insertedImageCount ?? 0
+                          : 0;
+                      if (!insertedImages) return null;
+                      return (
+                        <p className="mt-1.5 text-[10px] text-cyan-700 font-medium flex items-center gap-1">
+                          <span className="shrink-0">Images:</span>
+                          <span className="font-normal text-cyan-600">
+                            {insertedImages} image{insertedImages === 1 ? "" : "s"} inserted
+                          </span>
+                          <InfoTooltip label="About inserted images" content={IMAGE_NOTE_TOOLTIP} width={220} />
+                        </p>
+                      );
+                    })()}
                   </td>
 
                   <td className="px-4 py-3 text-slate-400">
@@ -341,6 +366,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                                 ["Share", "this member's share within the Docs-only pipeline"],
                                 ["Sessions", "distinct editing sessions on this source"],
                                 ["Imported Characters", "of the retained characters, how many came from a .docx import — see the Import disclosure note"],
+                                ["Images Inserted", "disclosed for context only — never scored"],
                               ]}
                             />
                           }
@@ -350,6 +376,9 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                           <Stat label="Retained Characters" value={(m.document?.retainedChars ?? 0).toLocaleString()} />
                           {(m.document?.importedRetainedChars ?? 0) > 0 && (
                             <Stat label="Imported Characters" value={(m.document!.importedRetainedChars).toLocaleString()} />
+                          )}
+                          {(m.document?.insertedImageCount ?? 0) > 0 && (
+                            <Stat label="Images Inserted" value={m.document!.insertedImageCount} />
                           )}
                         </DetailSection>
 
@@ -406,6 +435,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                                 ["Retained Characters", "chars this member wrote that survive in the current document"],
                                 ["Self-Churn", "up to 0.5× penalty on own deleted text"],
                                 ["Imported Characters", "of the above, how many came from a .docx import — see the Import disclosure note"],
+                                ["Images Inserted", "disclosed for context only — never scored"],
                               ]}
                             />
                           }
@@ -414,6 +444,9 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                           <Stat label="Self-Churn" value={`${(m.selfChurnRatio * 100).toFixed(1)}%`} />
                           {m.importedRetainedChars > 0 && (
                             <Stat label="Imported Characters" value={m.importedRetainedChars.toLocaleString()} />
+                          )}
+                          {m.insertedImageCount > 0 && (
+                            <Stat label="Images Inserted" value={m.insertedImageCount} />
                           )}
                         </DetailSection>
 

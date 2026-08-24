@@ -148,6 +148,10 @@ export interface RawDocumentMemberStats {
   liveSessionCount?: number;              // EditSession count with source: LIVE only; falls back to sessionCount when absent
   importedRetainedChars?: number;         // of retainedChars, how many originated from source: IMPORT rows (unweighted, for display)
   importedWeightedRetainedChars?: number; // of weightedRetainedChars, the IMPORT-origin portion (drives session credit)
+  // Gross count of image nodes this user inserted (net new, not decremented on delete). Disclosed
+  // on the report only — never enters contributionShare or any share/weight formula. Optional so
+  // existing test fixtures without it still compile.
+  insertedImageCount?: number;
 }
 
 export interface DocumentScoredMember {
@@ -174,6 +178,8 @@ export interface DocumentScoredMember {
   // .docx-import scoring (step 3)
   importedRetainedChars: number; // echoes the raw imported count used in importNote's {N}
   importNote: string | null;
+  // Image insertion disclosure — never scored, purely echoed for display (see MemberTable.tsx).
+  insertedImageCount: number;
 }
 
 export type DocumentTeamReport = TeamReport<DocumentScoredMember>;

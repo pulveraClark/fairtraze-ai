@@ -11,6 +11,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
+import Image from "@tiptap/extension-image";
 import FontFamily from "@tiptap/extension-font-family";
 import CharacterCount from "@tiptap/extension-character-count";
 import * as Y from "yjs";
@@ -24,6 +25,7 @@ import type { AuthorshipUpdate, AuthorshipUser } from "../lib/authorshipHighligh
 import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighlight";
 import type { CommentDecorationRange } from "../lib/commentHighlight";
 import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
+import { isSupportedImageHeader } from "../lib/imageSniff";
 import { CommentPanel } from "./CommentPanel";
 import type { CommentRecord } from "./CommentPanel";
 import { Toolbar, AuthorshipLegend } from "./DocumentEditorToolbar";
@@ -54,6 +56,11 @@ function wsUrl(path: string): string {
 
 const MAX_DOCX_BYTES = 5 * 1024 * 1024; // 5MB — must match server/src/routes/documents.ts's MAX_DOCX_BYTES
 
+// 2MB — client-side only. Image insertion never hits a REST route (it's written straight into
+// the live Yjs doc, see handleImageFileChange), so unlike docx import there is no server-side
+// re-check of this cap — a modified client could bypass it. Documented limitation, see CLAUDE.md.
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
 // Safety net for awaitInitialNodeCount below: y-websocket's server-side getYDoc() calls
 // persistence.bindState() without awaiting it, so a freshly-created room's initial sync (which
 // flips WebsocketProvider's `synced` to true) can complete before bindState's migrated content
@@ -67,6 +74,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const printContentRef = useRef<HTMLDivElement | null>(null);
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
@@ -208,6 +216,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             TextStyle,
             Color,
             Highlight.configure({ multicolor: true }),
+            Image.configure({ allowBase64: true }),
             FontFamily,
             FontSize,
             CharacterCount,
@@ -450,6 +459,47 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     }
   };
 
+  const handleInsertImageClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  // No REST route: the base64 data URL is inserted straight into the live collaborative
+  // document via editor.chain().setImage(), the same way any other live typed content is
+  // written. Size and type are only ever checked here, client-side — see MAX_IMAGE_BYTES.
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file (or re-trying after an error)
+    if (!file || !editor) return;
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImportMessage({
+        kind: "error",
+        text: `Image is too large — the limit is ${MAX_IMAGE_BYTES / (1024 * 1024)}MB.`,
+      });
+      return;
+    }
+
+    try {
+      const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+      if (!isSupportedImageHeader(header)) {
+        setImportMessage({ kind: "error", text: "Only PNG, JPEG, and WebP images are supported." });
+        return;
+      }
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string); // "data:<mime>;base64,<data>"
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+        reader.readAsDataURL(file);
+      });
+
+      editor.chain().focus().setImage({ src: dataUrl }).run();
+    } catch (err) {
+      console.error("[image insert] failed", err);
+      setImportMessage({ kind: "error", text: "Could not insert image — check the file and try again." });
+    }
+  };
+
   const handleExportDocx = async () => {
     if (exporting || !token) return;
     setExporting(true);
@@ -526,6 +576,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         onToggleAuthorship={() => setShowAuthorship((v) => !v)}
         onImportClick={handleImportClick}
         importing={importing}
+        onInsertImageClick={handleInsertImageClick}
         onExportDocx={handleExportDocx}
         exporting={exporting}
         onExportPdf={handleExportPdf}
@@ -545,6 +596,13 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="hidden"
         onChange={handleFileChange}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={handleImageFileChange}
       />
       {importMessage && (
         <div

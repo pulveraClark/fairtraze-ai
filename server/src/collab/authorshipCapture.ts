@@ -56,6 +56,7 @@ interface SessionState {
   startedAt: number; // epoch ms
   lastEventAt: number; // epoch ms
   pendingCharacterCount: number; // gross characters inserted since last flush
+  pendingImageInsertCount: number; // gross image nodes inserted since last flush
   source: EditSource;
 }
 
@@ -63,6 +64,7 @@ interface ClosedSession {
   sessionId: number;
   endedAtEpoch: number;
   pendingCharacterCount: number;
+  pendingImageInsertCount: number;
 }
 
 interface RoomState {
@@ -71,6 +73,7 @@ interface RoomState {
   // in pendingEvents/sessions while this is still null — see flushRoom's null check below.
   documentId: number | null;
   lastText: string;
+  lastImageCount: number;
   pendingEvents: PendingEvent[];
   closedSessions: ClosedSession[];
   sessions: Map<number, SessionState>; // userId -> active in-memory session
@@ -99,6 +102,21 @@ function extractPlainText(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.
     out += extractPlainText(child as YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText);
   }
   return out;
+}
+
+// Sibling walk to extractPlainText, for a completely different purpose: TipTap image nodes are
+// attribute-only Y.XmlElements with no Y.XmlText child, so they produce zero text delta and are
+// otherwise invisible to diffText below. This counts them directly (by nodeName, the tag TipTap's
+// Image extension writes) so net-new image insertions can still be attributed to a user — see the
+// update listener's imageDelta computation. Never inspects an image's src/attributes; only counts
+// node presence, since this is a disclosure count, not a content signal.
+function countImageNodes(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText): number {
+  if (node instanceof Y.XmlText) return 0;
+  let count = node instanceof Y.XmlElement && node.nodeName === "image" ? 1 : 0;
+  for (const child of node.toArray()) {
+    count += countImageNodes(child as YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText);
+  }
+  return count;
 }
 
 // Finds the single changed region between two strings via common-prefix/common-suffix trim.
@@ -130,11 +148,19 @@ function diffText(
   return { position: start, deleteLength, insertLength };
 }
 
-function touchSession(state: RoomState, userId: number, insertedChars: number, nowEpoch: number, source: EditSource): void {
+function touchSession(
+  state: RoomState,
+  userId: number,
+  insertedChars: number,
+  insertedImages: number,
+  nowEpoch: number,
+  source: EditSource
+): void {
   const existing = state.sessions.get(userId);
   if (existing && existing.source === source && nowEpoch - existing.lastEventAt <= SESSION_IDLE_MS) {
     existing.lastEventAt = nowEpoch;
     existing.pendingCharacterCount += insertedChars;
+    existing.pendingImageInsertCount += insertedImages;
     return;
   }
 
@@ -145,6 +171,7 @@ function touchSession(state: RoomState, userId: number, insertedChars: number, n
       sessionId: existing.sessionId,
       endedAtEpoch: existing.lastEventAt,
       pendingCharacterCount: existing.pendingCharacterCount,
+      pendingImageInsertCount: existing.pendingImageInsertCount,
     });
   }
 
@@ -153,6 +180,7 @@ function touchSession(state: RoomState, userId: number, insertedChars: number, n
     startedAt: nowEpoch,
     lastEventAt: nowEpoch,
     pendingCharacterCount: insertedChars,
+    pendingImageInsertCount: insertedImages,
     source,
   });
 }
@@ -178,7 +206,7 @@ async function flushRoom(room: string): Promise<void> {
   const closed = state.closedSessions;
   state.closedSessions = [];
   const dirtyUserIds = [...state.sessions.entries()]
-    .filter(([, s]) => s.sessionId === null || s.pendingCharacterCount > 0)
+    .filter(([, s]) => s.sessionId === null || s.pendingCharacterCount > 0 || s.pendingImageInsertCount > 0)
     .map(([userId]) => userId);
 
   try {
@@ -189,15 +217,21 @@ async function flushRoom(room: string): Promise<void> {
     for (const c of closed) {
       await prisma.editSession.update({
         where: { id: c.sessionId },
-        data: { endedAt: new Date(c.endedAtEpoch), characterCount: { increment: c.pendingCharacterCount } },
+        data: {
+          endedAt: new Date(c.endedAtEpoch),
+          characterCount: { increment: c.pendingCharacterCount },
+          imageInsertCount: { increment: c.pendingImageInsertCount },
+        },
       });
     }
 
     for (const userId of dirtyUserIds) {
       const session = state.sessions.get(userId);
       if (!session) continue;
-      const delta = session.pendingCharacterCount;
+      const charDelta = session.pendingCharacterCount;
+      const imageDelta = session.pendingImageInsertCount;
       session.pendingCharacterCount = 0;
+      session.pendingImageInsertCount = 0;
 
       if (session.sessionId === null) {
         const created = await prisma.editSession.create({
@@ -205,15 +239,19 @@ async function flushRoom(room: string): Promise<void> {
             documentId,
             userId,
             startedAt: new Date(session.startedAt),
-            characterCount: delta,
+            characterCount: charDelta,
+            imageInsertCount: imageDelta,
             source: session.source,
           },
         });
         session.sessionId = created.id;
-      } else if (delta > 0) {
+      } else if (charDelta > 0 || imageDelta > 0) {
         await prisma.editSession.update({
           where: { id: session.sessionId },
-          data: { characterCount: { increment: delta } },
+          data: {
+            characterCount: { increment: charDelta },
+            imageInsertCount: { increment: imageDelta },
+          },
         });
       }
     }
@@ -259,6 +297,7 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
   const state: RoomState = {
     documentId: null,
     lastText: extractPlainText(fragment),
+    lastImageCount: countImageNodes(fragment),
     pendingEvents: [],
     closedSessions: [],
     sessions: new Map(),
@@ -277,6 +316,13 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     const diff = diffText(state.lastText, newText);
     state.lastText = newText;
 
+    // Same resync discipline as lastText above, for the same reason — an image inserted during
+    // persisted-state restore/migration (never happens today; docx import explicitly skips
+    // images) must not be misattributed to whoever edits next.
+    const newImageCount = countImageNodes(fragment);
+    const imageDelta = newImageCount - state.lastImageCount;
+    state.lastImageCount = newImageCount;
+
     // y-websocket sets `origin` to the raw ws connection for every update that arrived over
     // the wire from that connection (verified against y-websocket/y-protocols source). Updates
     // applied locally with no origin (persisted-state restore, legacy-content migration) are
@@ -290,34 +336,41 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
       source = EditSource.IMPORT;
     }
     if (userId === undefined) return;
-    if (!diff) return;
+
+    // insertedImages only counts net-new image nodes (imageDelta > 0); a net decrease (an image
+    // deleted) is never subtracted from a session's running total — same "gross, not net of
+    // deletions" convention as characterCount.
+    const insertedImages = imageDelta > 0 ? imageDelta : 0;
+    if (!diff && insertedImages === 0) return;
 
     const now = new Date();
-    // Delete recorded before insert so a same-position "replace" replays correctly.
-    if (diff.deleteLength > 0) {
-      state.pendingEvents.push({
-        userId,
-        eventType: EditEventType.DELETE,
-        position: diff.position,
-        length: diff.deleteLength,
-        timestamp: now,
-        source,
-      });
-    }
-    if (diff.insertLength > 0) {
-      const editType = classifyEdit({ insertLength: diff.insertLength, deleteLength: diff.deleteLength });
-      state.pendingEvents.push({
-        userId,
-        eventType: EditEventType.INSERT,
-        position: diff.position,
-        length: diff.insertLength,
-        timestamp: now,
-        editType: EDIT_TYPE_TO_PRISMA[editType],
-        source,
-      });
+    if (diff) {
+      // Delete recorded before insert so a same-position "replace" replays correctly.
+      if (diff.deleteLength > 0) {
+        state.pendingEvents.push({
+          userId,
+          eventType: EditEventType.DELETE,
+          position: diff.position,
+          length: diff.deleteLength,
+          timestamp: now,
+          source,
+        });
+      }
+      if (diff.insertLength > 0) {
+        const editType = classifyEdit({ insertLength: diff.insertLength, deleteLength: diff.deleteLength });
+        state.pendingEvents.push({
+          userId,
+          eventType: EditEventType.INSERT,
+          position: diff.position,
+          length: diff.insertLength,
+          timestamp: now,
+          editType: EDIT_TYPE_TO_PRISMA[editType],
+          source,
+        });
+      }
     }
 
-    touchSession(state, userId, diff.insertLength, now.getTime(), source);
+    touchSession(state, userId, diff?.insertLength ?? 0, insertedImages, now.getTime(), source);
     scheduleFlush(room);
   });
 
@@ -349,6 +402,7 @@ export function startAuthorshipIdleSweep(): void {
             sessionId: session.sessionId,
             endedAtEpoch: session.lastEventAt,
             pendingCharacterCount: session.pendingCharacterCount,
+            pendingImageInsertCount: session.pendingImageInsertCount,
           });
           shouldFlush = true;
         }

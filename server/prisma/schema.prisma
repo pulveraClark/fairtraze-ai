@@ -407,6 +407,10 @@ model EditSession {
   endedAt        DateTime?
   // Gross characters inserted during this session (not net of deletions).
   characterCount Int       @default(0)
+  // Gross count of image nodes inserted during this session (net new, not decremented on
+  // delete — same "gross" convention as characterCount). Disclosed on the report; never fed
+  // into any scoring formula. See server/src/collab/authorshipCapture.ts's countImageNodes.
+  imageInsertCount Int     @default(0)
   // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
   source         EditSource @default(LIVE)
   document       Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
