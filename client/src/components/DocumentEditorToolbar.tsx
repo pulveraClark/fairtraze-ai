@@ -57,31 +57,53 @@ const FONT_SIZES: { label: string; value: string | null }[] = [
   { label: "32", value: "32px" },
 ];
 
-function ColorMenu({
-  label,
-  icon,
-  colors,
-  activeColor,
-  onPick,
-  onClear,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  colors: string[];
-  activeColor: string | null;
-  onPick: (color: string) => void;
-  onClear: () => void;
-}) {
+function ImportIcon({ spinning }: { spinning: boolean }) {
+  if (spinning) {
+    return (
+      <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+    );
+  }
+  // Arrow points UP out of the tray ("bring a file in") — deliberately the mirror of
+  // ExportIcon's arrow below, so the two read as opposites, not near-twins. Previously this
+  // used the exact same path as ExportIcon, which was the reported icon-collision bug.
+  return (
+    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 0l-4 4m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </svg>
+  );
+}
+
+function ExportIcon({ spinning }: { spinning: boolean }) {
+  if (spinning) {
+    return (
+      <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+    );
+  }
+  // Arrow points DOWN into the tray ("send a file out") — unchanged from before; this one was
+  // already the correct glyph, ImportIcon was wrongly duplicating it.
+  return (
+    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </svg>
+  );
+}
+
+// Dropdown positioning/outside-click/portal mechanics shared by the "More tools" menu below.
+// Portaled to document.body for the same reason the old ColorMenu was: the toolbar row's
+// overflow-x-auto computes overflow-y as auto too per the CSS spec, which silently clips an
+// absolutely positioned dropdown nested inside it.
+function useToolbarDropdown() {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Portaled to document.body and positioned via getBoundingClientRect, exactly like
-  // InfoTooltip.tsx — the toolbar's overflow-x-auto (see Toolbar's root div) computes
-  // overflow-y as auto too per the CSS spec, which would silently clip an absolutely
-  // positioned dropdown nested inside it (found via manual verification: the swatch
-  // buttons were clickable but invisible).
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return;
     const btn = btnRef.current.getBoundingClientRect();
@@ -102,51 +124,197 @@ function ColorMenu({
     return () => document.removeEventListener("mousedown", onOutside);
   }, [open]);
 
+  return { open, setOpen, pos, btnRef, menuRef };
+}
+
+// Everything less-frequent than day-to-day writing/formatting: font color/highlight/family/size
+// ("Format") and import/export/print ("File"). Collapsing exactly these two categories behind
+// one button is what keeps the always-visible row from needing horizontal scroll, without
+// hiding anything used on essentially every editing pass (that stays in the core row).
+//
+// Text color/highlight are rendered as an inline swatch row here (not a nested popup-in-popup —
+// the old per-color ColorMenu component) since there's already room inside this dropdown; a
+// second level of portal/outside-click handling would only add complexity for no benefit here.
+function MoreMenu({
+  editor,
+  editable,
+  importing,
+  onImportClick,
+  exporting,
+  onExportDocx,
+  onExportPdf,
+}: {
+  editor: Editor;
+  editable: boolean;
+  importing: boolean;
+  onImportClick: () => void;
+  exporting: boolean;
+  onExportDocx: () => void;
+  onExportPdf: () => void;
+}) {
+  const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
+  const close = () => setOpen(false);
+
   return (
     <>
-      <ToolbarButton
-        ref={btnRef}
-        label={label}
-        active={open || !!activeColor}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {icon}
+      <ToolbarButton ref={btnRef} label="More tools" active={open} onClick={() => setOpen((v) => !v)}>
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="1.6" />
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="19" cy="12" r="1.6" />
+        </svg>
       </ToolbarButton>
       {open && pos && createPortal(
         <div
           ref={menuRef}
           style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="p-1.5 bg-white border border-slate-200 rounded-lg shadow-md flex items-center gap-1"
+          className="w-60 p-2 bg-white border border-slate-200 rounded-lg shadow-md text-xs"
         >
+          {editable && (
+            <>
+              <p className="px-1.5 pt-0.5 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Format</p>
+
+              <div className="px-1.5 pb-1.5 flex items-center gap-2">
+                <span className="text-slate-500 w-14 shrink-0">Text color</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    title="Clear"
+                    aria-label="Clear text color"
+                    onClick={() => editor.chain().focus().unsetColor().run()}
+                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-[8px] shrink-0"
+                  >
+                    ✕
+                  </button>
+                  {FONT_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      title={c}
+                      aria-label={`Text color ${c}`}
+                      onClick={() => editor.chain().focus().setColor(c).run()}
+                      className={`w-4 h-4 rounded-full border shrink-0 ${
+                        editor.getAttributes("textStyle").color === c ? "ring-2 ring-offset-1 ring-indigo-400" : "border-slate-200"
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-1.5 pb-2 flex items-center gap-2">
+                <span className="text-slate-500 w-14 shrink-0">Highlight</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    title="Clear"
+                    aria-label="Clear highlight"
+                    onClick={() => editor.chain().focus().unsetHighlight().run()}
+                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-[8px] shrink-0"
+                  >
+                    ✕
+                  </button>
+                  {HIGHLIGHT_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      title={c}
+                      aria-label={`Highlight ${c}`}
+                      onClick={() => editor.chain().focus().toggleHighlight({ color: c }).run()}
+                      className={`w-4 h-4 rounded-full border shrink-0 ${
+                        editor.getAttributes("highlight").color === c ? "ring-2 ring-offset-1 ring-indigo-400" : "border-slate-200"
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-1.5 pb-1.5 flex items-center gap-2">
+                <span className="text-slate-500 w-14 shrink-0">Font</span>
+                <select
+                  title="Font family"
+                  aria-label="Font family"
+                  value={editor.getAttributes("textStyle").fontFamily ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) editor.chain().focus().unsetFontFamily().run();
+                    else editor.chain().focus().setFontFamily(value).run();
+                  }}
+                  className="h-6 text-[11px] text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
+                >
+                  {FONT_FAMILIES.map((f) => (
+                    <option key={f.label} value={f.value ?? ""}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="px-1.5 pb-2 flex items-center gap-2">
+                <span className="text-slate-500 w-14 shrink-0">Size</span>
+                <select
+                  title="Font size"
+                  aria-label="Font size"
+                  value={editor.getAttributes("textStyle").fontSize ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) editor.chain().focus().unsetFontSize().run();
+                    else editor.chain().focus().setFontSize(value).run();
+                  }}
+                  className="h-6 text-[11px] text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
+                >
+                  {FONT_SIZES.map((s) => (
+                    <option key={s.label} value={s.value ?? ""}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="border-t border-slate-100 my-1" />
+            </>
+          )}
+
+          <p className="px-1.5 pt-0.5 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">File</p>
+
+          {editable && (
+            <button
+              type="button"
+              onClick={() => {
+                onImportClick();
+                close();
+              }}
+              className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-700"
+            >
+              <ImportIcon spinning={importing} />
+              Import .docx
+            </button>
+          )}
           <button
             type="button"
-            title="Clear"
-            aria-label="Clear color"
             onClick={() => {
-              onClear();
-              setOpen(false);
+              onExportDocx();
+              close();
             }}
-            className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 shrink-0"
+            className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-700"
           >
-            ✕
+            <ExportIcon spinning={exporting} />
+            Export .docx
           </button>
-          <span className="w-px h-4 bg-slate-200 mx-0.5" />
-          {colors.map((c) => (
-            <button
-              key={c}
-              type="button"
-              title={c}
-              aria-label={`Color ${c}`}
-              onClick={() => {
-                onPick(c);
-                setOpen(false);
-              }}
-              className={`w-5 h-5 rounded-full border shrink-0 ${
-                activeColor === c ? "ring-2 ring-offset-1 ring-indigo-400" : "border-slate-200"
-              }`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
+          <button
+            type="button"
+            onClick={() => {
+              onExportPdf();
+              close();
+            }}
+            className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-700"
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
+            </svg>
+            Export PDF
+          </button>
         </div>,
         document.body
       )}
@@ -224,6 +392,7 @@ export function Toolbar({
     <div className="flex items-center gap-0.5 px-3 py-2 border-b border-slate-100 bg-slate-50 overflow-x-auto">
       {editable && (
         <>
+          {/* Home: the highest-frequency formatting actions, always visible. */}
           <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
             B
           </ToolbarButton>
@@ -301,67 +470,7 @@ export function Toolbar({
 
           <span className="w-px h-4 bg-slate-200 mx-1.5" />
 
-          <ColorMenu
-            label="Text color"
-            icon={<span className="font-bold text-sm leading-none">A</span>}
-            colors={FONT_COLORS}
-            activeColor={editor.getAttributes("textStyle").color ?? null}
-            onPick={(c) => editor.chain().focus().setColor(c).run()}
-            onClear={() => editor.chain().focus().unsetColor().run()}
-          />
-          <ColorMenu
-            label="Highlight color"
-            icon={
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 11l6-6 4 4-6 6m-4-4l-4 10 10-4m-6-6l6 6" />
-              </svg>
-            }
-            colors={HIGHLIGHT_COLORS}
-            activeColor={editor.getAttributes("highlight").color ?? null}
-            onPick={(c) => editor.chain().focus().toggleHighlight({ color: c }).run()}
-            onClear={() => editor.chain().focus().unsetHighlight().run()}
-          />
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
-          <select
-            title="Font family"
-            aria-label="Font family"
-            value={editor.getAttributes("textStyle").fontFamily ?? ""}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (!value) editor.chain().focus().unsetFontFamily().run();
-              else editor.chain().focus().setFontFamily(value).run();
-            }}
-            className="h-7 text-xs text-slate-600 border border-slate-200 rounded bg-white px-1 max-w-[7.5rem]"
-          >
-            {FONT_FAMILIES.map((f) => (
-              <option key={f.label} value={f.value ?? ""}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            title="Font size"
-            aria-label="Font size"
-            value={editor.getAttributes("textStyle").fontSize ?? ""}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (!value) editor.chain().focus().unsetFontSize().run();
-              else editor.chain().focus().setFontSize(value).run();
-            }}
-            className="h-7 text-xs text-slate-600 border border-slate-200 rounded bg-white px-1 w-16"
-          >
-            {FONT_SIZES.map((s) => (
-              <option key={s.label} value={s.value ?? ""}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
+          {/* Insert: also reached for on essentially every editing pass. */}
           <ToolbarButton
             label="Insert table"
             active={editor.isActive("table")}
@@ -402,8 +511,6 @@ export function Toolbar({
             </>
           )}
 
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
           <ToolbarButton label="Insert image" active={false} onClick={onInsertImageClick}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -414,21 +521,8 @@ export function Toolbar({
 
           <span className="w-px h-4 bg-slate-200 mx-1.5" />
 
-          <ToolbarButton label="Import .docx" active={false} onClick={onImportClick}>
-            {importing ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-              </svg>
-            )}
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
+          {/* Bubble-with-plus, deliberately distinct from the plain-bubble "Comments" panel
+              toggle below (they used to share one identical SVG path). */}
           <ToolbarButton label="Add comment" active={false} onClick={onAddComment}>
             <svg
               className={`w-4 h-4 ${hasSelection ? "" : "opacity-40"}`}
@@ -437,35 +531,38 @@ export function Toolbar({
               stroke="currentColor"
               strokeWidth={2}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m-2-2h4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </ToolbarButton>
+
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
         </>
       )}
-      {!editable && <span className="text-[11px] text-slate-400 font-medium">Viewing (read-only)</span>}
+      {!editable && (
+        <>
+          <span className="text-[11px] text-slate-400 font-medium">Viewing (read-only)</span>
+          <span className="w-px h-4 bg-slate-200 mx-1.5" />
+        </>
+      )}
+
+      {/* Format (color/highlight/font) and File (import/export/print) — the comparatively
+          occasional actions, grouped and labeled behind one menu instead of guessed at from a
+          bare icon in the always-visible row. Rendered in both editable and read-only views:
+          Export/Print must stay reachable for an instructor without edit rights; the menu's own
+          `editable` prop hides Format and Import internally. */}
+      <MoreMenu
+        editor={editor}
+        editable={editable}
+        importing={importing}
+        onImportClick={onImportClick}
+        exporting={exporting}
+        onExportDocx={onExportDocx}
+        onExportPdf={onExportPdf}
+      />
 
       <span className="w-px h-4 bg-slate-200 mx-1.5" />
 
-      <ToolbarButton label="Export .docx" active={false} onClick={onExportDocx}>
-        {exporting ? (
-          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-          </svg>
-        )}
-      </ToolbarButton>
-      <ToolbarButton label="Export PDF" active={false} onClick={onExportPdf}>
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
-        </svg>
-      </ToolbarButton>
-
-      <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
+      {/* View: one-click collaboration/review toggles, always visible. */}
       <ToolbarButton label="Highlight authorship" active={showAuthorship} onClick={onToggleAuthorship}>
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
           <rect x="3" y="3" width="7" height="7" rx="1.5" />
