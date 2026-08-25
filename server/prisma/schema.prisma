@@ -271,6 +271,7 @@ model Report {
   project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   documentContributions DocumentContribution[]
   combinedContributions CombinedContribution[]
+  documentSnapshots     DocumentSnapshot[]
 }
 
 // Normalized per-member persistence of a single analysis run's document-side (Editor) scores,
@@ -405,6 +406,26 @@ model Document {
   editSessions EditSession[]
   comments     Comment[]
   documentContributions DocumentContribution[]
+  snapshots    DocumentSnapshot[]
+}
+
+// A point-in-time copy of Document.yjsState, taken whenever an analysis run produces a new
+// Report for an EDITOR/COMBINED assignment (server/src/routes/analyze.ts). The write is a plain
+// copy of the already-current, already-debounce-persisted yjsState column (see persistence.ts) —
+// it never touches the live Y.Doc, never calls getYDoc(), and registers no Yjs update listener,
+// so it has zero interaction with authorshipCapture.ts's collab pipeline. Reconstruction to
+// readable document structure happens later, at read time, by feeding yjsState into the same
+// scratch-Y.Doc pattern documentExport.ts already uses.
+model DocumentSnapshot {
+  id         Int      @id @default(autoincrement())
+  documentId Int
+  reportId   Int?
+  yjsState   Bytes
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  report     Report?  @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
 }
 
 // Discussion attached to a point in a Document's content — pure metadata, never document

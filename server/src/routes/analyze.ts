@@ -44,6 +44,19 @@ async function writeDocumentContributionRows(
   });
 }
 
+// Copies the document's already-current, already-debounce-persisted yjsState column into a new
+// DocumentSnapshot row — a point-in-time revision-history entry anchored to this analysis run's
+// Report. This is a plain Prisma read + insert: it never calls getYDoc(), never touches the live
+// Y.Doc, and registers no Yjs update listener, so it has zero interaction with
+// server/src/collab/authorshipCapture.ts or the live collab room.
+async function writeDocumentSnapshot(documentId: number, reportId: number): Promise<void> {
+  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { yjsState: true } });
+  if (!doc?.yjsState) return;
+  await prisma.documentSnapshot.create({
+    data: { documentId, reportId, yjsState: doc.yjsState },
+  });
+}
+
 // ── Shared helper: build RawMemberStats from DB members + GitHub data ─────────
 
 function buildRawMembers(
@@ -144,6 +157,7 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
 
     if (project.document?.id) {
       await writeDocumentContributionRows(project.document.id, createdReport.id, report.members);
+      await writeDocumentSnapshot(project.document.id, createdReport.id);
     }
 
     await prisma.project.update({
@@ -243,6 +257,7 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
 
     if (project.document?.id) {
       await writeDocumentContributionRows(project.document.id, createdReport.id, documentReport.members);
+      await writeDocumentSnapshot(project.document.id, createdReport.id);
     }
     await prisma.combinedContribution.createMany({
       data: report.members.map((m) => ({
