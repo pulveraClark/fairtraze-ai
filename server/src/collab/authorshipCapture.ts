@@ -21,6 +21,8 @@ interface PendingEvent {
   timestamp: Date;
   editType?: PrismaEditType; // classification (Step 4b) — set on INSERT events only
   source: EditSource;
+  insertedText?: string; // literal text captured alongside position/length (INSERT rows only)
+  deletedText?: string;  // literal text captured alongside position/length (DELETE rows only)
 }
 
 // Synthetic transact() origin used by the .docx import route (server/src/collab/docxImport.ts).
@@ -130,7 +132,13 @@ function countImageNodes(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.X
 function diffText(
   before: string,
   after: string
-): { position: number; deleteLength: number; insertLength: number } | null {
+): {
+  position: number;
+  deleteLength: number;
+  insertLength: number;
+  deletedText: string;
+  insertedText: string;
+} | null {
   const minLen = Math.min(before.length, after.length);
   let start = 0;
   while (start < minLen && before[start] === after[start]) start++;
@@ -145,7 +153,13 @@ function diffText(
   const deleteLength = endBefore - start;
   const insertLength = endAfter - start;
   if (deleteLength === 0 && insertLength === 0) return null;
-  return { position: start, deleteLength, insertLength };
+  return {
+    position: start,
+    deleteLength,
+    insertLength,
+    deletedText: before.slice(start, endBefore),
+    insertedText: after.slice(start, endAfter),
+  };
 }
 
 function touchSession(
@@ -354,6 +368,7 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
           length: diff.deleteLength,
           timestamp: now,
           source,
+          deletedText: diff.deletedText,
         });
       }
       if (diff.insertLength > 0) {
@@ -366,6 +381,7 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
           timestamp: now,
           editType: EDIT_TYPE_TO_PRISMA[editType],
           source,
+          insertedText: diff.insertedText,
         });
       }
     }

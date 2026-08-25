@@ -432,9 +432,9 @@ model Comment {
 // Raw log of every insertion/deletion made in a Document's live text, attributed to the
 // authenticated user whose Yjs connection produced the update. position/length are offsets
 // into a flattened plain-text view of the document (concatenated text-node content, no
-// separator between blocks — see server/src/collab/authorshipCapture.ts). No text content is
-// stored: only shape, since the authorship map (Step 3) only needs to know whose insert
-// survives at a position, never what the text says.
+// separator between blocks — see server/src/collab/authorshipCapture.ts). Shape (position/
+// length) is still the source of truth for scoring/diffing; insertedText/deletedText are an
+// additive disclosure capture only — see the doc comment on those fields below.
 model EditEvent {
   id         Int           @id @default(autoincrement())
   documentId Int
@@ -447,6 +447,13 @@ model EditEvent {
   editType   EditType?
   // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
   source     EditSource    @default(LIVE)
+  // Literal substring captured alongside the existing position/length shape (INSERT: the
+  // inserted text; DELETE: the deleted text) — derived via before/after.slice() in
+  // authorshipCapture.ts's diffText flow, where both full strings are already in memory. Nullable
+  // so pre-migration rows remain valid. Purely additive: never read by scoring/diffing/editType
+  // classification, which all still operate on position/length exactly as before.
+  insertedText String?
+  deletedText  String?
   document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
   user       User          @relation(fields: [userId], references: [id])
 
