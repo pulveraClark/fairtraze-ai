@@ -81,7 +81,7 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 |---|---|
 | Page header | "System Overview" title + description |
 | 1. What it is | Description; core principle callout (⚖ icon) |
-| 2. Data sources | GitHub card (✓ Implemented); FairTraze Docs card (Planned); combined scoring formula |
+| 2. Data sources | GitHub card (✓ Implemented); FairTraze Docs card (✓ Implemented); combined scoring formula |
 | 3. System roles | 3 cards: Instructor · Student · Admin (each with capability bullet list) |
 | 4. Lifecycle | 5-step numbered flow: Instructor creates class → Students join → Leaders connect repo → Members self-register → Instructor analyzes |
 | 5. GitHub analysis & scoring | 5-step pipeline; contribution formula; 4 participation flags; Gini coefficient health table |
@@ -89,13 +89,13 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 | 7. Explainable AI | Green "What it does" box; red "What it does NOT do" box |
 | 8. Fairness tools | Explainable report · Export/Print · At-risk alerts · Dispute workflow |
 | 9. Privacy, Oversight & Student Agency | 3-card grid |
-| 10. What's Next | FairTraze Collaborative Editor + Combined Scoring (Planned) |
+| 10. What's Next | FairTraze Collaborative Editor + Combined Scoring (✓ Implemented) |
 | Legend bar | Status badge legend |
 | Footer disclaimer | Outputs support instructor judgment; never replace it |
 
 | Logic | Detail |
 |---|---|
-| Status badges | "✓ Implemented" (emerald) vs "Planned — next build" (amber) |
+| Status badges | "✓ Implemented" (emerald) — both data sources are now implemented, so the "Planned — next build" (amber) variant is no longer shown |
 | Data | Fully hardcoded; no API calls |
 
 ---
@@ -173,7 +173,7 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 |---|---|
 | Page header | Breadcrumb; group title; team health badge |
 | Group switcher | Dropdown to navigate between sibling groups in the same assignment |
-| Tabs | "Report" · "Document" (FairTraze Docs — planned) |
+| Tabs | "Report" · "Document" (FairTraze Docs — ✓ implemented) |
 | **Report tab** | |
 | — Team health banner | `Healthy` / `Moderate Risk` / `High Risk` with Gini coefficient |
 | — Contribution chart | Bar chart: each member's contribution share (%) |
@@ -182,7 +182,7 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 | — Instructor controls | "Run Analysis" button; "Scoring Settings" button (→ M5); "Export PDF" button; "Print" button |
 | Stale config warning | Banner: "Config changed since last analysis — re-run to apply" (conditional) |
 | Analysis stepper | Step-by-step progress overlay during re-analysis |
-| **Document tab** | `FairTrazeDocsPreview` placeholder (Phase D) |
+| **Document tab** | `DocumentEditor` component — live, read-only rendering of the group's shared document |
 
 | Logic | Detail |
 |---|---|

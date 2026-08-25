@@ -21,7 +21,6 @@ const SOURCE_LABEL: Record<string, string> = {
 interface MyGroup {
   id: number;
   groupName: string;
-  name: string;
   repoUrl: string;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
@@ -60,7 +59,7 @@ interface ClassDetail {
     id: number;
     subjectCode: string;
     subjectName: string;
-    course: string;
+    department: { id: number; name: string; code: string } | null;
     edpCode: string;
     joinCode: string | null;
   };
@@ -418,7 +417,7 @@ function ProjectCard({
                   <button
                     onClick={() => void handleRequest()}
                     disabled={submitting || !selectedId || noGithub}
-                    className="flex-1 py-1.5 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Sending…" : "Send Request"}
                   </button>
@@ -558,9 +557,11 @@ export function StudentClassPage({ classId }: Props) {
                     {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
                   </span>
                   <h1 className="text-sm font-semibold text-slate-800">{cls.subjectName}</h1>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
-                    {cls.course}
-                  </span>
+                  {cls.department && (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                      {cls.department.code}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <h1 className="text-sm font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>

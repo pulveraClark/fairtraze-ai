@@ -28,7 +28,6 @@ const HEALTH_BADGE: Record<string, string> = {
 interface MyGroup {
   id: number;
   groupName: string;
-  name: string;
   repoUrl: string;
   role: "LEADER" | "MEMBER";
   report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
@@ -47,7 +46,7 @@ interface EnrolledClass {
   id: number;
   subjectCode: string;
   subjectName: string;
-  course: string;
+  department: { id: number; name: string; code: string } | null;
   edpCode: string;
   joinCode: string | null;
   joinedAt: string;
@@ -232,17 +231,17 @@ function ClassCard({
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">
             {cls.subjectName}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">{cls.course}</p>
+          {cls.department && <p className="text-xs text-slate-400 mt-0.5">{cls.department.name}</p>}
         </div>
 
         {/* Class join code — always visible with copy button */}
         {cls.joinCode ? (
           <div
-            className="flex items-center gap-1.5 self-start bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5"
+            className="flex items-center flex-wrap gap-1.5 self-start bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5"
             onClick={(e) => e.stopPropagation()}
           >
             <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
-            <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{cls.joinCode}</span>
+            <span className="font-mono font-extrabold text-sm text-violet-700 tracking-wide select-all break-all">{cls.joinCode}</span>
             <button
               onClick={(e) => void handleCopy(e)}
               title={copied ? "Copied!" : "Copy class join code"}

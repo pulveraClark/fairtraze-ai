@@ -1,13 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
-import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig } from "@shared/types";
+import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
 import { AppTopBar } from "../components/AppTopBar";
 import { TeamHealthBanner } from "../components/TeamHealthBanner";
+import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { ContributionChart } from "../components/ContributionChart";
+import { TrendChart } from "../components/TrendChart";
 import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
-import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
+import { DocumentGate } from "../components/DocumentGate";
+import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
@@ -37,26 +40,32 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [stepperDone, setStepperDone]     = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
   const [showScoringModal, setShowScoringModal] = useState(false);
-  // Tracks whether config changed after the last analysis (stale report warning)
-  const [configStale, setConfigStale]           = useState(false);
+  // Tracks whether scoring config or membership changed after the last analysis (stale report warning)
+  const [reportStale, setReportStale]           = useState(false);
   // Names of members with OPEN disputes (instructor only — students see nothing extra)
   const [disputedMembers, setDisputedMembers]   = useState<Set<string>>(new Set());
   // Per-flag review outcomes from resolved/dismissed disputes — shown as badges next to flags
   const [resolvedFlagOutcomes, setResolvedFlagOutcomes] = useState<Map<string, Map<string, "RESOLVED" | "DISMISSED">>>(new Map());
   const [activeTab, setActiveTab]               = useState<Tab>("report");
+  const [viewingHistory, setViewingHistory]     = useState(false);
 
   // Summary used for breadcrumb + group switcher
   const [projectMeta, setProjectMeta] = useState<ProjectSummaryItem | null>(null);
   const [siblings, setSiblings]       = useState<ProjectSummaryItem[]>([]);
+
+  // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
+  const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
 
   const fetchStored = useCallback(async () => {
     setFetchError(null);
     setNotFound(false);
     setStored(null);
     setNarrativeText(null);   // clear immediately so no previous group's text bleeds through
-    setConfigStale(false);
+    setReportStale(false);
     try {
-      const res = await fetch(`/api/projects/${projectId}/report`);
+      const res = await fetch(`/api/projects/${projectId}/report`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 404) { setNotFound(true); return; }
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
@@ -66,28 +75,45 @@ export function ProjectDetailPage({ projectId }: Props) {
       const data = (await res.json()) as StoredReportResponse;
       setStored(data);
       setNarrativeText(data.narrative ?? null);
-      setConfigStale(!!data.scoringConfigChangedAt);
+      setReportStale(!!data.scoringConfigChangedAt || !!data.membershipChangedAt);
     } catch {
       setFetchError("Network error — could not reach the server.");
     }
-  }, [projectId]);
+  }, [projectId, token]);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/report/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setReportHistory([]); return; }
+      const data = (await res.json()) as { history: ReportHistoryPoint[] };
+      setReportHistory(data.history);
+    } catch {
+      setReportHistory([]);
+    }
+  }, [projectId, token]);
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res  = await fetch("/api/projects/summary");
+      const res  = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
       const data = (await res.json()) as { summary: ProjectSummaryItem[] };
       const current = data.summary.find((g) => g.projectId === projectId) ?? null;
       setProjectMeta(current);
       if (current) {
+        // assignmentId, not assignmentLabel — assignmentLabel is a display string shared at the
+        // subject/class level ("CODE — Subject Name"), not guaranteed unique per Assignment, so
+        // matching on it could pull in siblings from a different assignment under the same
+        // subject (or miss real siblings on a label mismatch). assignmentId is the actual FK.
         const list = data.summary
-          .filter((g) => g.assignmentLabel === current.assignmentLabel)
+          .filter((g) => g.assignmentId === current.assignmentId)
           .sort((a, b) => a.groupName.localeCompare(b.groupName));
         setSiblings(list);
       }
     } catch {
       // non-critical — breadcrumb degrades to Dashboard only
     }
-  }, [projectId]);
+  }, [projectId, token]);
 
   // Fetch all disputes for this project (OPEN + resolved) for the instructor view.
   // OPEN → shows "Disputed" badge in MemberTable.
@@ -143,14 +169,18 @@ export function ProjectDetailPage({ projectId }: Props) {
     void fetchStored();
     void fetchSummary();
     void fetchDisputes();
-  }, [fetchStored, fetchSummary, fetchDisputes]);
+    void fetchHistory();
+  }, [fetchStored, fetchSummary, fetchDisputes, fetchHistory]);
 
   async function handleAnalyze() {
     setReanalyzing(true);
     setStepperDone(false);
     setReanalyzeError(null);
     try {
-      const res  = await fetch(`/api/projects/${projectId}/analyze`, { method: "POST" });
+      const res  = await fetch(`/api/projects/${projectId}/analyze`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) {
         setReanalyzeError((data as { error?: string }).error ?? `Server error ${res.status}`);
@@ -160,6 +190,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       await new Promise((r) => setTimeout(r, 800));
       await fetchStored();
       await fetchSummary();   // refresh health labels in switcher
+      await fetchHistory();   // refresh trend chart with the new run
       setNotFound(false);
     } catch {
       setReanalyzeError("Network error — could not reach the server.");
@@ -172,11 +203,17 @@ export function ProjectDetailPage({ projectId }: Props) {
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
   // ── Source visibility & tabs ──────────────────────────────────────────────
-  const sourceType = stored?.sourceType ?? null;
-  const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub
+  // projectMeta comes from /api/projects/summary, available even before any report
+  // exists; stored.sourceType (from the report) is kept as a fallback for safety.
+  const sourceType = projectMeta?.sourceType ?? stored?.sourceType ?? null;
+  const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub (scoring settings button)
+  // The GitHub-only chart/table/narrative block below is for GITHUB/legacy projects only —
+  // COMBINED gets its own blended report block (chart+table+narrative) further down.
+  const showGithubOnly = sourceType === "GITHUB" || sourceType === null;
+  const showCombined   = sourceType === "COMBINED";
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["report", "document"]
+      ? ["document", "report"]
       : ["report"]; // GITHUB or legacy
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
@@ -189,6 +226,10 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   const classUrl      = classId      ? `/class/${classId}`                              : "/dashboard";
   const assignmentUrl = classId && assignmentId ? `/class/${classId}/assignment/${assignmentId}` : classUrl;
+
+  // This group's Gini vs. the average across its other analyzed siblings under the same
+  // assignment — omitted entirely (averageGini: null) when there are no such siblings.
+  const benchmark = computeAssignmentBenchmark(siblings, assignmentId, { excludeProjectId: projectId });
 
   const groupName = projectMeta?.groupName ?? stored?.groupName ?? `Project ${projectId}`;
 
@@ -251,8 +292,6 @@ export function ProjectDetailPage({ projectId }: Props) {
             <p className="text-xs text-slate-400">
               {stored ? (
                 <>
-                  {stored.name}
-                  {" · "}
                   <a
                     href={stored.repoUrl}
                     target="_blank"
@@ -325,12 +364,25 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
-            {/* Scoring settings button — shown only when a report exists, not for admin */}
-            {stored && !reanalyzing && !isAdmin && (
+            {/* Scoring settings button — shown only when a report exists, not for admin.
+                Disabled (not hidden) for EDITOR reports: weight override isn't wired for document scoring yet. */}
+            {stored && !reanalyzing && !isAdmin && showGitHub && (
               <button
                 onClick={() => setShowScoringModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-xs font-semibold rounded-lg transition-colors"
                 title="Adjust scoring weights and flag thresholds for this group"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                Scoring settings
+              </button>
+            )}
+            {stored && !reanalyzing && !isAdmin && !showGitHub && (
+              <button
+                disabled
+                title="Weight adjustment isn't available for Docs-only scoring yet"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold rounded-lg cursor-not-allowed"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -355,15 +407,29 @@ export function ProjectDetailPage({ projectId }: Props) {
             )}
 
             {/* Re-analyze / Analyze button — hidden for admin */}
-            {!reanalyzing && !isAdmin && (
+            {!isAdmin && (
               <button
                 onClick={handleAnalyze}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                disabled={reanalyzing}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors ${
+                  reanalyzing
+                    ? "bg-indigo-400 cursor-not-allowed"
+                    : "bg-indigo-600 hover:bg-indigo-700"
+                }`}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {notFound ? "Analyze" : "Re-analyze"}
+                {reanalyzing ? (
+                  <>
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin shrink-0" />
+                    Fetching GitHub data…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {notFound ? "Analyze" : "Re-analyze"}
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -416,20 +482,25 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* ── Report tab ─────────────────────────────────────────────────────── */}
         {effectiveTab === "report" && (
           <>
-        {/* Stale report — scoring config changed after last analysis */}
-        {configStale && stored && !reanalyzing && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-            <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {/* Stale report — membership changed and/or scoring config changed after last analysis */}
+        {reportStale && stored && !reanalyzing && (
+          <div className="bg-amber-100 border-2 border-amber-300 rounded-xl px-5 py-4 flex items-center gap-4 flex-wrap shadow-sm">
+            <svg className="w-6 h-6 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">Report is stale</p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                Scoring settings changed after the last analysis. The numbers shown below reflect the
-                old settings. Click <strong>Re-analyze</strong> to recompute with the new weights and
-                thresholds.
-              </p>
-            </div>
+            <p className="flex-1 min-w-[220px] text-sm font-semibold text-amber-900">
+              Report may be outdated — membership or settings have changed. Click Re-analyze to update.
+            </p>
+            <button
+              onClick={handleAnalyze}
+              disabled={reanalyzing}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Re-analyze
+            </button>
           </div>
         )}
 
@@ -452,6 +523,15 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* Stored report */}
         {stored && !reanalyzing && (
           <>
+            {/* Team health — the visual focal point of the report, shown first (source-agnostic) */}
+            <TeamHealthBanner
+              teamHealth={stored.report.teamHealth}
+              gini={stored.report.gini}
+              projectName={stored.groupName}
+              memberCount={stored.report.memberCount}
+              benchmark={benchmark}
+            />
+
             {/* Report details */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">
@@ -461,10 +541,6 @@ export function ProjectDetailPage({ projectId }: Props) {
                 <div>
                   <span className="text-slate-400 text-xs block mb-0.5">Group</span>
                   <p className="font-medium text-slate-800">{stored.groupName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block mb-0.5">App / Project</span>
-                  <p className="font-medium text-slate-800">{stored.name}</p>
                 </div>
                 <div>
                   <span className="text-slate-400 text-xs block mb-0.5">Repository</span>
@@ -506,33 +582,48 @@ export function ProjectDetailPage({ projectId }: Props) {
                   <ScoredWithPill label="free-rider" display={`${stored.scoringConfig.thresholds.freeRider}×`} />
                   <ScoredWithPill label="overload" display={`${stored.scoringConfig.thresholds.overload}×`} />
                   <ScoredWithPill label="deadline" display={`${Math.round(stored.scoringConfig.thresholds.deadlineDriven * 100)}%`} />
-                  {configStale && (
+                  {reportStale && (
                     <span className="text-[10px] text-amber-600 font-semibold ml-1">(settings changed — re-analyze to update)</span>
                   )}
                 </div>
               )}
             </div>
 
-            {/* GitHub-specific sections */}
-            {showGitHub && (
-              <>
-                {/* Team health */}
-                <TeamHealthBanner
-                  teamHealth={stored.report.teamHealth}
-                  gini={stored.report.gini}
-                  projectName={stored.groupName}
-                  memberCount={stored.report.memberCount}
-                />
+            {/* Imbalance trend — Gini/team health across all past analysis runs.
+                Omitted until there are at least 2 runs, since a single point isn't a trend. */}
+            {reportHistory.length >= 2 && (
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <h2 className="text-sm font-semibold text-slate-700">Imbalance Trend</h2>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Gini coefficient across all analysis runs for this group</p>
+                </div>
+                <div className="px-6 pt-4 pb-2">
+                  <TrendChart history={reportHistory} />
+                </div>
+              </div>
+            )}
 
-                {/* Contribution profiling */}
+            {/* GitHub-specific sections (GITHUB-only / legacy projects) */}
+            {showGithubOnly && (
+              <>
+                {/* Contribution chart — the "quick picture" at a glance */}
                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100">
                     <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — GitHub</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's share at a glance</p>
                   </div>
                   <div className="px-6 pt-4 pb-2">
                     <ContributionChart members={stored.report.members} />
                   </div>
-                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} resolvedFlagOutcomes={resolvedFlagOutcomes} memberRoles={stored.memberRoles} />
+                </div>
+
+                {/* Member table — the "detail view", clearly separated from the chart above */}
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — per-member stats, significance, and flags</p>
+                  </div>
+                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} resolvedFlagOutcomes={resolvedFlagOutcomes} memberRoles={stored.memberRoles} deadlineWindowBasis={stored.report.deadlineWindowBasis} />
                 </div>
 
                 {/* AI narrative — keyed to projectId so it always reflects the current group */}
@@ -554,6 +645,88 @@ export function ProjectDetailPage({ projectId }: Props) {
               </>
             )}
 
+            {/* Combined (GitHub + Docs) sections — one blended report, not two separate ones */}
+            {showCombined && (
+              <>
+                {stored.scoringConfig?.blend && (
+                  <div className="flex items-center gap-1.5 flex-wrap -mt-2">
+                    <span className="text-[11px] text-slate-400 font-medium">Source blend:</span>
+                    <ScoredWithPill label="GitHub" display={`${Math.round(stored.scoringConfig.blend.wGitHub * 100)}%`} />
+                    <ScoredWithPill label="Docs" display={`${Math.round(stored.scoringConfig.blend.wDocs * 100)}%`} />
+                  </div>
+                )}
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — GitHub + Docs</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's blended share at a glance</p>
+                  </div>
+                  <div className="px-6 pt-4 pb-2">
+                    <ContributionChart members={stored.report.members} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — GitHub share, Docs share, blend weights, and flags</p>
+                  </div>
+                  <MemberTable
+                    members={stored.report.members}
+                    variant="combined"
+                    disputedMembers={disputedMembers}
+                    resolvedFlagOutcomes={resolvedFlagOutcomes}
+                    memberRoles={stored.memberRoles}
+                    deadlineWindowBasis={stored.report.deadlineWindowBasis}
+                  />
+                </div>
+
+                <Narrative
+                  key={projectId}
+                  narrative={narrativeText}
+                  projectId={projectId}
+                  onNarrativeGenerated={(text) => setNarrativeText(text)}
+                />
+
+                {stored.unmatchedGitHubLogins.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                    <span className="font-semibold">Unmatched GitHub contributors: </span>
+                    {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
+                    repository but are not in the team member list.
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* FairTraze Docs (EDITOR) sections */}
+            {sourceType === "EDITOR" && (
+              <>
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — FairTraze Docs</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's share at a glance</p>
+                  </div>
+                  <div className="px-6 pt-4 pb-2">
+                    <ContributionChart members={stored.report.members} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — per-member stats and flags</p>
+                  </div>
+                  <MemberTable
+                    members={stored.report.members}
+                    variant="document"
+                    disputedMembers={disputedMembers}
+                    resolvedFlagOutcomes={resolvedFlagOutcomes}
+                    deadlineWindowBasis={stored.report.deadlineWindowBasis}
+                  />
+                </div>
+              </>
+            )}
+
             {/* Timestamp */}
             <p className="text-xs text-slate-400 text-right">
               Report generated {new Date(stored.analyzedAt).toLocaleString()}
@@ -569,10 +742,26 @@ export function ProjectDetailPage({ projectId }: Props) {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — document contributions recorded per author
+                {viewingHistory
+                  ? "Past versions of this group's document, captured at each analysis run"
+                  : "Collaborative editor — shared document for this group. Highlighting shows who wrote each part of the current text — it does not show edit history or deleted content."}
               </span>
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
+                Read-only — instructor view
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingHistory((v) => !v)}
+                className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline"
+              >
+                {viewingHistory ? "Back to live document" : "History"}
+              </button>
             </div>
-            <FairTrazeDocsPreview />
+            {viewingHistory ? (
+              <DocumentHistoryPanel groupId={projectId} />
+            ) : (
+              <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} />
+            )}
           </div>
         )}
       </main>
@@ -605,11 +794,12 @@ export function ProjectDetailPage({ projectId }: Props) {
         <ScoringSettingsModal
           projectId={projectId}
           currentConfig={stored.currentConfig}
+          sourceType={sourceType}
           onClose={() => setShowScoringModal(false)}
           onSaved={(newConfig: ProjectScoringConfig) => {
             setShowScoringModal(false);
             // Optimistically mark config stale and update currentConfig in stored
-            setConfigStale(true);
+            setReportStale(true);
             setStored((prev) => prev ? { ...prev, currentConfig: newConfig, scoringConfigChangedAt: new Date().toISOString() } : prev);
           }}
         />

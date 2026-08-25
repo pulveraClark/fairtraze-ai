@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -48,6 +48,29 @@ enum JoinRequestStatus {
   DECLINED
 }
 
+enum EditEventType {
+  INSERT
+  DELETE
+}
+
+// Rule-based classification of an INSERT edit's significance (Step 4b). Mirrors the GitHub
+// side's commit-impact classes (structural/functional/cosmetic/trivial). Only populated on
+// INSERT rows — DELETE rows and any edit predating this feature stay null (treated as a
+// neutral 1.0 weight so pre-migration data isn't retroactively penalized).
+enum EditType {
+  SUBSTANTIVE
+  REVISION
+  FORMATTING
+  TRIVIAL
+}
+
+// Distinguishes live-typed rows from a future .docx-import feature. IMPORT is schema
+// groundwork only — nothing produces it yet; every row today is LIVE.
+enum EditSource {
+  LIVE
+  IMPORT
+}
+
 model User {
   id               Int               @id @default(autoincrement())
   email            String            @unique
@@ -56,6 +79,13 @@ model User {
   systemRole       SystemRole        @default(STUDENT)
   githubUsername   String?
   active           Boolean           @default(true)
+  // Default true so a migration backfills every pre-existing row (seeded demo
+  // accounts, any real accounts registered before this feature shipped) as
+  // already verified. The register route explicitly overrides this to false
+  // for newly created accounts — see server/src/routes/auth.ts.
+  emailVerified    Boolean           @default(true)
+  failedLoginAttempts Int            @default(0)
+  lockedUntil      DateTime?
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
@@ -65,19 +95,65 @@ model User {
   auditLogs        AuditLog[]
   joinRequests     GroupJoinRequest[]
   roleSuggestions  RoleSuggestion[]
+  editEvents       EditEvent[]
+  editSessions     EditSession[]
+  refreshTokens    RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  tasksAssigned    Task[]            @relation("TaskAssignee")
+  tasksCreated     Task[]            @relation("TaskCreator")
+  comments         Comment[]
+  documentContributions DocumentContribution[]
+  combinedContributions CombinedContribution[]
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerificationToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Department {
+  id            Int            @id @default(autoincrement())
+  name          String
+  code          String
+  createdAt     DateTime       @default(now())
+  classSections ClassSection[]
 }
 
 model ClassSection {
   id           Int               @id @default(autoincrement())
   subjectCode  String
   subjectName  String
-  course       String            @default("BSIT")
+  departmentId Int
   edpCode      String            @default("")
   type         ClassType         @default(LECTURE)
   joinCode     String?           @unique
   instructorId Int
   createdAt    DateTime          @default(now())
   instructor   User              @relation(fields: [instructorId], references: [id])
+  department   Department        @relation(fields: [departmentId], references: [id])
   assignments  Assignment[]
   enrollments  ClassEnrollment[]
 
@@ -101,7 +177,7 @@ model Assignment {
   title          String
   deadline       DateTime?
   maxGroupSize   Int          @default(5)
-  sourceType     SourceType   @default(GITHUB)
+  sourceType     SourceType
   joinCode       String       @unique
   createdAt      DateTime     @default(now())
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
@@ -139,6 +215,9 @@ model Project {
   freeRiderThreshold       Float             @default(0.5)
   overloadThreshold        Float             @default(1.75)
   deadlineDrivenThreshold  Float             @default(0.6)
+  // COMBINED-only blend weights (GitHub share vs. Docs share); harmless defaults for GITHUB/EDITOR-only projects
+  weightGithub             Float             @default(0.5)
+  weightDocs               Float             @default(0.5)
   scoringConfigChangedAt   DateTime?                         // set when config changes after last analyze; cleared by re-analyze
   createdAt                DateTime          @default(now())
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
@@ -149,6 +228,29 @@ model Project {
   disputes                 Dispute[]
   joinRequests             GroupJoinRequest[]
   roleSuggestions          RoleSuggestion[]
+  document                 Document?
+  tasks                    Task[]
+}
+
+// Leader/instructor-assigned sub-tasks for deliverables GitHub and the
+// Collaborative Editor can't see (a poster, a physical prototype, a
+// presentation). Purely informational — self-reported completion is
+// trivially gameable, so it is never read by shared/src/scoring.ts and
+// never fed into contributionShare/flags/Gini. See taskSummary on the
+// report for how it's surfaced instead (context only, like functionalRoles).
+model Task {
+  id               Int       @id @default(autoincrement())
+  projectId        Int
+  title            String
+  description      String?
+  assignedToUserId Int?
+  createdByUserId  Int
+  done             Boolean   @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo       User?     @relation("TaskAssignee", fields: [assignedToUserId], references: [id])
+  createdBy        User      @relation("TaskCreator", fields: [createdByUserId], references: [id])
 }
 
 model Member {
@@ -160,13 +262,69 @@ model Member {
 }
 
 model Report {
-  id          Int      @id @default(autoincrement())
-  projectId   Int
-  generatedAt DateTime @default(now())
-  gini        Float?
-  teamHealth  String?
-  content     String?
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                    Int                    @id @default(autoincrement())
+  projectId             Int
+  generatedAt           DateTime               @default(now())
+  gini                  Float?
+  teamHealth            String?
+  content               String?
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentContributions DocumentContribution[]
+  combinedContributions CombinedContribution[]
+  documentSnapshots     DocumentSnapshot[]
+}
+
+// Normalized per-member persistence of a single analysis run's document-side (Editor) scores,
+// alongside — not replacing — the existing full-blob Report.content JSON. Written as a
+// side-effect right after the owning Report row is created (server/src/routes/analyze.ts); every
+// value here is already computed by shared/src/documentScoring.ts, so this is a pure persistence-
+// shape addition with zero new computation and zero interaction with the live collab pipeline.
+// Field list matches the manuscript's DOCUMENT_CONTRIBUTION data dictionary (Table 61).
+model DocumentContribution {
+  id                        Int      @id @default(autoincrement())
+  documentId                Int
+  userId                    Int
+  reportId                  Int
+  netRetainedChars          Int
+  weightedRetainedChars     Float
+  effectiveRetainedChars    Float
+  totalCharsInserted        Int
+  totalCharsDeleted         Int
+  selfChurnRatio            Float
+  editSessionCount          Int
+  activeEditingDays         Int
+  lastPhaseRatio            Float
+  retainedTextShare         Float
+  sessionShare              Float
+  activeDaysShare           Float
+  documentContributionShare Float
+  computedAt                DateTime @default(now())
+  document                  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user                      User     @relation(fields: [userId], references: [id])
+  report                    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+}
+
+// Normalized per-member persistence of a single COMBINED analysis run's blended scores,
+// alongside the existing Report.content JSON, same rationale as DocumentContribution above.
+// Field list matches the manuscript's COMBINED_CONTRIBUTION data dictionary (Table 62).
+model CombinedContribution {
+  id                        Int      @id @default(autoincrement())
+  reportId                  Int
+  userId                    Int
+  githubContributionShare   Float
+  documentContributionShare Float
+  wGitHub                   Float
+  wDocs                     Float
+  combinedContributionShare Float
+  flags                     String // JSON array of Flag strings
+  mismatchNotes             String? // JSON array, nullable
+  computedAt                DateTime @default(now())
+  report                    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user                      User     @relation(fields: [userId], references: [id])
+
+  @@index([reportId])
 }
 
 model Alert {
@@ -231,4 +389,133 @@ model RoleSuggestion {
   resolvedAt     DateTime?
   user           User              @relation(fields: [userId], references: [id])
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id        Int      @id @default(autoincrement())
+  groupId   Int      @unique
+  // TipTap/ProseMirror document JSON, stringified. Default is a valid empty doc.
+  // Legacy Step-1 field — superseded by yjsState once a collaboration room has run at least once.
+  content   String   @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  // Raw Yjs update state (Y.encodeStateAsUpdate). Source of truth for live collaborative content.
+  yjsState  Bytes?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  editEvents   EditEvent[]
+  editSessions EditSession[]
+  comments     Comment[]
+  documentContributions DocumentContribution[]
+  snapshots    DocumentSnapshot[]
+}
+
+// A point-in-time copy of Document.yjsState, taken whenever an analysis run produces a new
+// Report for an EDITOR/COMBINED assignment (server/src/routes/analyze.ts). The write is a plain
+// copy of the already-current, already-debounce-persisted yjsState column (see persistence.ts) —
+// it never touches the live Y.Doc, never calls getYDoc(), and registers no Yjs update listener,
+// so it has zero interaction with authorshipCapture.ts's collab pipeline. Reconstruction to
+// readable document structure happens later, at read time, by feeding yjsState into the same
+// scratch-Y.Doc pattern documentExport.ts already uses.
+model DocumentSnapshot {
+  id         Int      @id @default(autoincrement())
+  documentId Int
+  reportId   Int?
+  yjsState   Bytes
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  report     Report?  @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+}
+
+// Discussion attached to a point in a Document's content — pure metadata, never document
+// content itself. Anchored via an encoded Yjs RelativePosition (or CollaborationMappablePosition
+// JSON), resolved to a live position client-side; the anchor bytes are opaque to the server and
+// never read or written by authorshipCapture.ts or any Yjs update listener. Comments are reached
+// only through plain REST routes (server/src/routes/comments.ts) — the same "context only" shape
+// as Task/Dispute/RoleSuggestion. Purely informational — never read by shared/src/scoring.ts and
+// never folded into contributionShare/flags/Gini.
+model Comment {
+  id         Int       @id @default(autoincrement())
+  documentId Int
+  authorId   Int
+  text       String
+  anchor     Bytes
+  parentId   Int?      // null = thread root; set = reply (flat, one level deep)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author     User      @relation(fields: [authorId], references: [id])
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
+}
+
+// Raw log of every insertion/deletion made in a Document's live text, attributed to the
+// authenticated user whose Yjs connection produced the update. position/length are offsets
+// into a flattened plain-text view of the document (concatenated text-node content, no
+// separator between blocks — see server/src/collab/authorshipCapture.ts). Shape (position/
+// length) is still the source of truth for scoring/diffing; insertedText/deletedText are an
+// additive disclosure capture only — see the doc comment on those fields below.
+model EditEvent {
+  id         Int           @id @default(autoincrement())
+  documentId Int
+  userId     Int
+  eventType  EditEventType
+  position   Int
+  length     Int
+  timestamp  DateTime      @default(now())
+  // Significance classification (Step 4b) — set at capture time for INSERT events only.
+  editType   EditType?
+  // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
+  source     EditSource    @default(LIVE)
+  // Literal substring captured alongside the existing position/length shape (INSERT: the
+  // inserted text; DELETE: the deleted text) — derived via before/after.slice() in
+  // authorshipCapture.ts's diffText flow, where both full strings are already in memory. Nullable
+  // so pre-migration rows remain valid. Purely additive: never read by scoring/diffing/editType
+  // classification, which all still operate on position/length exactly as before.
+  insertedText String?
+  deletedText  String?
+  document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id])
+
+  @@index([documentId, timestamp])
+}
+
+// A contiguous burst of editing activity by one user in one Document. Begins on a member's
+// first EditEvent after being idle; ends (endedAt set) after 30 minutes with no further
+// EditEvents from that member. Not FK-linked to EditEvent rows — both are independent logs
+// keyed by (documentId, userId, time).
+model EditSession {
+  id             Int       @id @default(autoincrement())
+  documentId     Int
+  userId         Int
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  // Gross characters inserted during this session (not net of deletions).
+  characterCount Int       @default(0)
+  // Gross count of image nodes inserted during this session (net new, not decremented on
+  // delete — same "gross" convention as characterCount). Disclosed on the report; never fed
+  // into any scoring formula. See server/src/collab/authorshipCapture.ts's countImageNodes.
+  imageInsertCount Int     @default(0)
+  // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
+  source         EditSource @default(LIVE)
+  document       Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id])
+
+  @@index([documentId, userId])
+}
+
+// Persistent cache of raw per-commit GitHub diff data (server/src/lib/github.ts's
+// fetchCommitDiffs). A commit SHA is immutable and globally unique within a repo, so once
+// fetched a row is valid forever — no invalidation path exists or is needed. Caches the raw
+// `files` array as returned by GitHub, not any derived/weighted score, so every read still
+// flows through the same classification/weighting code as a fresh fetch.
+model CachedCommitDiff {
+  id        Int      @id @default(autoincrement())
+  repo      String   // "owner/repo", lowercased
+  sha       String
+  files     String   // JSON.stringify of the commit's raw `files` array
+  createdAt DateTime @default(now())
+
+  @@unique([repo, sha])
 }

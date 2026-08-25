@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { NarrativeResponse } from "@shared/types";
+import { useAuth } from "../context/AuthContext";
 
 interface Props {
   narrative: string | null;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props) {
+  const { token } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -17,7 +19,10 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
     setError(null);
     try {
       const url = `/api/projects/${projectId}/narrative${regenerate ? "?regenerate=true" : ""}`;
-      const res = await fetch(url, { method: "POST" });
+      const res = await fetch(url, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = (await res.json()) as Partial<NarrativeResponse> & { error?: string };
       if (!res.ok) {
         setError(data.error ?? "Could not generate explanation.");
@@ -32,7 +37,7 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+    <div className="bg-white border border-slate-200 border-l-4 border-l-purple-400 rounded-xl shadow-sm p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-slate-700">Explainable Fairness Report</h2>
@@ -88,7 +93,7 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
       {/* Narrative */}
       {narrative && !generating && (
         <>
-          <div className="text-slate-600 text-sm leading-relaxed space-y-3 [&_strong]:font-semibold [&_strong]:text-slate-800 [&_p]:mb-0">
+          <div className="text-slate-600 text-sm leading-relaxed [&_strong]:font-semibold [&_strong]:text-slate-800 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-100">
             <ReactMarkdown>{narrative}</ReactMarkdown>
           </div>
           {error && (

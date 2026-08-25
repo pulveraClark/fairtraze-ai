@@ -2,9 +2,9 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import type { ReactNode } from "react";
 import { createElement } from "react";
 
-export type AppRoute = "/" | "/overview" | "/login" | "/register" | "/dashboard" | "/student" | "/admin" | "/admin/audit" | "/settings" | "/alerts" | "/disputes" | "/join";
+export type AppRoute = "/" | "/overview" | "/login" | "/register" | "/forgot-password" | "/reset-password" | "/verify-email" | "/dashboard" | "/student" | "/admin" | "/admin/audit" | "/settings" | "/alerts" | "/disputes" | "/join";
 
-const VALID_STATIC_ROUTES: AppRoute[] = ["/", "/overview", "/login", "/register", "/dashboard", "/student", "/admin", "/admin/audit", "/settings", "/alerts", "/disputes", "/join"];
+const VALID_STATIC_ROUTES: AppRoute[] = ["/", "/overview", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/dashboard", "/student", "/admin", "/admin/audit", "/settings", "/alerts", "/disputes", "/join"];
 
 function resolvePathname(raw: string): string {
   if ((VALID_STATIC_ROUTES as string[]).includes(raw)) return raw;

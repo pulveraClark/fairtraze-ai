@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import type { ProjectSummaryItem } from "@shared/types";
+import type { ProjectSummaryItem, StoredReportResponse } from "@shared/types";
 import { AppTopBar } from "../components/AppTopBar";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
+import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
+import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 
@@ -23,7 +25,7 @@ interface ClassInfo {
   id: number;
   subjectCode: string;
   subjectName: string;
-  course: string;
+  department: { id: number; name: string; code: string } | null;
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
 }
@@ -31,7 +33,6 @@ interface ClassInfo {
 interface LifecycleGroup {
   id: number;
   groupName: string;
-  name: string;
   repoUrl: string;
   memberCount: number;
   lastAnalyzedAt: string | null;
@@ -92,14 +93,22 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
 
+  // ── Bulk selection / bulk analyze / bulk export ────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkFailures, setBulkFailures] = useState<string[]>([]);
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const [exportItems, setExportItems] = useState<PrintableReportBundleItem[] | null>(null);
+
   const fetchSummaryForAssignment = useCallback(
     async (groups: LifecycleGroup[]) => {
       const ids       = new Set(groups.map((g) => g.id));
-      const res       = await fetch("/api/projects/summary");
+      const res       = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
       const data      = (await res.json()) as { summary: ProjectSummaryItem[] };
       setSummary(data.summary.filter((i) => ids.has(i.projectId)));
     },
-    []
+    [token]
   );
 
   const fetchData = useCallback(async () => {
@@ -136,7 +145,10 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   async function handleReanalyze(projectId: number) {
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, { method: "POST" });
+      await fetch(`/api/projects/${projectId}/analyze`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       // Re-fetch just the summary after re-analysis
       if (assignment) {
         const res  = await fetch(`/api/assignments/${assignmentId}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -152,16 +164,114 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     }
   }
 
+  function toggleSelect(projectId: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(ids: number[]) {
+    setSelectedIds((prev) => (prev.size === ids.length ? new Set() : new Set(ids)));
+  }
+
+  // Client-orchestrated sequential loop over the existing single-project
+  // /analyze endpoint — no dedicated batch endpoint. Each call is already
+  // synchronous and self-persisting, so progress is incremental: if the
+  // instructor navigates away partway through, everything analyzed so far
+  // is already saved, and a failed project doesn't stop the rest.
+  async function handleBulkAnalyze() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkRunning(true);
+    setBulkFailures([]);
+    setBulkProgress({ done: 0, total: ids.length });
+    const failures: string[] = [];
+    for (const id of ids) {
+      setAnalyzing((prev) => new Set(prev).add(id));
+      try {
+        const res = await fetch(`/api/projects/${id}/analyze`, {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const groupName = summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`;
+          failures.push(groupName);
+        }
+      } catch {
+        const groupName = summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`;
+        failures.push(groupName);
+      } finally {
+        setAnalyzing((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        setBulkProgress((prev) => (prev ? { done: prev.done + 1, total: prev.total } : prev));
+      }
+    }
+    setBulkFailures(failures);
+    setBulkRunning(false);
+    setBulkProgress(null);
+    await fetchData();
+  }
+
+  // Combined multi-project PDF: fetch each selected project's stored report
+  // (narrative is already included on that response), render them all into
+  // the hidden print-only bundle, then trigger one window.print() covering
+  // every selected report in a single pass.
+  async function handleBulkExport() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkExporting(true);
+    try {
+      const items: PrintableReportBundleItem[] = [];
+      for (const id of ids) {
+        const res = await fetch(`/api/projects/${id}/report`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) continue;
+        const stored = (await res.json()) as StoredReportResponse;
+        const assignmentLabel = summary.find((s) => s.projectId === id)?.assignmentLabel ?? "";
+        items.push({ projectId: id, stored, narrative: stored.narrative ?? null, assignmentLabel });
+      }
+      setExportItems(items);
+    } finally {
+      setBulkExporting(false);
+    }
+  }
+
+  // Print once the bundle has actually rendered into the DOM, then clear it —
+  // window.onafterprint fires once the browser's print dialog closes
+  // (cancelled or confirmed), covering both outcomes.
+  useEffect(() => {
+    if (!exportItems || exportItems.length === 0) return;
+    const cleanup = () => setExportItems(null);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    const id = requestAnimationFrame(() => window.print());
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("afterprint", cleanup);
+    };
+  }, [exportItems]);
+
   const sorted      = filterItems(sortItems(summary, sortMode), filterMode);
   const processed   = search.trim()
     ? sorted.filter((i) => i.groupName.toLowerCase().includes(search.trim().toLowerCase()))
     : sorted;
   const atRiskCount = classAtRiskCount(summary);
   const classUrl    = `/class/${classId}`;
+  // Page-level reference stat — average across every analyzed group in this assignment
+  // (self-inclusive; `summary` is already scoped to this one assignment).
+  const benchmark   = computeAssignmentBenchmark(summary, assignmentId);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
+      <div className="print:hidden">
+        <AppTopBar />
+      </div>
 
       {managingGroupId !== null && (
         <GroupManageModal
@@ -173,7 +283,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       )}
 
       {/* Page header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <button onClick={() => navigate(dashboardUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
@@ -199,6 +309,14 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}
                 {summary.length} group{summary.length !== 1 ? "s" : ""}
                 {assignment?.deadline && <span className="ml-1">· Deadline: {fmtDeadline(assignment.deadline)}</span>}
+                {/* Require at least 2 analyzed groups — a page-level "average" of just one
+                    group's own Gini would misleadingly imply a comparison that doesn't exist. */}
+                {benchmark.averageGini !== null && benchmark.analyzedPeerCount > 1 && (
+                  <span className="ml-1">
+                    · Assignment average Gini: <span className="font-semibold text-slate-500">{benchmark.averageGini.toFixed(3)}</span>{" "}
+                    ({benchmark.analyzedPeerCount} of {summary.length} analyzed)
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -226,7 +344,51 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         </div>
       </div>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* Bulk select / bulk action bar — instructors only */}
+        {!isAdmin && !loading && !loadError && processed.length > 0 && (
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={processed.length > 0 && processed.every((i) => selectedIds.has(i.projectId))}
+                onChange={() => toggleSelectAll(processed.map((i) => i.projectId))}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0"
+              />
+              Select all
+            </label>
+
+            {selectedIds.size > 0 && (
+              <>
+                <span className="text-xs text-slate-400">{selectedIds.size} selected</span>
+                <button
+                  onClick={() => void handleBulkAnalyze()}
+                  disabled={bulkRunning || bulkExporting}
+                  className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {bulkRunning && bulkProgress
+                    ? `Analyzing ${bulkProgress.done}/${bulkProgress.total}…`
+                    : `Analyze Selected (${selectedIds.size})`}
+                </button>
+                <button
+                  onClick={() => void handleBulkExport()}
+                  disabled={bulkRunning || bulkExporting}
+                  className="px-3 py-1 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {bulkExporting ? "Preparing export…" : `Export Selected (${selectedIds.size})`}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {bulkFailures.length > 0 && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+            <button onClick={() => setBulkFailures([])} className="float-right text-amber-400 hover:text-amber-700 ml-2">✕</button>
+            Failed to analyze: {bulkFailures.join(", ")}. You can retry these individually.
+          </div>
+        )}
 
         {/* Search + Sort / filter controls */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -303,13 +465,16 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 onAnalyze={isAdmin ? undefined : handleReanalyze}
                 analyzing={analyzing.has(item.projectId)}
                 onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
+                selectable={!isAdmin}
+                selected={selectedIds.has(item.projectId)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
+      <footer className="print:hidden border-t border-slate-200 bg-white">
         <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
@@ -319,6 +484,10 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
           </button>
         </div>
       </footer>
+
+      {/* Print-only bundle for bulk export — hidden on screen, populated only while a
+          bulk-export print pass is in flight (see handleBulkExport / the afterprint effect). */}
+      {exportItems && <PrintableReportBundle items={exportItems} />}
     </div>
   );
 }

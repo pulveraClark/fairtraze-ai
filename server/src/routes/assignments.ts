@@ -10,9 +10,9 @@ export const assignmentsRouter = Router();
 const createAssignmentSchema = z.object({
   classSectionId: z.number().int().positive(),
   title:          z.string().min(1),
-  deadline:       z.string().datetime({ offset: true }).optional(),
+  deadline:       z.string({ required_error: "Deadline is required" }).datetime({ offset: true, message: "Deadline is required" }),
   maxGroupSize:   z.number().int().positive().default(5),
-  sourceType:     z.enum(["GITHUB", "EDITOR", "COMBINED"]).default("GITHUB"),
+  sourceType:     z.enum(["GITHUB", "EDITOR", "COMBINED"]),
 });
 
 const idParam = z.coerce.number().int().positive();
@@ -21,7 +21,8 @@ const idParam = z.coerce.number().int().positive();
 assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const result = createAssignmentSchema.safeParse(req.body);
   if (!result.success) {
-    res.status(400).json({ error: "Invalid input", details: result.error.flatten() });
+    const message = result.error.issues[0]?.message ?? "Invalid input";
+    res.status(400).json({ error: message, details: result.error.flatten() });
     return;
   }
 
@@ -36,7 +37,7 @@ assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (
     data: {
       classSectionId,
       title,
-      deadline:     deadline ? new Date(deadline) : null,
+      deadline:     new Date(deadline),
       maxGroupSize,
       sourceType,
       joinCode,
@@ -108,7 +109,6 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
     groups: projects.map((p) => ({
       id:              p.id,
       groupName:       p.groupName || `Group ${p.id}`,
-      name:            p.name,
       repoUrl:         p.repoUrl,
       memberCount:     p.members.length,
       lastAnalyzedAt:  p.reports[0]?.generatedAt.toISOString() ?? null,

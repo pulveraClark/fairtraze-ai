@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
   classType?: "LECTURE" | "LABORATORY";
   onDelete?: () => void;
   projectCount?: number;
+  joinCode?: string;
 }
 
 // Deterministic gradient based on label string — stable across renders
@@ -42,8 +44,17 @@ export function classAtRiskCount(items: ProjectSummaryItem[]): number {
   ).length;
 }
 
-export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount }: Props) {
+export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount, joinCode }: Props) {
   const { code, subjectName } = parseClassLabel(assignmentLabel);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyJoinCode(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!joinCode) return;
+    await navigator.clipboard.writeText(joinCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const analyzed   = items.filter((i) => i.isAnalyzed);
   const healthy    = analyzed.filter((i) => i.teamHealth === "Healthy").length;
@@ -87,7 +98,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 title="Delete class section"
-                className="p-1 rounded text-white/50 hover:text-white hover:bg-white/20 transition-colors"
+                className="p-1 rounded text-white/50 hover:text-white hover:bg-red-500/40 transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -131,6 +142,34 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
             <span className="font-medium text-slate-700">{projectCount}</span>{" "}
             project{projectCount !== 1 ? "s" : ""}
           </p>
+        )}
+
+        {/* Join code */}
+        {joinCode && (
+          <div className="flex items-center flex-wrap gap-1.5">
+            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            <span className="text-[11px] text-slate-400 shrink-0">Join code:</span>
+            <span className="font-mono font-extrabold text-sm text-violet-700 tracking-wide select-all break-all">
+              {joinCode}
+            </span>
+            <button
+              onClick={handleCopyJoinCode}
+              title={copied ? "Copied!" : "Copy join code"}
+              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+            >
+              {copied ? (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
+          </div>
         )}
 
         {/* Risk rollup */}

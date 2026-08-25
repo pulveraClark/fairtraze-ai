@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { requireRole } from "../middleware/auth.js";
+import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
+import { defaultFunctionalRoles } from "../lib/roles.js";
 import type { TeamReport } from "@shared/types.js";
 
 export const joinRouter = Router();
@@ -23,7 +24,8 @@ joinRouter.post("/api/join/class", ...requireRole("STUDENT"), async (req, res) =
     where: { joinCode: code },
     select: {
       id: true, subjectCode: true, subjectName: true,
-      course: true, edpCode: true, joinCode: true,
+      department: { select: { id: true, name: true, code: true } },
+      edpCode: true, joinCode: true,
     },
   });
   if (!cls) {
@@ -47,7 +49,7 @@ joinRouter.post("/api/join/class", ...requireRole("STUDENT"), async (req, res) =
     classSectionId: cls.id,
     subjectCode:    cls.subjectCode,
     subjectName:    cls.subjectName,
-    course:         cls.course,
+    department:     cls.department,
     edpCode:        cls.edpCode,
     joinedAt:       enrollment.joinedAt.toISOString(),
   });
@@ -65,6 +67,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
     include: {
       classSection: {
         include: {
+          department: { select: { id: true, name: true, code: true } },
           assignments: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -92,7 +95,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
       id:          cs.id,
       subjectCode: cs.subjectCode,
       subjectName: cs.subjectName,
-      course:      cs.course,
+      department:  cs.department,
       edpCode:     cs.edpCode,
       joinCode:    cs.joinCode,
       joinedAt:    e.joinedAt.toISOString(),
@@ -112,7 +115,6 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
             ? {
                 id:        myProject.id,
                 groupName: myProject.groupName || `Group ${myProject.id}`,
-                name:      myProject.name,
                 repoUrl:   myProject.repoUrl,
                 role:      myMembership.role,
                 report:    myProject.reports[0]
@@ -156,6 +158,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
   const cs = await prisma.classSection.findUnique({
     where: { id: classSectionId },
     include: {
+      department: { select: { id: true, name: true, code: true } },
       assignments: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -234,7 +237,6 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
         ? {
             id:                   myProject.id,
             groupName:            myProject.groupName || `Group ${myProject.id}`,
-            name:                 myProject.name,
             repoUrl:              myProject.repoUrl,
             role:                 myMembership.role,
             pendingRequestCount:  pendingCountByProject.get(myProject.id) ?? 0,
@@ -275,7 +277,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
       id:          cs.id,
       subjectCode: cs.subjectCode,
       subjectName: cs.subjectName,
-      course:      cs.course,
+      department:  cs.department,
       edpCode:     cs.edpCode,
       joinCode:    cs.joinCode,
     },
@@ -339,7 +341,7 @@ joinRouter.get("/api/student/requests", ...requireRole("STUDENT"), async (req, r
 // Student creates a new group for an assignment, becoming the leader.
 // Body: { projectId (the assignment id), groupName, repoUrl }
 // Requires enrollment in the assignment's class.
-joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req, res) => {
+joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVerifiedEmail, async (req, res) => {
   const result = z.object({
     assignmentId: z.number().int().positive(),
     groupName:    z.string().min(1, "Group name is required"),
@@ -407,14 +409,19 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
   const project = await prisma.project.create({
     data: {
       groupName:    trimmedName,
-      name:         trimmedName,
+      name:         trimmedName, // legacy column, kept in sync with groupName — not surfaced anywhere
       repoUrl:      result.data.repoUrl.trim(),
       assignmentId: assignment.id,
     },
   });
 
   await prisma.groupMembership.create({
-    data: { userId, projectId: project.id, role: "LEADER" },
+    data: {
+      userId,
+      projectId:       project.id,
+      role:            "LEADER",
+      functionalRoles: defaultFunctionalRoles(assignment.sourceType),
+    },
   });
 
   await prisma.member.create({
@@ -432,7 +439,7 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), async (req,
 // Student joins an existing group as a member.
 // Body: { projectGroupId } — the project (group) id.
 // Requires enrollment in the group's class.
-joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, res) => {
+joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), requireVerifiedEmail, async (req, res) => {
   const result = z.object({
     projectGroupId: z.number().int().positive(),
   }).safeParse(req.body);
@@ -499,7 +506,12 @@ joinRouter.post("/api/join/join-group", ...requireRole("STUDENT"), async (req, r
 
   await prisma.$transaction([
     prisma.groupMembership.create({
-      data: { userId, projectId: project.id, role: "MEMBER" },
+      data: {
+        userId,
+        projectId:       project.id,
+        role:            "MEMBER",
+        functionalRoles: defaultFunctionalRoles(project.assignment.sourceType),
+      },
     }),
     prisma.project.update({
       where: { id: project.id },
@@ -619,7 +631,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        assignment: { include: { classSection: true } },
+        assignment: { include: { classSection: { include: { department: true } } } },
         reports: { orderBy: { generatedAt: "desc" }, take: 1 },
       },
     }),
@@ -641,7 +653,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   const base = {
     classSection: {
       id: cs.id, subjectCode: cs.subjectCode, subjectName: cs.subjectName,
-      course: cs.course, edpCode: cs.edpCode,
+      department: { id: cs.department.id, name: cs.department.name, code: cs.department.code },
+      edpCode: cs.edpCode,
     },
     assignment: {
       id: asgn.id, title: asgn.title,
@@ -651,7 +664,6 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     project: {
       id: project.id,
       groupName: project.groupName || `Group ${project.id}`,
-      name:      project.name,
       repoUrl:   project.repoUrl,
     },
     membership: {
@@ -697,6 +709,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       teamHealth:  teamReport.teamHealth,
       analyzedAt:  latestReport.generatedAt.toISOString(),
       memberCount: teamReport.memberCount,
+      deadlineWindowBasis: teamReport.deadlineWindowBasis,
       myContribution: myScoredMember ? {
         contributionShare: myScoredMember.contributionShare,
         commits:           myScoredMember.commits,

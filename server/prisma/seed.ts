@@ -29,6 +29,14 @@ async function main() {
   });
   console.log(`User: ${admin.name} <${admin.email}> (${admin.systemRole})`);
 
+  // ===== DEPARTMENTS =====
+  const departmentCCS = await prisma.department.upsert({
+    where:  { id: 1 },
+    update: { name: "College of Computer Studies", code: "CCS" },
+    create: { name: "College of Computer Studies", code: "CCS" },
+  });
+  console.log(`Department: ${departmentCCS.name} (${departmentCCS.code})`);
+
   // ===== CLASS SECTIONS =====
   // Migrate any rows that were seeded before EDP codes were added (LEGACY-X placeholder)
   // and update them to their real EDP codes by matching on subjectCode.
@@ -66,11 +74,11 @@ async function main() {
 
   const sectionAppsdev = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "31400" } },
-    update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["31400"] },
+    update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["31400"] },
     create: {
       subjectCode: "CC-APPSDEV22",
       subjectName: "Applications Development",
-      course:      "BSIT",
+      departmentId: departmentCCS.id,
       edpCode:     "31400",
       type:        "LECTURE",
       joinCode:    CLASS_JOIN_CODES["31400"],
@@ -81,11 +89,11 @@ async function main() {
 
   const sectionImdb = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21856" } },
-    update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["21856"] },
+    update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["21856"] },
     create: {
       subjectCode: "IT-IMDBSYS32",
       subjectName: "Information Management 2 (Database Systems)",
-      course:      "BSIT",
+      departmentId: departmentCCS.id,
       edpCode:     "21856",
       type:        "LECTURE",
       joinCode:    CLASS_JOIN_CODES["21856"],
@@ -96,11 +104,11 @@ async function main() {
 
   const sectionElec = await prisma.classSection.upsert({
     where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21936" } },
-    update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", course: "BSIT", type: "LECTURE", joinCode: CLASS_JOIN_CODES["21936"] },
+    update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["21936"] },
     create: {
       subjectCode: "IT-ELEC 2",
       subjectName: "IT Elective 2",
-      course:      "BSIT",
+      departmentId: departmentCCS.id,
       edpCode:     "21936",
       type:        "LECTURE",
       joinCode:    CLASS_JOIN_CODES["21936"],
@@ -110,13 +118,17 @@ async function main() {
   console.log(`ClassSection: ${sectionElec.subjectCode} edpCode=${sectionElec.edpCode} joinCode=${sectionElec.joinCode} (id=${sectionElec.id})`);
 
   // ===== ASSIGNMENTS (one per class section) =====
+  // Deadline set close to Group 1 (Sysarch)'s real observed commit activity (last real commit:
+  // 2026-04-23T02:53:11Z) rather than the far-future placeholder the other two assignments still
+  // use — this is what makes the deadline-driven flag demonstrable in demo data after anchoring
+  // the "last third" window to Assignment.deadline instead of the observed activity span alone.
   const assignmentAppsdev = await prisma.assignment.upsert({
     where:  { joinCode: "APPS-2026-FP" },
-    update: { title: "Final Application Project", classSectionId: sectionAppsdev.id },
+    update: { title: "Final Application Project", classSectionId: sectionAppsdev.id, deadline: new Date("2026-04-23T06:00:00Z") },
     create: {
       classSectionId: sectionAppsdev.id,
       title:          "Final Application Project",
-      deadline:       new Date("2026-07-15T23:59:00Z"),
+      deadline:       new Date("2026-04-23T06:00:00Z"),
       maxGroupSize:   5,
       sourceType:     "GITHUB",
       joinCode:       "APPS-2026-FP",
@@ -158,7 +170,7 @@ async function main() {
     update: { groupName: "Group 1", name: "FairTraze AI", repoUrl: "https://github.com/lenizochristian8-afk/Sysarch", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
     create: { groupName: "Group 1", name: "FairTraze AI", repoUrl: "https://github.com/lenizochristian8-afk/Sysarch", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
   });
-  console.log(`Project: ${project.name} (id=${project.id}, assignmentId=${project.assignmentId})`);
+  console.log(`Project: ${project.groupName} (id=${project.id}, assignmentId=${project.assignmentId})`);
 
   const members = await Promise.all([
     prisma.member.upsert({
@@ -197,7 +209,7 @@ async function main() {
     update: { groupName: "Group 2", name: "PersonalFinanceTracker", repoUrl: "https://github.com/arcebal/PersonalFinanceTracker.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
     create: { groupName: "Group 2", name: "PersonalFinanceTracker", repoUrl: "https://github.com/arcebal/PersonalFinanceTracker.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
   });
-  console.log(`Project: ${project2.name} (id=${project2.id}, assignmentId=${project2.assignmentId})`);
+  console.log(`Project: ${project2.groupName} (id=${project2.id}, assignmentId=${project2.assignmentId})`);
 
   const members2 = await Promise.all([
     prisma.member.upsert({
@@ -221,7 +233,7 @@ async function main() {
     update: { groupName: "Group 3", name: "uConnect", repoUrl: "https://github.com/eyronc/uConnect.git", assignmentLabel: "IT-ELEC 2 — IT Elective 2", assignmentId: assignmentElec.id },
     create: { groupName: "Group 3", name: "uConnect", repoUrl: "https://github.com/eyronc/uConnect.git", assignmentLabel: "IT-ELEC 2 — IT Elective 2", assignmentId: assignmentElec.id },
   });
-  console.log(`Project: ${project3.name} (id=${project3.id}, assignmentId=${project3.assignmentId})`);
+  console.log(`Project: ${project3.groupName} (id=${project3.id}, assignmentId=${project3.assignmentId})`);
 
   const members3 = await Promise.all([
     prisma.member.upsert({
@@ -250,7 +262,7 @@ async function main() {
     update: { groupName: "PorkChop", name: "Porkhub", repoUrl: "https://github.com/eyronc/porkhub-ui.git", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
     create: { groupName: "PorkChop", name: "Porkhub", repoUrl: "https://github.com/eyronc/porkhub-ui.git", assignmentLabel: "CC-APPSDEV22 — Applications Development", assignmentId: assignmentAppsdev.id },
   });
-  console.log(`Project: ${project4.name} (id=${project4.id}, assignmentId=${project4.assignmentId})`);
+  console.log(`Project: ${project4.groupName} (id=${project4.id}, assignmentId=${project4.assignmentId})`);
 
   const members4 = await Promise.all([
     prisma.member.upsert({
@@ -274,7 +286,7 @@ async function main() {
     update: { groupName: "SmartBebe", name: "SkillSmart", repoUrl: "https://github.com/eyronc/SkillSmart.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
     create: { groupName: "SmartBebe", name: "SkillSmart", repoUrl: "https://github.com/eyronc/SkillSmart.git", assignmentLabel: "IT-IMDBSYS32 — Information Management 2 (Database Systems)", assignmentId: assignmentImdb.id },
   });
-  console.log(`Project: ${project5.name} (id=${project5.id}, assignmentId=${project5.assignmentId})`);
+  console.log(`Project: ${project5.groupName} (id=${project5.id}, assignmentId=${project5.assignmentId})`);
 
   const members5 = await Promise.all([
     prisma.member.upsert({

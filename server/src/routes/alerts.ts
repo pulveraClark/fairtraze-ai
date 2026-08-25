@@ -28,7 +28,7 @@ alertsRouter.get("/api/alerts", ...requireRole("INSTRUCTOR"), async (req, res) =
       ...(paginate ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
       include: {
         project: {
-          select: { id: true, groupName: true, assignmentLabel: true, name: true },
+          select: { id: true, groupName: true, assignmentLabel: true },
         },
       },
     }),

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
+import { VerifyEmailBanner } from "./VerifyEmailBanner";
 
 type SystemRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
 
@@ -23,7 +24,13 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      localStorage.setItem("ft_next", pathname);
+      // Guard against re-recording "/login" itself: this effect re-fires
+      // once `navigate` updates `pathname` to "/login" (a dependency below),
+      // which would otherwise overwrite the originally-intended path with
+      // the redirect target on the second run.
+      if (pathname !== "/login") {
+        localStorage.setItem("ft_next", pathname);
+      }
       navigate("/login");
     } else if (allowedRoles && !allowedRoles.includes(user.systemRole)) {
       navigate(roleHome(user.systemRole));
@@ -41,5 +48,10 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   if (!user) return null;
   if (allowedRoles && !allowedRoles.includes(user.systemRole)) return null;
 
-  return <>{children}</>;
+  return (
+    <>
+      <VerifyEmailBanner />
+      {children}
+    </>
+  );
 }

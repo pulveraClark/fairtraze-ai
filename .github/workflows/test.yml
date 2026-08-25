@@ -1,0 +1,53 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Points Prisma at the dedicated Neon *test* branch — never production.
+      # Configure this as a repo secret (Settings -> Secrets and variables ->
+      # Actions) with the branch's direct (non-pooled) connection string.
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      # Prisma reads DATABASE_URL, not TEST_DATABASE_URL. Locally, vitest.config.ts
+      # and test/globalSetup.ts derive DATABASE_URL from TEST_DATABASE_URL — set it
+      # directly here too so every process in this job (prisma migrate deploy,
+      # vitest, each test file's PrismaClient) gets it without depending on that
+      # derivation chain.
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      # Fixed non-production value — only signs/verifies tokens within this
+      # ephemeral run, so it doesn't need to be a real secret.
+      AUTH_SECRET: test-secret-do-not-use-in-prod
+      # Gemini/GitHub/Resend calls are mocked in server/test/setupEnv.ts, so
+      # CI never needs real third-party API keys. This dummy value only
+      # satisfies lib/gemini.ts's fail-fast startup guard before the mock
+      # takes effect.
+      GEMINI_API_KEY: test-gemini-key
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate -w server
+
+      - name: Test shared
+        run: npm test -w shared
+
+      - name: Test server
+        run: npm test -w server
+
+      - name: Test client
+        run: npm test -w client

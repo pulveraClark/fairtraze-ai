@@ -62,23 +62,56 @@ export function RegisterPage() {
   const { navigate } = useRouter();
   const { register, user, loading: authLoading } = useAuth();
 
-  const [name,       setName]       = useState("");
-  const [email,      setEmail]      = useState("");
-  const [role,       setRole]       = useState<"INSTRUCTOR" | "STUDENT">("INSTRUCTOR");
-  const [password,   setPassword]   = useState("");
-  const [error,      setError]      = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [name,          setName]          = useState("");
+  const [email,         setEmail]         = useState("");
+  const [role,          setRole]          = useState<"INSTRUCTOR" | "STUDENT">("INSTRUCTOR");
+  const [password,      setPassword]      = useState("");
+  const [error,         setError]         = useState<string | null>(null);
+  const [submitting,    setSubmitting]    = useState(false);
+  const [justRegistered, setJustRegistered] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    // Skip the auto-redirect immediately after registering — the success
+    // panel below handles navigation itself once the user is ready.
+    if (!authLoading && user && !justRegistered) {
       navigate(user.systemRole === "STUDENT" ? "/student" : user.systemRole === "ADMIN" ? "/admin" : "/dashboard");
     }
-  }, [authLoading, user, navigate]);
+  }, [authLoading, user, justRegistered, navigate]);
 
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <span className="h-4 w-4 rounded-full border-2 border-indigo-400/40 border-t-indigo-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (justRegistered) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-sm text-center">
+          <div className="mb-8">
+            <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
+            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Account created</h1>
+          </div>
+          {verificationRequired && (
+            <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
+              <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <p className="text-xs text-indigo-700 leading-relaxed">
+                Check <span className="font-semibold">{email}</span> for a verification link. You can explore FairTraze AI right away — a few actions like creating or joining a group are unavailable until you verify.
+              </p>
+            </div>
+          )}
+          <button
+            onClick={continueToDashboard}
+            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
+          >
+            Continue to dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -94,18 +127,23 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const newUser = await register(email, password, name, role);
-      const next = localStorage.getItem("ft_next");
-      localStorage.removeItem("ft_next");
-      if (next) {
-        navigate(next);
-      } else {
-        navigate(newUser.systemRole === "STUDENT" ? "/student" : newUser.systemRole === "ADMIN" ? "/admin" : "/dashboard");
-      }
+      const result = await register(email, password, name, role);
+      setVerificationRequired(result.emailVerificationRequired);
+      setJustRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function continueToDashboard() {
+    const next = localStorage.getItem("ft_next");
+    localStorage.removeItem("ft_next");
+    if (next) {
+      navigate(next);
+    } else if (user) {
+      navigate(user.systemRole === "STUDENT" ? "/student" : user.systemRole === "ADMIN" ? "/admin" : "/dashboard");
     }
   }
 

@@ -1,6 +1,6 @@
 import type { AlertType } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import type { TeamReport } from "@shared/types.js";
+import type { AnyScoredMember, TeamReport } from "@shared/types.js";
 
 /**
  * Called after every analyze run.  Reads the already-computed TeamReport and
@@ -17,7 +17,7 @@ import type { TeamReport } from "@shared/types.js";
  */
 export async function generateAlertsForProject(
   projectId: number,
-  report: TeamReport,
+  report: TeamReport<AnyScoredMember>,
   project: {
     groupName: string;
     assignmentLabel: string;

@@ -16,6 +16,7 @@ const USER_SELECT = {
   systemRole:     true,
   githubUsername: true,
   active:         true,
+  lockedUntil:    true,
   createdAt:      true,
 } as const;
 
@@ -137,6 +138,45 @@ adminRouter.patch("/api/admin/users/:id/status", ...requireRole("ADMIN"), async 
       actorId:    req.user!.sub,
       actorName,
       action:     bodyResult.data.active ? "USER_ACTIVATED" : "USER_DEACTIVATED",
+      targetType: "USER",
+      targetId:   String(targetId),
+      details:    target.name,
+    },
+  });
+
+  res.json(updated);
+});
+
+// ── POST /api/admin/users/:id/unlock ──────────────────────────────────────────
+// Clear a login lockout (failedLoginAttempts/lockedUntil) before its 15-minute
+// auto-expiry — see MAX_FAILED_LOGIN_ATTEMPTS/LOCKOUT_DURATION_MS in auth.ts.
+
+adminRouter.post("/api/admin/users/:id/unlock", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  const targetId = idResult.data;
+
+  const target = await prisma.user.findUnique({
+    where:  { id: targetId },
+    select: { id: true, name: true },
+  });
+  if (!target) { res.status(404).json({ error: "User not found" }); return; }
+
+  const [updated, actorName] = await Promise.all([
+    prisma.user.update({
+      where: { id: targetId },
+      data:  { failedLoginAttempts: 0, lockedUntil: null },
+      select: USER_SELECT,
+    }),
+    getActorName(req.user!.sub),
+  ]);
+
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     "USER_UNLOCKED",
       targetType: "USER",
       targetId:   String(targetId),
       details:    target.name,
@@ -322,6 +362,7 @@ adminRouter.get("/api/admin/classes", ...requireRole("ADMIN"), async (_req, res)
     orderBy: [{ instructorId: "asc" }, { createdAt: "asc" }],
     include: {
       instructor:  { select: { id: true, name: true, email: true } },
+      department:  { select: { id: true, name: true, code: true } },
       assignments: {
         orderBy: { createdAt: "asc" },
         select:  { id: true, title: true, _count: { select: { projects: true } } },
@@ -330,6 +371,53 @@ adminRouter.get("/api/admin/classes", ...requireRole("ADMIN"), async (_req, res)
   });
 
   res.json({ classes });
+});
+
+// ── GET /api/admin/departments ────────────────────────────────────────────────
+// List all departments (institutional taxonomy — pre-created by admins).
+
+adminRouter.get("/api/admin/departments", ...requireRole("ADMIN"), async (_req, res) => {
+  const departments = await prisma.department.findMany({
+    orderBy: { name: "asc" },
+    include: { _count: { select: { classSections: true } } },
+  });
+
+  res.json({ departments });
+});
+
+// ── POST /api/admin/departments ───────────────────────────────────────────────
+// Create a department. Instructors select from this list when creating a class
+// section — they cannot create departments themselves (see CLAUDE.md rationale).
+
+adminRouter.post("/api/admin/departments", ...requireRole("ADMIN"), async (req, res) => {
+  const bodyResult = z.object({
+    name: z.string().trim().min(1),
+    code: z.string().trim().min(1),
+  }).safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "Invalid input", details: bodyResult.error.flatten() });
+    return;
+  }
+
+  const { name, code } = bodyResult.data;
+
+  const [department, actorName] = await Promise.all([
+    prisma.department.create({ data: { name, code } }),
+    getActorName(req.user!.sub),
+  ]);
+
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     "DEPARTMENT_CREATED",
+      targetType: "DEPARTMENT",
+      targetId:   String(department.id),
+      details:    `${department.name} (${department.code})`,
+    },
+  });
+
+  res.status(201).json(department);
 });
 
 // ── GET /api/admin/audit ──────────────────────────────────────────────────────

@@ -125,6 +125,16 @@ body {
   animation: float 6s ease-in-out infinite;
 }
 
+/* ── Toast / success feedback ──────────────────────────────────────────── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.15s ease-out both;
+}
+
 /* ── Print / Export styles ──────────────────────────────────────────────── */
 @media print {
   @page {
@@ -138,6 +148,15 @@ body {
     print-color-adjust: exact !important;
   }
 
+  /* DocumentEditor's PDF export: its printable content is portaled to a direct sibling of #root
+     (see DocumentEditor.tsx's handleExportPdf), so hiding the app shell here — rather than
+     relying on every page that embeds DocumentEditor to mark its own chrome print:hidden, the
+     way ProjectDetailPage.tsx/AssignmentPage.tsx do for PrintableReport — keeps this export
+     self-contained to DocumentEditor.tsx alone. */
+  body.ft-printing-document #root {
+    display: none !important;
+  }
+
   /* Prevent orphaned table rows */
   tr {
     break-inside: avoid;
@@ -149,4 +168,100 @@ body {
     break-after: avoid;
     page-break-after: avoid;
   }
+}
+
+/* ── TipTap document editor content ────────────────────────────────────────── */
+.ft-doc-content {
+  outline: none;
+}
+.ft-doc-content h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--brand-text-primary);
+  margin: 1.25rem 0 0.75rem;
+}
+.ft-doc-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brand-text-primary);
+  margin: 1rem 0 0.5rem;
+}
+.ft-doc-content p {
+  margin: 0 0 0.85rem;
+}
+.ft-doc-content ul, .ft-doc-content ol {
+  margin: 0 0 0.85rem;
+  padding-left: 1.5rem;
+}
+.ft-doc-content ul { list-style: disc; }
+.ft-doc-content ol { list-style: decimal; }
+.ft-doc-content li { margin-bottom: 0.25rem; }
+.ft-doc-content li > p { margin: 0; }
+.ft-doc-content table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0 0 0.85rem;
+}
+.ft-doc-content th, .ft-doc-content td {
+  border: 1px solid var(--brand-border, #e2e8f0);
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+  position: relative;
+}
+.ft-doc-content th {
+  background-color: rgba(99, 102, 241, 0.06);
+  font-weight: 700;
+  text-align: left;
+}
+.ft-doc-content td > p, .ft-doc-content th > p { margin: 0; }
+.ft-doc-content .selectedCell {
+  background-color: rgba(99, 102, 241, 0.12);
+}
+
+/* ── Comment highlight (ProseMirror decoration — see client/src/lib/commentHighlight.ts,
+   never part of document content) ─────────────────────────────────────────────────────── */
+.ft-comment-highlight {
+  background-color: rgba(251, 191, 36, 0.28);
+  border-bottom: 2px solid rgba(217, 119, 6, 0.5);
+  cursor: pointer;
+}
+.ft-comment-highlight-resolved {
+  background-color: rgba(148, 163, 184, 0.18);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.4);
+}
+
+/* ── Collaboration cursor (Yjs) ────────────────────────────────────────────
+   `.collaboration-cursor__caret` is an inline, zero-width marker inserted as a
+   ProseMirror widget decoration (never part of the document schema/content).
+   `.collaboration-cursor__label` is its floating name badge. It MUST stay
+   absolutely positioned and out of flow — without `position: absolute` a
+   bare <div> renders as a block, breaking onto its own full-width line and
+   shifting the surrounding text. */
+.collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px 3px 3px 0;
+  font-family: "Outfit", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  line-height: normal;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  z-index: 20;
 }

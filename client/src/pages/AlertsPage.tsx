@@ -148,7 +148,7 @@ export function AlertsPage() {
 
         {/* Empty state */}
         {!loading && !error && alerts.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-24 text-center">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col items-center gap-3 py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
               <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -163,14 +163,15 @@ export function AlertsPage() {
         {!loading && !error && alerts.length > 0 && (
           <>
             <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 bg-white shadow-sm">
-              {alerts.map((alert) => {
+              {alerts.map((alert, i) => {
                 const typeMeta = ALERT_TYPE_LIGHT[alert.type];
+                const stripe   = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                 return (
                   <button
                     key={alert.id}
                     onClick={() => handleClick(alert)}
-                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-50 ${
-                      !alert.read ? "bg-indigo-50/60" : "bg-white"
+                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-100 ${
+                      !alert.read ? "bg-indigo-50/60" : stripe
                     }`}
                   >
                     <div className="flex items-start gap-3">

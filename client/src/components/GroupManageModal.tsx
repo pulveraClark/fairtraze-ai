@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
+import { useToast } from "./Toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
@@ -25,6 +26,20 @@ interface RoleSuggestion {
   createdAt: string;
 }
 
+// Leader/instructor-assigned checklist item. Purely informational — completion
+// never affects contribution scores (see server/src/routes/groups.ts Task routes).
+interface GroupTask {
+  id: number;
+  projectId: number;
+  title: string;
+  description: string | null;
+  assignedToUserId: number | null;
+  createdByUserId: number;
+  done: boolean;
+  completedAt: string | null;
+  createdAt: string;
+}
+
 const ROLE_META: Record<FunctionalRole, { label: string; activeClass: string; inactiveClass: string }> = {
   DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
   DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
@@ -43,7 +58,6 @@ interface GroupMember {
 interface GroupDetail {
   id: number;
   groupName: string;
-  name: string;
   repoUrl: string;
   sourceType: "GITHUB" | "EDITOR" | "COMBINED" | null;
   maxGroupSize: number | null;
@@ -84,6 +98,7 @@ function Initials({ name, leader }: { name: string; leader: boolean }) {
 export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }: Props) {
   const { user, token } = useAuth();
   const { navigate }    = useRouter();
+  const { showSuccessToast } = useToast();
 
   const [group, setGroup]       = useState<GroupDetail | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -100,6 +115,18 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const [roleSuggestions, setRoleSuggestions]       = useState<RoleSuggestion[]>([]);
   const [roleSuggestionsLoading, setRoleSuggestionsLoading] = useState(false);
   const [roleSuggestionsErr, setRoleSuggestionsErr] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft]     = useState("");
+  const [nameBusy, setNameBusy]       = useState(false);
+  const [nameErr, setNameErr]         = useState("");
+  const [tasks, setTasks]             = useState<GroupTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksErr, setTasksErr]       = useState("");
+  const [taskBusy, setTaskBusy]       = useState<number | null>(null);
+  const [newTaskTitle, setNewTaskTitle]         = useState("");
+  const [newTaskAssignee, setNewTaskAssignee]   = useState<number | "">("");
+  const [createTaskBusy, setCreateTaskBusy]     = useState(false);
+  const [createTaskErr, setCreateTaskErr]       = useState("");
 
   const currentUserId = user?.id ?? 0;
 
@@ -137,6 +164,23 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     }
   }
 
+  async function fetchTasks() {
+    setTasksLoading(true);
+    setTasksErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { tasks?: GroupTask[]; error?: string };
+      if (!res.ok) { setTasksErr(data.error ?? "Could not load tasks."); return; }
+      setTasks(data.tasks ?? []);
+    } catch {
+      setTasksErr("Network error — could not load tasks.");
+    } finally {
+      setTasksLoading(false);
+    }
+  }
+
   async function fetchGroup() {
     setLoading(true);
     setFetchErr("");
@@ -155,6 +199,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         void fetchRequests();
         void fetchRoleSuggestions();
       }
+      // Every member can view the checklist and toggle their own assigned tasks.
+      void fetchTasks();
     } catch {
       setFetchErr("Network error — could not load group.");
     } finally {
@@ -288,6 +334,39 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     }
   }
 
+  // ── Rename group ────────────────────────────────────────────────────────
+  function startEditName() {
+    if (!group) return;
+    setNameDraft(group.groupName);
+    setNameErr("");
+    setEditingName(true);
+  }
+
+  async function handleSaveName() {
+    if (!group) return;
+    const trimmed = nameDraft.trim();
+    if (!trimmed) { setNameErr("Group name is required."); return; }
+    setNameBusy(true);
+    setNameErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ groupName: trimmed }),
+      });
+      const data = await res.json() as { groupName?: string; error?: string };
+      if (!res.ok) { setNameErr(data.error ?? "Could not update name."); return; }
+      const confirmed = data.groupName ?? trimmed;
+      setGroup((g) => g ? { ...g, groupName: confirmed } : g);
+      setEditingName(false);
+      showSuccessToast("Group name updated.");
+    } catch {
+      setNameErr("Network error — could not update name.");
+    } finally {
+      setNameBusy(false);
+    }
+  }
+
   // ── Set functional roles (optimistic update, revert on error) ─────────────
   async function handleSetRoles(targetUserId: number, roles: FunctionalRole[]) {
     if (!group) return;
@@ -317,11 +396,75 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       setGroup((g) => g ? { ...g, members: g.members.map((m) =>
         m.userId === targetUserId ? { ...m, functionalRoles: confirmed } : m
       ) } : g);
+      showSuccessToast("Role updated.");
     } catch {
       setGroup({ ...group });
       setRoleErr("Network error — could not update role.");
     } finally {
       setRoleBusy(null);
+    }
+  }
+
+  // ── Tasks (leader/instructor create+manage; assignee toggles their own) ───
+  async function handleCreateTask() {
+    const title = newTaskTitle.trim();
+    if (!title) { setCreateTaskErr("Task title is required."); return; }
+    setCreateTaskBusy(true);
+    setCreateTaskErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ title, assignedToUserId: newTaskAssignee === "" ? undefined : newTaskAssignee }),
+      });
+      const data = await res.json() as GroupTask & { error?: string };
+      if (!res.ok) { setCreateTaskErr(data.error ?? "Could not create task."); return; }
+      setTasks((prev) => [...prev, data]);
+      setNewTaskTitle("");
+      setNewTaskAssignee("");
+    } catch {
+      setCreateTaskErr("Network error — could not create task.");
+    } finally {
+      setCreateTaskBusy(false);
+    }
+  }
+
+  async function handleToggleTask(task: GroupTask) {
+    setTaskBusy(task.id);
+    const prevTasks = tasks;
+    // Optimistic update
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, done: !t.done } : t));
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks/${task.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ done: !task.done }),
+      });
+      const data = await res.json() as GroupTask & { error?: string };
+      if (!res.ok) { setTasks(prevTasks); setTasksErr(data.error ?? "Could not update task."); return; }
+      setTasks((prev) => prev.map((t) => t.id === task.id ? data : t));
+    } catch {
+      setTasks(prevTasks);
+      setTasksErr("Network error — could not update task.");
+    } finally {
+      setTaskBusy(null);
+    }
+  }
+
+  async function handleDeleteTask(taskId: number) {
+    setTaskBusy(taskId);
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/tasks/${taskId}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setTasksErr(data.error ?? "Could not delete task."); return; }
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch {
+      setTasksErr("Network error — could not delete task.");
+    } finally {
+      setTaskBusy(null);
     }
   }
 
@@ -340,14 +483,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
     return (
       <>
-        <p className="text-[11px] text-slate-400 mb-4">
-          {group.members.length}
-          {group.maxGroupSize ? ` / ${group.maxGroupSize}` : ""} members
-          {group.repoUrl && (
-            <> · <span className="font-mono">{group.repoUrl.replace("https://github.com/", "")}</span></>
-          )}
-        </p>
-
         {actionErr && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs text-red-700">
             {actionErr}
@@ -359,11 +494,332 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
         )}
 
-        {/* Pending join requests — only visible to leader / instructor */}
+        {/* ── Group Name ──────────────────────────────────────────────────────── */}
         {canManage && (
           <div className="mb-5">
+            <h3 className="text-xs font-semibold text-slate-700 mb-2">Group Name</h3>
+            {nameErr && (
+              <p className="text-xs text-red-600 mb-2">{nameErr}</p>
+            )}
+            {editingName ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => { setNameDraft(e.target.value); setNameErr(""); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSaveName();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  disabled={nameBusy}
+                  className="flex-1 min-w-0 rounded-lg bg-slate-50 border border-slate-200 px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+                />
+                <button
+                  onClick={() => void handleSaveName()}
+                  disabled={nameBusy}
+                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1.5 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                >
+                  {nameBusy ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={() => setEditingName(false)}
+                  disabled={nameBusy}
+                  className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-slate-700">{group.groupName}</span>
+                <button
+                  onClick={startEditName}
+                  title="Rename group"
+                  aria-label="Rename group"
+                  className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Members ─────────────────────────────────────────────────────── */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
+            <h3 className="text-xs font-semibold text-slate-700">Members</h3>
+            <p className="text-[11px] text-slate-400">
+              {group.members.length}
+              {group.maxGroupSize ? ` / ${group.maxGroupSize}` : ""} members
+              {group.repoUrl && (
+                <> · <span className="font-mono">{group.repoUrl.replace("https://github.com/", "")}</span></>
+              )}
+            </p>
+          </div>
+
+          {/* Role-context note */}
+          <p className="text-[10px] text-slate-400 mb-3">
+            Roles are context only — they never affect contribution scores.
+            {!canManage && " Members can suggest a role from their project view."}
+          </p>
+
+          <ul className="space-y-2">
+            {group.members.map((m) => {
+              const isSelf       = m.userId === currentUserId;
+              const isThisLeader = m.role === "LEADER";
+              const canEditRoles = canManage; // only leader / instructor assign roles directly
+
+              return (
+                <li
+                  key={m.userId}
+                  className="flex items-start gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50"
+                >
+                  <Initials name={m.name} leader={isThisLeader} />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-800 truncate">
+                        {m.name}{isSelf && <span className="text-slate-400 font-normal"> (you)</span>}
+                      </span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                        isThisLeader
+                          ? "text-indigo-700 bg-indigo-50 border-indigo-200"
+                          : "text-slate-500 bg-white border-slate-200"
+                      }`}>
+                        {isThisLeader ? "Leader" : "Member"}
+                      </span>
+                    </div>
+                    {m.githubUsername && (
+                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
+                    )}
+
+                    {/* Functional role chips — filtered by sourceType (Fix 1); at least one always required (Fix 3) */}
+                    <div className="mt-1.5 flex items-center flex-wrap gap-1">
+                      {availableRoles.map((role) => {
+                        const active   = m.functionalRoles.includes(role);
+                        const meta     = ROLE_META[role];
+                        // Only one role option exists for this source type — it's mandatory, not a toggle.
+                        const isOnlyOption = availableRoles.length === 1;
+                        if (!canEditRoles) {
+                          if (!active) return null;
+                          return (
+                            <span key={role} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
+                              {meta.label}
+                            </span>
+                          );
+                        }
+                        // Mandatory single-source role that's already active: permanently on, non-removable.
+                        if (isOnlyOption && active) {
+                          return (
+                            <span
+                              key={role}
+                              title="Required for this project's source type — cannot be removed"
+                              className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}
+                            >
+                              ✓ {meta.label}
+                            </span>
+                          );
+                        }
+                        const isLastRemaining = !isOnlyOption && active && m.functionalRoles.length <= 1;
+                        const next = active
+                          ? m.functionalRoles.filter((r) => r !== role)
+                          : ([...m.functionalRoles, role] as FunctionalRole[]);
+                        return (
+                          <button
+                            key={role}
+                            disabled={roleBusy === m.userId}
+                            onClick={() => {
+                              if (isLastRemaining) {
+                                setRoleErr("At least one role must be assigned.");
+                                return;
+                              }
+                              void handleSetRoles(m.userId, next);
+                            }}
+                            title={isLastRemaining ? "At least one role must be assigned." : undefined}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
+                              active ? meta.activeClass : meta.inactiveClass
+                            }`}
+                          >
+                            {active ? `✓ ${meta.label}` : `+ ${meta.label}`}
+                          </button>
+                        );
+                      })}
+                      {roleBusy === m.userId && (
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
+                          saving…
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                    {isSelf && isThisLeader && (
+                      <span className="text-[10px] text-slate-400">Reassign to leave</span>
+                    )}
+                    {isSelf && !isThisLeader && (
+                      <button
+                        onClick={() => setStep({ type: "confirm-remove", userId: m.userId, name: m.name })}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                      >
+                        Leave
+                      </button>
+                    )}
+                    {!isSelf && canManage && !isThisLeader && (
+                      <button
+                        onClick={() => setStep({ type: "confirm-remove", userId: m.userId, name: m.name })}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Change leader — only shown if canManage and there are other members to promote */}
+          {canManage && nonLeaderMembers.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => { setStep("reassign-select"); setReassignTarget(null); setActionErr(""); }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Change leader
+              </button>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Leadership is administrative only — it grants no contribution credit.
+              </p>
+            </div>
+          )}
+
+          {canManage && nonLeaderMembers.length === 0 && amLeader && (
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <p className="text-[11px] text-slate-400 mb-2">
+                You are the only member of this group.
+              </p>
+              <button
+                onClick={() => { setStep({ type: "confirm-disband" }); setActionErr(""); }}
+                className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+              >
+                Leave and delete group
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Tasks — visible to everyone; only leader/instructor manage, each
+               member toggles their own assigned task. Purely informational:
+               completion never affects contribution scores. ─────────────── */}
+        <div className="mb-5 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-2 mb-2.5">
+            <h3 className="text-xs font-semibold text-slate-700">Tasks</h3>
+            {tasks.filter((t) => !t.done).length > 0 && (
+              <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-violet-600 text-white text-[9px] font-bold px-1 leading-none">
+                {tasks.filter((t) => !t.done).length}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400 mb-2.5">
+            Context only — task completion never affects contribution scores.
+          </p>
+
+          {tasksErr && (
+            <p className="text-[11px] text-red-500 mb-2">{tasksErr}</p>
+          )}
+
+          {tasksLoading ? (
+            <p className="text-[11px] text-slate-400">Loading tasks…</p>
+          ) : tasks.length === 0 ? (
+            <p className="text-[11px] text-slate-400 italic mb-2">No tasks yet.</p>
+          ) : (
+            <ul className="space-y-2 mb-3">
+              {tasks.map((t) => {
+                const assignee  = group.members.find((m) => m.userId === t.assignedToUserId);
+                const canToggle = canManage || t.assignedToUserId === currentUserId;
+                return (
+                  <li
+                    key={t.id}
+                    className={`flex items-start gap-3 px-3 py-2.5 rounded-xl border ${
+                      t.done ? "border-violet-100 bg-violet-50" : "border-slate-100 bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={t.done}
+                      disabled={!canToggle || taskBusy === t.id}
+                      onChange={() => void handleToggleTask(t)}
+                      className="mt-0.5 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold truncate ${t.done ? "text-slate-500 line-through" : "text-slate-800"}`}>
+                        {t.title}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {assignee ? assignee.name : "Unassigned"}
+                      </p>
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => void handleDeleteTask(t.id)}
+                        disabled={taskBusy === t.id}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="New task title…"
+                className="flex-1 min-w-0 text-xs rounded-lg border border-slate-200 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              />
+              <select
+                value={newTaskAssignee}
+                onChange={(e) => setNewTaskAssignee(e.target.value ? Number(e.target.value) : "")}
+                className="text-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
+              >
+                <option value="">Unassigned</option>
+                {group.members.map((m) => (
+                  <option key={m.userId} value={m.userId}>{m.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handleCreateTask()}
+                disabled={createTaskBusy}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50 shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          )}
+          {createTaskErr && (
+            <p className="text-[11px] text-red-500 mt-1.5">{createTaskErr}</p>
+          )}
+        </div>
+
+        {/* ── Pending Join Requests — only visible to leader / instructor ──── */}
+        {canManage && (
+          <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
-              <h3 className="text-xs font-semibold text-slate-700">Join Requests</h3>
+              <h3 className="text-xs font-semibold text-slate-700">Pending Join Requests</h3>
               {requests.length > 0 && (
                 <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold px-1 leading-none">
                   {requests.length}
@@ -414,11 +870,11 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
         )}
 
-        {/* Role Suggestions — visible to leader / instructor */}
+        {/* ── Pending Role Suggestions — visible to leader / instructor ────── */}
         {canManage && (
-          <div className="mb-5">
+          <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
-              <h3 className="text-xs font-semibold text-slate-700">Role Suggestions</h3>
+              <h3 className="text-xs font-semibold text-slate-700">Pending Role Suggestions</h3>
               {roleSuggestions.length > 0 && (
                 <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-teal-600 text-white text-[9px] font-bold px-1 leading-none">
                   {roleSuggestions.length}
@@ -470,138 +926,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
         )}
 
-        {/* Role-context note */}
-        <p className="text-[10px] text-slate-400 mb-3">
-          Roles are context only — they never affect contribution scores.
-          {!canManage && " Members can suggest a role from their project view."}
-        </p>
-
-        <ul className="space-y-2">
-          {group.members.map((m) => {
-            const isSelf       = m.userId === currentUserId;
-            const isThisLeader = m.role === "LEADER";
-            const canEditRoles = canManage; // only leader / instructor assign roles directly
-
-            return (
-              <li
-                key={m.userId}
-                className="flex items-start gap-3 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50"
-              >
-                <Initials name={m.name} leader={isThisLeader} />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-semibold text-slate-800 truncate">
-                      {m.name}{isSelf && <span className="text-slate-400 font-normal"> (you)</span>}
-                    </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                      isThisLeader
-                        ? "text-indigo-700 bg-indigo-50 border-indigo-200"
-                        : "text-slate-500 bg-white border-slate-200"
-                    }`}>
-                      {isThisLeader ? "Leader" : "Member"}
-                    </span>
-                  </div>
-                  {m.githubUsername && (
-                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
-                  )}
-
-                  {/* Functional role chips — filtered by sourceType (Fix 1) */}
-                  <div className="mt-1.5 flex items-center flex-wrap gap-1">
-                    {availableRoles.map((role) => {
-                      const active = m.functionalRoles.includes(role);
-                      const meta   = ROLE_META[role];
-                      if (!canEditRoles) {
-                        if (!active) return null;
-                        return (
-                          <span key={role} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
-                            {meta.label}
-                          </span>
-                        );
-                      }
-                      const next = active
-                        ? m.functionalRoles.filter((r) => r !== role)
-                        : ([...m.functionalRoles, role] as FunctionalRole[]);
-                      return (
-                        <button
-                          key={role}
-                          disabled={roleBusy === m.userId}
-                          onClick={() => void handleSetRoles(m.userId, next)}
-                          className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
-                            active ? meta.activeClass : meta.inactiveClass
-                          }`}
-                        >
-                          {active ? `✓ ${meta.label}` : `+ ${meta.label}`}
-                        </button>
-                      );
-                    })}
-                    {roleBusy === m.userId && (
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
-                        saving…
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                  {isSelf && isThisLeader && (
-                    <span className="text-[10px] text-slate-400">Reassign to leave</span>
-                  )}
-                  {isSelf && !isThisLeader && (
-                    <button
-                      onClick={() => setStep({ type: "confirm-remove", userId: m.userId, name: m.name })}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
-                    >
-                      Leave
-                    </button>
-                  )}
-                  {!isSelf && canManage && !isThisLeader && (
-                    <button
-                      onClick={() => setStep({ type: "confirm-remove", userId: m.userId, name: m.name })}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-
-        {/* Change leader — only shown if canManage and there are other members to promote */}
-        {canManage && nonLeaderMembers.length > 0 && (
-          <div className="mt-5 pt-4 border-t border-slate-100">
-            <button
-              onClick={() => { setStep("reassign-select"); setReassignTarget(null); setActionErr(""); }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-              Change leader
-            </button>
-            <p className="text-[10px] text-slate-400 mt-1">
-              Leadership is administrative only — it grants no contribution credit.
-            </p>
-          </div>
-        )}
-
-        {canManage && nonLeaderMembers.length === 0 && amLeader && (
-          <div className="mt-5 pt-4 border-t border-slate-100">
-            <p className="text-[11px] text-slate-400 mb-2">
-              You are the only member of this group.
-            </p>
-            <button
-              onClick={() => { setStep({ type: "confirm-disband" }); setActionErr(""); }}
-              className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
-            >
-              Leave and delete group
-            </button>
-          </div>
-        )}
       </>
     );
   }
