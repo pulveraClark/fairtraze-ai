@@ -395,6 +395,102 @@ documentsRouter.get("/api/groups/:id/document/export", requireAuth, async (req: 
   res.send(buffer);
 });
 
+// GET /api/groups/:id/document/snapshots — list the group's document revision history, newest
+// first. Snapshots are written by server/src/routes/analyze.ts on every analysis run (see
+// DocumentSnapshot in schema.prisma) — this route only reads them. No document row yet is a
+// valid, expected state (not an error), mirroring the authorship-map route's empty-state shape
+// rather than export's 404-for-missing-file shape.
+documentsRouter.get("/api/groups/:id/document/snapshots", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Document history is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+
+  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
+  if (!doc) {
+    res.json({ snapshots: [] });
+    return;
+  }
+
+  const snapshots = await prisma.documentSnapshot.findMany({
+    where:   { documentId: doc.id },
+    orderBy: { createdAt: "desc" },
+    select:  { id: true, createdAt: true, reportId: true },
+  });
+  res.json({ snapshots });
+});
+
+// GET /api/groups/:id/document/snapshots/:snapshotId — reconstruct one historical snapshot's
+// content via readDocumentStructure, unmodified — the exact same scratch-Y.Doc read pattern
+// export already uses. Read-only; never touches the live Y.Doc or authorshipCapture.ts.
+documentsRouter.get("/api/groups/:id/document/snapshots/:snapshotId", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  const snapshotIdResult = idParam.safeParse(req.params.snapshotId);
+  if (!idResult.success || !snapshotIdResult.success) {
+    res.status(400).json({ error: "Invalid group or snapshot id" });
+    return;
+  }
+  const projectId = idResult.data;
+  const snapshotId = snapshotIdResult.data;
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Document history is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+
+  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
+  if (!doc) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+
+  const snapshot = await prisma.documentSnapshot.findUnique({ where: { id: snapshotId } });
+  // A snapshot that doesn't exist and a snapshot that belongs to a different group's document are
+  // deliberately indistinguishable here — both 404, never 403 — so this endpoint can't be used as
+  // an oracle to confirm another group's snapshot exists.
+  if (!snapshot || snapshot.documentId !== doc.id) {
+    res.status(404).json({ error: "Snapshot not found." });
+    return;
+  }
+
+  try {
+    const blocks = readDocumentStructure({ content: "", yjsState: snapshot.yjsState });
+    res.json({ id: snapshot.id, createdAt: snapshot.createdAt, reportId: snapshot.reportId, blocks });
+  } catch (err) {
+    console.error(`[documents] snapshot reconstruction failed for group ${projectId}, snapshot ${snapshotId}`, err);
+    res.status(500).json({ error: "Failed to reconstruct this snapshot." });
+  }
+});
+
 const importBody = z.object({
   filename: z.string().min(1),
   fileBase64: z.string().min(1),
