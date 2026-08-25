@@ -9,9 +9,40 @@ import { computeCombinedTeamReport } from "@shared/combinedScoring.js";
 import { computeDocumentRawStats } from "../collab/editStats.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
-import type { RawMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig } from "@shared/types.js";
+import type { RawMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
 export const analyzeRouter = Router();
+
+// Persists one DocumentContribution row per member, alongside the existing Report.content JSON
+// blob — see CLAUDE.md/manuscript Table 61. Shared between the EDITOR and COMBINED branches
+// below since both compute a DocumentScoredMember[] the same way.
+async function writeDocumentContributionRows(
+  documentId: number,
+  reportId: number,
+  members: DocumentScoredMember[]
+): Promise<void> {
+  if (members.length === 0) return;
+  await prisma.documentContribution.createMany({
+    data: members.map((m) => ({
+      documentId,
+      userId:                    m.userId,
+      reportId,
+      netRetainedChars:          m.retainedChars,
+      weightedRetainedChars:     m.weightedRetainedChars,
+      effectiveRetainedChars:    m.effectiveRetainedChars,
+      totalCharsInserted:        m.totalInsertedChars,
+      totalCharsDeleted:         m.totalDeletedChars,
+      selfChurnRatio:            m.selfChurnRatio,
+      editSessionCount:          m.sessionCount,
+      activeEditingDays:         m.activeDays,
+      lastPhaseRatio:            m.lastPhaseRatio,
+      retainedTextShare:         m.retainedTextShare,
+      sessionShare:              m.sessionShare,
+      activeDaysShare:           m.activeDaysShare,
+      documentContributionShare: m.contributionShare,
+    })),
+  });
+}
 
 // ── Shared helper: build RawMemberStats from DB members + GitHub data ─────────
 
@@ -102,7 +133,7 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
     const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
     const savedNarrative = stored.narrative ?? null;
-    await prisma.report.create({
+    const createdReport = await prisma.report.create({
       data: {
         projectId,
         gini:      report.gini,
@@ -110,6 +141,10 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
         content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null }),
       },
     });
+
+    if (project.document?.id) {
+      await writeDocumentContributionRows(project.document.id, createdReport.id, report.members);
+    }
 
     await prisma.project.update({
       where: { id: projectId },
@@ -197,13 +232,30 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
     const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
     const savedNarrative = stored.narrative ?? null;
-    await prisma.report.create({
+    const createdReport = await prisma.report.create({
       data: {
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
         content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
       },
+    });
+
+    if (project.document?.id) {
+      await writeDocumentContributionRows(project.document.id, createdReport.id, documentReport.members);
+    }
+    await prisma.combinedContribution.createMany({
+      data: report.members.map((m) => ({
+        reportId:                  createdReport.id,
+        userId:                    m.userId,
+        githubContributionShare:   m.githubContributionShare,
+        documentContributionShare: m.documentContributionShare,
+        wGitHub:                   m.wGitHub,
+        wDocs:                     m.wDocs,
+        combinedContributionShare: m.contributionShare,
+        flags:                     JSON.stringify(m.flags),
+        mismatchNotes:             null,
+      })),
     });
 
     await prisma.project.update({

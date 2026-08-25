@@ -103,6 +103,8 @@ model User {
   tasksAssigned    Task[]            @relation("TaskAssignee")
   tasksCreated     Task[]            @relation("TaskCreator")
   comments         Comment[]
+  documentContributions DocumentContribution[]
+  combinedContributions CombinedContribution[]
 }
 
 model RefreshToken {
@@ -260,13 +262,68 @@ model Member {
 }
 
 model Report {
-  id          Int      @id @default(autoincrement())
-  projectId   Int
-  generatedAt DateTime @default(now())
-  gini        Float?
-  teamHealth  String?
-  content     String?
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                    Int                    @id @default(autoincrement())
+  projectId             Int
+  generatedAt           DateTime               @default(now())
+  gini                  Float?
+  teamHealth            String?
+  content               String?
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentContributions DocumentContribution[]
+  combinedContributions CombinedContribution[]
+}
+
+// Normalized per-member persistence of a single analysis run's document-side (Editor) scores,
+// alongside — not replacing — the existing full-blob Report.content JSON. Written as a
+// side-effect right after the owning Report row is created (server/src/routes/analyze.ts); every
+// value here is already computed by shared/src/documentScoring.ts, so this is a pure persistence-
+// shape addition with zero new computation and zero interaction with the live collab pipeline.
+// Field list matches the manuscript's DOCUMENT_CONTRIBUTION data dictionary (Table 61).
+model DocumentContribution {
+  id                        Int      @id @default(autoincrement())
+  documentId                Int
+  userId                    Int
+  reportId                  Int
+  netRetainedChars          Int
+  weightedRetainedChars     Float
+  effectiveRetainedChars    Float
+  totalCharsInserted        Int
+  totalCharsDeleted         Int
+  selfChurnRatio            Float
+  editSessionCount          Int
+  activeEditingDays         Int
+  lastPhaseRatio            Float
+  retainedTextShare         Float
+  sessionShare              Float
+  activeDaysShare           Float
+  documentContributionShare Float
+  computedAt                DateTime @default(now())
+  document                  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user                      User     @relation(fields: [userId], references: [id])
+  report                    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+}
+
+// Normalized per-member persistence of a single COMBINED analysis run's blended scores,
+// alongside the existing Report.content JSON, same rationale as DocumentContribution above.
+// Field list matches the manuscript's COMBINED_CONTRIBUTION data dictionary (Table 62).
+model CombinedContribution {
+  id                        Int      @id @default(autoincrement())
+  reportId                  Int
+  userId                    Int
+  githubContributionShare   Float
+  documentContributionShare Float
+  wGitHub                   Float
+  wDocs                     Float
+  combinedContributionShare Float
+  flags                     String // JSON array of Flag strings
+  mismatchNotes             String? // JSON array, nullable
+  computedAt                DateTime @default(now())
+  report                    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user                      User     @relation(fields: [userId], references: [id])
+
+  @@index([reportId])
 }
 
 model Alert {
@@ -347,6 +404,7 @@ model Document {
   editEvents   EditEvent[]
   editSessions EditSession[]
   comments     Comment[]
+  documentContributions DocumentContribution[]
 }
 
 // Discussion attached to a point in a Document's content — pure metadata, never document
