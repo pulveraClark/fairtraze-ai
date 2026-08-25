@@ -6,7 +6,8 @@ import { attachAuthorshipBroadcastServer } from "./collab/authorshipBroadcast.js
 import { closeDanglingSessions, startAuthorshipIdleSweep } from "./collab/authorshipCapture.js";
 
 const app = createApp();
-const PORT = process.env.PORT ?? 3001;
+const rawPort = process.env.PORT?.trim();
+const PORT = rawPort ? Number(rawPort) : 3001;
 
 const httpServer = http.createServer(app);
 attachYjsCollabServer(httpServer);
