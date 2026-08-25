@@ -10,6 +10,7 @@ import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
+import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
@@ -46,6 +47,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   // Per-flag review outcomes from resolved/dismissed disputes — shown as badges next to flags
   const [resolvedFlagOutcomes, setResolvedFlagOutcomes] = useState<Map<string, Map<string, "RESOLVED" | "DISMISSED">>>(new Map());
   const [activeTab, setActiveTab]               = useState<Tab>("report");
+  const [viewingHistory, setViewingHistory]     = useState(false);
 
   // Summary used for breadcrumb + group switcher
   const [projectMeta, setProjectMeta] = useState<ProjectSummaryItem | null>(null);
@@ -740,14 +742,26 @@ export function ProjectDetailPage({ projectId }: Props) {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — shared document for this group. Highlighting shows who wrote
-                each part of the current text — it does not show edit history or deleted content.
+                {viewingHistory
+                  ? "Past versions of this group's document, captured at each analysis run"
+                  : "Collaborative editor — shared document for this group. Highlighting shows who wrote each part of the current text — it does not show edit history or deleted content."}
               </span>
               <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
                 Read-only — instructor view
               </span>
+              <button
+                type="button"
+                onClick={() => setViewingHistory((v) => !v)}
+                className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline"
+              >
+                {viewingHistory ? "Back to live document" : "History"}
+              </button>
             </div>
-            <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} />
+            {viewingHistory ? (
+              <DocumentHistoryPanel groupId={projectId} />
+            ) : (
+              <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} />
+            )}
           </div>
         )}
       </main>
