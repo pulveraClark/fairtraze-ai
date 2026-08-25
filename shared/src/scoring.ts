@@ -1,4 +1,4 @@
-import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, ScoringThresholds, Flag } from "./types";
+import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, ScoringThresholds, Flag } from "./types.js";
 
 export const DEFAULT_WEIGHTS: ScoringWeights = { commits: 0.4, lines: 0.4, activeDays: 0.2 };
 

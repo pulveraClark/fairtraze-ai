@@ -1,8 +1,8 @@
 import type {
   RawMemberStats, ScoredMember, RawDocumentMemberStats, DocumentScoredMember,
   CombinedScoredMember, TeamReport, TeamHealth, BlendWeights, ScoringThresholds, Flag,
-} from "./types";
-import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring";
+} from "./types.js";
+import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
 export const DEFAULT_BLEND_WEIGHTS: BlendWeights = { wGitHub: 0.5, wDocs: 0.5 };
 

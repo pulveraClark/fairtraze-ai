@@ -1,8 +1,8 @@
 import type {
   RawDocumentMemberStats, DocumentScoredMember, TeamReport, TeamHealth,
   DocumentScoringWeights, ScoringThresholds, Flag,
-} from "./types";
-import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring";
+} from "./types.js";
+import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
 export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
   retainedText: 0.4, sessions: 0.2, activeDays: 0.4,
