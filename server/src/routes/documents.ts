@@ -1,12 +1,14 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { docs } from "y-websocket/bin/utils";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
+import { cancelPendingPersist } from "../collab/persistence.js";
 import { findDocumentTemplate } from "@shared/documentTemplates.js";
 
 export const documentsRouter = Router();
@@ -59,10 +61,27 @@ documentsRouter.get("/api/groups/:id/document", requireAuth, async (req: Request
   });
 });
 
+// A document is safely resettable (the leader can pick a different starting template) only when
+// NO real user-authored content exists yet on it: no live-typed/imported EditEvent, no EditSession
+// (which also covers image-only inserts — those never produce an EditEvent but do touch a
+// session), and no Comment. Comments matter here even though they're never scored: a member can
+// select template-only text and comment on it with zero typing, so EditEvent/EditSession alone
+// would under-detect "real content exists" and a reset would silently cascade-delete that
+// discussion. Recomputed fresh on every call — never cached, never trusted from the client.
+async function isDocumentResettable(documentId: number): Promise<boolean> {
+  const [editEventCount, editSessionCount, commentCount] = await Promise.all([
+    prisma.editEvent.count({ where: { documentId } }),
+    prisma.editSession.count({ where: { documentId } }),
+    prisma.comment.count({ where: { documentId } }),
+  ]);
+  return editEventCount === 0 && editSessionCount === 0 && commentCount === 0;
+}
+
 // GET /api/groups/:id/document/status — whether a Document row exists yet, WITHOUT creating one
 // (unlike GET /document above, which auto-creates on first fetch). The client must call this
 // before ever calling GET /document or mounting the live editor, so the leader still has a chance
-// to pick a starting template — see POST /document/init below.
+// to pick a starting template — see POST /document/init below. Also reports `resettable`, which
+// gates the client's "Change template" affordance — see POST /document/reset below.
 documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: Request, res: Response) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
@@ -83,7 +102,8 @@ documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: 
   }
 
   const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
-  res.json({ exists: !!doc });
+  const resettable = doc ? await isDocumentResettable(doc.id) : false;
+  res.json({ exists: !!doc, resettable });
 });
 
 const initBody = z.object({
@@ -155,6 +175,77 @@ documentsRouter.post("/api/groups/:id/document/init", requireAuth, async (req: R
     content:   JSON.parse(doc.content) as unknown,
     updatedAt: doc.updatedAt.toISOString(),
   });
+});
+
+// POST /api/groups/:id/document/reset — undo a misclicked template choice. Leader or instructor
+// only (same check as /document/init). Only succeeds while the document is still genuinely
+// untouched — see isDocumentResettable above — re-verified here server-side regardless of what
+// the client believed, since the "Change template" affordance being visible at all only reflects
+// the state of a prior /status call, which can go stale (another tab, another member typing in
+// the meantime).
+documentsRouter.post("/api/groups/:id/document/reset", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+
+  if (!isInstructorOf(req, project) && !leaderMembership(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can change the template." });
+    return;
+  }
+
+  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
+  if (!doc) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+
+  if (!(await isDocumentResettable(doc.id))) {
+    res.status(409).json({ error: "This document already has real content — it can no longer be reset." });
+    return;
+  }
+
+  // Only touch the live room if one is ALREADY resident (someone has the editor open, or it was
+  // left resident by the documented room-eviction limitation) — checked via y-websocket's own
+  // `docs` map, never via getYDoc(room, true). getYDoc would itself CREATE a room here if none
+  // existed, which calls persistence.bindState() fire-and-forget (never awaited by getYDoc, the
+  // same pattern documented elsewhere in this codebase) — and bindState's own
+  // attachAuthorshipTracking() does its own unconditional Document.upsert() shortly after. That
+  // upsert races the prisma.document.delete() below and can resurrect the row we just deleted,
+  // completely independent of the persist-debounce race handled below. Only ever acting on an
+  // ALREADY-resident room sidesteps this entirely: attachAuthorshipTracking only ever runs once,
+  // when a room is first created, so a room resident before this request already has it behind it.
+  const room = `group-doc-${projectId}`;
+  const liveYdoc = docs.get(room);
+  if (liveYdoc) {
+    // Clears with no transact origin, mirroring persistence.ts's own origin-less legacy-content
+    // migration, so authorshipCapture.ts's update listener correctly ignores it (no stray
+    // EditEvent from a clear nobody "wrote").
+    const fragment = liveYdoc.getXmlFragment("default");
+    liveYdoc.transact(() => {
+      fragment.delete(0, fragment.length);
+    });
+
+    // The clear above may have just scheduled a debounced persist for this room (bindState's own
+    // ydoc.on("update", ...) listener) — and one could already have been pending from whatever
+    // made this room resident in the first place. Cancel it before deleting the row below —
+    // otherwise that persist fires ~3s from now and silently recreates an empty Document row,
+    // which would make a template the leader picks in that window silently no-op (POST
+    // /document/init's upsert sees an "existing" row and never applies the new content).
+    cancelPendingPersist(room);
+  }
+
+  await prisma.document.delete({ where: { groupId: projectId } });
+
+  res.json({ reset: true });
 });
 
 // PATCH /api/groups/:id/document — save document content.

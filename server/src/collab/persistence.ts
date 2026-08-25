@@ -70,6 +70,19 @@ async function persist(room: string, ydoc: YTypes.Doc): Promise<void> {
   });
 }
 
+// Cancels a room's pending debounced persist without running it. Exported for
+// server/src/routes/documents.ts's POST /document/reset: after clearing a room's live content and
+// before deleting its Document row, the reset route must stop the already-scheduled persist from
+// this clear firing later and silently recreating an (empty) row — the same two-line cancellation
+// already duplicated inside writeState() below, just exposed for that one other caller.
+export function cancelPendingPersist(room: string): void {
+  const existing = debounceTimers.get(room);
+  if (existing) {
+    clearTimeout(existing);
+    debounceTimers.delete(room);
+  }
+}
+
 function scheduleDebouncedPersist(room: string, ydoc: YTypes.Doc): void {
   const existing = debounceTimers.get(room);
   if (existing) clearTimeout(existing);

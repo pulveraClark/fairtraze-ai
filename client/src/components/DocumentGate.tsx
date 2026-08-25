@@ -20,7 +20,13 @@ interface Props {
 export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
   const { token } = useAuth();
   const [exists, setExists] = useState<boolean | null>(null);
+  // Whether the document is still safe to reset (no real typed/imported content, no image
+  // inserts, no comments — see server/src/routes/documents.ts's isDocumentResettable). Only ever
+  // trusted as a UI hint for whether to show "Change template" — POST /document/reset re-verifies
+  // this itself server-side regardless of what this flag says.
+  const [resettable, setResettable] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set only when THIS browser session just created the document via handleChoose below — never
   // on the initial /status load. Tells DocumentEditor how many top-level nodes to wait for before
@@ -35,9 +41,11 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
     fetch(`/api/groups/${groupId}/document/status`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => (res.ok ? (res.json() as Promise<{ exists: boolean }>) : null))
+      .then((res) => (res.ok ? (res.json() as Promise<{ exists: boolean; resettable: boolean }>) : null))
       .then((data) => {
-        if (!cancelled) setExists(data?.exists ?? false);
+        if (cancelled) return;
+        setExists(data?.exists ?? false);
+        setResettable(data?.resettable ?? false);
       })
       .catch(() => {
         if (!cancelled) setExists(false);
@@ -64,10 +72,39 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
       }
       setJustCreatedNodeCount(templateId ? (findDocumentTemplate(templateId)?.content.content.length ?? 0) : 0);
       setExists(true);
+      // A document just created here is definitionally untouched — nothing could have typed,
+      // imported, or commented on it yet. Set this directly rather than leaving the stale `false`
+      // from the pre-creation /status fetch (or re-fetching /status again just to learn what's
+      // already true), so "Change template" appears immediately without a round trip.
+      setResettable(true);
     } catch {
       setError("Could not start the document — check your connection and try again.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!token || resetting) return;
+    setResetting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/document/reset`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Could not change the template.");
+        return;
+      }
+      setExists(false);
+      setResettable(false);
+      setJustCreatedNodeCount(null);
+    } catch {
+      setError("Could not change the template — check your connection and try again.");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -81,11 +118,33 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
 
   if (exists) {
     return (
-      <DocumentEditor
-        groupId={groupId}
-        editable={editable}
-        awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
-      />
+      <div>
+        {/* Rare, early-in-the-project action — a small text link, not a toolbar control. Only
+            shown to whoever could have started the document in the first place, and only while
+            the server confirms nothing real has happened to it yet (see `resettable` above). */}
+        {canChooseTemplate && resettable && (
+          <div className="flex items-center justify-between gap-3 mb-2">
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <button
+              type="button"
+              disabled={resetting}
+              onClick={() => {
+                if (window.confirm("Change the starting template? This only works because nobody has added any content yet.")) {
+                  handleReset();
+                }
+              }}
+              className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline disabled:opacity-50"
+            >
+              {resetting ? "Changing template…" : "Change template"}
+            </button>
+          </div>
+        )}
+        <DocumentEditor
+          groupId={groupId}
+          editable={editable}
+          awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
+        />
+      </div>
     );
   }
 
