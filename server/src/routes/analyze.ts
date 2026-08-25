@@ -100,29 +100,16 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
-    let savedNarrative: string | null = null;
-    if (existing) {
-      const stored = existing.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
-      savedNarrative = stored.narrative ?? null;
-      await prisma.report.update({
-        where: { id: existing.id },
-        data: {
-          generatedAt: new Date(),
-          gini:       report.gini,
-          teamHealth: report.teamHealth,
-          content:    JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null }),
-        },
-      });
-    } else {
-      await prisma.report.create({
-        data: {
-          projectId,
-          gini:      report.gini,
-          teamHealth: report.teamHealth,
-          content:   JSON.stringify({ report, narrative: null, unmatchedLogins: [], scoringConfig: null }),
-        },
-      });
-    }
+    const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+    const savedNarrative = stored.narrative ?? null;
+    await prisma.report.create({
+      data: {
+        projectId,
+        gini:      report.gini,
+        teamHealth: report.teamHealth,
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null }),
+      },
+    });
 
     await prisma.project.update({
       where: { id: projectId },
@@ -208,29 +195,16 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     );
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
-    let savedNarrative: string | null = null;
-    if (existing) {
-      const stored = existing.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
-      savedNarrative = stored.narrative ?? null;
-      await prisma.report.update({
-        where: { id: existing.id },
-        data: {
-          generatedAt: new Date(),
-          gini:       report.gini,
-          teamHealth: report.teamHealth,
-          content:    JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
-        },
-      });
-    } else {
-      await prisma.report.create({
-        data: {
-          projectId,
-          gini:      report.gini,
-          teamHealth: report.teamHealth,
-          content:   JSON.stringify({ report, narrative: null, unmatchedLogins, scoringConfig }),
-        },
-      });
-    }
+    const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+    const savedNarrative = stored.narrative ?? null;
+    await prisma.report.create({
+      data: {
+        projectId,
+        gini:      report.gini,
+        teamHealth: report.teamHealth,
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+      },
+    });
 
     await prisma.project.update({
       where: { id: projectId },
@@ -303,38 +277,27 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
   const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);
 
-  // Upsert: update existing report row for this project (preserving narrative),
-  // or create a fresh one.
+  // Always create a new Report row per analysis run — history accumulates so the
+  // instructor can see how Gini/team health changed across the project lifecycle
+  // (see GET /api/projects/:id/report/history). Only the previous row's narrative
+  // is carried forward, so re-analyzing doesn't silently blank a saved AI explanation.
   const existing = await prisma.report.findFirst({
     where: { projectId },
     orderBy: { generatedAt: "desc" },
   });
 
-  let savedNarrative: string | null = null;
-  if (existing) {
-    const stored = existing.content
-      ? (JSON.parse(existing.content) as { report?: TeamReport; narrative?: string })
-      : {};
-    savedNarrative = stored.narrative ?? null;
-    await prisma.report.update({
-      where: { id: existing.id },
-      data: {
-        generatedAt: new Date(),
-        gini:        report.gini,
-        teamHealth:  report.teamHealth,
-        content:     JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
-      },
-    });
-  } else {
-    await prisma.report.create({
-      data: {
-        projectId,
-        gini:      report.gini,
-        teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: null, unmatchedLogins, scoringConfig }),
-      },
-    });
-  }
+  const stored = existing?.content
+    ? (JSON.parse(existing.content) as { report?: TeamReport; narrative?: string })
+    : {};
+  const savedNarrative = stored.narrative ?? null;
+  await prisma.report.create({
+    data: {
+      projectId,
+      gini:      report.gini,
+      teamHealth: report.teamHealth,
+      content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+    },
+  });
 
   // Clear stale flags — report now reflects current membership and scoring config
   await prisma.project.update({

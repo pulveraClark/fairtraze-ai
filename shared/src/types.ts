@@ -293,3 +293,15 @@ export interface StoredReportResponse {
   // Functional roles + soft mismatch notes per member (context only — never changes scores)
   memberRoles: MemberRoleInfo[];
 }
+
+// One point in a project's analysis history — returned by GET /api/projects/:id/report/history.
+// Read-only over already-computed, already-stored Report rows; no new scoring.
+export interface ReportHistoryPoint {
+  generatedAt: string;
+  gini: number | null;
+  teamHealth: TeamHealth | null;
+}
+
+export interface ReportHistoryResponse {
+  history: ReportHistoryPoint[];
+}

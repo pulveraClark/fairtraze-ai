@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig } from "@shared/types";
+import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
 import { AppTopBar } from "../components/AppTopBar";
 import { TeamHealthBanner } from "../components/TeamHealthBanner";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { ContributionChart } from "../components/ContributionChart";
+import { TrendChart } from "../components/TrendChart";
 import { MemberTable } from "../components/MemberTable";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
@@ -50,6 +51,9 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [projectMeta, setProjectMeta] = useState<ProjectSummaryItem | null>(null);
   const [siblings, setSiblings]       = useState<ProjectSummaryItem[]>([]);
 
+  // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
+  const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
+
   const fetchStored = useCallback(async () => {
     setFetchError(null);
     setNotFound(false);
@@ -72,6 +76,19 @@ export function ProjectDetailPage({ projectId }: Props) {
       setReportStale(!!data.scoringConfigChangedAt || !!data.membershipChangedAt);
     } catch {
       setFetchError("Network error — could not reach the server.");
+    }
+  }, [projectId, token]);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/report/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setReportHistory([]); return; }
+      const data = (await res.json()) as { history: ReportHistoryPoint[] };
+      setReportHistory(data.history);
+    } catch {
+      setReportHistory([]);
     }
   }, [projectId, token]);
 
@@ -150,7 +167,8 @@ export function ProjectDetailPage({ projectId }: Props) {
     void fetchStored();
     void fetchSummary();
     void fetchDisputes();
-  }, [fetchStored, fetchSummary, fetchDisputes]);
+    void fetchHistory();
+  }, [fetchStored, fetchSummary, fetchDisputes, fetchHistory]);
 
   async function handleAnalyze() {
     setReanalyzing(true);
@@ -170,6 +188,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       await new Promise((r) => setTimeout(r, 800));
       await fetchStored();
       await fetchSummary();   // refresh health labels in switcher
+      await fetchHistory();   // refresh trend chart with the new run
       setNotFound(false);
     } catch {
       setReanalyzeError("Network error — could not reach the server.");
@@ -567,6 +586,20 @@ export function ProjectDetailPage({ projectId }: Props) {
                 </div>
               )}
             </div>
+
+            {/* Imbalance trend — Gini/team health across all past analysis runs.
+                Omitted until there are at least 2 runs, since a single point isn't a trend. */}
+            {reportHistory.length >= 2 && (
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <h2 className="text-sm font-semibold text-slate-700">Imbalance Trend</h2>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Gini coefficient across all analysis runs for this group</p>
+                </div>
+                <div className="px-6 pt-4 pb-2">
+                  <TrendChart history={reportHistory} />
+                </div>
+              </div>
+            )}
 
             {/* GitHub-specific sections (GITHUB-only / legacy projects) */}
             {showGithubOnly && (

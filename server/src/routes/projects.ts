@@ -165,6 +165,49 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
   res.json({ summary });
 });
 
+// GET /api/projects/:id/report/history — Gini/team-health across all stored analysis runs
+// requireRole(INSTRUCTOR) + ownership check through assignment chain (same pattern as /report)
+projectsRouter.get("/api/projects/:id/report/history", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid project id" });
+    return;
+  }
+  const projectId = idResult.data;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      assignment: { select: { classSection: { select: { instructorId: true } } } },
+    },
+  });
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  if (project.assignment) {
+    if (project.assignment.classSection.instructorId !== req.user!.sub) {
+      res.status(403).json({ error: "You do not have access to this project" });
+      return;
+    }
+  }
+
+  const reports = await prisma.report.findMany({
+    where:  { projectId },
+    select: { generatedAt: true, gini: true, teamHealth: true },
+    orderBy: { generatedAt: "asc" },
+  });
+
+  res.json({
+    history: reports.map((r) => ({
+      generatedAt: r.generatedAt.toISOString(),
+      gini:        r.gini,
+      teamHealth:  r.teamHealth as TeamHealth | null,
+    })),
+  });
+});
+
 // GET /api/projects/:id/report — fetch a project's latest stored report, no GitHub call
 // requireRole(INSTRUCTOR) + ownership check through assignment chain
 projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), async (req, res) => {
