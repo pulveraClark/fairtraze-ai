@@ -41,12 +41,24 @@ export function requireRole(...roles: SystemRole[]) {
   ];
 }
 
+// Read live (not cached at import time) so REQUIRE_EMAIL_VERIFICATION can be
+// flipped per-test via process.env without needing vi.resetModules().
+// Defaults to enforced: only the literal string "false" disables the gate.
+export function isEmailVerificationRequired(): boolean {
+  return process.env.REQUIRE_EMAIL_VERIFICATION !== "false";
+}
+
 // Soft gate for the small set of state-changing routes (group creation/join,
 // triggering analysis) that require a verified email. Reads live from the DB
 // rather than the JWT so a just-verified user is unblocked immediately,
 // without waiting for the 15-minute access-token refresh cycle. Must run
 // after requireAuth/requireRole so req.user is populated.
 export async function requireVerifiedEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!isEmailVerificationRequired()) {
+    next();
+    return;
+  }
+
   if (!req.user) {
     res.status(401).json({ error: "Authentication required" });
     return;

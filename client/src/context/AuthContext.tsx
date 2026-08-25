@@ -14,7 +14,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  register: (email: string, password: string, name: string, role?: string) => Promise<AuthUser>;
+  register: (email: string, password: string, name: string, role?: string) => Promise<AuthUser & { emailVerificationRequired: boolean }>;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   refreshUser: () => Promise<AuthUser | null>;
@@ -142,17 +142,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser);
   }
 
-  async function register(email: string, password: string, name: string, role?: string): Promise<AuthUser> {
+  async function register(email: string, password: string, name: string, role?: string): Promise<AuthUser & { emailVerificationRequired: boolean }> {
     const res = await fetch("/api/auth/register", {
       method:      "POST",
       headers:     { "Content-Type": "application/json" },
       credentials: "include",
       body:        JSON.stringify({ email, password, name, ...(role ? { role } : {}) }),
     });
-    const data = (await res.json()) as { token?: string; user?: AuthUser; error?: string };
+    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Registration failed (${res.status})`);
     storeSession(data.token!, data.user!);
-    return data.user!;
+    return { ...data.user!, emailVerificationRequired: data.emailVerificationRequired ?? true };
   }
 
   async function login(email: string, password: string): Promise<AuthUser> {

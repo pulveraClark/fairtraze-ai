@@ -69,6 +69,7 @@ export function RegisterPage() {
   const [error,         setError]         = useState<string | null>(null);
   const [submitting,    setSubmitting]    = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(true);
 
   useEffect(() => {
     // Skip the auto-redirect immediately after registering — the success
@@ -94,14 +95,16 @@ export function RegisterPage() {
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
             <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Account created</h1>
           </div>
-          <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
-            <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <p className="text-xs text-indigo-700 leading-relaxed">
-              Check <span className="font-semibold">{email}</span> for a verification link. You can explore FairTraze AI right away — a few actions like creating or joining a group are unavailable until you verify.
-            </p>
-          </div>
+          {verificationRequired && (
+            <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
+              <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <p className="text-xs text-indigo-700 leading-relaxed">
+                Check <span className="font-semibold">{email}</span> for a verification link. You can explore FairTraze AI right away — a few actions like creating or joining a group are unavailable until you verify.
+              </p>
+            </div>
+          )}
           <button
             onClick={continueToDashboard}
             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
@@ -124,7 +127,8 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      await register(email, password, name, role);
+      const result = await register(email, password, name, role);
+      setVerificationRequired(result.emailVerificationRequired);
       setJustRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed. Please try again.");

@@ -108,4 +108,23 @@ describe("requireVerifiedEmail soft gate", () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("EMAIL_NOT_VERIFIED");
   });
+
+  it("passes through without a DB check when REQUIRE_EMAIL_VERIFICATION=false", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR", emailVerified: false });
+    const classSection = await createClassSection(instructor.id);
+    const assignment = await createAssignment(classSection.id);
+    const project = await createProject({ assignmentId: assignment.id });
+
+    process.env.REQUIRE_EMAIL_VERIFICATION = "false";
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/analyze`)
+        .set("Authorization", authHeaderFor(instructor));
+
+      expect(res.status).not.toBe(403);
+      expect(res.body.code).not.toBe("EMAIL_NOT_VERIFIED");
+    } finally {
+      delete process.env.REQUIRE_EMAIL_VERIFICATION;
+    }
+  });
 });

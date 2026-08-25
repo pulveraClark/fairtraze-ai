@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import type { SystemRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, isEmailVerificationRequired } from "../middleware/auth.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
@@ -100,17 +100,20 @@ authRouter.post("/api/auth/register", async (req, res) => {
   const refreshToken = await issueRefreshToken(user.id);
   setRefreshCookie(res, refreshToken);
 
-  const rawVerifyToken = await issueVerificationToken(user.id);
-  const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
-  // A delivery failure must not block registration — the account is already
-  // created; the user can request a fresh link via resend-verification.
-  sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
-    console.error("[auth] failed to send verification email", err)
-  );
+  if (isEmailVerificationRequired()) {
+    const rawVerifyToken = await issueVerificationToken(user.id);
+    const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
+    // A delivery failure must not block registration — the account is already
+    // created; the user can request a fresh link via resend-verification.
+    sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
+      console.error("[auth] failed to send verification email", err)
+    );
+  }
 
   res.status(201).json({
     token,
     user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
+    emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
 
