@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { API_BASE_URL } from "../lib/apiBase";
 
 export interface AuthUser {
   id: number;
@@ -82,7 +83,12 @@ function installFetchInterceptor() {
       url.startsWith("/api/auth/register") ||
       url.startsWith("/api/auth/refresh");
 
-    const response = await originalFetch(input, init);
+    const rewrittenInput =
+      isApiRequest && API_BASE_URL && typeof input === "string"
+        ? `${API_BASE_URL}${input}`
+        : input;
+
+    const response = await originalFetch(rewrittenInput, init);
 
     if (!isApiRequest || isAuthExempt || response.status !== 401) {
       return response;
@@ -93,7 +99,7 @@ function installFetchInterceptor() {
 
     const retryHeaders = new Headers(init?.headers);
     retryHeaders.set("Authorization", `Bearer ${newToken}`);
-    return originalFetch(input, { ...init, headers: retryHeaders });
+    return originalFetch(rewrittenInput, { ...init, headers: retryHeaders });
   };
 }
 

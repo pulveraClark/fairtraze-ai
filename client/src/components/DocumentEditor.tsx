@@ -21,6 +21,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { useAuth } from "../context/AuthContext";
 import { getUserColor } from "../lib/collabColors";
+import { wsBaseUrl } from "../lib/apiBase";
 import { CollaborationCursor } from "../lib/collaborationCursor";
 import { FontSize } from "../lib/fontSize";
 import { LineHeight } from "../lib/lineHeight";
@@ -56,8 +57,7 @@ interface CollabHandle {
 }
 
 function wsUrl(path: string): string {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}${path}`;
+  return `${wsBaseUrl()}${path}`;
 }
 
 // Pure client-side derivation from current editor state — no new data model. Recomputed on
