@@ -285,7 +285,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
-            <button onClick={() => navigate(classUrl)} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1">
+            <button onClick={() => navigate(classUrl)} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
@@ -302,7 +302,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               ) : (
                 <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
               )}
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-400 mt-0.5">
                 {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}
                 {summary.length} group{summary.length !== 1 ? "s" : ""}
                 {assignment?.deadline && <span className="ml-1">· Deadline: {fmtDeadline(assignment.deadline)}</span>}
@@ -476,7 +476,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

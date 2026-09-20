@@ -325,7 +325,7 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
 
   return (
     <div ref={popoverRef} className="relative flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-      <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+      <span className="text-xs text-slate-400 shrink-0">Class code:</span>
       <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
 
       {/* Copy button */}
@@ -370,7 +370,7 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
             fgColor="#312e81"
           />
           <p className="font-mono font-bold text-sm text-indigo-700 tracking-wider">{code}</p>
-          <p className="text-[10px] text-slate-400 text-center">Scan with a phone camera<br />to copy the join code</p>
+          <p className="text-xs text-slate-400 text-center">Scan with a phone camera<br />to copy the join code</p>
         </div>
       )}
     </div>
@@ -560,7 +560,7 @@ export function ClassPage({ classId }: Props) {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <button onClick={() => navigate(dashboardUrl)} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1">
+            <button onClick={() => navigate(dashboardUrl)} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
@@ -582,7 +582,7 @@ export function ClassPage({ classId }: Props) {
                     </span>
                   )}
                   {classInfo.type && (
-                    <span className="shrink-0 text-[10px] text-slate-400 font-mono">
+                    <span className="shrink-0 text-xs text-slate-400 font-mono">
                       {classInfo.type.charAt(0) + classInfo.type.slice(1).toLowerCase()}
                     </span>
                   )}
@@ -591,7 +591,7 @@ export function ClassPage({ classId }: Props) {
                 <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
               )}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm text-slate-400">
               {assignments.reduce((s, a) => s + a._count.projects, 0)} group{assignments.reduce((s, a) => s + a._count.projects, 0) !== 1 ? "s" : ""} · {assignments.length} project{assignments.length !== 1 ? "s" : ""}
             </p>
           </div>
@@ -780,7 +780,7 @@ export function ClassPage({ classId }: Props) {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

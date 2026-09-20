@@ -362,7 +362,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
             <p className="text-sm text-red-600">{error || "Group not found."}</p>
-            <button onClick={() => navigate("/student")} className="text-xs text-indigo-600 hover:underline">
+            <button onClick={() => navigate("/student")} className="text-sm text-indigo-600 hover:underline">
               ← Back to My Classes
             </button>
           </div>
@@ -423,7 +423,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           <div className="min-w-0 flex-1">
             <button
               onClick={() => navigate(`/student/class/${classSection.id}`)}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1"
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -491,7 +491,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               {editingGroupName && groupNameErr && (
                 <p className="text-[11px] text-red-600 mt-1">{groupNameErr}</p>
               )}
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-400 mt-0.5">
                 {classSection.subjectName}
                 {assignment.deadline && (
                   <> · Due {new Date(assignment.deadline).toLocaleDateString()}</>
@@ -502,7 +502,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setShowManageModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -788,7 +788,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       { label: "Lines Deleted", value: report.myContribution.deletions.toLocaleString() },
                     ] as const).map(({ label, value }) => (
                       <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
-                        <p className="text-xl font-bold text-slate-800">{value}</p>
+                        <p className="text-2xl font-bold text-slate-800">{value}</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
                       </div>
                     ))}
@@ -808,7 +808,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     <div>
                       <p className="text-[11px] text-slate-400 mb-1.5">Contribution Gini</p>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-slate-700">{report.gini.toFixed(2)}</span>
+                        <span className="text-base font-bold text-slate-700">{report.gini.toFixed(2)}</span>
                         {giniLabel && (
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[giniLabel]}`}>
                             {giniLabel}

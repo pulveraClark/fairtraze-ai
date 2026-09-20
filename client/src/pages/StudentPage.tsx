@@ -240,7 +240,7 @@ function ClassCard({
             className="flex items-center flex-wrap gap-1.5 self-start bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+            <span className="text-xs text-slate-400 shrink-0">Class code:</span>
             <span className="font-mono font-extrabold text-sm text-violet-700 tracking-wide select-all break-all">{cls.joinCode}</span>
             <button
               onClick={(e) => void handleCopy(e)}
@@ -333,10 +333,10 @@ export function StudentPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-sm font-semibold text-slate-800">
+            <h1 className="text-xl font-bold text-slate-900">
               Welcome back{user ? `, ${user.name.split(" ")[0]}` : ""}
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-sm text-slate-500 mt-0.5">
               {loading
                 ? "Loading…"
                 : `${classes.length} class${classes.length !== 1 ? "es" : ""} enrolled`}

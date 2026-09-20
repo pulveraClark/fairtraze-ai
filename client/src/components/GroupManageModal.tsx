@@ -561,7 +561,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
 
           {/* Role-context note */}
-          <p className="text-[10px] text-slate-400 mb-3">
+          <p className="text-xs text-slate-400 mb-3">
             Roles are context only — they never affect contribution scores.
             {!canManage && " Members can suggest a role from their project view."}
           </p>
@@ -648,7 +648,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         );
                       })}
                       {roleBusy === m.userId && (
-                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
                           <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
                           saving…
                         </span>
@@ -659,7 +659,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                     {isSelf && isThisLeader && (
-                      <span className="text-[10px] text-slate-400">Reassign to leave</span>
+                      <span className="text-xs text-slate-400">Reassign to leave</span>
                     )}
                     {isSelf && !isThisLeader && (
                       <button
@@ -695,7 +695,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 </svg>
                 Change leader
               </button>
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Leadership is administrative only — it grants no contribution credit.
               </p>
             </div>
@@ -728,7 +728,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-400 mb-2.5">
+          <p className="text-xs text-slate-400 mb-2.5">
             Context only — task completion never affects contribution scores.
           </p>
 
@@ -972,7 +972,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           ))}
         </div>
 
-        <p className="text-[10px] text-slate-400 mb-4">
+        <p className="text-xs text-slate-400 mb-4">
           Leadership is administrative only. The new leader is scored on their actual work, the same as every other member.
         </p>
 

@@ -235,7 +235,7 @@ function CreateClassModal({
                   bgColor="#f8fafc"
                   fgColor="#312e81"
                 />
-                <p className="text-[10px] text-slate-400 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
+                <p className="text-xs text-slate-400 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
               </div>
             </div>
 
@@ -590,8 +590,8 @@ export function InstructorDashboardPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-sm font-semibold text-slate-800">Instructor Dashboard</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h1 className="text-xl font-bold text-slate-900">Instructor Dashboard</h1>
+            <p className="text-sm text-slate-400 mt-0.5">
               Group contribution overview · GitHub analysis
             </p>
           </div>
@@ -825,7 +825,7 @@ export function InstructorDashboardPage() {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

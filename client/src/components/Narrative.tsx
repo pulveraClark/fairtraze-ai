@@ -93,7 +93,7 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
       {/* Narrative */}
       {narrative && !generating && (
         <>
-          <div className="text-slate-600 text-sm leading-relaxed [&_strong]:font-semibold [&_strong]:text-slate-800 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-100">
+          <div className="text-slate-600 text-base leading-relaxed [&_strong]:font-semibold [&_strong]:text-slate-800 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-100">
             <ReactMarkdown>{narrative}</ReactMarkdown>
           </div>
           {error && (

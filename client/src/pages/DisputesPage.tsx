@@ -118,7 +118,7 @@ function ResolveModal({
 
         <div className="px-6 pt-5">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Student's note</p>
-          <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
+          <p className="text-base text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
             {dispute.reason}
           </p>
         </div>
@@ -221,7 +221,7 @@ export function DisputesPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <button onClick={() => navigate("/dashboard")} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1">
+            <button onClick={() => navigate("/dashboard")} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
@@ -235,7 +235,7 @@ export function DisputesPage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">Student-raised score disputes awaiting your review</p>
+            <p className="text-sm text-slate-400">Student-raised score disputes awaiting your review</p>
           </div>
           <button onClick={load} className="text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">Refresh</button>
         </div>
@@ -351,11 +351,11 @@ export function DisputesPage() {
                           {cs && <><span className="text-slate-300">·</span><span className="text-slate-400">{cs.subjectName}</span></>}
                         </div>
 
-                        <p className="text-sm text-slate-700 leading-relaxed">{d.reason}</p>
+                        <p className="text-base text-slate-700 leading-relaxed">{d.reason}</p>
 
                         {d.instructorResponse && (
                           <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Your response</p>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Your response</p>
                             <p className="text-xs text-slate-600 leading-relaxed">{d.instructorResponse}</p>
                           </div>
                         )}
@@ -397,7 +397,7 @@ export function DisputesPage() {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

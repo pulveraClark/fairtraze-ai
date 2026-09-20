@@ -196,7 +196,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
 
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 min-w-[140px]">
-                      <span className="tabular-nums font-semibold text-slate-700 w-12 text-right shrink-0">
+                      <span className="tabular-nums font-semibold text-base text-slate-700 w-14 text-right shrink-0">
                         {(m.contributionShare * 100).toFixed(1)}%
                       </span>
                       <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -254,7 +254,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                       return (
                         <>
                           {notes.map((note) => (
-                            <p key={note} className="mt-1.5 text-[10px] text-sky-600 font-medium flex items-start gap-1">
+                            <p key={note} className="mt-1.5 text-xs text-sky-600 font-medium flex items-start gap-1">
                               <span className="shrink-0">Context:</span>
                               <span className="font-normal text-sky-500">{note}</span>
                             </p>
@@ -273,7 +273,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                       const summary = info?.taskSummary;
                       if (!summary || summary.total === 0) return null;
                       return (
-                        <p className="mt-1.5 text-[10px] text-violet-700 font-medium flex items-center gap-1">
+                        <p className="mt-1.5 text-xs text-violet-700 font-medium flex items-center gap-1">
                           <span className="shrink-0">Tasks:</span>
                           <span className="font-normal text-violet-600">{summary.completed} of {summary.total} completed</span>
                         </p>
@@ -296,7 +296,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                           : null;
                       if (importedChars === null) return null;
                       return (
-                        <p className="mt-1.5 text-[10px] text-amber-700 font-medium flex items-center gap-1">
+                        <p className="mt-1.5 text-xs text-amber-700 font-medium flex items-center gap-1">
                           <span className="shrink-0">Import:</span>
                           <span className="font-normal text-amber-600">
                             {importedChars.toLocaleString()} characters imported from .docx
@@ -317,7 +317,7 @@ export function MemberTable({ members, variant = "github", disputedMembers, reso
                           : 0;
                       if (!insertedImages) return null;
                       return (
-                        <p className="mt-1.5 text-[10px] text-cyan-700 font-medium flex items-center gap-1">
+                        <p className="mt-1.5 text-xs text-cyan-700 font-medium flex items-center gap-1">
                           <span className="shrink-0">Images:</span>
                           <span className="font-normal text-cyan-600">
                             {insertedImages} image{insertedImages === 1 ? "" : "s"} inserted

@@ -430,7 +430,7 @@ export function AdminPage() {
                           <p className="font-medium text-slate-800 leading-tight">{u.name}</p>
                           <p className="text-xs text-slate-400 mt-0.5">{u.email}</p>
                           {isSelf && (
-                            <span className="text-[10px] text-indigo-500 font-semibold">you</span>
+                            <span className="text-xs text-indigo-500 font-semibold">you</span>
                           )}
                         </td>
 
@@ -596,7 +596,7 @@ export function AdminPage() {
                   { label: "Analyzed",    value: overview.analyzedGroups,    textCls: "text-emerald-600", borderCls: "border-emerald-200" },
                 ].map(({ label, value, textCls, borderCls }) => (
                   <div key={label} className={`bg-white border ${borderCls} rounded-xl p-4 text-center`}>
-                    <p className={`text-2xl font-bold ${textCls}`}>{value}</p>
+                    <p className={`text-3xl font-bold ${textCls}`}>{value}</p>
                     <p className="text-xs text-slate-500 mt-1">{label}</p>
                   </div>
                 ))}
@@ -703,10 +703,10 @@ export function AdminPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-semibold text-slate-800">{g.groupName}</span>
                               {g.classDisplay && (
-                                <span className="text-[10px] font-mono text-indigo-600">{g.classDisplay}</span>
+                                <span className="text-xs font-mono text-indigo-600">{g.classDisplay}</span>
                               )}
                               {g.instructorName && g.instructorName !== "Unknown" && (
-                                <span className="text-[10px] text-slate-400">{g.instructorName}</span>
+                                <span className="text-xs text-slate-400">{g.instructorName}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
@@ -791,17 +791,17 @@ export function AdminPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono font-bold text-indigo-600">{cls.subjectCode}</span>
                       {cls.edpCode && (
-                        <span className="text-[10px] text-indigo-400 font-mono">EDP {cls.edpCode}</span>
+                        <span className="text-xs text-indigo-400 font-mono">EDP {cls.edpCode}</span>
                       )}
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
                       {cls.department && (
                         <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
                       )}
-                      <span className="text-[10px] text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
+                      <span className="text-xs text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
                       <span className="text-xs text-slate-400">{cls.instructor.name}</span>
-                      <span className="text-[10px] text-slate-300">·</span>
+                      <span className="text-xs text-slate-300">·</span>
                       <span className="text-xs text-slate-400">
                         {cls.assignments.length} assignment{cls.assignments.length !== 1 ? "s" : ""}
                         {" · "}
@@ -856,7 +856,7 @@ export function AdminPage() {
                   <button
                     type="submit"
                     disabled={deptSubmitting || !deptName.trim() || !deptCode.trim()}
-                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold transition-colors"
+                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
                   >
                     {deptSubmitting ? "Creating…" : "Create"}
                   </button>

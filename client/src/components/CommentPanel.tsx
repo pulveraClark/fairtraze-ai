@@ -158,7 +158,7 @@ function Thread({
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5 flex-wrap">
                 <span className="text-xs font-semibold text-slate-700">{c.author.name}</span>
-                <span className="text-[10px] text-slate-400">{timeAgo(c.createdAt)}</span>
+                <span className="text-xs text-slate-400">{timeAgo(c.createdAt)}</span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5 whitespace-pre-wrap break-words">{c.text}</p>
             </div>

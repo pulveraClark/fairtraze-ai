@@ -78,7 +78,7 @@ export function AuditLogPage() {
           <div>
             <button
               onClick={() => navigate("/admin")}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1"
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -86,7 +86,7 @@ export function AuditLogPage() {
               Back to Admin
             </button>
             <h1 className="text-xl font-bold text-slate-900">Audit Log</h1>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm text-slate-400">
               Admin actions recorded most-recent first
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>

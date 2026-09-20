@@ -822,7 +822,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
                     className="absolute inset-x-0 pointer-events-none border-t border-dashed border-slate-300"
                     style={{ top: y }}
                   >
-                    <span className="absolute right-2 top-1 text-[10px] text-slate-400 bg-white px-1">
+                    <span className="absolute right-2 top-1 text-xs text-slate-400 bg-white px-1">
                       Page {i + 2}
                     </span>
                   </div>

@@ -9,8 +9,8 @@ export function OverviewPage() {
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4">
-          <h1 className="text-sm font-semibold text-slate-800">System Overview</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-xl font-bold text-slate-900">System Overview</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
             What FAIR TRAZE AI does and how the system works
           </p>
         </div>

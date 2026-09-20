@@ -90,7 +90,7 @@ export function AppSidebar() {
           <div className="rounded-lg bg-white/90 px-1.5 py-1 inline-flex shadow-sm mb-1">
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-6 w-auto block" />
           </div>
-          <span className="block text-[10px] text-slate-600 group-hover:text-slate-500 transition-colors">
+          <span className="block text-xs text-slate-600 group-hover:text-slate-500 transition-colors">
             Contribution Fairness
           </span>
         </button>

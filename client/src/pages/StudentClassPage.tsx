@@ -76,7 +76,7 @@ function JoinCodeBadge({ code }: { code: string }) {
   }
   return (
     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-      <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+      <span className="text-xs text-slate-400 shrink-0">Class code:</span>
       <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
       <button
         onClick={() => void handleCopy()}
@@ -233,7 +233,7 @@ function ProjectCard({
                 {g.role === "LEADER" && (
                   <button
                     onClick={() => onManage(g.id)}
-                    className="relative inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
+                    className="relative inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
                   >
                     Manage group
                     {g.pendingRequestCount > 0 && (
@@ -245,14 +245,14 @@ function ProjectCard({
                 )}
                 <button
                   onClick={() => onNavigate(g.id)}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
+                  className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
                 >
                   View report →
                 </button>
                 {(asgn.sourceType === "EDITOR" || asgn.sourceType === "COMBINED") && (
                   <button
                     onClick={() => onNavigate(g.id, "document")}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
                   >
                     FairTraze Docs
                   </button>
@@ -363,7 +363,7 @@ function ProjectCard({
                     Cancel
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Leadership is administrative only — it grants no contribution credit.
                 </p>
               </div>
@@ -402,7 +402,7 @@ function ProjectCard({
                             {g.memberCount} / {asgn.maxGroupSize} members
                           </span>
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <span className="text-xs text-slate-400 shrink-0">
                           {g.isFull ? "Full" : g.leaderName ? `Leader: ${g.leaderName}` : ""}
                         </span>
                       </label>
@@ -410,7 +410,7 @@ function ProjectCard({
                   </div>
                 )}
                 {error && <p className="text-xs text-red-600">{error}</p>}
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   The group leader must approve your request before you are added.
                 </p>
                 <div className="flex gap-2">
@@ -544,7 +544,7 @@ export function StudentClassPage({ classId }: Props) {
           <div className="min-w-0 flex-1">
             <button
               onClick={() => navigate("/student")}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1"
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -568,7 +568,7 @@ export function StudentClassPage({ classId }: Props) {
               ) : (
                 <h1 className="text-xl font-bold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
               )}
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-400 mt-0.5">
                 {assignments.length} project{assignments.length !== 1 ? "s" : ""}
                 {" · "}
                 {assignments.filter((a) => a.myGroup !== null).length} joined
