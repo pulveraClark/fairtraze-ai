@@ -13,6 +13,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import Image from "@tiptap/extension-image";
+import { DragHandle } from "@tiptap/extension-drag-handle-react";
 import FontFamily from "@tiptap/extension-font-family";
 import CharacterCount from "@tiptap/extension-character-count";
 import Superscript from "@tiptap/extension-superscript";
@@ -131,6 +132,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
+  // Drag handle only appears over image nodes (v1 scope — see CLAUDE.md's reposition-within-flow
+  // note); the underlying move is a real ProseMirror delete+insert in one atomic transaction, same
+  // as manual cut/paste already permits, just with a discoverable handle affordance.
+  const [dragHandleOnImage, setDragHandleOnImage] = useState(false);
   // Extension options are captured at construction time by TipTap and don't hot-update, so the
   // click handler goes through a ref instead — kept current every render, called from inside the
   // (effectively static) CommentHighlight extension instance.
@@ -255,7 +260,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             TextStyle,
             Color,
             Highlight.configure({ multicolor: true }),
-            Image.configure({ allowBase64: true }),
+            Image.configure({
+              allowBase64: true,
+              resize: { enabled: true, directions: ["bottom-right"], alwaysPreserveAspectRatio: true },
+            }),
             FontFamily,
             FontSize,
             LineHeight,
@@ -725,6 +733,18 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       {showAuthorship && <AuthorshipLegend users={authorshipUsers} />}
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
+          <DragHandle
+            editor={editor}
+            onNodeChange={({ node }) => setDragHandleOnImage(node?.type.name === "image")}
+          >
+            <div
+              className={`ft-drag-handle ${dragHandleOnImage ? "" : "ft-drag-handle-hidden"}`}
+              aria-label="Drag to reposition image"
+              title="Drag to reposition"
+            >
+              ⠿
+            </div>
+          </DragHandle>
           <EditorContent editor={editor} />
         </div>
         {showComments && (

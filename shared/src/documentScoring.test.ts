@@ -263,4 +263,38 @@ describe("computeDocumentTeamReport", () => {
       expect(report.members[0].importNote).toBeNull();
     });
   });
+
+  // ── insertedImageCount — resize/reposition scoring-neutrality (see CLAUDE.md "Image resize
+  // and reposition — IMPLEMENTED") ─────────────────────────────────────────────────────────
+  describe("insertedImageCount is disclosure-only", () => {
+    it("a nonzero insertedImageCount produces identical shares/contributionShare to the same fixture with zero", () => {
+      const base = {
+        studentName: "A", userId: 1, githubUsername: "a",
+        retainedChars: 100, totalInsertedChars: 100, totalDeletedChars: 0, selfDeletedChars: 0,
+        sessionCount: 2, sessionDates: ["2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z"],
+      };
+      const withoutImages: RawDocumentMemberStats[] = [{ ...base, insertedImageCount: 0 }];
+      const withImages: RawDocumentMemberStats[] = [{ ...base, insertedImageCount: 7 }];
+
+      const reportWithout = computeDocumentTeamReport(withoutImages);
+      const reportWith = computeDocumentTeamReport(withImages);
+      const a = reportWithout.members[0];
+      const b = reportWith.members[0];
+
+      // Pass-through field itself differs (that's the point of disclosure)...
+      expect(a.insertedImageCount).toBe(0);
+      expect(b.insertedImageCount).toBe(7);
+
+      // ...but every scoring-relevant field is byte-for-byte identical regardless — resizing
+      // or repositioning an image (which never changes insertedImageCount at all, since both
+      // operations produce zero EditEvent rows per authorshipCapture.ts) cannot move any of these.
+      expect(b.effectiveRetainedChars).toBe(a.effectiveRetainedChars);
+      expect(b.logSessions).toBe(a.logSessions);
+      expect(b.sessionShare).toBe(a.sessionShare);
+      expect(b.retainedTextShare).toBe(a.retainedTextShare);
+      expect(b.activeDaysShare).toBe(a.activeDaysShare);
+      expect(b.contributionShare).toBe(a.contributionShare);
+      expect(b.flags).toEqual(a.flags);
+    });
+  });
 });

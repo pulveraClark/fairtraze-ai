@@ -115,4 +115,85 @@ describe("attachAuthorshipTracking — image insertion", () => {
     expect(sessions.length).toBe(1);
     expect(sessions[0].imageInsertCount).toBe(1);
   }, 30000);
+
+  it("resizing an image (width/height attribute change) produces zero EditEvent rows and leaves imageInsertCount/characterCount unchanged", async () => {
+    const { user } = await createUser({ systemRole: "STUDENT" });
+    const project = await createProject();
+
+    const ydoc = new Y.Doc();
+    const fragment = ydoc.getXmlFragment("default");
+    const conn = fakeConnFor(user.id);
+
+    const room = `group-doc-${project.id}`;
+    const attachPromise = attachAuthorshipTracking(room, project.id, ydoc);
+    await attachPromise;
+
+    // Insert, then resize — mirrors the real onCommit path (ResizableNodeView calling
+    // editor.commands.updateAttributes("image", { width, height })): a plain setAttribute
+    // transaction on the same, already-existing node, no text or node-count change.
+    ydoc.transact(() => insertImageNode(fragment, 0), conn);
+    ydoc.transact(() => {
+      const image = fragment.get(0) as InstanceType<typeof Y.XmlElement>;
+      image.setAttribute("width", "300");
+      image.setAttribute("height", "200");
+    }, conn);
+
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // FLUSH_DEBOUNCE_MS + margin
+
+    const doc = await prisma.document.findUnique({ where: { groupId: project.id } });
+    expect(doc).not.toBeNull();
+
+    const events = await prisma.editEvent.findMany({ where: { documentId: doc!.id } });
+    expect(events.length).toBe(0);
+
+    const sessions = await prisma.editSession.findMany({ where: { documentId: doc!.id, userId: user.id } });
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].imageInsertCount).toBe(1);
+    expect(sessions[0].characterCount).toBe(0);
+  }, 30000);
+
+  it("repositioning an image within one atomic transaction (delete + reinsert) produces zero EditEvent rows and does not double-count imageInsertCount", async () => {
+    const { user } = await createUser({ systemRole: "STUDENT" });
+    const project = await createProject();
+
+    const ydoc = new Y.Doc();
+    const fragment = ydoc.getXmlFragment("default");
+    const conn = fakeConnFor(user.id);
+
+    const room = `group-doc-${project.id}`;
+    const attachPromise = attachAuthorshipTracking(room, project.id, ydoc);
+    await attachPromise;
+
+    // Two images establish a flow to reorder within.
+    ydoc.transact(() => insertImageNode(fragment, 0), conn); // image A at index 0
+    ydoc.transact(() => insertImageNode(fragment, 1), conn); // image B at index 1
+
+    // "Drag image A to after image B" — ProseMirror/Yjs have no native move op (per
+    // investigation), so a real drag resolves to delete-at-source + insert-at-target. The
+    // safety property under test is that both happen inside ONE ydoc.transact() call, exactly
+    // as a single drag gesture's transaction would translate via @tiptap/y-tiptap.
+    ydoc.transact(() => {
+      const imageA = fragment.get(0) as InstanceType<typeof Y.XmlElement>;
+      const src = imageA.getAttribute("src") as string;
+      fragment.delete(0, 1);
+      const moved = new Y.XmlElement("image");
+      moved.setAttribute("src", src);
+      fragment.insert(fragment.length, [moved]);
+    }, conn);
+
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // FLUSH_DEBOUNCE_MS + margin
+
+    const doc = await prisma.document.findUnique({ where: { groupId: project.id } });
+    expect(doc).not.toBeNull();
+
+    // The move itself produces zero EditEvent rows (same gate as resize/insertion).
+    const events = await prisma.editEvent.findMany({ where: { documentId: doc!.id } });
+    expect(events.length).toBe(0);
+
+    // Still 2, not 3 — countImageNodes's fresh whole-tree recount nets the move to zero delta,
+    // it is not identity-tracked and does not misattribute the atomic move as a new insertion.
+    const sessions = await prisma.editSession.findMany({ where: { documentId: doc!.id, userId: user.id } });
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].imageInsertCount).toBe(2);
+  }, 30000);
 });
