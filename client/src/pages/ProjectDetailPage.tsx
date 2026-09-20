@@ -229,7 +229,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   // Most specific real parent: assignment, else class, else dashboard/admin.
   const backTarget = assignmentId ? assignmentUrl : classId ? classUrl : dashboardUrl;
-  const backLabel   = assignmentId ? (subjectName || "Assignment") : classId ? code : (isAdmin ? "Admin" : "Dashboard");
+  const backLabel   = assignmentId ? (subjectName || "Project") : classId ? code : (isAdmin ? "Admin" : "Dashboard");
 
   // This group's Gini vs. the average across its other analyzed siblings under the same
   // assignment — omitted entirely (averageGini: null) when there are no such siblings.

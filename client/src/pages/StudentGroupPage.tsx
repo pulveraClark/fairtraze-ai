@@ -362,8 +362,14 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
             <p className="text-sm text-red-600">{error || "Group not found."}</p>
-            <button onClick={() => navigate("/student")} className="text-sm text-indigo-600 hover:underline">
-              ← Back to My Classes
+            <button
+              onClick={() => navigate("/student")}
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to My Classes
             </button>
           </div>
         </main>

@@ -78,7 +78,7 @@ export function TeamHealthBanner({ teamHealth, gini, projectName, memberCount, b
 
       {benchmark && benchmark.averageGini !== null && (
         <div className="mt-3 pt-3 border-t border-black/10 flex items-center gap-1.5 text-xs">
-          <span className="text-slate-500 font-medium">Assignment average:</span>
+          <span className="text-slate-500 font-medium">Project average:</span>
           <span className="font-semibold text-slate-700">{benchmark.averageGini.toFixed(3)}</span>
           <span
             className={`font-semibold ${

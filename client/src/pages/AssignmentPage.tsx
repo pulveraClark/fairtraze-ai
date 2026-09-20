@@ -310,7 +310,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                     group's own Gini would misleadingly imply a comparison that doesn't exist. */}
                 {benchmark.averageGini !== null && benchmark.analyzedPeerCount > 1 && (
                   <span className="ml-1">
-                    · Assignment average Gini: <span className="font-semibold text-slate-500">{benchmark.averageGini.toFixed(3)}</span>{" "}
+                    · Project average Gini: <span className="font-semibold text-slate-500">{benchmark.averageGini.toFixed(3)}</span>{" "}
                     ({benchmark.analyzedPeerCount} of {summary.length} analyzed)
                   </span>
                 )}
