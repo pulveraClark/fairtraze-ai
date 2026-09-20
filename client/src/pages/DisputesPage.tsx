@@ -221,12 +221,14 @@ export function DisputesPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <button onClick={() => navigate("/dashboard")} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
-                Dashboard
-              </button>
-              <span className="text-slate-300 text-xs shrink-0">›</span>
-              <span className="shrink-0 text-xs font-semibold text-slate-800">Disputes</span>
+            <button onClick={() => navigate("/dashboard")} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
+            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">Disputes</h1>
               {openCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold">
                   {openCount} open

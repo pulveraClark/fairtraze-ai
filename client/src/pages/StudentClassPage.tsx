@@ -541,22 +541,24 @@ export function StudentClassPage({ classId }: Props) {
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <div className="min-w-0 flex-1">
             <button
               onClick={() => navigate("/student")}
-              className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
+              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
-              Dashboard
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
             </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               {cls ? (
                 <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl font-bold text-slate-900">{cls.subjectName}</h1>
                   <span className="text-xs font-mono font-bold text-indigo-600">
                     {cls.subjectCode}
                     {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
                   </span>
-                  <h1 className="text-sm font-semibold text-slate-800">{cls.subjectName}</h1>
                   {cls.department && (
                     <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {cls.department.code}
@@ -564,7 +566,7 @@ export function StudentClassPage({ classId }: Props) {
                   )}
                 </div>
               ) : (
-                <h1 className="text-sm font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
+                <h1 className="text-xl font-bold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
               )}
               <p className="text-xs text-slate-400 mt-0.5">
                 {assignments.length} project{assignments.length !== 1 ? "s" : ""}

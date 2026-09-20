@@ -80,7 +80,6 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const { navigate } = useRouter();
   const { token, user } = useAuth();
   const isAdmin = user?.systemRole === "ADMIN";
-  const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
   const [assignment, setAssignment] = useState<AssignmentMeta | null>(null);
   const [classInfo, setClassInfo]   = useState<ClassInfo | null>(null);
@@ -285,25 +284,23 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <button onClick={() => navigate(dashboardUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
-              {isAdmin ? "Admin" : "Dashboard"}
+          <div className="min-w-0 flex-1">
+            <button onClick={() => navigate(classUrl)} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to {classInfo?.subjectCode ?? "…"}
             </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
-            <button onClick={() => navigate(classUrl)} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium font-mono">
-              {classInfo?.subjectCode ?? "…"}
-            </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               {assignment ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-sm font-semibold text-slate-800 truncate">{assignment.title}</h1>
+                  <h1 className="text-xl font-bold text-slate-900 truncate">{assignment.title}</h1>
                   <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                     {assignment.sourceType}
                   </span>
                 </div>
               ) : (
-                <h1 className="text-sm font-semibold text-slate-400">Loading…</h1>
+                <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
               )}
               <p className="text-xs text-slate-400 mt-0.5">
                 {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}

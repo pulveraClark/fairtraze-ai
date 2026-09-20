@@ -420,21 +420,16 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <button
-              onClick={() => navigate("/student")}
-              className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
-            >
-              My Classes
-            </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
+          <div className="min-w-0 flex-1">
             <button
               onClick={() => navigate(`/student/class/${classSection.id}`)}
-              className="shrink-0 text-xs font-mono font-medium text-slate-500 hover:text-slate-700 transition-colors"
+              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
-              {bandCode}
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to {bandCode}
             </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 {editingGroupName ? (
@@ -467,7 +462,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
-                    <h1 className="text-sm font-semibold text-slate-800 truncate">{project.groupName}</h1>
+                    <h1 className="text-xl font-bold text-slate-900 truncate">{project.groupName}</h1>
                     {membership.role === "LEADER" && (
                       <button
                         onClick={startEditGroupName}
