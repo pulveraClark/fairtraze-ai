@@ -66,6 +66,7 @@ export function RegisterPage() {
   const [email,         setEmail]         = useState("");
   const [role,          setRole]          = useState<"INSTRUCTOR" | "STUDENT">("INSTRUCTOR");
   const [password,      setPassword]      = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error,         setError]         = useState<string | null>(null);
   const [submitting,    setSubmitting]    = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
@@ -122,6 +123,11 @@ export function RegisterPage() {
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
@@ -284,6 +290,22 @@ export function RegisterPage() {
               />
             </div>
 
+            {/* Confirm password */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Confirm password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete="new-password"
+                className={inputClass}
+              />
+            </div>
+
             {/* Error */}
             {error && (
               <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-3">
@@ -297,7 +319,7 @@ export function RegisterPage() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !name || !email || !password}
+              disabled={submitting || !name || !email || !password || !confirmPassword}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
             >
               {submitting ? (

@@ -28,7 +28,7 @@ interface RoleSuggestion {
 
 // Leader/instructor-assigned checklist item. Purely informational — completion
 // never affects contribution scores (see server/src/routes/groups.ts Task routes).
-interface GroupTask {
+export interface GroupTask {
   id: number;
   projectId: number;
   title: string;

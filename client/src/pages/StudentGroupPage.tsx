@@ -4,7 +4,7 @@ import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
-import { GroupManageModal } from "../components/GroupManageModal";
+import { GroupManageModal, type GroupTask } from "../components/GroupManageModal";
 import { FlagTag } from "../components/FlagTag";
 import type { Flag } from "@shared/types";
 
@@ -229,6 +229,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [groupNameDraft, setGroupNameDraft]     = useState("");
   const [groupNameBusy, setGroupNameBusy]       = useState(false);
   const [groupNameErr, setGroupNameErr]         = useState("");
+  // My open tasks (read-only preview — full management stays in Manage Group)
+  const [myTasks, setMyTasks] = useState<GroupTask[]>([]);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -268,6 +270,19 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       .catch(() => setDispute(null));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, projectId]);
+
+  // Fetch tasks to surface the current user's own open assignments
+  useEffect(() => {
+    if (!token || !user) return;
+    fetch(`/api/groups/${projectId}/tasks`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json() as { tasks?: GroupTask[] };
+        setMyTasks((json.tasks ?? []).filter((t) => t.assignedToUserId === user.id && !t.done));
+      })
+      .catch(() => setMyTasks([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, projectId, user, refreshKey]);
 
   async function handleSuggestRole() {
     if (!token) return;
@@ -413,7 +428,12 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               My Classes
             </button>
             <span className="text-slate-300 text-xs shrink-0">›</span>
-            <span className="shrink-0 text-xs font-mono font-medium text-slate-500">{bandCode}</span>
+            <button
+              onClick={() => navigate(`/student/class/${classSection.id}`)}
+              className="shrink-0 text-xs font-mono font-medium text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              {bandCode}
+            </button>
             <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -523,6 +543,34 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       </div>
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* ── Your tasks widget ───────────────────────────────────────────────── */}
+        {myTasks.length > 0 && (
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h2 className="text-xs font-semibold text-slate-700">
+                Your tasks
+                <span className="ml-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 rounded-full px-1.5 py-0.5">
+                  {myTasks.length}
+                </span>
+              </h2>
+              <button
+                onClick={() => setShowManageModal(true)}
+                className="text-[11px] text-indigo-600 hover:underline font-medium shrink-0"
+              >
+                Manage tasks
+              </button>
+            </div>
+            <ul className="space-y-1">
+              {myTasks.map((t) => (
+                <li key={t.id} className="flex items-center gap-2 text-xs text-slate-600">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="truncate">{t.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* ── Report tab ───────────────────────────────────────────────────────── */}
         {effectiveTab === "report" && (
