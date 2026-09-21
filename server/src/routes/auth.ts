@@ -175,6 +175,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
   res.json({
     token,
     user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
+    emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
 
@@ -294,13 +295,14 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
   }
 
   res.json({
-    id:             user.id,
-    email:          user.email,
-    name:           user.name,
-    systemRole:     user.systemRole,
-    githubUsername: user.githubUsername,
-    emailVerified:  user.emailVerified,
-    createdAt:      user.createdAt,
+    id:                        user.id,
+    email:                     user.email,
+    name:                      user.name,
+    systemRole:                user.systemRole,
+    githubUsername:            user.githubUsername,
+    emailVerified:             user.emailVerified,
+    createdAt:                 user.createdAt,
+    emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
 

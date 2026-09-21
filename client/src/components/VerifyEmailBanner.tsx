@@ -7,7 +7,7 @@ export function VerifyEmailBanner() {
   const [sent,    setSent]    = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  if (!user || user.emailVerified !== false) return null;
+  if (!user || user.emailVerified !== false || user.emailVerificationRequired === false) return null;
 
   async function handleResend() {
     setSending(true);

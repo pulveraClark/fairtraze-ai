@@ -9,6 +9,7 @@ export interface AuthUser {
   systemRole: "ADMIN" | "INSTRUCTOR" | "STUDENT";
   githubUsername?: string | null;
   emailVerified?: boolean;
+  emailVerificationRequired?: boolean;
 }
 
 interface AuthContextValue {
@@ -168,10 +169,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       credentials: "include",
       body:        JSON.stringify({ email, password }),
     });
-    const data = (await res.json()) as { token?: string; user?: AuthUser; error?: string };
+    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Login failed (${res.status})`);
-    storeSession(data.token!, data.user!);
-    return data.user!;
+    const user = { ...data.user!, emailVerificationRequired: data.emailVerificationRequired };
+    storeSession(data.token!, user);
+    return user;
   }
 
   async function refreshUser(): Promise<AuthUser | null> {
