@@ -397,7 +397,11 @@ export function ProjectDetailPage({ projectId }: Props) {
                 {reanalyzing ? (
                   <>
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin shrink-0" />
-                    Fetching GitHub data…
+                    {sourceType === "EDITOR"
+                      ? "Fetching FairTraze Docs data…"
+                      : sourceType === "COMBINED"
+                      ? "Fetching GitHub + FairTraze Docs data…"
+                      : "Fetching GitHub data…"}
                   </>
                 ) : (
                   <>
@@ -435,7 +439,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-6">
 
         {/* Loading stepper */}
-        {reanalyzing && <AnalysisStepper done={stepperDone} />}
+        {reanalyzing && <AnalysisStepper done={stepperDone} sourceType={sourceType} />}
 
         {/* Re-analyze error */}
         {reanalyzeError && !reanalyzing && (
@@ -708,6 +712,14 @@ export function ProjectDetailPage({ projectId }: Props) {
                     deadlineWindowBasis={stored.report.deadlineWindowBasis}
                   />
                 </div>
+
+                {/* AI narrative — keyed to projectId so it always reflects the current group */}
+                <Narrative
+                  key={projectId}
+                  narrative={narrativeText}
+                  projectId={projectId}
+                  onNarrativeGenerated={(text) => setNarrativeText(text)}
+                />
               </>
             )}
 
