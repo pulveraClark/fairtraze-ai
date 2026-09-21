@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 
 export const groupsRouter = Router();
@@ -687,7 +687,7 @@ groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: 
 // ── Join-request flow ──────────────────────────────────────────────────────────
 
 // POST /api/groups/:projectId/request — student requests to join a group
-groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), async (req: Request, res: Response) => {
+groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), requireVerifiedEmail, async (req: Request, res: Response) => {
   const idResult = idParam.safeParse(req.params.projectId);
   if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
 
@@ -893,4 +893,28 @@ groupsRouter.post("/api/groups/requests/:id/decline", requireAuth, async (req: R
   });
 
   res.json({ message: "Request declined." });
+});
+
+// POST /api/groups/requests/:id/cancel — requester withdraws their own pending request
+groupsRouter.post("/api/groups/requests/:id/cancel", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+
+  const joinReq = await prisma.groupJoinRequest.findUnique({
+    where: { id: idResult.data },
+  });
+  if (!joinReq) { res.status(404).json({ error: "Request not found." }); return; }
+
+  if (joinReq.userId !== req.user!.sub) {
+    res.status(403).json({ error: "You can only cancel your own request." });
+    return;
+  }
+  if (joinReq.status !== "PENDING") {
+    res.status(409).json({ error: "This request has already been resolved." });
+    return;
+  }
+
+  await prisma.groupJoinRequest.delete({ where: { id: joinReq.id } });
+
+  res.json({ message: "Request cancelled." });
 });

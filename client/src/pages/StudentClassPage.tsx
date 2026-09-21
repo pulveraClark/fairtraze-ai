@@ -175,6 +175,23 @@ function ProjectCard({
     }
   }
 
+  async function handleCancelRequest() {
+    if (!asgn.myRequest) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/groups/requests/${asgn.myRequest.id}/cancel`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Could not cancel request."); return; }
+      onChanged();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function fmtDeadline(iso: string | null): string {
     if (!iso) return "No deadline";
     return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
@@ -276,8 +293,16 @@ function ProjectCard({
                 <p className="text-[11px] text-amber-700 mt-0.5">
                   Waiting for the group leader to respond. You will be notified when your request is accepted or declined.
                 </p>
+                <button
+                  onClick={handleCancelRequest}
+                  disabled={submitting}
+                  className="mt-2 text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
+                >
+                  Cancel request
+                </button>
               </div>
             </div>
+            {error && <p className="text-[11px] text-red-600">{error}</p>}
           </div>
         ) : (
           /* Student has no group yet — show create/join UI */

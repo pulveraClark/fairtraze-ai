@@ -45,30 +45,33 @@ describe("requireVerifiedEmail soft gate", () => {
     expect(res.body.code).not.toBe("EMAIL_NOT_VERIFIED");
   });
 
-  it("blocks an unverified STUDENT from joining a group with EMAIL_NOT_VERIFIED", async () => {
-    const { user } = await createUser({ systemRole: "STUDENT", emailVerified: false });
+  it("blocks an unverified STUDENT from requesting to join a group with EMAIL_NOT_VERIFIED", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+    const classSection = await createClassSection(instructor.id);
+    const assignment = await createAssignment(classSection.id, { sourceType: "EDITOR" });
+    const project = await createProject({ assignmentId: assignment.id });
+    const { user: student } = await createUser({ systemRole: "STUDENT", emailVerified: false });
+    await enroll(student.id, classSection.id);
 
     const res = await request(app)
-      .post("/api/join/join-group")
-      .set("Authorization", authHeaderFor(user))
-      .send({ projectGroupId: 1 });
+      .post(`/api/groups/${project.id}/request`)
+      .set("Authorization", authHeaderFor(student));
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("EMAIL_NOT_VERIFIED");
   });
 
-  it("allows a verified STUDENT past the gate to join a group", async () => {
+  it("allows a verified STUDENT past the gate to request to join a group", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const classSection = await createClassSection(instructor.id);
-    const assignment = await createAssignment(classSection.id);
+    const assignment = await createAssignment(classSection.id, { sourceType: "EDITOR" });
     const project = await createProject({ assignmentId: assignment.id });
     const { user: student } = await createUser({ systemRole: "STUDENT", emailVerified: true });
     await enroll(student.id, classSection.id);
 
     const res = await request(app)
-      .post("/api/join/join-group")
-      .set("Authorization", authHeaderFor(student))
-      .send({ projectGroupId: project.id });
+      .post(`/api/groups/${project.id}/request`)
+      .set("Authorization", authHeaderFor(student));
 
     expect(res.status).not.toBe(403);
     expect(res.body.code).not.toBe("EMAIL_NOT_VERIFIED");
