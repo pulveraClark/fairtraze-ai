@@ -128,7 +128,7 @@ export function AlertsBell() {
                           }`}>
                             {alert.message}
                           </p>
-                          <p className="text-[10px] text-slate-600 mt-1">{timeAgo(alert.createdAt)}</p>
+                          <p className="text-xs text-slate-600 mt-1">{timeAgo(alert.createdAt)}</p>
                         </div>
                       </div>
                     </button>

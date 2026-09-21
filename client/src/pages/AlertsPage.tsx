@@ -89,22 +89,24 @@ export function AlertsPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
-              >
-                Dashboard
-              </button>
-              <span className="text-slate-300 text-xs shrink-0">›</span>
-              <span className="shrink-0 text-xs font-semibold text-slate-800">Alerts</span>
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
+            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">Alerts</h1>
               {unreadCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[10px] font-semibold">
                   {unreadCount} unread
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm text-slate-400">
               Team health alerts and flag notifications
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>
@@ -148,7 +150,7 @@ export function AlertsPage() {
 
         {/* Empty state */}
         {!loading && !error && alerts.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-24 text-center">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col items-center gap-3 py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
               <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -163,14 +165,15 @@ export function AlertsPage() {
         {!loading && !error && alerts.length > 0 && (
           <>
             <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 bg-white shadow-sm">
-              {alerts.map((alert) => {
+              {alerts.map((alert, i) => {
                 const typeMeta = ALERT_TYPE_LIGHT[alert.type];
+                const stripe   = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                 return (
                   <button
                     key={alert.id}
                     onClick={() => handleClick(alert)}
-                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-50 ${
-                      !alert.read ? "bg-indigo-50/60" : "bg-white"
+                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-100 ${
+                      !alert.read ? "bg-indigo-50/60" : stripe
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -219,7 +222,7 @@ export function AlertsPage() {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

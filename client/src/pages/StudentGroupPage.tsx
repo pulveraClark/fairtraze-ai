@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
-import { FairTrazeDocsPreview } from "../components/FairTrazeDocsPreview";
-import { GroupManageModal } from "../components/GroupManageModal";
+import { DocumentGate } from "../components/DocumentGate";
+import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
+import { GroupManageModal, type GroupTask } from "../components/GroupManageModal";
+import { FlagTag } from "../components/FlagTag";
 import type { Flag } from "@shared/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -17,9 +19,9 @@ interface RoleSuggestionData {
 }
 
 interface GroupDetail {
-  classSection: { id: number; subjectCode: string; subjectName: string; course: string; edpCode: string; };
+  classSection: { id: number; subjectCode: string; subjectName: string; department: { id: number; name: string; code: string } | null; edpCode: string; };
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; };
-  project:      { id: number; groupName: string; name: string; repoUrl: string; };
+  project:      { id: number; groupName: string; repoUrl: string; };
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
   report: {
@@ -27,6 +29,7 @@ interface GroupDetail {
     teamHealth:  string;
     analyzedAt:  string;
     memberCount: number;
+    deadlineWindowBasis: "assignment-deadline" | "activity-span";
     myContribution: {
       contributionShare: number;
       commits:           number;
@@ -210,6 +213,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     const params = new URLSearchParams(window.location.search);
     return params.get("tab") === "document" ? "document" : "report";
   });
+  const [viewingHistory, setViewingHistory]     = useState(false);
   const [showManageModal, setShowManageModal]   = useState(false);
   const [refreshKey, setRefreshKey]             = useState(0);
   const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
@@ -220,6 +224,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [suggestDraft, setSuggestDraft]   = useState<string[]>([]);
   const [suggestBusy, setSuggestBusy]     = useState(false);
   const [suggestErr, setSuggestErr]       = useState("");
+  // Group name rename (leader only)
+  const [editingGroupName, setEditingGroupName] = useState(false);
+  const [groupNameDraft, setGroupNameDraft]     = useState("");
+  const [groupNameBusy, setGroupNameBusy]       = useState(false);
+  const [groupNameErr, setGroupNameErr]         = useState("");
+  // My open tasks (read-only preview — full management stays in Manage Group)
+  const [myTasks, setMyTasks] = useState<GroupTask[]>([]);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -260,6 +271,19 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, projectId]);
 
+  // Fetch tasks to surface the current user's own open assignments
+  useEffect(() => {
+    if (!token || !user) return;
+    fetch(`/api/groups/${projectId}/tasks`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json() as { tasks?: GroupTask[] };
+        setMyTasks((json.tasks ?? []).filter((t) => t.assignedToUserId === user.id && !t.done));
+      })
+      .catch(() => setMyTasks([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, projectId, user, refreshKey]);
+
   async function handleSuggestRole() {
     if (!token) return;
     const st = data?.assignment?.sourceType ?? "GITHUB";
@@ -287,6 +311,36 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     }
   }
 
+  function startEditGroupName() {
+    if (!data) return;
+    setGroupNameDraft(data.project.groupName);
+    setGroupNameErr("");
+    setEditingGroupName(true);
+  }
+
+  async function handleSaveGroupName() {
+    if (!token || !data) return;
+    const trimmed = groupNameDraft.trim();
+    if (!trimmed) { setGroupNameErr("Group name is required."); return; }
+    setGroupNameBusy(true);
+    setGroupNameErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ groupName: trimmed }),
+      });
+      const json = await res.json() as { groupName?: string; error?: string };
+      if (!res.ok) { setGroupNameErr(json.error ?? "Could not update name."); return; }
+      setData((d) => d ? { ...d, project: { ...d.project, groupName: json.groupName ?? trimmed } } : d);
+      setEditingGroupName(false);
+    } catch {
+      setGroupNameErr("Network error — could not update name.");
+    } finally {
+      setGroupNameBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -308,8 +362,14 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
             <p className="text-sm text-red-600">{error || "Group not found."}</p>
-            <button onClick={() => navigate("/student")} className="text-xs text-indigo-600 hover:underline">
-              ← Back to My Classes
+            <button
+              onClick={() => navigate("/student")}
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to My Classes
             </button>
           </div>
         </main>
@@ -323,9 +383,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["report", "document"]
+      ? ["document", "report"]
       : ["report"]; // GITHUB (default)
-  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0]!;
+  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
   const equalShare   = report ? 1 / report.memberCount : 0;
   const myShare      = report?.myContribution?.contributionShare ?? null;
@@ -366,19 +426,63 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <div className="min-w-0 flex-1">
             <button
-              onClick={() => navigate("/student")}
-              className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
+              onClick={() => navigate(`/student/class/${classSection.id}`)}
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
-              My Classes
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to {bandCode}
             </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
-            <span className="shrink-0 text-xs font-mono font-medium text-slate-500">{bandCode}</span>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm font-semibold text-slate-800 truncate">My Project</h1>
+                {editingGroupName ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={groupNameDraft}
+                      onChange={(e) => { setGroupNameDraft(e.target.value); setGroupNameErr(""); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void handleSaveGroupName();
+                        if (e.key === "Escape") setEditingGroupName(false);
+                      }}
+                      disabled={groupNameBusy}
+                      className="text-sm font-semibold text-slate-800 border border-indigo-300 rounded-lg px-2 py-1 max-w-[220px] focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+                    />
+                    <button
+                      onClick={() => void handleSaveGroupName()}
+                      disabled={groupNameBusy}
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-1.5 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                    >
+                      {groupNameBusy ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setEditingGroupName(false)}
+                      disabled={groupNameBusy}
+                      className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <h1 className="text-xl font-bold text-slate-900 truncate">{project.groupName}</h1>
+                    {membership.role === "LEADER" && (
+                      <button
+                        onClick={startEditGroupName}
+                        title="Rename group"
+                        aria-label="Rename group"
+                        className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+                      >
+                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                   {SOURCE_LABEL[assignment.sourceType] ?? assignment.sourceType}
                 </span>
@@ -390,8 +494,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   {membership.role === "LEADER" ? "Leader" : "Member"}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {classSection.subjectName} · {project.groupName}
+              {editingGroupName && groupNameErr && (
+                <p className="text-[11px] text-red-600 mt-1">{groupNameErr}</p>
+              )}
+              <p className="text-sm text-slate-400 mt-0.5">
+                {classSection.subjectName}
                 {assignment.deadline && (
                   <> · Due {new Date(assignment.deadline).toLocaleDateString()}</>
                 )}
@@ -401,7 +508,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setShowManageModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -437,6 +544,34 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       </div>
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* ── Your tasks widget ───────────────────────────────────────────────── */}
+        {myTasks.length > 0 && (
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h2 className="text-xs font-semibold text-slate-700">
+                Your tasks
+                <span className="ml-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 rounded-full px-1.5 py-0.5">
+                  {myTasks.length}
+                </span>
+              </h2>
+              <button
+                onClick={() => setShowManageModal(true)}
+                className="text-[11px] text-indigo-600 hover:underline font-medium shrink-0"
+              >
+                Manage tasks
+              </button>
+            </div>
+            <ul className="space-y-1">
+              {myTasks.map((t) => (
+                <li key={t.id} className="flex items-center gap-2 text-xs text-slate-600">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="truncate">{t.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* ── Report tab ───────────────────────────────────────────────────────── */}
         {effectiveTab === "report" && (
@@ -475,8 +610,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 </p>
               )}
 
-              {/* Member: suggestion flow */}
-              {membership.role === "MEMBER" && (
+              {/* Member: suggestion flow — only meaningful when the assignment has more than one valid role to choose from */}
+              {membership.role === "MEMBER" && (sourceType === "COMBINED" || mySuggestion?.status === "PENDING") && (
                 <div className="border-t border-slate-100 mt-3 pt-3">
                   {suggestErr && <p className="text-xs text-red-600 mb-2">{suggestErr}</p>}
 
@@ -597,7 +732,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       <div>
                         <h2 className="text-sm font-semibold text-slate-800">Your contribution share</h2>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {project.groupName} · {project.name} · {report.memberCount} members
+                          {project.groupName} · {report.memberCount} members
                         </p>
                       </div>
                       <span className="text-3xl font-bold text-indigo-600">{mySharePct}%</span>
@@ -659,7 +794,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       { label: "Lines Deleted", value: report.myContribution.deletions.toLocaleString() },
                     ] as const).map(({ label, value }) => (
                       <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
-                        <p className="text-xl font-bold text-slate-800">{value}</p>
+                        <p className="text-2xl font-bold text-slate-800">{value}</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
                       </div>
                     ))}
@@ -679,7 +814,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     <div>
                       <p className="text-[11px] text-slate-400 mb-1.5">Contribution Gini</p>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-slate-700">{report.gini.toFixed(2)}</span>
+                        <span className="text-base font-bold text-slate-700">{report.gini.toFixed(2)}</span>
                         {giniLabel && (
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[giniLabel]}`}>
                             {giniLabel}
@@ -719,9 +854,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <span className="text-[11px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5">
-                                    {flag}
-                                  </span>
+                                  <FlagTag flag={flag} />
                                   {(() => {
                                     const outcome = getFlagDisputeOutcome(flag, dispute);
                                     if (!outcome) return null;
@@ -742,6 +875,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 <p className="text-sm text-slate-700 leading-relaxed">
                                   {FLAG_DESCRIPTIONS[flag] ?? "A flag has been raised on your contribution pattern."}
                                 </p>
+                                {flag === "deadline-driven" && (
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {report.deadlineWindowBasis === "assignment-deadline"
+                                      ? "Based on the assignment deadline."
+                                      : "Based on observed activity span (no deadline was set for this assignment)."}
+                                  </p>
+                                )}
                                 <p className="text-xs text-slate-400 mt-1.5">
                                   This flag is visible to your instructor. You may submit a note to provide context.
                                 </p>
@@ -795,16 +935,27 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           </div>
         )}
 
-        {/* ── FairTraze Docs tab (preview) ─────────────────────────────────────── */}
+        {/* ── FairTraze Docs tab ────────────────────────────────────────────────── */}
         {effectiveTab === "document" && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
               <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Collaborative editor — document contributions recorded per author
+                {viewingHistory ? "Past versions of this document, captured at each analysis run" : "Collaborative editor — shared document for this group"}
               </span>
+              <button
+                type="button"
+                onClick={() => setViewingHistory((v) => !v)}
+                className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline"
+              >
+                {viewingHistory ? "Back to live document" : "History"}
+              </button>
             </div>
-            <FairTrazeDocsPreview />
+            {viewingHistory ? (
+              <DocumentHistoryPanel groupId={projectId} />
+            ) : (
+              <DocumentGate groupId={projectId} editable={true} canChooseTemplate={membership.role === "LEADER"} />
+            )}
           </div>
         )}
 

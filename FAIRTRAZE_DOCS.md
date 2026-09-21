@@ -1,9 +1,9 @@
 # FairTraze Docs — Design Blueprint & Manuscript Source
 
-> **STATUS: PLANNED — NOT YET IMPLEMENTED.**
-> This document is the authoritative design blueprint for FairTraze Docs, the system's planned built-in collaborative editor and its integration with GitHub-based scoring into a unified contribution fairness analysis. Nothing described here is currently in the codebase. The current build analyses GitHub only.
+> **STATUS: IMPLEMENTED.**
+> This document is the design blueprint for FairTraze Docs, the system's built-in collaborative editor and its integration with GitHub-based scoring into a unified contribution fairness analysis. The core design described here is live in the codebase — see `CLAUDE.md` for the current, authoritative implementation status of each specific feature (a few sub-features, such as comments/suggestions and bulk-paste detection, remain unimplemented and are called out inline below).
 >
-> Phase D is the implementation target. This document serves as design reference AND as manuscript source material for the capstone paper.
+> This document serves as design reference AND as manuscript source material for the capstone paper.
 
 ---
 
@@ -1141,4 +1141,4 @@ The classification affects the edit-type weighting of net retained text but does
 
 *End of FAIRTRAZE_DOCS.md — FairTraze AI Capstone Design Blueprint.*
 
-*Document version: 1.0 | Status: PLANNED — Phase D | Author: Design team | Date: June 2026*
+*Document version: 1.0 | Status: IMPLEMENTED — Phase D | Author: Design team | Date: June 2026*

@@ -10,9 +10,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "types": ["@testing-library/jest-dom"],
     "paths": {
       "@shared/*": ["../shared/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

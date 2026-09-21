@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { Fragment, useState, useRef, useLayoutEffect, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 
@@ -20,10 +20,39 @@ export function TipList({ items }: { items: [string, string][] }) {
   );
 }
 
+// ── Weight/score list helper ──────────────────────────────────────────────────
+// Bold header, thin divider, then label/value rows in a true CSS grid so every
+// value lines up in the same column regardless of label length. No bullets,
+// no dashes — items must be passed in the same order shown in the report.
+export function WeightList({ header, items }: { header: string; items: [string, string][] }) {
+  return (
+    <div>
+      <p style={{ margin: 0, marginBottom: 6, fontWeight: 700, color: "#f8fafc", fontSize: 11 }}>
+        {header}
+      </p>
+      <div style={{ borderTop: "1px solid #334155", marginBottom: 6 }} />
+      <div style={{ display: "grid", gridTemplateColumns: "auto auto", columnGap: 16, rowGap: 4 }}>
+        {items.map(([label, value]) => (
+          <Fragment key={label}>
+            <span style={{ color: "#cbd5e1", whiteSpace: "nowrap" }}>{label}</span>
+            <span style={{ color: "#f1f5f9", fontWeight: 600, whiteSpace: "nowrap", justifySelf: "end" }}>
+              {value}
+            </span>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 interface Props {
   content: ReactNode;
   label: string;
+  // Fixed px width by default (existing sentence-style tooltips). Pass "max-content"
+  // to size the tooltip to fit its content exactly — used by WeightList tooltips
+  // so their aligned columns never wrap.
+  width?: number | string;
 }
 
 interface Pos {
@@ -34,7 +63,7 @@ interface Pos {
   visible: boolean;
 }
 
-export function InfoTooltip({ content, label }: Props) {
+export function InfoTooltip({ content, label, width = 252 }: Props) {
   const [open, setOpen] = useState(false);
   const [pos, setPos]   = useState<Pos | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -158,7 +187,7 @@ export function InfoTooltip({ content, label }: Props) {
             left: pos?.left ?? 0,
             visibility: pos?.visible ? "visible" : "hidden",
             zIndex: 9999,
-            width: 252,
+            width,
             maxWidth: "calc(100vw - 20px)",
             backgroundColor: "#1e293b",
             color: "#e2e8f0",

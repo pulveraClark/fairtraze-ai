@@ -292,6 +292,7 @@ export function SettingsPage() {
   const { navigate } = useRouter();
 
   const [profile, setProfile]     = useState<FullProfile | null>(null);
+  const [loading, setLoading]     = useState(true);
   const [fetchErr, setFetchErr]   = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPwModal,   setShowPwModal]   = useState(false);
@@ -306,7 +307,8 @@ export function SettingsPage() {
         return res.json() as Promise<FullProfile>;
       })
       .then((data) => setProfile(data))
-      .catch(() => setFetchErr("Could not load your profile. Please try again."));
+      .catch(() => setFetchErr("Could not load your profile. Please try again."))
+      .finally(() => setLoading(false));
   }, [token]);
 
   async function handleProfileSaved(updated: Partial<FullProfile>) {
@@ -367,6 +369,13 @@ export function SettingsPage() {
         </div>
 
         {fetchErr && <ErrorBanner msg={fetchErr} />}
+
+        {loading && (
+          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+            <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+            Loading profile…
+          </div>
+        )}
 
         {/* ── Account info ────────────────────────────────────────────────── */}
         {profile && (

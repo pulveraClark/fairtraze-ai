@@ -139,7 +139,7 @@ disputesRouter.get("/api/disputes/mine", ...requireRole("STUDENT"), async (req, 
     where:   { studentUserId },
     orderBy: { createdAt: "desc" },
     include: {
-      project: { select: { id: true, groupName: true, name: true } },
+      project: { select: { id: true, groupName: true } },
     },
   });
 
@@ -187,7 +187,6 @@ disputesRouter.get("/api/disputes", ...requireRole("INSTRUCTOR"), async (req, re
           select: {
             id:         true,
             groupName:  true,
-            name:       true,
             reports:    { orderBy: { generatedAt: "desc" }, take: 1, select: { content: true } },
             assignment: {
               select: {
