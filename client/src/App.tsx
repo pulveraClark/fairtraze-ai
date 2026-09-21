@@ -1,29 +1,37 @@
+import { lazy, Suspense } from "react";
 import { useRouter } from "./router";
-import { LandingPage } from "./pages/LandingPage";
-import { LoginPage } from "./pages/LoginPage";
-import { RegisterPage } from "./pages/RegisterPage";
-import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
-import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-import { VerifyEmailPage } from "./pages/VerifyEmailPage";
-import { InstructorDashboardPage } from "./pages/InstructorDashboardPage";
-import { OverviewPage } from "./pages/OverviewPage";
-import { ProjectDetailPage } from "./pages/ProjectDetailPage";
-import { ClassPage } from "./pages/ClassPage";
-import { AssignmentPage } from "./pages/AssignmentPage";
-import { StudentPage } from "./pages/StudentPage";
-import { StudentClassPage } from "./pages/StudentClassPage";
-import { StudentGroupPage } from "./pages/StudentGroupPage";
-import { AdminPage } from "./pages/AdminPage";
-import { AuditLogPage } from "./pages/AuditLogPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { AlertsPage } from "./pages/AlertsPage";
-import { DisputesPage } from "./pages/DisputesPage";
-import { JoinPage } from "./pages/JoinPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
-export default function App() {
-  const { pathname } = useRouter();
+const LandingPage = lazy(() => import("./pages/LandingPage").then((m) => ({ default: m.LandingPage })));
+const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import("./pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage").then((m) => ({ default: m.VerifyEmailPage })));
+const InstructorDashboardPage = lazy(() => import("./pages/InstructorDashboardPage").then((m) => ({ default: m.InstructorDashboardPage })));
+const OverviewPage = lazy(() => import("./pages/OverviewPage").then((m) => ({ default: m.OverviewPage })));
+const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage").then((m) => ({ default: m.ProjectDetailPage })));
+const ClassPage = lazy(() => import("./pages/ClassPage").then((m) => ({ default: m.ClassPage })));
+const AssignmentPage = lazy(() => import("./pages/AssignmentPage").then((m) => ({ default: m.AssignmentPage })));
+const StudentPage = lazy(() => import("./pages/StudentPage").then((m) => ({ default: m.StudentPage })));
+const StudentClassPage = lazy(() => import("./pages/StudentClassPage").then((m) => ({ default: m.StudentClassPage })));
+const StudentGroupPage = lazy(() => import("./pages/StudentGroupPage").then((m) => ({ default: m.StudentGroupPage })));
+const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const AuditLogPage = lazy(() => import("./pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const AlertsPage = lazy(() => import("./pages/AlertsPage").then((m) => ({ default: m.AlertsPage })));
+const DisputesPage = lazy(() => import("./pages/DisputesPage").then((m) => ({ default: m.DisputesPage })));
+const JoinPage = lazy(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })));
 
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--brand-bg-light)" }}>
+      <span className="h-5 w-5 rounded-full border-2 border-amber-400/40 border-t-amber-400 animate-spin" />
+    </div>
+  );
+}
+
+function routeElement(pathname: string) {
   // Dynamic route: /project/:id (instructor only)
   const detailMatch = pathname.match(/^\/project\/(\d+)$/);
   if (detailMatch) {
@@ -128,4 +136,14 @@ export default function App() {
   );
 
   return <LandingPage />;
+}
+
+export default function App() {
+  const { pathname } = useRouter();
+
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      {routeElement(pathname)}
+    </Suspense>
+  );
 }
