@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
+import {
+  useAdminUsersQuery,
+  useAdminOverviewQuery,
+  useAdminClassesQuery,
+  useAdminDepartmentsQuery,
+} from "../hooks/useAdminQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface UserRecord {
@@ -103,13 +110,9 @@ export function AdminPage() {
   const { navigate }     = useRouter();
 
   // ── User management state ──────────────────────────────────────────────────
-  const [displayedUsers, setDisplayedUsers] = useState<UserRecord[]>([]);
-  const [usersLoading,   setUsersLoading]   = useState(true);
-  const [usersError,     setUsersError]     = useState("");
   const [search,         setSearch]         = useState("");
   const [roleFilter,     setRoleFilter]     = useState("");
   const [usersPage,      setUsersPage]      = useState(1);
-  const [usersMeta,      setUsersMeta]      = useState({ total: 0, totalPages: 1, pageSize: 20 });
   const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -119,25 +122,24 @@ export function AdminPage() {
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   }
 
-  const loadUsers = useCallback(() => {
-    if (!token) return;
-    setUsersLoading(true);
-    setUsersError("");
-    const params = new URLSearchParams({ page: String(usersPage), pageSize: "20" });
-    if (search)     params.set("search", search);
-    if (roleFilter) params.set("role",   roleFilter);
-    fetch(`/api/admin/users?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { users?: UserRecord[]; total?: number; totalPages?: number; pageSize?: number; error?: string };
-        if (!r.ok) { setUsersError(json.error ?? "Could not load users."); return; }
-        setDisplayedUsers(json.users ?? []);
-        setUsersMeta({ total: json.total ?? 0, totalPages: json.totalPages ?? 1, pageSize: json.pageSize ?? 20 });
-      })
-      .catch(() => setUsersError("Network error — could not load users."))
-      .finally(() => setUsersLoading(false));
-  }, [token, search, roleFilter, usersPage]);
+  const queryClient = useQueryClient();
+  const usersQueryParams = { page: usersPage, search, roleFilter };
+  const usersQuery = useAdminUsersQuery(token, usersQueryParams);
+  const displayedUsers = usersQuery.data?.users ?? [];
+  const usersMeta = {
+    total:      usersQuery.data?.total ?? 0,
+    totalPages: usersQuery.data?.totalPages ?? 1,
+    pageSize:   usersQuery.data?.pageSize ?? 20,
+  };
+  const usersLoading = usersQuery.isLoading;
+  const usersError = usersQuery.isError
+    ? (usersQuery.error instanceof Error ? usersQuery.error.message : "Could not load users.")
+    : "";
+  const usersQueryKey = ["admin-users", usersQueryParams.page, usersQueryParams.search, usersQueryParams.roleFilter] as const;
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  function loadUsers() {
+    void usersQuery.refetch();
+  }
 
   async function changeRole(u: UserRecord, newRole: string) {
     if (newRole === u.systemRole) return;
@@ -150,7 +152,9 @@ export function AdminPage() {
       });
       const json = await res.json() as UserRecord & { error?: string };
       if (!res.ok) { showToast("error", json.error ?? "Could not change role."); return; }
-      setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, systemRole: json.systemRole } : x));
+      queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
+        ...old, users: old.users.map((x) => x.id === u.id ? { ...x, systemRole: json.systemRole } : x),
+      });
       showToast("success", `${u.name} is now ${ROLE_LABEL[json.systemRole]}.`);
     } catch {
       showToast("error", "Network error.");
@@ -168,7 +172,9 @@ export function AdminPage() {
       });
       const json = await res.json() as UserRecord & { error?: string };
       if (!res.ok) { showToast("error", json.error ?? `Could not ${action} user.`); return; }
-      setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, active: json.active } : x));
+      queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
+        ...old, users: old.users.map((x) => x.id === u.id ? { ...x, active: json.active } : x),
+      });
       showToast("success", `${u.name} ${json.active ? "activated" : "deactivated"}.`);
     } catch {
       showToast("error", "Network error.");
@@ -183,7 +189,9 @@ export function AdminPage() {
       });
       const json = await res.json() as UserRecord & { error?: string };
       if (!res.ok) { showToast("error", json.error ?? "Could not unlock account."); return; }
-      setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, lockedUntil: json.lockedUntil } : x));
+      queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
+        ...old, users: old.users.map((x) => x.id === u.id ? { ...x, lockedUntil: json.lockedUntil } : x),
+      });
       showToast("success", `${u.name}'s account unlocked.`);
     } catch {
       showToast("error", "Network error.");
@@ -202,78 +210,41 @@ export function AdminPage() {
       const json = await res.json() as { message?: string; error?: string };
       if (!res.ok) { showToast("error", json.error ?? "Could not delete user."); return; }
       showToast("success", json.message ?? `${u.name} deleted.`);
-      loadUsers();
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch {
       showToast("error", "Network error.");
     }
   }
 
   // ── Institution overview state ─────────────────────────────────────────────
-  const [overview,        setOverview]        = useState<OverviewData | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(true);
-  const [overviewError,   setOverviewError]   = useState("");
-
-  const loadOverview = useCallback(() => {
-    if (!token) return;
-    setOverviewLoading(true);
-    setOverviewError("");
-    fetch("/api/admin/overview", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as OverviewData & { error?: string };
-        if (!r.ok) { setOverviewError(json.error ?? "Could not load overview."); return; }
-        setOverview(json);
-      })
-      .catch(() => setOverviewError("Network error — could not load overview."))
-      .finally(() => setOverviewLoading(false));
-  }, [token]);
-
-  useEffect(() => { loadOverview(); }, [loadOverview]);
+  const overviewQuery = useAdminOverviewQuery(token);
+  const overview = overviewQuery.data ?? null;
+  const overviewLoading = overviewQuery.isLoading;
+  const overviewError = overviewQuery.isError
+    ? (overviewQuery.error instanceof Error ? overviewQuery.error.message : "Could not load overview.")
+    : "";
+  function loadOverview() { void overviewQuery.refetch(); }
 
   // ── Browse Classes state ───────────────────────────────────────────────────
-  const [classes,        setClasses]        = useState<ClassSectionItem[]>([]);
-  const [classesLoading, setClassesLoading] = useState(true);
-  const [classesError,   setClassesError]   = useState("");
-
-  const loadClasses = useCallback(() => {
-    if (!token) return;
-    setClassesLoading(true);
-    setClassesError("");
-    fetch("/api/admin/classes", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { classes?: ClassSectionItem[]; error?: string };
-        if (!r.ok) { setClassesError(json.error ?? "Could not load classes."); return; }
-        setClasses(json.classes ?? []);
-      })
-      .catch(() => setClassesError("Network error — could not load classes."))
-      .finally(() => setClassesLoading(false));
-  }, [token]);
-
-  useEffect(() => { loadClasses(); }, [loadClasses]);
+  const classesQuery = useAdminClassesQuery(token);
+  const classes = classesQuery.data ?? [];
+  const classesLoading = classesQuery.isLoading;
+  const classesError = classesQuery.isError
+    ? (classesQuery.error instanceof Error ? classesQuery.error.message : "Could not load classes.")
+    : "";
+  function loadClasses() { void classesQuery.refetch(); }
 
   // ── Departments state ──────────────────────────────────────────────────────
-  const [departments,        setDepartments]        = useState<DepartmentItem[]>([]);
-  const [departmentsLoading, setDepartmentsLoading] = useState(true);
-  const [departmentsError,   setDepartmentsError]   = useState("");
+  const departmentsQuery = useAdminDepartmentsQuery(token);
+  const departments = departmentsQuery.data ?? [];
+  const departmentsLoading = departmentsQuery.isLoading;
+  const departmentsError = departmentsQuery.isError
+    ? (departmentsQuery.error instanceof Error ? departmentsQuery.error.message : "Could not load departments.")
+    : "";
   const [showDeptForm,       setShowDeptForm]       = useState(false);
   const [deptName,           setDeptName]           = useState("");
   const [deptCode,           setDeptCode]           = useState("");
   const [deptSubmitting,     setDeptSubmitting]     = useState(false);
-
-  const loadDepartments = useCallback(() => {
-    if (!token) return;
-    setDepartmentsLoading(true);
-    setDepartmentsError("");
-    fetch("/api/admin/departments", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { departments?: DepartmentItem[]; error?: string };
-        if (!r.ok) { setDepartmentsError(json.error ?? "Could not load departments."); return; }
-        setDepartments(json.departments ?? []);
-      })
-      .catch(() => setDepartmentsError("Network error — could not load departments."))
-      .finally(() => setDepartmentsLoading(false));
-  }, [token]);
-
-  useEffect(() => { loadDepartments(); }, [loadDepartments]);
 
   async function createDepartment(e: React.FormEvent) {
     e.preventDefault();
@@ -289,7 +260,7 @@ export function AdminPage() {
       if (!res.ok) { showToast("error", json.error ?? "Could not create department."); return; }
       showToast("success", `Department "${json.name}" created.`);
       setDeptName(""); setDeptCode(""); setShowDeptForm(false);
-      loadDepartments();
+      await departmentsQuery.refetch();
     } catch {
       showToast("error", "Network error.");
     } finally {

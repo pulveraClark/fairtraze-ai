@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
 import { AppTopBar } from "../components/AppTopBar";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
@@ -6,6 +6,8 @@ import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/Clas
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useProjectsSummaryQuery, useClassesListQuery } from "../hooks/useSharedQueries";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -433,10 +435,6 @@ export function InstructorDashboardPage() {
   const { navigate }    = useRouter();
   const { token }       = useAuth();
 
-  const [classes, setClasses]         = useState<LifecycleClass[]>([]);
-  const [summary, setSummary]         = useState<ProjectSummaryItem[]>([]);
-  const [loadError, setLoadError]     = useState<string | null>(null);
-  const [loading, setLoading]         = useState(true);
   const [sortMode, setSortMode]       = useState<SortMode>("risk");
   const [filterMode, setFilterMode]   = useState<FilterMode>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -446,32 +444,20 @@ export function InstructorDashboardPage() {
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState<string | null>(null);
 
-  const fetchSummary = useCallback(async () => {
-    const res  = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
-    const data = (await res.json()) as { summary: ProjectSummaryItem[] };
-    setSummary(data.summary);
-  }, [token]);
+  const queryClient = useQueryClient();
+  const classesQuery = useClassesListQuery<LifecycleClass>(token);
+  const summaryQuery = useProjectsSummaryQuery(token);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [classesRes, summaryRes] = await Promise.all([
-        fetch("/api/classes", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      if (!classesRes.ok) throw new Error("Could not load classes");
-      const classesData = (await classesRes.json()) as { classes: LifecycleClass[] };
-      const summaryData = (await summaryRes.json()) as { summary: ProjectSummaryItem[] };
-      setClasses(classesData.classes);
-      setSummary(summaryData.summary);
-      setLoadError(null);
-    } catch {
-      setLoadError("Could not load dashboard — is the server running?");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  const classes = classesQuery.data ?? [];
+  const summary = summaryQuery.data ?? [];
+  const loading = classesQuery.isLoading || summaryQuery.isLoading;
+  const loadError = (classesQuery.isError || summaryQuery.isError)
+    ? "Could not load dashboard — is the server running?"
+    : null;
 
-  useEffect(() => { void fetchData(); }, [fetchData]);
+  async function fetchData() {
+    await Promise.all([classesQuery.refetch(), summaryQuery.refetch()]);
+  }
 
   async function handleDeleteClass() {
     if (!deleteTarget) return;
@@ -484,7 +470,8 @@ export function InstructorDashboardPage() {
       });
       if (res.ok) {
         setDeleteTarget(null);
-        await fetchData();
+        await queryClient.invalidateQueries({ queryKey: ["classes-list"] });
+        await queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
       } else {
         const data = (await res.json()) as { error?: string };
         setDeleteError(data.error ?? "Failed to delete class section");
@@ -503,7 +490,7 @@ export function InstructorDashboardPage() {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      await fetchSummary();
+      await summaryQuery.refetch();
     } finally {
       setAnalyzing((prev) => {
         const next = new Set(prev);

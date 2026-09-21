@@ -6,6 +6,7 @@ import { PaginationBar } from "../components/PaginationBar";
 import { FlagTag } from "../components/FlagTag";
 import { useToast } from "../components/Toast";
 import type { Flag } from "@shared/types";
+import { useClassesListQuery } from "../hooks/useSharedQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DisputeItem {
@@ -181,18 +182,10 @@ export function DisputesPage() {
   const [page,          setPage]          = useState(1);
   const [resolving,     setResolving]     = useState<DisputeItem | null>(null);
 
-  // Class dropdown options — loaded from instructor's classes
-  const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
-
-  useEffect(() => {
-    if (!token) return;
-    fetch("/api/classes", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data: { classes?: Array<{ id: number; subjectCode: string; subjectName: string; edpCode: string }> }) => {
-        setClassOptions(data.classes ?? []);
-      })
-      .catch(() => { /* non-critical — filter simply won't show */ });
-  }, [token]);
+  // Class dropdown options — shared with the dashboard page via useClassesListQuery so this
+  // doesn't re-issue its own fetch if the classes list is already cached.
+  const classesQuery = useClassesListQuery<ClassOption>(token);
+  const classOptions = classesQuery.data ?? [];
 
   const load = useCallback(() => {
     if (!token) return;

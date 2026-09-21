@@ -5,6 +5,7 @@ import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -433,7 +434,6 @@ export function ClassPage({ classId }: Props) {
   const [classInfo, setClassInfo]           = useState<ClassInfo | null>(null);
   const [assignments, setAssignments]       = useState<LifecycleAssignment[]>([]);
   const [assignGroups, setAssignGroups]     = useState<Record<number, AssignmentGroup[]>>({});
-  const [summary, setSummary]               = useState<ProjectSummaryItem[]>([]);
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState<string | null>(null);
   const [showModal, setShowModal]           = useState(false);
@@ -443,22 +443,23 @@ export function ClassPage({ classId }: Props) {
   const [deleting, setDeleting]             = useState(false);
   const [deleteError, setDeleteError]       = useState<string | null>(null);
 
+  // Shared with the dashboard/project pages via useProjectsSummaryQuery so navigating
+  // between them reuses the cached fetch instead of re-issuing it here.
+  const summaryQuery = useProjectsSummaryQuery(token);
+  const summary = summaryQuery.data ?? [];
+  const isPageLoading = loading || summaryQuery.isLoading;
+
   const fetchData = useCallback(async () => {
     try {
-      const [classRes, summaryRes] = await Promise.all([
-        fetch(`/api/classes/${classId}/assignments`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+      const classRes = await fetch(`/api/classes/${classId}/assignments`, { headers: { Authorization: `Bearer ${token}` } });
       if (!classRes.ok) {
         setLoadError(classRes.status === 403 ? "You do not have access to this class section." : "Class section not found.");
         return;
       }
-      const classData   = (await classRes.json()) as { class: ClassInfo; assignments: LifecycleAssignment[] };
-      const summaryData = (await summaryRes.json()) as { summary: ProjectSummaryItem[] };
+      const classData = (await classRes.json()) as { class: ClassInfo; assignments: LifecycleAssignment[] };
 
       setClassInfo(classData.class);
       setAssignments(classData.assignments);
-      setSummary(summaryData.summary);
 
       // Parallel-fetch each assignment's groups for risk roll-up
       const details = await Promise.all(
@@ -492,7 +493,7 @@ export function ClassPage({ classId }: Props) {
       });
       if (res.ok) {
         setDeleteTarget(null);
-        await fetchData();
+        await Promise.all([fetchData(), summaryQuery.refetch()]);
       } else {
         const data = (await res.json()) as { error?: string };
         setDeleteError(data.error ?? "Failed to delete project");
@@ -527,7 +528,7 @@ export function ClassPage({ classId }: Props) {
           classSectionId={classInfo.id}
           token={token}
           onClose={() => setShowModal(false)}
-          onCreated={() => void fetchData()}
+          onCreated={() => { void fetchData(); void summaryQuery.refetch(); }}
         />
       )}
       {deleteTarget && (() => {
@@ -651,18 +652,18 @@ export function ClassPage({ classId }: Props) {
           </div>
         )}
 
-        {loading && (
+        {isPageLoading && (
           <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading projects…
           </div>
         )}
 
-        {loadError && !loading && (
+        {loadError && !isPageLoading && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700">{loadError}</div>
         )}
 
-        {!loading && !loadError && (
+        {!isPageLoading && !loadError && (
           <>
             {visibleAssignments.length === 0 && assignments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">

@@ -15,6 +15,7 @@ import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
 import { useRouter } from "../router";
+import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -50,9 +51,20 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [activeTab, setActiveTab]               = useState<Tab>("report");
   const [viewingHistory, setViewingHistory]     = useState(false);
 
-  // Summary used for breadcrumb + group switcher
-  const [projectMeta, setProjectMeta] = useState<ProjectSummaryItem | null>(null);
-  const [siblings, setSiblings]       = useState<ProjectSummaryItem[]>([]);
+  // Summary used for breadcrumb + group switcher — shared with the dashboard/class pages
+  // via useProjectsSummaryQuery so navigating between them reuses the cached fetch.
+  const summaryQuery = useProjectsSummaryQuery(token);
+  const projectMeta: ProjectSummaryItem | null =
+    summaryQuery.data?.find((g) => g.projectId === projectId) ?? null;
+  // assignmentId, not assignmentLabel — assignmentLabel is a display string shared at the
+  // subject/class level ("CODE — Subject Name"), not guaranteed unique per Assignment, so
+  // matching on it could pull in siblings from a different assignment under the same
+  // subject (or miss real siblings on a label mismatch). assignmentId is the actual FK.
+  const siblings: ProjectSummaryItem[] = projectMeta
+    ? (summaryQuery.data ?? [])
+        .filter((g) => g.assignmentId === projectMeta.assignmentId)
+        .sort((a, b) => a.groupName.localeCompare(b.groupName))
+    : [];
 
   // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
   const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
@@ -94,27 +106,6 @@ export function ProjectDetailPage({ projectId }: Props) {
       setReportHistory(data.history);
     } catch {
       setReportHistory([]);
-    }
-  }, [projectId, token]);
-
-  const fetchSummary = useCallback(async () => {
-    try {
-      const res  = await fetch("/api/projects/summary", { headers: { Authorization: `Bearer ${token}` } });
-      const data = (await res.json()) as { summary: ProjectSummaryItem[] };
-      const current = data.summary.find((g) => g.projectId === projectId) ?? null;
-      setProjectMeta(current);
-      if (current) {
-        // assignmentId, not assignmentLabel — assignmentLabel is a display string shared at the
-        // subject/class level ("CODE — Subject Name"), not guaranteed unique per Assignment, so
-        // matching on it could pull in siblings from a different assignment under the same
-        // subject (or miss real siblings on a label mismatch). assignmentId is the actual FK.
-        const list = data.summary
-          .filter((g) => g.assignmentId === current.assignmentId)
-          .sort((a, b) => a.groupName.localeCompare(b.groupName));
-        setSiblings(list);
-      }
-    } catch {
-      // non-critical — breadcrumb degrades to Dashboard only
     }
   }, [projectId, token]);
 
@@ -170,10 +161,9 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   useEffect(() => {
     void fetchStored();
-    void fetchSummary();
     void fetchDisputes();
     void fetchHistory();
-  }, [fetchStored, fetchSummary, fetchDisputes, fetchHistory]);
+  }, [fetchStored, fetchDisputes, fetchHistory]);
 
   async function handleAnalyze() {
     setReanalyzing(true);
@@ -192,7 +182,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       setStepperDone(true);
       await new Promise((r) => setTimeout(r, 800));
       await fetchStored();
-      await fetchSummary();   // refresh health labels in switcher
+      await summaryQuery.refetch();   // refresh health labels in switcher
       await fetchHistory();   // refresh trend chart with the new run
       setNotFound(false);
     } catch {
