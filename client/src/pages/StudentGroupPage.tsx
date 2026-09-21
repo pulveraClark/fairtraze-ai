@@ -610,8 +610,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 </p>
               )}
 
-              {/* Member: suggestion flow */}
-              {membership.role === "MEMBER" && (
+              {/* Member: suggestion flow — only meaningful when the assignment has more than one valid role to choose from */}
+              {membership.role === "MEMBER" && (sourceType === "COMBINED" || mySuggestion?.status === "PENDING") && (
                 <div className="border-t border-slate-100 mt-3 pt-3">
                   {suggestErr && <p className="text-xs text-red-600 mb-2">{suggestErr}</p>}
 
