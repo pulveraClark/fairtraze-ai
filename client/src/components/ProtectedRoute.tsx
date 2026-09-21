@@ -39,7 +39,7 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0b0d1a" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--brand-bg-light)" }}>
         <span className="h-5 w-5 rounded-full border-2 border-amber-400/40 border-t-amber-400 animate-spin" />
       </div>
     );
