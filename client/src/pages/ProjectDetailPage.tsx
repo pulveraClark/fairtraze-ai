@@ -36,6 +36,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [narrativeText, setNarrativeText] = useState<string | null>(null);
   const [fetchError, setFetchError]       = useState<string | null>(null);
   const [notFound, setNotFound]           = useState(false);
+  const [loading, setLoading]             = useState(true);
   const [reanalyzing, setReanalyzing]     = useState(false);
   const [stepperDone, setStepperDone]     = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
@@ -78,6 +79,8 @@ export function ProjectDetailPage({ projectId }: Props) {
       setReportStale(!!data.scoringConfigChangedAt || !!data.membershipChangedAt);
     } catch {
       setFetchError("Network error — could not reach the server.");
+    } finally {
+      setLoading(false);
     }
   }, [projectId, token]);
 
@@ -466,6 +469,13 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* ── Report tab ─────────────────────────────────────────────────────── */}
         {effectiveTab === "report" && (
           <>
+        {loading && (
+          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+            <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+            Loading report…
+          </div>
+        )}
+
         {/* Stale report — membership changed and/or scoring config changed after last analysis */}
         {reportStale && stored && !reanalyzing && (
           <div className="bg-amber-100 border-2 border-amber-300 rounded-xl px-5 py-4 flex items-center gap-4 flex-wrap shadow-sm">
