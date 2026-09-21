@@ -273,6 +273,15 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           ]
         : [StarterKit],
       editable: effectiveEditable,
+      // TipTap v3's useEditor no longer force-rerenders on every transaction by default (that was
+      // v2's behavior) — without this, every `editor.isActive(...)` read throughout Toolbar (Bold,
+      // Italic, headings, alignment, table, ...) is a stale snapshot that only happens to update
+      // when some unrelated state setter (onSelectionUpdate/onUpdate below) coincidentally fires.
+      // A plain click that moves the cursor between two collapsed-selection positions (e.g. out of
+      // a table, or between differently-formatted text) doesn't trigger either of those, so the
+      // toolbar's active/enabled indicators silently go stale until something else forces a
+      // re-render. This opts back into TipTap's own per-transaction re-render.
+      shouldRerenderOnTransaction: true,
       editorProps: {
         attributes: {
           class: "ft-doc-content px-8 py-6 text-base leading-relaxed text-slate-700 min-h-[20rem]",

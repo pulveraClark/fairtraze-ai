@@ -134,54 +134,197 @@ function useToolbarDropdown() {
   return { open, setOpen, pos, btnRef, menuRef };
 }
 
-// Everything less-frequent than day-to-day writing/formatting: font color/highlight/family/size
-// ("Format") and import/export/print ("File"). Collapsing exactly these two categories behind
-// one button is what keeps the always-visible row from needing horizontal scroll, without
-// hiding anything used on essentially every editing pass (that stays in the core row).
-//
-// Text color/highlight are rendered as an inline swatch row here (not a nested popup-in-popup —
-// the old per-color ColorMenu component) since there's already room inside this dropdown; a
-// second level of portal/outside-click handling would only add complexity for no benefit here.
-function MoreMenu({
-  editor,
-  editable,
-  importing,
-  onImportClick,
-  exporting,
-  onExportDocx,
-  onExportPdf,
+// Purpose-named dropdown buttons ("Table", "Format", "File") replace what used to be one generic
+// "⋯ More tools" button hiding all three categories undifferentiated. Each still uses the same
+// proven useToolbarDropdown()/portal mechanics — this is a parameterization of that pattern, not
+// a new one — and each is a short text-labeled trigger (via MenuTriggerButton) rather than a bare
+// icon, so a user doesn't have to guess what's behind it.
+const MenuTriggerButton = forwardRef<
+  HTMLButtonElement,
+  { onClick: () => void; active: boolean; label: string }
+>(function MenuTriggerButton({ onClick, active, label }, ref) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-haspopup="menu"
+      aria-expanded={active}
+      className={`h-7 px-2 rounded flex items-center gap-1 text-xs font-semibold transition-colors shrink-0 ${
+        active
+          ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+          : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+      }`}
+    >
+      {label}
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
+  );
+});
+
+function DropdownPanel({
+  pos,
+  menuRef,
+  children,
 }: {
-  editor: Editor;
-  editable: boolean;
-  importing: boolean;
-  onImportClick: () => void;
-  exporting: boolean;
-  onExportDocx: () => void;
-  onExportPdf: () => void;
+  pos: { top: number; left: number };
+  menuRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
 }) {
+  return createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
+      className="w-60 p-2 bg-white border border-slate-200 rounded-lg shadow-md text-xs"
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+// Text+icon row used inside a dropdown panel. `disabled` renders the row visibly (greyed, no
+// hover) rather than omitting it — used by the Table menu so row/column operations stay
+// discoverable even when the cursor isn't currently inside a table.
+function MenuItemButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled}
+      className={`w-full flex items-center gap-2 px-1.5 py-1.5 rounded ${
+        disabled ? "text-slate-300 cursor-not-allowed" : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// Always visible (not conditional on cursor position) so table editing is discoverable even
+// before/after the cursor is inside a table — row/column operations are shown disabled rather
+// than omitted when there's no table at the cursor, instead of vanishing entirely as they used to.
+function TableMenu({ editor }: { editor: Editor }) {
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
   const close = () => setOpen(false);
+  const inTable = editor.isActive("table");
 
   return (
     <>
-      <ToolbarButton ref={btnRef} label="More tools" active={open} onClick={() => setOpen((v) => !v)}>
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="5" cy="12" r="1.6" />
-          <circle cx="12" cy="12" r="1.6" />
-          <circle cx="19" cy="12" r="1.6" />
-        </svg>
-      </ToolbarButton>
-      {open && pos && createPortal(
-        <div
-          ref={menuRef}
-          style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="w-60 p-2 bg-white border border-slate-200 rounded-lg shadow-md text-xs"
-        >
-          {editable && (
-            <>
-              <p className="px-1.5 pt-0.5 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Format</p>
+      <MenuTriggerButton ref={btnRef} label="Table" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
+          <MenuItemButton
+            label="Insert table"
+            onClick={() => {
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+              close();
+            }}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="4" width="18" height="16" rx="1" />
+                <path strokeLinecap="round" d="M3 10h18M3 16h18M9 4v16M15 4v16" />
+              </svg>
+            }
+          />
+          <div className="border-t border-slate-100 my-1" />
+          <MenuItemButton
+            label="Add row"
+            disabled={!inTable}
+            onClick={() => {
+              editor.chain().focus().addRowAfter().run();
+              close();
+            }}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v10m0 0l-3-3m3 3l3-3M4 20h16" />
+              </svg>
+            }
+          />
+          <MenuItemButton
+            label="Delete row"
+            disabled={!inTable}
+            onClick={() => {
+              editor.chain().focus().deleteRow().run();
+              close();
+            }}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 20v-10m0 0l-3 3m3-3l3 3M4 4h16" />
+              </svg>
+            }
+          />
+          <MenuItemButton
+            label="Add column"
+            disabled={!inTable}
+            onClick={() => {
+              editor.chain().focus().addColumnAfter().run();
+              close();
+            }}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h10m0 0l-3-3m3 3l-3 3M20 4v16" />
+              </svg>
+            }
+          />
+          <MenuItemButton
+            label="Delete column"
+            disabled={!inTable}
+            onClick={() => {
+              editor.chain().focus().deleteColumn().run();
+              close();
+            }}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H10m0 0l3-3m-3 3l3 3M4 4v16" />
+              </svg>
+            }
+          />
+          <MenuItemButton
+            label="Delete table"
+            disabled={!inTable}
+            onClick={() => {
+              editor.chain().focus().deleteTable().run();
+              close();
+            }}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            }
+          />
+        </DropdownPanel>
+      )}
+    </>
+  );
+}
 
-              <div className="px-1.5 pb-1.5 flex items-center gap-2">
+// Text color/highlight/family/size/spacing — only ever shown when editable (read-only viewers
+// have nothing to format).
+function FormatMenu({ editor }: { editor: Editor }) {
+  const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
+
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="Format" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
+          <div className="px-1.5 pb-1.5 flex items-center gap-2">
                 <span className="text-slate-500 w-14 shrink-0">Text color</span>
                 <div className="flex items-center gap-1">
                   <button
@@ -299,52 +442,68 @@ function MoreMenu({
                   ))}
                 </select>
               </div>
+        </DropdownPanel>
+      )}
+    </>
+  );
+}
 
-              <div className="border-t border-slate-100 my-1" />
-            </>
-          )}
+// Import/export/print — always rendered (Export/Print must stay reachable for an instructor
+// without edit rights); Import is hidden internally when !editable, same as before the split.
+function FileMenu({
+  editable,
+  importing,
+  onImportClick,
+  exporting,
+  onExportDocx,
+  onExportPdf,
+}: {
+  editable: boolean;
+  importing: boolean;
+  onImportClick: () => void;
+  exporting: boolean;
+  onExportDocx: () => void;
+  onExportPdf: () => void;
+}) {
+  const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
+  const close = () => setOpen(false);
 
-          <p className="px-1.5 pt-0.5 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">File</p>
-
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="File" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
           {editable && (
-            <button
-              type="button"
+            <MenuItemButton
+              label="Import .docx"
+              icon={<ImportIcon spinning={importing} />}
               onClick={() => {
                 onImportClick();
                 close();
               }}
-              className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-700"
-            >
-              <ImportIcon spinning={importing} />
-              Import .docx
-            </button>
+            />
           )}
-          <button
-            type="button"
+          <MenuItemButton
+            label="Export .docx"
+            icon={<ExportIcon spinning={exporting} />}
             onClick={() => {
               onExportDocx();
               close();
             }}
-            className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-700"
-          >
-            <ExportIcon spinning={exporting} />
-            Export .docx
-          </button>
-          <button
-            type="button"
+          />
+          <MenuItemButton
+            label="Export PDF"
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
+              </svg>
+            }
             onClick={() => {
               onExportPdf();
               close();
             }}
-            className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-700"
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
-            </svg>
-            Export PDF
-          </button>
-        </div>,
-        document.body
+          />
+        </DropdownPanel>
       )}
     </>
   );
@@ -528,46 +687,10 @@ export function Toolbar({
 
           <span className="w-px h-4 bg-slate-200 mx-1.5" />
 
-          {/* Insert: also reached for on essentially every editing pass. */}
-          <ToolbarButton
-            label="Insert table"
-            active={editor.isActive("table")}
-            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <rect x="3" y="4" width="18" height="16" rx="1" />
-              <path strokeLinecap="round" d="M3 10h18M3 16h18M9 4v16M15 4v16" />
-            </svg>
-          </ToolbarButton>
-          {editor.isActive("table") && (
-            <>
-              <ToolbarButton label="Add row" active={false} onClick={() => editor.chain().focus().addRowAfter().run()}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v10m0 0l-3-3m3 3l3-3M4 20h16" />
-                </svg>
-              </ToolbarButton>
-              <ToolbarButton label="Delete row" active={false} onClick={() => editor.chain().focus().deleteRow().run()}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 20v-10m0 0l-3 3m3-3l3 3M4 4h16" />
-                </svg>
-              </ToolbarButton>
-              <ToolbarButton label="Add column" active={false} onClick={() => editor.chain().focus().addColumnAfter().run()}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h10m0 0l-3-3m3 3l-3 3M20 4v16" />
-                </svg>
-              </ToolbarButton>
-              <ToolbarButton label="Delete column" active={false} onClick={() => editor.chain().focus().deleteColumn().run()}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H10m0 0l3-3m-3 3l3 3M4 4v16" />
-                </svg>
-              </ToolbarButton>
-              <ToolbarButton label="Delete table" active={false} onClick={() => editor.chain().focus().deleteTable().run()}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </ToolbarButton>
-            </>
-          )}
+          {/* Insert: also reached for on essentially every editing pass. Table is a labeled
+              dropdown (not a bare icon) and always visible, so row/column editing is discoverable
+              even outside a table — its entries render disabled rather than vanishing. */}
+          <TableMenu editor={editor} />
 
           <ToolbarButton label="Insert image" active={false} onClick={onInsertImageClick}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -604,12 +727,12 @@ export function Toolbar({
       )}
 
       {/* Format (color/highlight/font) and File (import/export/print) — the comparatively
-          occasional actions, grouped and labeled behind one menu instead of guessed at from a
-          bare icon in the always-visible row. Rendered in both editable and read-only views:
-          Export/Print must stay reachable for an instructor without edit rights; the menu's own
-          `editable` prop hides Format and Import internally. */}
-      <MoreMenu
-        editor={editor}
+          occasional actions, each behind its own purpose-named dropdown instead of one generic
+          catch-all button. Format only makes sense when editable; File is rendered in both
+          editable and read-only views since Export/Print must stay reachable for an instructor
+          without edit rights (FileMenu hides Import internally when !editable). */}
+      {editable && <FormatMenu editor={editor} />}
+      <FileMenu
         editable={editable}
         importing={importing}
         onImportClick={onImportClick}
