@@ -20,9 +20,12 @@ export async function setup(): Promise<void> {
     return;
   }
 
+  // Explicitly set DIRECT_DATABASE_URL too (schema.prisma's datasource requires it) -
+  // without this, Prisma CLI's own .env auto-load would silently fill it in from
+  // server/.env (the dev database), which is not the test branch this is meant to run against.
   execSync("npx prisma migrate deploy", {
     cwd: path.resolve(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: dbUrl },
+    env: { ...process.env, DATABASE_URL: dbUrl, DIRECT_DATABASE_URL: dbUrl },
     stdio: "inherit",
   });
 }

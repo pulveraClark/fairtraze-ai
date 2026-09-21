@@ -21,6 +21,9 @@ export default defineConfig({
       // PrismaClient reads DATABASE_URL, not TEST_DATABASE_URL — point it at
       // the dedicated Neon test branch so tests never touch production data.
       DATABASE_URL: testDatabaseUrl,
+      // schema.prisma's datasource also requires directUrl — the test branch's
+      // connection string is already direct/non-pooled, so reuse it here too.
+      DIRECT_DATABASE_URL: testDatabaseUrl,
       AUTH_SECRET: authSecret,
       GEMINI_API_KEY: geminiApiKey,
       NODE_ENV: "test",

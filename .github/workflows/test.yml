@@ -20,6 +20,10 @@ jobs:
       # vitest, each test file's PrismaClient) gets it without depending on that
       # derivation chain.
       DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      # schema.prisma's datasource also requires directUrl (used by `prisma migrate
+      # deploy`). The test branch's connection string is already direct/non-pooled,
+      # so this just points at the same value as DATABASE_URL above.
+      DIRECT_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
       # Fixed non-production value — only signs/verifies tokens within this
       # ephemeral run, so it doesn't need to be a real secret.
       AUTH_SECRET: test-secret-do-not-use-in-prod
