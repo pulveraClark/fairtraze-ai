@@ -25,6 +25,7 @@ interface PendingSelection {
 interface Props {
   comments: CommentRecord[];
   currentUserId: number;
+  memberIds: number[];
   canModerate: boolean; // instructor — may delete any comment, matches isInstructorOf server-side
   pendingSelection: PendingSelection | null;
   onCancelPending: () => void;
@@ -36,12 +37,12 @@ interface Props {
   activeThreadId: number | null;
 }
 
-function Avatar({ author }: { author: CommentAuthor }) {
+function Avatar({ author, memberIds }: { author: CommentAuthor; memberIds: number[] }) {
   const initial = author.name.trim().charAt(0).toUpperCase() || "?";
   return (
     <span
       className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-      style={{ backgroundColor: getUserColor(author.id) }}
+      style={{ backgroundColor: getUserColor(author.id, memberIds) }}
     >
       {initial}
     </span>
@@ -122,6 +123,7 @@ function Thread({
   currentUserId,
   canModerate,
   active,
+  memberIds,
   onReply,
   onResolveToggle,
   onDelete,
@@ -132,6 +134,7 @@ function Thread({
   currentUserId: number;
   canModerate: boolean;
   active: boolean;
+  memberIds: number[];
   onReply: (parentId: number, text: string) => Promise<void>;
   onResolveToggle: (commentId: number, resolved: boolean) => Promise<void>;
   onDelete: (commentId: number) => Promise<void>;
@@ -154,7 +157,7 @@ function Thread({
       {[root, ...replies].map((c, i) => (
         <div key={c.id} className={i > 0 ? "mt-2.5 pt-2.5 border-t border-slate-100 pl-3" : ""}>
           <div className="flex items-start gap-2">
-            <Avatar author={c.author} />
+            <Avatar author={c.author} memberIds={memberIds} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5 flex-wrap">
                 <span className="text-xs font-semibold text-slate-700">{c.author.name}</span>
@@ -216,6 +219,7 @@ function Thread({
 export function CommentPanel({
   comments,
   currentUserId,
+  memberIds,
   canModerate,
   pendingSelection,
   onCancelPending,
@@ -267,6 +271,7 @@ export function CommentPanel({
             currentUserId={currentUserId}
             canModerate={canModerate}
             active={activeThreadId === root.id}
+            memberIds={memberIds}
             onReply={onReply}
             onResolveToggle={onResolveToggle}
             onDelete={onDelete}

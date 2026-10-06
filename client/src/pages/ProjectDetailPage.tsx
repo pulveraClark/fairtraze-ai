@@ -68,6 +68,9 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
   const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
+  // Collapsed by default — the card itself is already gated on having 2+ runs; this only
+  // controls whether its body (the chart) is shown within that card.
+  const [trendExpanded, setTrendExpanded] = useState(false);
 
   const fetchStored = useCallback(async () => {
     setFetchError(null);
@@ -581,13 +584,30 @@ export function ProjectDetailPage({ projectId }: Props) {
                 Omitted until there are at least 2 runs, since a single point isn't a trend. */}
             {reportHistory.length >= 2 && (
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100">
-                  <h2 className="text-sm font-semibold text-slate-700">Imbalance Trend</h2>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Gini coefficient across all analysis runs for this group</p>
-                </div>
-                <div className="px-6 pt-4 pb-2">
-                  <TrendChart history={reportHistory} />
-                </div>
+                <button
+                  onClick={() => setTrendExpanded((v) => !v)}
+                  aria-expanded={trendExpanded}
+                  className="w-full text-left px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4 hover:bg-slate-50/60 transition-colors"
+                >
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-700">Imbalance Trend</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Gini coefficient across all analysis runs for this group</p>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 mt-0.5 shrink-0 transition-transform duration-200 text-slate-400 ${trendExpanded ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {trendExpanded && (
+                  <div className="px-6 pt-4 pb-2">
+                    <TrendChart history={reportHistory} />
+                  </div>
+                )}
               </div>
             )}
 

@@ -23,6 +23,14 @@ export interface AuthorshipUpdate {
   users: AuthorshipUser[];
 }
 
+// What's actually dispatched as plugin meta: the server's AuthorshipUpdate plus the group's
+// full, stable member roster (sorted userIds) needed to color spans collision-free — see
+// collabColors.ts. Kept separate from AuthorshipUpdate since that type also describes the raw
+// server JSON shape.
+export interface AuthorshipDecorationInput extends AuthorshipUpdate {
+  memberIds: number[];
+}
+
 export const authorshipPluginKey = new PluginKey<DecorationSet>("authorshipHighlight");
 
 // The server's spans are offsets into a flattened plain-text view of the document (concatenated
@@ -62,14 +70,14 @@ export function plainTextRangeToPMRange(doc: PMNode, start: number, end: number)
   return { from, to: Math.max(from, to) };
 }
 
-function buildDecorations(doc: PMNode, update: AuthorshipUpdate | null): DecorationSet {
+function buildDecorations(doc: PMNode, update: AuthorshipDecorationInput | null): DecorationSet {
   if (!update || update.spans.length === 0) return DecorationSet.empty;
 
   const decorations: Decoration[] = [];
   for (const span of update.spans) {
     const range = plainTextRangeToPMRange(doc, span.start, span.end);
     if (!range || range.to <= range.from) continue;
-    const color = getUserColor(span.userId);
+    const color = getUserColor(span.userId, update.memberIds);
     decorations.push(
       Decoration.inline(range.from, range.to, {
         style: `background-color: ${color}33;`,
@@ -89,7 +97,7 @@ export const AuthorshipHighlight = Extension.create({
         state: {
           init: () => DecorationSet.empty,
           apply(tr, old) {
-            const update = tr.getMeta(authorshipPluginKey) as AuthorshipUpdate | null | undefined;
+            const update = tr.getMeta(authorshipPluginKey) as AuthorshipDecorationInput | null | undefined;
             if (update !== undefined) {
               return buildDecorations(tr.doc, update);
             }

@@ -37,6 +37,7 @@ The Collaborative Editor is a writing environment built directly into FAIR TRAZE
 - Rule-based significance classification of each insert (`EditType`: substantive / revision / formatting / trivial)
 - Comments — see "Comments — IMPLEMENTED" under "Editor Scoring Model" below
 - Tables, text alignment, and font/highlight color (`@tiptap/extension-table*`, `@tiptap/extension-text-align`, `@tiptap/extension-color`, `@tiptap/extension-highlight`, registered in `DocumentEditor.tsx`) — purely additive editor surface. Text typed anywhere, including inside a table cell, flows through the exact same `authorshipCapture.ts` diff/classify/session pipeline as any other text: `extractPlainText` recurses on Yjs node *class* (`Y.XmlText` vs. everything else), never on node *name*, so a table cell is structurally identical to a heading or list item from the diffing code's point of view — no new `EditSource`, no pipeline changes. Comment anchoring (`commentAnchor.ts`) is also unaffected — its `RelativePosition` mechanism walks the Yjs type tree regardless of nesting depth.
+- Authorship highlighting (color-coded by author) is on by default in both the student (editable) and instructor (read-only) views, with a toolbar toggle to turn it off.
 
 ### Not implemented (documented as a limitation, not a bug)
 - Tracked-change suggestions (accepted/rejected) — no `Suggestion` model exists; only insert/delete shape is captured. Deliberately deferred — see "Tracked-change suggestions — NOT implemented (deliberately deferred)" below for why.
@@ -345,6 +346,8 @@ The user is an **instructor**. Both the UI and the AI report must be professiona
 
 **Partially implemented.** `ClassSection`, `Assignment`, `GroupMembership`, `User`, `Department`, and `Report` all exist and match this shape today. `Department` is fully implemented — a real Prisma model (`server/prisma/schema.prisma`), with CRUD in `AdminPage.tsx` and a selector in `InstructorDashboardPage.tsx`; `ClassSection` has both `departmentId` and `instructorId`. **Not implemented:** the `School` level above `Department`, and the `Project` → `Group` rename (the model is still called `Project` in the live schema). Do not build School or rename `Project` without an explicit task instruction.
 
+Note: `Department` is organizational metadata for grouping class sections, not an access-control boundary — data isolation between instructors is enforced by instructor ownership (`server/src/lib/ownership.ts`'s `assertOwnsClass`/`assertOwnsAssignment`, checking `classSection.instructorId`), not by `departmentId`.
+
 ### Hierarchy
 
 ```
@@ -426,6 +429,11 @@ Scoring weights and flag thresholds are per-`Project` columns (`weightCommits`, 
 | Healthy Gini | < 0.2 | Low inequality |
 | Moderate Risk Gini | 0.2 – 0.4 | Moderate inequality |
 | High Risk Gini | ≥ 0.4 | High inequality |
+
+### Historical trend & benchmarking — IMPLEMENTED
+Each analyze run creates a new `Report` row (no uniqueness constraint on `projectId`), so a group's Gini/team-health history accumulates across runs. `GET /api/projects/:id/report/history` (`server/src/routes/projects.ts`) returns that history; the instructor dashboard renders it as `TrendChart` in `ProjectDetailPage.tsx`, shown only once at least 2 runs exist.
+
+Separately, `client/src/lib/benchmark.ts`'s `computeAssignmentBenchmark()` compares a group's Gini against the average Gini of other analyzed groups **under the same assignment** (shown as a ▲/▼ note in `TeamHealthBanner.tsx`). This is a same-assignment average, not cross-section or institutional analytics — that remains unbuilt (see Phase F below).
 
 ## Identity & Authentication
 

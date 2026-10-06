@@ -21,13 +21,13 @@ import Subscript from "@tiptap/extension-subscript";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { useAuth } from "../context/AuthContext";
-import { getUserColor } from "../lib/collabColors";
+import { getUserColor, buildMemberRoster } from "../lib/collabColors";
 import { wsBaseUrl } from "../lib/apiBase";
 import { CollaborationCursor } from "../lib/collaborationCursor";
 import { FontSize } from "../lib/fontSize";
 import { LineHeight } from "../lib/lineHeight";
 import { AuthorshipHighlight, authorshipPluginKey } from "../lib/authorshipHighlight";
-import type { AuthorshipUpdate, AuthorshipUser } from "../lib/authorshipHighlight";
+import type { AuthorshipUpdate, AuthorshipUser, AuthorshipDecorationInput } from "../lib/authorshipHighlight";
 import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighlight";
 import type { CommentDecorationRange } from "../lib/commentHighlight";
 import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
@@ -94,11 +94,13 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
   const [awaitingInitialContent, setAwaitingInitialContent] = useState(awaitInitialNodeCount !== undefined);
-  // Read-only (instructor/observer) views default to showing authorship, since reviewing who
-  // wrote what is the point of viewing read-only; the editable (member) view defaults off so
-  // it doesn't distract from active writing.
-  const [showAuthorship, setShowAuthorship] = useState(!editable);
+  // Authorship highlighting defaults on in both the instructor read-only view and the student
+  // editable view, so "who wrote what" is visible without needing to discover the toggle first.
+  const [showAuthorship, setShowAuthorship] = useState(true);
   const [authorshipUsers, setAuthorshipUsers] = useState<AuthorshipUser[]>([]);
+  // The group's full, stable member roster (sorted userIds) — used to color-index spans/cursors
+  // collision-free within the group, instead of by raw global User.id (see collabColors.ts).
+  const [memberIds, setMemberIds] = useState<number[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -170,12 +172,30 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     };
   }, []);
 
+  // Fetch the group's full member roster once per group — the stable, collision-free basis for
+  // getUserColor (see collabColors.ts). Sorted ascending by userId for a canonical order that
+  // doesn't depend on fetch-time join-order.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    fetch(`/api/groups/${groupId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? (res.json() as Promise<{ members: { userId: number }[] }>) : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setMemberIds(buildMemberRoster(data.members));
+      })
+      .catch((err) => console.error("[document] group roster fetch failed", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, token]);
+
   useEffect(() => {
     if (!collab || !user) return;
 
     const { provider } = collab;
     const awareness = provider.awareness;
-    awareness.setLocalStateField("user", { name: user.name, color: getUserColor(user.id) });
+    awareness.setLocalStateField("user", { name: user.name, color: getUserColor(user.id, memberIds) });
 
     const updatePresence = () => {
       const states = Array.from(awareness.getStates().entries()) as [number, { user?: { name: string; color: string } }][];
@@ -196,7 +216,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       awareness.off("change", updatePresence);
       provider.off("status", handleStatus);
     };
-  }, [collab, user]);
+  }, [collab, user, memberIds]);
 
   // Only armed right after this session created the document (awaitInitialNodeCount set — see
   // DocumentGate.tsx). Waits for the fresh room's Yjs sync to actually deliver its initial content
@@ -246,7 +266,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             Collaboration.configure({ document: collab.ydoc }),
             CollaborationCursor.configure({
               provider: collab.provider,
-              user: { name: user?.name ?? "Unknown", color: getUserColor(user?.id ?? 0) },
+              user: { name: user?.name ?? "Unknown", color: getUserColor(user?.id ?? 0, memberIds) },
             }),
             AuthorshipHighlight,
             CommentHighlight.configure({
@@ -358,6 +378,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     };
   }, [focusMode, pageSize]);
 
+  // Kept in sync with memberIds state (assigned during render, not in an effect, so it's always
+  // current) so the authorship-apply effect below can read the latest roster without needing
+  // memberIds in its own dependency array — see that effect's comment for why.
+  const memberIdsRef = useRef<number[]>(memberIds);
+  memberIdsRef.current = memberIds;
+  // Last raw update applied to the plugin (from either the initial fetch or a WS push) — kept so
+  // the memberIds-driven re-dispatch effect further below can recolor already-painted decorations
+  // once the roster fetch resolves, without needing to refetch the authorship map itself.
+  const lastAuthorshipUpdateRef = useRef<AuthorshipUpdate | null>(null);
+
   // While the toggle is on: fetch the current authorship map once (immediate snapshot), then
   // open a dedicated push socket (separate from the Yjs sync socket — see
   // authorshipBroadcast.ts) for live updates as teammates edit.
@@ -365,6 +395,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     if (!editor || !token) return;
 
     if (!showAuthorship) {
+      lastAuthorshipUpdateRef.current = null;
       editor.view.dispatch(editor.state.tr.setMeta(authorshipPluginKey, null));
       setAuthorshipUsers([]);
       return;
@@ -373,8 +404,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     let cancelled = false;
     const applyUpdate = (update: AuthorshipUpdate) => {
       if (cancelled) return;
+      lastAuthorshipUpdateRef.current = update;
       setAuthorshipUsers(update.users);
-      editor.view.dispatch(editor.state.tr.setMeta(authorshipPluginKey, update));
+      const decorationInput: AuthorshipDecorationInput = { ...update, memberIds: memberIdsRef.current };
+      editor.view.dispatch(editor.state.tr.setMeta(authorshipPluginKey, decorationInput));
     };
 
     fetch(`/api/groups/${groupId}/document/authorship`, {
@@ -402,7 +435,18 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       cancelled = true;
       ws.close();
     };
+    // memberIds is deliberately excluded here — re-run only when the roster changes, via the
+    // effect below, so a resolving roster fetch doesn't close and reopen the push WebSocket.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, showAuthorship, groupId, token]);
+
+  // Recolors already-painted decorations once the group roster resolves (or changes), without
+  // refetching the authorship map or reconnecting the push WebSocket above.
+  useEffect(() => {
+    if (!editor || !showAuthorship || !lastAuthorshipUpdateRef.current) return;
+    const decorationInput: AuthorshipDecorationInput = { ...lastAuthorshipUpdateRef.current, memberIds };
+    editor.view.dispatch(editor.state.tr.setMeta(authorshipPluginKey, decorationInput));
+  }, [editor, showAuthorship, memberIds]);
 
   // Fetch the comment list once per group/session. Unlike authorship, there's no live push
   // channel for other members' newly-added comments (out of scope for v1 — see the comments
@@ -739,7 +783,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           </button>
         </div>
       )}
-      {showAuthorship && <AuthorshipLegend users={authorshipUsers} />}
+      {showAuthorship && <AuthorshipLegend users={authorshipUsers} memberIds={memberIds} />}
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
           <DragHandle
@@ -760,6 +804,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           <CommentPanel
             comments={comments}
             currentUserId={user?.id ?? -1}
+            memberIds={memberIds}
             canModerate={!editable}
             pendingSelection={pendingSelection}
             onCancelPending={() => setPendingSelection(null)}

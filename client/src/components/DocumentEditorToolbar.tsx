@@ -522,13 +522,13 @@ export function PresenceChip({ user }: { user: PresentUser }) {
   );
 }
 
-export function AuthorshipLegend({ users }: { users: AuthorshipUser[] }) {
+export function AuthorshipLegend({ users, memberIds }: { users: AuthorshipUser[]; memberIds: number[] }) {
   if (users.length === 0) return null;
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 flex-wrap">
       {users.map((u) => (
         <span key={u.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getUserColor(u.id) }} />
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getUserColor(u.id, memberIds) }} />
           {u.name}
         </span>
       ))}
