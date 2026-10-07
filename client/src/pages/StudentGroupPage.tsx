@@ -4,13 +4,12 @@ import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
-import { GroupManageModal, type GroupTask } from "../components/GroupManageModal";
+import { GroupManageModal } from "../components/GroupManageModal";
+import { TaskManageModal, type GroupTask } from "../components/TaskManageModal";
 import { FlagTag } from "../components/FlagTag";
-import type { Flag } from "@shared/types";
+import { getContributionStatsCards, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface TeamShare { share: number; isMe: boolean; }
-
 interface RoleSuggestionData {
   id:             number;
   suggestedRoles: string[];
@@ -30,15 +29,7 @@ interface GroupDetail {
     analyzedAt:  string;
     memberCount: number;
     deadlineWindowBasis: "assignment-deadline" | "activity-span";
-    myContribution: {
-      contributionShare: number;
-      commits:           number;
-      additions:         number;
-      deletions:         number;
-      activeDays:        number;
-      flags:             Flag[];
-    } | null;
-    teamShares: TeamShare[];
+    myContribution: MyContribution | null;
   } | null;
 }
 
@@ -61,26 +52,6 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   "inactive":        "No recorded activity was found in the analyzed period.",
   "overload":        "Your contribution share significantly exceeds the equal share, suggesting an uneven workload distribution.",
 };
-
-// ── Team distribution bar ─────────────────────────────────────────────────────
-function TeamDistributionBar({ shares }: { shares: TeamShare[] }) {
-  const total = shares.reduce((s, m) => s + m.share, 0) || 1;
-  return (
-    <div className="flex h-3 rounded-full overflow-hidden w-full gap-px">
-      {shares.map((m, i) => {
-        const pct = (m.share / total) * 100;
-        return (
-          <div
-            key={i}
-            title={m.isMe ? `You: ${(m.share * 100).toFixed(1)}%` : `Teammate: ${(m.share * 100).toFixed(1)}%`}
-            style={{ width: `${pct}%`, backgroundColor: m.isMe ? "#6366f1" : "#cbd5e1" }}
-            className={`shrink-0 transition-all ${m.isMe ? "ring-1 ring-indigo-400 ring-inset" : ""}`}
-          />
-        );
-      })}
-    </div>
-  );
-}
 
 type Tab = "report" | "document";
 
@@ -215,6 +186,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   });
   const [viewingHistory, setViewingHistory]     = useState(false);
   const [showManageModal, setShowManageModal]   = useState(false);
+  const [showTasksModal, setShowTasksModal]     = useState(false);
   const [refreshKey, setRefreshKey]             = useState(0);
   const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -229,7 +201,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [groupNameDraft, setGroupNameDraft]     = useState("");
   const [groupNameBusy, setGroupNameBusy]       = useState(false);
   const [groupNameErr, setGroupNameErr]         = useState("");
-  // My open tasks (read-only preview — full management stays in Manage Group)
+  // My open tasks (read-only preview — full management lives in the Tasks modal)
   const [myTasks, setMyTasks] = useState<GroupTask[]>([]);
 
   useEffect(() => {
@@ -411,6 +383,15 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         />
       )}
 
+      {showTasksModal && (
+        <TaskManageModal
+          projectId={projectId}
+          isInstructor={false}
+          onClose={() => setShowTasksModal(false)}
+          onChanged={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
       {showDisputeModal && token && (
         <DisputeModal
           projectId={projectId}
@@ -507,6 +488,15 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => setShowTasksModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Tasks
+            </button>
+            <button
               onClick={() => setShowManageModal(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
@@ -556,7 +546,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 </span>
               </h2>
               <button
-                onClick={() => setShowManageModal(true)}
+                onClick={() => setShowTasksModal(true)}
                 className="text-[11px] text-indigo-600 hover:underline font-medium shrink-0"
               >
                 Manage tasks
@@ -719,7 +709,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             {hasReport && report && (
               <>
                 {/* No contribution data for this student in the current report */}
-                {report.myContribution === null && sourceType !== "EDITOR" && (
+                {report.myContribution === null && (
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm text-slate-500 leading-relaxed">
                     No contribution data was found for your account in this report. If you joined after the last analysis was run, your instructor may need to re-run it to include your contributions.
                   </div>
@@ -762,37 +752,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         {" "}The marker line shows the equal share.
                       </p>
                     </div>
-
-                    {/* Team distribution */}
-                    {report.teamShares.length > 0 && (
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="text-slate-500">Team distribution</span>
-                          <span className="text-[11px] text-slate-400">
-                            <span className="inline-block w-2 h-2 rounded-sm bg-indigo-400 mr-1" />
-                            You
-                            <span className="inline-block w-2 h-2 rounded-sm bg-slate-300 mx-1 ml-2" />
-                            Teammates
-                          </span>
-                        </div>
-                        <TeamDistributionBar shares={report.teamShares} />
-                        <p className="text-[11px] text-slate-400 mt-1.5">
-                          Individual teammate scores are not shown — only the overall team distribution.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 )}
 
                 {/* Stats grid */}
                 {report.myContribution && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {([
-                      { label: "Commits",       value: String(report.myContribution.commits) },
-                      { label: "Active Days",   value: String(report.myContribution.activeDays) },
-                      { label: "Lines Added",   value: report.myContribution.additions.toLocaleString() },
-                      { label: "Lines Deleted", value: report.myContribution.deletions.toLocaleString() },
-                    ] as const).map(({ label, value }) => (
+                    {getContributionStatsCards(report.myContribution, sourceType).map(({ label, value }) => (
                       <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
                         <p className="text-2xl font-bold text-slate-800">{value}</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
@@ -830,7 +796,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
-                    The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. Only aggregate team data is shown here — individual teammates' scores are not exposed in this view.
+                    The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. The Gini coefficient and team health label are aggregate measures computed from all members' activity — individual teammates' scores are not shared with you.
                   </p>
                 </div>
 

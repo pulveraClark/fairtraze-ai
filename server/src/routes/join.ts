@@ -3,7 +3,9 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
-import type { TeamReport } from "@shared/types.js";
+import type {
+  TeamReport, AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember,
+} from "@shared/types.js";
 
 export const joinRouter = Router();
 
@@ -586,22 +588,75 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const stored = JSON.parse(latestReport.content) as { report?: TeamReport };
+  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember> };
   if (!stored.report) {
     res.json({ ...base, hasReport: false, report: null });
     return;
   }
 
-  const teamReport       = stored.report;
-  const myGithubUsername = user?.githubUsername ?? null;
-  const myScoredMember   = myGithubUsername
-    ? (teamReport.members.find((m) => m.githubUsername === myGithubUsername) ?? null)
-    : null;
+  const teamReport = stored.report;
+  const sourceType = asgn.sourceType;
 
-  const sharesWithMe = teamReport.members
-    .map((m) => ({ share: m.contributionShare, isMe: m.githubUsername === myGithubUsername }))
-    .sort((a, b) => b.share - a.share);
+  // GITHUB has no userId anywhere in its scoring pipeline (Member/RawMemberStats/ScoredMember
+  // are keyed only by githubUsername), so it stays matched that way. EDITOR and COMBINED members
+  // always carry userId (sourced from GroupMembership, required for every member regardless of
+  // source type), which is the reliable key there — githubUsername is optional/display-only for
+  // EDITOR members (see RawDocumentMemberStats comment in shared/src/types.ts).
+  let myScoredMember: AnyScoredMember | null = null;
+  if (sourceType === "GITHUB") {
+    const myGithubUsername = user?.githubUsername ?? null;
+    myScoredMember = myGithubUsername
+      ? (teamReport.members.find((m) => m.githubUsername === myGithubUsername) ?? null)
+      : null;
+  } else {
+    myScoredMember = teamReport.members.find((m) => "userId" in m && m.userId === userId) ?? null;
+  }
 
+  let myContribution: Record<string, unknown> | null = null;
+  if (myScoredMember) {
+    if (sourceType === "GITHUB") {
+      const m = myScoredMember as ScoredMember;
+      myContribution = {
+        contributionShare: m.contributionShare,
+        commits:           m.commits,
+        additions:         m.additions,
+        deletions:         m.deletions,
+        activeDays:        m.activeDays,
+        flags:             m.flags,
+      };
+    } else if (sourceType === "EDITOR") {
+      const m = myScoredMember as DocumentScoredMember;
+      myContribution = {
+        contributionShare: m.contributionShare,
+        sessionCount:       m.sessionCount,
+        activeDays:         m.activeDays,
+        retainedChars:      m.retainedChars,
+        totalInsertedChars: m.totalInsertedChars,
+        flags:              m.flags,
+      };
+    } else {
+      const m = myScoredMember as CombinedScoredMember;
+      myContribution = {
+        contributionShare:         m.contributionShare,
+        githubContributionShare:   m.githubContributionShare,
+        documentContributionShare: m.documentContributionShare,
+        wGitHub:                   m.wGitHub,
+        wDocs:                     m.wDocs,
+        flags:                     m.flags,
+        github: m.github ? {
+          commits: m.github.commits, additions: m.github.additions,
+          deletions: m.github.deletions, activeDays: m.github.activeDays,
+        } : null,
+        document: m.document ? {
+          sessionCount: m.document.sessionCount, activeDays: m.document.activeDays,
+          retainedChars: m.document.retainedChars, totalInsertedChars: m.document.totalInsertedChars,
+        } : null,
+      };
+    }
+  }
+
+  // Privacy: only the requesting student's own data leaves this endpoint. No other member's
+  // contributionShare, name, userId, or githubUsername is included anywhere in the response.
   res.json({
     ...base,
     hasReport: true,
@@ -611,15 +666,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       analyzedAt:  latestReport.generatedAt.toISOString(),
       memberCount: teamReport.memberCount,
       deadlineWindowBasis: teamReport.deadlineWindowBasis,
-      myContribution: myScoredMember ? {
-        contributionShare: myScoredMember.contributionShare,
-        commits:           myScoredMember.commits,
-        additions:         myScoredMember.additions,
-        deletions:         myScoredMember.deletions,
-        activeDays:        myScoredMember.activeDays,
-        flags:             myScoredMember.flags,
-      } : null,
-      teamShares: sharesWithMe,
+      myContribution,
     },
   });
 });

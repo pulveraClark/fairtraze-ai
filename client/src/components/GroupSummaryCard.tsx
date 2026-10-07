@@ -14,6 +14,7 @@ interface Props {
   onAnalyze?: (projectId: number) => void;
   analyzing: boolean;
   onManage?: (projectId: number) => void;
+  onTasks?: (projectId: number) => void;
   // Bulk-select mode (AssignmentPage) — omitted entirely outside that context,
   // so the checkbox never appears on pages that don't support bulk actions.
   selectable?: boolean;
@@ -26,7 +27,7 @@ function isMembershipStale(item: ProjectSummaryItem): boolean {
   return new Date(item.membershipChangedAt) > new Date(item.lastAnalyzedAt);
 }
 
-export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, selectable, selected, onToggleSelect }: Props) {
+export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, selectable, selected, onToggleSelect }: Props) {
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
 
@@ -64,6 +65,14 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, selecta
         <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
           <p className="text-xs text-slate-400">No report yet</p>
           <div className="flex items-center gap-3">
+            {onTasks && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onTasks(item.projectId); }}
+                className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                Tasks
+              </button>
+            )}
             {onManage && (
               <button
                 onClick={(e) => { e.stopPropagation(); onManage(item.projectId); }}
@@ -175,6 +184,14 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, selecta
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          {onTasks && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTasks(item.projectId); }}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Tasks
+            </button>
+          )}
           {onManage && (
             <button
               onClick={(e) => { e.stopPropagation(); onManage(item.projectId); }}

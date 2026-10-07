@@ -3,6 +3,7 @@ import type { ProjectSummaryItem, StoredReportResponse } from "@shared/types";
 import { AppTopBar } from "../components/AppTopBar";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupManageModal } from "../components/GroupManageModal";
+import { TaskManageModal } from "../components/TaskManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
 import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
@@ -91,6 +92,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [search, setSearch]         = useState("");
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
+  const [tasksGroupId, setTasksGroupId]       = useState<number | null>(null);
 
   // ── Bulk selection / bulk analyze / bulk export ────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -281,6 +283,15 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         />
       )}
 
+      {tasksGroupId !== null && (
+        <TaskManageModal
+          projectId={tasksGroupId}
+          isInstructor={true}
+          onClose={() => setTasksGroupId(null)}
+          onChanged={() => void fetchData()}
+        />
+      )}
+
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
@@ -462,6 +473,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 onAnalyze={isAdmin ? undefined : handleReanalyze}
                 analyzing={analyzing.has(item.projectId)}
                 onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
+                onTasks={isAdmin ? undefined : (id) => setTasksGroupId(id)}
                 selectable={!isAdmin}
                 selected={selectedIds.has(item.projectId)}
                 onToggleSelect={toggleSelect}
