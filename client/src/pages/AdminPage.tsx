@@ -23,17 +23,6 @@ interface UserRecord {
   createdAt:      string;
 }
 
-interface AtRiskGroup {
-  projectId:      number;
-  groupName:      string;
-  classDisplay:   string;
-  subjectName:    string;
-  instructorName: string;
-  teamHealth:     string;
-  gini:           number | null;
-  analyzedAt:     string;
-}
-
 interface ClassSectionItem {
   id:          number;
   subjectCode: string;
@@ -60,9 +49,6 @@ interface OverviewData {
   totalProjects:      number;
   totalGroups:        number;
   analyzedGroups:     number;
-  healthDistribution: { healthy: number; moderateRisk: number; highRisk: number };
-  flagTotals:         { inactive: number; freeRider: number; overload: number; deadlineDriven: number };
-  atRiskGroups:       AtRiskGroup[];
   openDisputesCount:  number;
 }
 
@@ -78,18 +64,6 @@ const ROLE_LABEL: Record<string, string> = {
   INSTRUCTOR: "Instructor",
   STUDENT:    "Student",
 };
-
-const HEALTH_BADGE: Record<string, string> = {
-  "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "High Risk":     "text-red-700     bg-red-50     border-red-200",
-  "Moderate Risk": "text-amber-700   bg-amber-50   border-amber-200",
-};
-
-const HEALTH_BAR: Array<{ key: keyof OverviewData["healthDistribution"]; label: string; cls: string }> = [
-  { key: "healthy",      label: "Healthy",       cls: "bg-emerald-400" },
-  { key: "moderateRisk", label: "Moderate Risk",  cls: "bg-amber-400"  },
-  { key: "highRisk",     label: "High Risk",      cls: "bg-red-400"    },
-];
 
 // ── Small reusable pieces ─────────────────────────────────────────────────────
 function DisabledBtn({ children }: { children: React.ReactNode }) {
@@ -267,9 +241,6 @@ export function AdminPage() {
       setDeptSubmitting(false);
     }
   }
-
-  const [atRiskPage, setAtRiskPage] = useState(1);
-  const AT_RISK_PAGE_SIZE = 8;
 
   const selfId = user?.id ?? -1;
 
@@ -581,137 +552,6 @@ export function AdminPage() {
             </>
           )}
         </section>
-
-        {/* ── Health Distribution + At-Risk Groups ─────────────────────────────── */}
-        {!overviewLoading && !overviewError && overview && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            {/* Team Health Distribution */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">
-                Team Health Distribution
-              </h2>
-              <p className="text-xs text-slate-400 mb-5">
-                {overview.analyzedGroups > 0
-                  ? `Across ${overview.analyzedGroups} analyzed group${overview.analyzedGroups !== 1 ? "s" : ""}`
-                  : "No groups analyzed yet"}
-              </p>
-
-              {overview.analyzedGroups === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">
-                  No groups analyzed yet. Run an analysis to see health data.
-                </p>
-              ) : (
-                <>
-                  <div className="space-y-3">
-                    {HEALTH_BAR.map(({ key, label, cls }) => {
-                      const count = overview.healthDistribution[key];
-                      const pct   = (count / overview.analyzedGroups) * 100;
-                      return (
-                        <div key={key} className="flex items-center gap-3">
-                          <span className="text-xs text-slate-500 w-24 text-right shrink-0">{label}</span>
-                          <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${cls} opacity-80 rounded-full transition-all`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-semibold text-slate-700 w-6 text-right shrink-0">{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Flag totals */}
-                  <div className="mt-5 pt-4 border-t border-slate-100">
-                    <p className="text-[11px] text-slate-400 mb-2">Flag totals across all latest reports</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { label: "Free Rider",      count: overview.flagTotals.freeRider,     cls: "text-orange-700 bg-orange-50 border-orange-200" },
-                        { label: "Overload",        count: overview.flagTotals.overload,      cls: "text-red-700    bg-red-50    border-red-200"    },
-                        { label: "Inactive",        count: overview.flagTotals.inactive,      cls: "text-slate-600  bg-slate-50  border-slate-200"  },
-                        { label: "Deadline-Driven", count: overview.flagTotals.deadlineDriven, cls: "text-blue-700  bg-blue-50   border-blue-200"   },
-                      ].map(({ label, count, cls }) => (
-                        <span key={label} className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${cls}`}>
-                          {count} {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* At-Risk Groups */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">
-                At-Risk Groups
-              </h2>
-              <p className="text-xs text-slate-400 mb-5">
-                Moderate/High Risk or flagged members — newest analyzed first
-              </p>
-
-              {overview.atRiskGroups.length === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">
-                  No at-risk groups detected across the institution.
-                </p>
-              ) : (() => {
-                const totalAtRisk = overview.atRiskGroups.length;
-                const atRiskTotalPages = Math.max(1, Math.ceil(totalAtRisk / AT_RISK_PAGE_SIZE));
-                const pagedGroups = overview.atRiskGroups.slice(
-                  (atRiskPage - 1) * AT_RISK_PAGE_SIZE,
-                  atRiskPage * AT_RISK_PAGE_SIZE
-                );
-                return (
-                  <>
-                    <div className="space-y-2">
-                      {pagedGroups.map((g) => (
-                        <div
-                          key={g.projectId}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-semibold text-slate-800">{g.groupName}</span>
-                              {g.classDisplay && (
-                                <span className="text-xs font-mono text-indigo-600">{g.classDisplay}</span>
-                              )}
-                              {g.instructorName && g.instructorName !== "Unknown" && (
-                                <span className="text-xs text-slate-400">{g.instructorName}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[g.teamHealth] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
-                                {g.teamHealth}
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                Gini {g.gini != null ? g.gini.toFixed(2) : "—"}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => navigate(`/project/${g.projectId}`)}
-                            className="shrink-0 text-[11px] text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
-                          >
-                            View →
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <PaginationBar
-                      page={atRiskPage}
-                      totalPages={atRiskTotalPages}
-                      total={totalAtRisk}
-                      pageSize={AT_RISK_PAGE_SIZE}
-                      onPage={setAtRiskPage}
-                      label="groups"
-                    />
-                  </>
-                );
-              })()}
-            </section>
-          </div>
-        )}
 
         {/* ── Browse Classes ───────────────────────────────────────────────────── */}
         <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
