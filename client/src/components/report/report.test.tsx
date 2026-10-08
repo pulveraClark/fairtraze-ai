@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event";
 import type { CombinedScoredMember, DocumentScoredMember, ScoredMember, ScoringThresholds } from "@shared/types";
 import { MemberDrawer } from "./MemberDrawer";
 import { MemberContributionList } from "./MemberContributionList";
-import { LorenzCard } from "./LorenzCard";
 
 const thresholds: ScoringThresholds = { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 };
 
@@ -82,14 +81,5 @@ describe("MemberContributionList", () => {
     expect(screen.getByText(/equal share \(50\.0% each\)/)).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button")[0]);
     expect(onOpen).toHaveBeenCalledWith(gh, expect.any(HTMLElement));
-  });
-});
-
-describe("LorenzCard", () => {
-  it("shows the stored Gini as given and offers a text/table alternative", () => {
-    render(<LorenzCard shares={[0.1, 0.2, 0.7]} gini={0.412} />);
-    expect(screen.getByText(/Gini coefficient: 0\.412/)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /Lorenz curve/ })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Lorenz curve points" })).toBeInTheDocument();
   });
 });

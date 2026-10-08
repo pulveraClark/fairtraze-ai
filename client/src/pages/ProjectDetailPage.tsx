@@ -3,11 +3,9 @@ import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, Re
 import { useAuth } from "../context/AuthContext";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { TrendChart } from "../components/TrendChart";
-import { PageHeader, StatTile, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT, CARD } from "../components/ui";
+import { PageHeader, StatTile, InfoTip, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT, CARD } from "../components/ui";
 import { MemberContributionList } from "../components/report/MemberContributionList";
 import { MemberDrawer } from "../components/report/MemberDrawer";
-import { LorenzCard } from "../components/report/LorenzCard";
-import { ReportDetailsCard } from "../components/report/ReportDetailsCard";
 import { giniBandsText } from "../lib/giniBands";
 import type { FlagSource } from "../lib/flagRules";
 import { usePrefersReducedMotion } from "../lib/usePrefersReducedMotion";
@@ -261,7 +259,7 @@ export function ProjectDetailPage({ projectId }: Props) {
     ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
     : "neutral";
 
-  const switchBtn = `flex h-10 w-10 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
+  const switchBtn = `flex h-8 w-8 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -324,7 +322,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                       value={projectId}
                       onChange={(e) => navigate(`/project/${e.target.value}`)}
                       aria-label="Group"
-                      className={`h-9 max-w-[11rem] cursor-pointer bg-transparent px-2 text-sm font-medium text-slate-900 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
+                      className={`h-8 max-w-[11rem] cursor-pointer bg-transparent px-2 text-sm font-medium text-slate-900 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
                     >
                       {siblings.map((g) => (
                         <option key={g.projectId} value={g.projectId}>
@@ -355,7 +353,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                     onClick={() => setShowScoringModal(true)}
                     disabled={!showGitHub}
                     title={showGitHub ? "Adjust scoring weights and flag thresholds for this group" : "Weight adjustment isn't available for Docs-only scoring yet"}
-                    className={BUTTON_SECONDARY}
+                    className={BUTTON_SECONDARY_COMPACT}
                   >
                     Scoring settings
                   </button>
@@ -367,7 +365,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                     type="button"
                     onClick={() => window.print()}
                     title="Export a clean PDF via the browser print dialog"
-                    className={BUTTON_SECONDARY}
+                    className={BUTTON_SECONDARY_COMPACT}
                   >
                     Export / Print
                   </button>
@@ -375,7 +373,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
                 {/* Re-analyze / Analyze — hidden for admin */}
                 {!isAdmin && (
-                  <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY}>
+                  <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY_COMPACT}>
                     {reanalyzing ? (
                       <>
                         <span aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full border-2 border-white/40 border-t-white motion-safe:animate-spin" />
@@ -457,7 +455,7 @@ export function ProjectDetailPage({ projectId }: Props) {
           <div aria-busy="true" role="status" className="space-y-4">
             <span className="sr-only">Loading report…</span>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}
+              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
             </div>
             <Skeleton className="h-64" />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -473,7 +471,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
               Report may be outdated — membership or settings have changed. Re-analyze to update.
             </p>
-            <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY}>
+            <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY_COMPACT}>
               Re-analyze
             </button>
           </div>
@@ -498,32 +496,32 @@ export function ProjectDetailPage({ projectId }: Props) {
             {/* Summary row */}
             <section aria-label="Summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile
+                compact
                 label="Team health"
                 tone={healthTone}
                 value={<StatusPill kind="health" value={stored.report.teamHealth} className="!text-base" />}
                 detail={
-                  <>
-                    <span className="block">{giniBandsText()}</span>
-                    {benchmark.averageGini !== null && (
-                      <span className="mt-1 block">
-                        Average for other groups in this assignment: {benchmark.averageGini.toFixed(3)} —{" "}
-                        {stored.report.gini > benchmark.averageGini
-                          ? "this group is more uneven"
-                          : stored.report.gini < benchmark.averageGini
-                          ? "this group is more even"
-                          : "equal"}.
-                      </span>
-                    )}
-                  </>
+                  <span className="flex items-center gap-1">
+                    Gini {stored.report.gini.toFixed(3)}
+                    <InfoTip label="About the Gini coefficient and team health">
+                      <span className="block">0 = perfectly equal, 1 = one member holds everything.</span>
+                      <span className="mt-1 block">{giniBandsText()}</span>
+                      {benchmark.averageGini !== null && (
+                        <span className="mt-1 block">
+                          Average for other groups in this assignment: {benchmark.averageGini.toFixed(3)} —{" "}
+                          {stored.report.gini > benchmark.averageGini
+                            ? "this group is more uneven"
+                            : stored.report.gini < benchmark.averageGini
+                            ? "this group is more even"
+                            : "equal"}.
+                        </span>
+                      )}
+                    </InfoTip>
+                  </span>
                 }
               />
               <StatTile
-                label="Gini coefficient"
-                value={stored.report.gini.toFixed(3)}
-                bar={{ value: stored.report.gini, label: "Gini coefficient, 0 to 1", valueText: `${stored.report.gini.toFixed(3)} out of 1` }}
-                detail="0 = perfectly equal, 1 = one member holds everything."
-              />
-              <StatTile
+                compact
                 label="Flags"
                 value={totalFlags}
                 detail={
@@ -533,9 +531,29 @@ export function ProjectDetailPage({ projectId }: Props) {
                 }
               />
               <StatTile
+                compact
                 label="Members"
                 value={memberCount}
-                detail={`Equal share = ${equalSharePct.toFixed(1)}% each`}
+                detail={`equal share ${equalSharePct.toFixed(0)}%`}
+              />
+              <StatTile
+                compact
+                label="Analysis"
+                value={<span className="text-base">{SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"} · {new Date(stored.analyzedAt).toLocaleDateString()}</span>}
+                detail={
+                  sourceType !== "EDITOR" && stored.repoUrl ? (
+                    <a
+                      href={stored.repoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`break-all font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
+                    >
+                      {stored.repoUrl.replace("https://github.com/", "")}
+                    </a>
+                  ) : (
+                    "FairTraze Docs activity"
+                  )
+                }
               />
             </section>
 
@@ -557,24 +575,17 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
-            {/* AI explanation + Report details */}
+            {/* AI report + Imbalance trend (equal height) */}
             <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
               {/* keyed to projectId so it always reflects the current group */}
-              <Narrative
-                key={projectId}
-                narrative={narrativeText}
-                projectId={projectId}
-                onNarrativeGenerated={(text) => setNarrativeText(text)}
-              />
-              <ReportDetailsCard
-                stored={stored}
-                sourceLabel={SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}
-                stale={reportStale}
-              />
-            </div>
-
-            {/* Trend + Lorenz curve */}
-            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+              <div className={reportHistory.length >= 2 ? "h-full min-w-0" : "h-full min-w-0 lg:col-span-2"}>
+                <Narrative
+                  key={projectId}
+                  narrative={narrativeText}
+                  projectId={projectId}
+                  onNarrativeGenerated={(text) => setNarrativeText(text)}
+                />
+              </div>
               {/* Imbalance trend — omitted until there are at least 2 runs, since a single point isn't a trend. */}
               {reportHistory.length >= 2 && (
                 <section aria-labelledby="trend-title" className={`${CARD} h-full min-w-0 overflow-hidden`}>
@@ -606,9 +617,6 @@ export function ProjectDetailPage({ projectId }: Props) {
                   )}
                 </section>
               )}
-              <div className={reportHistory.length >= 2 ? "h-full" : "lg:col-span-2"}>
-                <LorenzCard shares={stored.report.members.map((m) => m.contributionShare)} gini={stored.report.gini} wide={reportHistory.length < 2} />
-              </div>
             </div>
           </>
         )}
@@ -644,13 +652,6 @@ export function ProjectDetailPage({ projectId }: Props) {
           <p className="text-sm leading-normal text-slate-700">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button
-            type="button"
-            onClick={() => navigate("/overview")}
-            className={`inline-flex min-h-10 items-center rounded-lg px-2 text-sm font-medium text-slate-800 underline underline-offset-2 hover:text-slate-950 ${FOCUS_LIGHT}`}
-          >
-            System overview →
-          </button>
         </div>
       </footer>
 

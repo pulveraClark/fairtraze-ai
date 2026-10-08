@@ -16,7 +16,7 @@ function item(overrides: Partial<ProjectSummaryItem> = {}): ProjectSummaryItem {
     memberCount: 3,
     teamHealth: "Healthy",
     gini: 0.2,
-    memberShares: [],
+    memberShares: [{ studentName: "Member A", contributionShare: 1, flags: [] }],
     flagsPresent: [],
     lastAnalyzedAt: "2026-01-01T00:00:00.000Z",
     isAnalyzed: true,
@@ -57,6 +57,19 @@ describe("computeAssignmentBenchmark", () => {
     ];
     const result = computeAssignmentBenchmark(items, 10);
     expect(result).toEqual({ averageGini: null, analyzedPeerCount: 0 });
+  });
+
+  it("ignores 'analyzed' peers whose report has no scored members (bogus 0.000 Gini)", () => {
+    const items = [
+      item({ assignmentId: 10, gini: 0, memberShares: [] }),
+      item({ assignmentId: 10, gini: 0, memberShares: [] }),
+    ];
+    expect(computeAssignmentBenchmark(items, 10)).toEqual({ averageGini: null, analyzedPeerCount: 0 });
+
+    const mixed = [...items, item({ assignmentId: 10, gini: 0.3 })];
+    const result = computeAssignmentBenchmark(mixed, 10);
+    expect(result.analyzedPeerCount).toBe(1);
+    expect(result.averageGini).toBeCloseTo(0.3);
   });
 
   it("excludes the given projectId when excludeProjectId is passed (self-exclusion)", () => {

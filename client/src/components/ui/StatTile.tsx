@@ -9,6 +9,8 @@ interface Props {
   bar?: { value: number; label: string; valueText: string };
   /** Tint for the whole tile (used for team health). */
   tone?: "neutral" | "green" | "amber" | "red";
+  /** Shorter tile: 12px padding, tighter spacing. */
+  compact?: boolean;
 }
 
 const TONE: Record<NonNullable<Props["tone"]>, string> = {
@@ -18,12 +20,12 @@ const TONE: Record<NonNullable<Props["tone"]>, string> = {
   red: "border-red-300 bg-red-50",
 };
 
-export function StatTile({ label, value, detail, bar, tone = "neutral" }: Props) {
+export function StatTile({ label, value, detail, bar, tone = "neutral", compact = false }: Props) {
   const clamped = bar ? Math.min(1, Math.max(0, bar.value)) : 0;
   return (
-    <div className={`${CARD} h-full min-w-0 p-4 ${TONE[tone]}`}>
+    <div className={`${CARD} h-full min-w-0 ${compact ? "px-4 py-3" : "p-4"} ${TONE[tone]}`}>
       <p className="text-xs font-medium leading-normal text-slate-700">{label}</p>
-      <div className="mt-1 break-words text-xl font-semibold leading-tight tabular-nums text-slate-900">{value}</div>
+      <div className={`${compact ? "mt-0.5" : "mt-1"} break-words text-xl font-semibold leading-tight tabular-nums text-slate-900`}>{value}</div>
       {bar && (
         <div
           role="meter"
@@ -37,7 +39,7 @@ export function StatTile({ label, value, detail, bar, tone = "neutral" }: Props)
           <div className="h-full rounded-full bg-indigo-700" style={{ width: `${clamped * 100}%` }} />
         </div>
       )}
-      {detail && <div className="mt-2 break-words text-xs leading-normal text-slate-700">{detail}</div>}
+      {detail && <div className={`${compact ? "mt-1" : "mt-2"} break-words text-xs leading-normal text-slate-700`}>{detail}</div>}
     </div>
   );
 }

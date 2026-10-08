@@ -75,12 +75,12 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
     >
       {/* Colored band */}
       <div
-        className="relative px-5 pt-5 pb-4 flex flex-col gap-3"
+        className="relative px-4 py-3 flex flex-col gap-2"
         style={{ background: gradient }}
       >
         <div className="flex items-start justify-between gap-2">
           {/* Clipboard icon */}
-          <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round"
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
@@ -110,7 +110,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
 
         {/* Subject code · EDP code */}
         <div>
-          <p className="text-white font-mono font-bold text-lg leading-tight tracking-tight">
+          <p className="text-white font-mono font-bold text-base leading-tight tracking-tight">
             {code}
             {edpCode && (
               <span className="font-semibold text-white/75"> · EDP {edpCode}</span>
@@ -125,7 +125,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
       </div>
 
       {/* Card body */}
-      <div className="px-5 py-4 flex flex-col gap-3">
+      <div className="px-4 py-3 flex flex-col gap-2">
         {/* Subject name + BSIT badge */}
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-slate-800 leading-snug group-hover:text-indigo-700 transition-colors">
@@ -201,7 +201,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
         </div>
 
         {/* Footer arrow */}
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-end">
           <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">
             View groups →
           </span>

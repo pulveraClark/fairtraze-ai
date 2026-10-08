@@ -182,11 +182,11 @@ function ClassCard({
     >
       {/* Colored band */}
       <div
-        className="relative px-5 pt-5 pb-4 flex flex-col gap-3"
+        className="relative px-4 py-3 flex flex-col gap-2"
         style={{ background: gradient }}
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
@@ -195,11 +195,11 @@ function ClassCard({
             {joinedCount}/{totalAssignments} joined
           </span>
         </div>
-        <p className="text-white font-mono font-bold text-lg leading-tight tracking-tight">{bandLabel}</p>
+        <p className="text-white font-mono font-bold text-base leading-tight tracking-tight">{bandLabel}</p>
       </div>
 
       {/* Card body */}
-      <div className="px-5 py-4 flex flex-col gap-3">
+      <div className="px-4 py-3 flex flex-col gap-2">
         <div>
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">
             {cls.subjectName}
@@ -252,7 +252,7 @@ function ClassCard({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
           <span className="text-xs text-slate-400">
             {totalAssignments} project{totalAssignments !== 1 ? "s" : ""}
           </span>
@@ -375,12 +375,6 @@ export function StudentPage() {
           <p className="text-xs text-slate-400">
             Outputs support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            System Overview →
-          </button>
         </div>
       </footer>
     </div>

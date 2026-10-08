@@ -290,7 +290,6 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
     </span>
   );
 
-  function go(path: string) { navigate(path); setOpen(false); onNavigate?.(); }
   function handleLogout() { logout(); navigate("/"); setOpen(false); onNavigate?.(); }
 
   const itemClass = `flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`;
@@ -329,9 +328,6 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
             <p className="truncate text-sm font-semibold text-white">{user.name}</p>
             <p className="mt-0.5">{badge}</p>
           </div>
-          <button type="button" onClick={() => go("/settings")} className={itemClass}>
-            <NavIcon name="settings" /> Settings
-          </button>
           <button type="button" onClick={handleLogout} className={itemClass}>
             <SignOutIcon /> Sign out
           </button>

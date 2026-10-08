@@ -104,7 +104,7 @@ export function AdminPage() {
   const usersMeta = {
     total:      usersQuery.data?.total ?? 0,
     totalPages: usersQuery.data?.totalPages ?? 1,
-    pageSize:   usersQuery.data?.pageSize ?? 20,
+    pageSize:   usersQuery.data?.pageSize ?? 10,
   };
   const usersLoading = usersQuery.isLoading;
   const usersError = usersQuery.isError
@@ -702,12 +702,6 @@ export function AdminPage() {
           <p className="text-xs text-slate-400">
             Outputs support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            System Overview →
-          </button>
         </div>
       </footer>
     </div>

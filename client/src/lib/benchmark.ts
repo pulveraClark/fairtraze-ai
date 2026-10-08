@@ -23,7 +23,10 @@ export function computeAssignmentBenchmark(
       item.assignmentId === assignmentId &&
       item.projectId !== options.excludeProjectId &&
       item.isAnalyzed &&
-      item.gini !== null
+      item.gini !== null &&
+      // A report row with no scored members is not a real analysis (its Gini is a
+      // meaningless 0.000) — counting it dragged the average to zero.
+      item.memberShares.length > 0
   );
 
   if (peers.length === 0) return { averageGini: null, analyzedPeerCount: 0 };

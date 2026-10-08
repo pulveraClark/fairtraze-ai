@@ -485,9 +485,6 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
         </div>
       </footer>
 

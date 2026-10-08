@@ -107,11 +107,15 @@ function AuthedFrame({ userId, children }: { userId: number; children: ReactNode
       <aside
         id={SIDEBAR_ID}
         aria-label="Sidebar"
-        className={`sticky top-0 z-40 hidden h-screen shrink-0 border-r border-white/10 bg-[#020617] md:block print:hidden ${
+        className={`z-40 hidden shrink-0 self-stretch border-r border-white/10 bg-[#020617] md:block print:hidden ${
           collapsed ? "w-[4.75rem]" : "w-64"
         } ${reduced ? "" : "transition-[width] duration-200"}`}
       >
-        <SidebarContent collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+        {/* The aside stretches the full height of the page (so the dark column never ends above the
+            footer); the content inside stays pinned to the viewport while the page scrolls. */}
+        <div className="sticky top-0 h-dvh">
+          <SidebarContent collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+        </div>
       </aside>
 
       <div className="ft-app-content flex min-w-0 flex-1 flex-col">

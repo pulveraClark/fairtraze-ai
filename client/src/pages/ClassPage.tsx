@@ -720,9 +720,9 @@ export function ClassPage({ classId }: Props) {
                       className="group cursor-pointer w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
                       {/* Colored band */}
-                      <div className="relative px-5 pt-5 pb-4 flex flex-col gap-3" style={{ background: pickGradient(a.title) }}>
+                      <div className="relative px-4 py-3 flex flex-col gap-2" style={{ background: pickGradient(a.title) }}>
                         <div className="flex items-start justify-between gap-2">
-                          <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                          <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
@@ -753,7 +753,7 @@ export function ClassPage({ classId }: Props) {
                       </div>
 
                       {/* Card body */}
-                      <div className="px-5 py-4 flex flex-col gap-3">
+                      <div className="px-4 py-3 flex flex-col gap-2">
                         <p className="text-xs text-slate-500">
                           Deadline: <span className="font-medium text-slate-700">{fmtDeadline(a.deadline)}</span>
                         </p>
@@ -761,7 +761,7 @@ export function ClassPage({ classId }: Props) {
                           {a._count.projects} group{a._count.projects !== 1 ? "s" : ""}
                         </p>
                         <RiskPills healthy={healthy} moderate={moderate} highRisk={highRisk} unanalyzed={unanalyzed} />
-                        <div className="flex justify-end pt-1">
+                        <div className="flex justify-end">
                           <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">View groups →</span>
                         </div>
                       </div>
@@ -779,9 +779,6 @@ export function ClassPage({ classId }: Props) {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
         </div>
       </footer>
     </div>

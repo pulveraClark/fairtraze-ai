@@ -42,7 +42,7 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 id="narrative-title" className="text-lg font-semibold text-slate-900">Explainable fairness report</h2>
+          <h2 id="narrative-title" className="text-lg font-semibold text-slate-900">AI report</h2>
           <p className="text-sm leading-normal text-slate-700">Scores computed by formula · explained by AI</p>
         </div>
         {narrative && !generating && (

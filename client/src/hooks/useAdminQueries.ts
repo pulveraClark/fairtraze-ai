@@ -69,8 +69,8 @@ export function useAdminUsersQuery(
   return useQuery({
     queryKey: ["admin-users", params.page, params.search, params.roleFilter],
     queryFn: async () => {
-      const qs = new URLSearchParams({ page: String(params.page), pageSize: "20" });
-      if (params.search)     qs.set("search", params.search);
+      const qs = new URLSearchParams({ page: String(params.page), pageSize: "10" });
+      if (params.search)    qs.set("search", params.search);
       if (params.roleFilter) qs.set("role", params.roleFilter);
       const res  = await fetch(`/api/admin/users?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = (await res.json()) as Partial<UsersPage> & { error?: string };
@@ -79,7 +79,7 @@ export function useAdminUsersQuery(
         users:      json.users ?? [],
         total:      json.total ?? 0,
         totalPages: json.totalPages ?? 1,
-        pageSize:   json.pageSize ?? 20,
+        pageSize:   json.pageSize ?? 10,
       } satisfies UsersPage;
     },
     enabled: !!token,
