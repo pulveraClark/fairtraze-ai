@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { notify } from "../lib/notify.js";
 import { loadGroup, isInstructorOf } from "./groups.js";
 import { isMemberOf } from "./documents.js";
 
@@ -138,8 +139,9 @@ commentsRouter.post("/api/groups/:id/document/comments", requireAuth, async (req
     return;
   }
 
+  let parent: Awaited<ReturnType<typeof prisma.comment.findUnique>> = null;
   if (parentId !== undefined) {
-    const parent = await prisma.comment.findUnique({ where: { id: parentId } });
+    parent = await prisma.comment.findUnique({ where: { id: parentId } });
     if (!parent || parent.documentId !== document.id) {
       res.status(400).json({ error: "parentId must reference an existing comment on this document." });
       return;
@@ -160,6 +162,19 @@ commentsRouter.post("/api/groups/:id/document/comments", requireAuth, async (req
     },
     include: { author: { select: { id: true, name: true } } },
   });
+
+  if (parent) {
+    // Only group members can comment (isMemberOf above), so the parent's author is always a
+    // student and the student document link is always the right one.
+    await notify({
+      recipientIds: parent.authorId,
+      actorId:      req.user!.sub,
+      type:         "COMMENT_REPLY",
+      message:      `${created.author.name} replied to your comment`,
+      link:         `/student/group/${projectId}?tab=document`,
+      projectId,
+    });
+  }
 
   res.status(201).json(serializeComment(created));
 });

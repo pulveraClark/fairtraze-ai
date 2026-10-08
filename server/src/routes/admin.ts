@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
+import { notify, activeAdminIds } from "../lib/notify.js";
 
 export const adminRouter = Router();
 
@@ -415,6 +416,14 @@ adminRouter.post("/api/admin/departments", ...requireRole("ADMIN"), async (req, 
       targetId:   String(department.id),
       details:    `${department.name} (${department.code})`,
     },
+  });
+
+  await notify({
+    recipientIds: activeAdminIds,
+    actorId:      req.user!.sub,
+    type:         "DEPARTMENT_CREATED",
+    message:      `Department created: ${department.name} (${department.code})`,
+    link:         "/admin",
   });
 
   res.status(201).json(department);

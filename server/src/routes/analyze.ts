@@ -9,9 +9,27 @@ import { computeCombinedTeamReport } from "@shared/combinedScoring.js";
 import { computeDocumentRawStats } from "../collab/editStats.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
+import { notify } from "../lib/notify.js";
 import type { RawMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
 export const analyzeRouter = Router();
+
+// Tells each group member a fresh report is available. Students see the latest report as soon
+// as it is stored (GET /api/student/group/:projectId has no release gate), so this fires right
+// after the Report row is written. The message deliberately carries no scores or health label.
+// collapse: re-analysing refreshes one unread row per member instead of stacking.
+async function notifyReportReady(
+  project: { id: number; groupName: string; groupMemberships: { userId: number }[] }
+): Promise<void> {
+  await notify({
+    recipientIds: project.groupMemberships.map((m) => m.userId),
+    type:         "REPORT_READY",
+    message:      `A new contribution report is available for ${project.groupName.trim() || `Group ${project.id}`}`,
+    link:         `/student/group/${project.id}`,
+    projectId:    project.id,
+    collapse:     true,
+  });
+}
 
 // Persists one DocumentContribution row per member, alongside the existing Report.content JSON
 // blob — see CLAUDE.md/manuscript Table 61. Shared between the EDITOR and COMBINED branches
@@ -165,6 +183,8 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
       data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
     });
 
+    await notifyReportReady(project);
+
     generateAlertsForProject(projectId, report, {
       groupName:      project.groupName,
       assignmentLabel: project.assignmentLabel,
@@ -278,6 +298,8 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
       data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
     });
 
+    await notifyReportReady(project);
+
     generateAlertsForProject(projectId, report, {
       groupName:      project.groupName,
       assignmentLabel: project.assignmentLabel,
@@ -373,6 +395,8 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
   });
 
   // Fire-and-forget: generate alerts for at-risk groups. Never blocks the response.
+  await notifyReportReady(project);
+
   generateAlertsForProject(projectId, report, {
     groupName:      project.groupName,
     assignmentLabel: project.assignmentLabel,

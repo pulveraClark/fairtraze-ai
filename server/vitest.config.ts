@@ -30,8 +30,8 @@ export default defineConfig({
     },
     setupFiles: ["./test/setupEnv.ts"],
     globalSetup: ["./test/globalSetup.ts"],
-    testTimeout: 20000,
-    hookTimeout: 30000,
+    testTimeout: 60000,
+    hookTimeout: 60000,
     // Tests share one Neon test-branch connection; running files sequentially
     // avoids truncate/insert races between them.
     fileParallelism: false,

@@ -11,7 +11,16 @@ export type AlertType =
   | "JOIN_REQUEST_DECLINED"
   | "TASK_ASSIGNED"
   | "DISPUTE_RESPONDED"
-  | "ACCOUNT_LOCKED";
+  | "ACCOUNT_LOCKED"
+  | "COMMENT_REPLY"
+  | "REPORT_READY"
+  | "LEADER_CHANGED"
+  | "MEMBER_REMOVED"
+  | "ROLE_SUGGESTION_RECEIVED"
+  | "ROLE_SUGGESTION_RESOLVED"
+  | "GROUP_CREATED"
+  | "DEPARTMENT_CREATED"
+  | "USER_REGISTERED";
 
 export interface AlertItem {
   id: number;
@@ -59,6 +68,15 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   TASK_ASSIGNED:         { label: "Task",            color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
   DISPUTE_RESPONDED:     { label: "Review Response", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
   ACCOUNT_LOCKED:        { label: "Account Locked",  color: "text-red-400 bg-red-500/10 border-red-500/30",          light: "text-red-700 bg-red-50 border-red-200" },
+  COMMENT_REPLY:           { label: "Comment Reply", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
+  REPORT_READY:            { label: "Report Ready", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  LEADER_CHANGED:          { label: "Leader Change", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+  MEMBER_REMOVED:          { label: "Member Removed", color: "text-slate-300 bg-slate-500/10 border-slate-500/30", light: "text-slate-700 bg-slate-100 border-slate-200" },
+  ROLE_SUGGESTION_RECEIVED:{ label: "Role Suggestion", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
+  ROLE_SUGGESTION_RESOLVED:{ label: "Role Response", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+  GROUP_CREATED:           { label: "New Group", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  DEPARTMENT_CREATED:      { label: "New Department", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+  USER_REGISTERED:         { label: "New Instructor", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", light: "text-amber-700 bg-amber-50 border-amber-200" },
 };
 
 const FALLBACK_META: AlertTypeMeta = {

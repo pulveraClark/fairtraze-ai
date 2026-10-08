@@ -101,6 +101,19 @@ authRouter.post("/api/auth/register", async (req, res) => {
     },
   });
 
+  // Instructor sign-ups are worth an admin's attention; student sign-ups would be noise, and
+  // ADMIN can't self-register at all. No actor — the registrant isn't an authenticated user yet.
+  if (user.systemRole === "INSTRUCTOR") {
+    await notify({
+      recipientIds: activeAdminIds,
+      type:         "USER_REGISTERED",
+      message:      `New instructor account registered: ${user.name}`,
+      link:         "/admin",
+      refType:      "USER",
+      refId:        user.id,
+    });
+  }
+
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
   const refreshToken = await issueRefreshToken(user.id);
   setRefreshCookie(res, refreshToken);
