@@ -22,8 +22,8 @@ export function StatTile({ label, value, detail, bar, tone = "neutral" }: Props)
   const clamped = bar ? Math.min(1, Math.max(0, bar.value)) : 0;
   return (
     <div className={`${CARD} min-w-0 p-4 ${TONE[tone]}`}>
-      <p className="text-sm font-medium leading-normal text-slate-700">{label}</p>
-      <div className="mt-1 break-words text-[1.75rem] font-bold leading-tight text-slate-900">{value}</div>
+      <p className="text-[0.8125rem] font-medium leading-normal text-slate-700">{label}</p>
+      <div className="mt-1 break-words text-2xl font-bold leading-tight text-slate-900">{value}</div>
       {bar && (
         <div
           role="meter"
@@ -37,7 +37,7 @@ export function StatTile({ label, value, detail, bar, tone = "neutral" }: Props)
           <div className="h-full rounded-full bg-indigo-700" style={{ width: `${clamped * 100}%` }} />
         </div>
       )}
-      {detail && <div className="mt-2 break-words text-sm leading-normal text-slate-700">{detail}</div>}
+      {detail && <div className="mt-2 break-words text-[0.8125rem] leading-normal text-slate-700">{detail}</div>}
     </div>
   );
 }

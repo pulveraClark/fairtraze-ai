@@ -23,13 +23,13 @@ interface Props {
 }
 
 export function NotAvailable({ children }: { children?: ReactNode }) {
-  return <p className="text-base leading-normal text-slate-700">Not available{children ? ` — ${children}` : ""}</p>;
+  return <p className="text-sm leading-normal text-slate-700">Not available{children ? ` — ${children}` : ""}</p>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border-t border-slate-200 py-4 first:border-t-0 first:pt-0">
-      <h3 className="mb-2 text-base font-semibold text-slate-900">{title}</h3>
+      <h3 className="mb-2 text-sm font-semibold text-slate-900">{title}</h3>
       {children}
     </section>
   );
@@ -37,7 +37,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Stats({ rows }: { rows: Array<[string, ReactNode]> }) {
   return (
-    <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-base leading-normal">
+    <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-sm leading-normal">
       {rows.map(([k, v]) => (
         <div key={k} className="col-span-2 grid grid-cols-subgrid">
           <dt className="text-slate-700">{k}</dt>
@@ -73,8 +73,8 @@ export function MemberDrawer({
   return (
     <Drawer open={open} onClose={onClose} title={member.studentName} restoreFocusTo={restoreFocusTo} subtitle={<RoleChips info={info} />}>
       <Section title="Contribution share">
-        <p className="text-[1.75rem] font-bold leading-tight text-slate-900">{formatPct(member.contributionShare)}</p>
-        <p className="mt-1 text-base leading-normal text-slate-800">
+        <p className="text-2xl font-bold leading-tight text-slate-900">{formatPct(member.contributionShare)}</p>
+        <p className="mt-1 text-sm leading-normal text-slate-800">
           {Math.abs(diff).toFixed(1)} percentage points {diff >= 0 ? "above" : "below"} the equal share ({equalPct.toFixed(1)}% each).
         </p>
         {combined && (
@@ -92,7 +92,7 @@ export function MemberDrawer({
 
       <Section title="Flags">
         {member.flags.length === 0 ? (
-          <p className="text-base text-slate-800">No flags</p>
+          <p className="text-sm text-slate-800">No flags</p>
         ) : (
           <ul className="space-y-3">
             {member.flags.map((f) => {
@@ -106,7 +106,7 @@ export function MemberDrawer({
                     {outcome === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
                   </div>
                   {rule && (
-                    <p className="mt-1 text-sm leading-normal text-slate-700">
+                    <p className="mt-1 text-[0.8125rem] leading-normal text-slate-700">
                       <span className="font-semibold">How this flag is defined: </span>{rule}
                     </p>
                   )}
@@ -122,7 +122,7 @@ export function MemberDrawer({
           </div>
         )}
         {(notes.length > 0 || (tasks && tasks.total > 0)) && (
-          <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
+          <div className="mt-3 space-y-1 text-[0.8125rem] leading-normal text-slate-800">
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
             {tasks && tasks.total > 0 && <p><span className="font-semibold">Tasks: </span>{tasks.completed} of {tasks.total} completed</p>}
           </div>
@@ -161,7 +161,7 @@ export function MemberDrawer({
               ]}
             />
             {(importedChars > 0 || docs.insertedImageCount > 0) && (
-              <div className="mt-2 space-y-1 text-sm leading-normal text-slate-800">
+              <div className="mt-2 space-y-1 text-[0.8125rem] leading-normal text-slate-800">
                 {importedChars > 0 && <p><span className="font-semibold">Import: </span>{n(importedChars)} characters imported from .docx (session credit includes an estimate).</p>}
                 {docs.insertedImageCount > 0 && <p><span className="font-semibold">Images: </span>{docs.insertedImageCount} inserted (disclosed only, never scored).</p>}
               </div>

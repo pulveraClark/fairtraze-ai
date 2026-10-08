@@ -28,7 +28,7 @@ function MobileTopBar({ open, onOpen, buttonRef }: { open: boolean; onOpen: () =
       >
         <MenuIcon />
         {unreadCount > 0 && (
-          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 min-w-[1.25rem] rounded-full bg-red-500 px-1 py-0.5 text-center text-[0.8125rem] font-bold leading-none text-white">
+          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 min-w-[1.25rem] rounded-full bg-red-500 px-1 py-0.5 text-center text-xs font-bold leading-none text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
@@ -141,7 +141,7 @@ function AuthedFrame({ userId, children }: { userId: number; children: ReactNode
 /** Logged-out visitors on shared pages (/join, /overview): a compact bar instead of a sidebar. */
 function PublicFrame({ children }: { children: ReactNode }) {
   const { navigate } = useRouter();
-  const linkClass = `inline-flex min-h-11 items-center rounded-lg px-4 text-base font-medium ${FOCUS_RING}`;
+  const linkClass = `inline-flex min-h-11 items-center rounded-lg px-4 text-sm font-medium ${FOCUS_RING}`;
   return (
     <div className="ft-app-content ft-app-content--public flex min-h-screen flex-col">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#020617] px-4 print:hidden">

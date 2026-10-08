@@ -81,13 +81,13 @@ export function TrendChart({ history }: Props) {
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 13, fill: "#475569" }}
+          tick={{ fontSize: 12, fill: "#475569" }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
           domain={[0, 1]}
-          tick={{ fontSize: 13, fill: "#475569" }}
+          tick={{ fontSize: 12, fill: "#475569" }}
           axisLine={false}
           tickLine={false}
           width={36}
@@ -112,7 +112,7 @@ export function TrendChart({ history }: Props) {
     {visibleLegend.length > 0 && (
       <div className="flex items-center gap-4 px-1 pt-1 pb-2 flex-wrap">
         {visibleLegend.map((e) => (
-          <span key={e.color} className="flex items-center gap-1.5 text-[0.8125rem] text-slate-700">
+          <span key={e.color} className="flex items-center gap-1.5 text-xs text-slate-700">
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
             {e.label}
           </span>

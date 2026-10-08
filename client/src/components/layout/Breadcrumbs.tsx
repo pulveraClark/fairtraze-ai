@@ -11,7 +11,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
   const { navigate } = useRouter();
   return (
     <nav aria-label="Breadcrumb" className="print:hidden">
-      <ol className="flex flex-wrap items-center text-sm">
+      <ol className="flex flex-wrap items-center text-[0.8125rem]">
         {items.map((c, i) => {
           const last = i === items.length - 1;
           return (

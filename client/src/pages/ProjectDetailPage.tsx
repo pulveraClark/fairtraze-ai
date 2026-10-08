@@ -557,7 +557,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               </div>
             )}
 
-            {/* AI explanation + Lorenz curve */}
+            {/* AI explanation + Report details */}
             <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
               {/* keyed to projectId so it always reflects the current group */}
               <Narrative
@@ -566,10 +566,14 @@ export function ProjectDetailPage({ projectId }: Props) {
                 projectId={projectId}
                 onNarrativeGenerated={(text) => setNarrativeText(text)}
               />
-              <LorenzCard shares={stored.report.members.map((m) => m.contributionShare)} gini={stored.report.gini} />
+              <ReportDetailsCard
+                stored={stored}
+                sourceLabel={SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}
+                stale={reportStale}
+              />
             </div>
 
-            {/* Trend + details */}
+            {/* Trend + Lorenz curve */}
             <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
               {/* Imbalance trend — omitted until there are at least 2 runs, since a single point isn't a trend. */}
               {reportHistory.length >= 2 && (
@@ -603,11 +607,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                 </section>
               )}
               <div className={reportHistory.length >= 2 ? "" : "lg:col-span-2"}>
-                <ReportDetailsCard
-                  stored={stored}
-                  sourceLabel={SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}
-                  stale={reportStale}
-                />
+                <LorenzCard shares={stored.report.members.map((m) => m.contributionShare)} gini={stored.report.gini} />
               </div>
             </div>
           </>

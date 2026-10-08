@@ -64,7 +64,7 @@ export function StatusPill(props: Props) {
     icon = "dot";
   }
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-sm font-semibold leading-normal ${PILL_TONES[tone].cls} ${props.className ?? ""}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-normal ${PILL_TONES[tone].cls} ${props.className ?? ""}`}>
       <Icon kind={icon} />
       {label}
     </span>

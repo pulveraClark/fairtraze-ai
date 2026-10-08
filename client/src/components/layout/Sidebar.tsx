@@ -91,7 +91,7 @@ function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; act
       collapsed={false}
       onNavigate={onNavigate}
       badge={unreadCount > 0 && (
-        <span className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[0.8125rem] font-bold leading-none text-white">
+        <span className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-xs font-bold leading-none text-white">
           {unreadCount > 99 ? "99+" : unreadCount}
           <span className="sr-only"> unread</span>
         </span>
@@ -105,13 +105,13 @@ function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; act
 const treeLinkClass = (active: boolean, size: "base" | "sm") =>
   [
     "flex min-h-11 min-w-0 flex-1 items-center rounded-lg px-3",
-    size === "base" ? "text-base" : "text-sm",
+    size === "base" ? "text-sm" : "text-[0.8125rem]",
     active ? "bg-white/10 font-semibold text-white" : "font-medium text-slate-300 hover:bg-white/5 hover:text-white",
     FOCUS_RING,
   ].join(" ");
 
 const viewAllClass =
-  `flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-indigo-300 underline-offset-2 hover:text-indigo-200 hover:underline ${FOCUS_RING}`;
+  `flex min-h-11 items-center rounded-lg px-3 text-[0.8125rem] font-medium text-indigo-300 underline-offset-2 hover:text-indigo-200 hover:underline ${FOCUS_RING}`;
 
 function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => void }) {
   const { token } = useAuth();
@@ -138,15 +138,15 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
   useEffect(() => { setOverrides({}); }, [activeClassId]);
 
   const query = isInstructor ? classesQ : studentQ;
-  if (query.isLoading) return <p className="px-3 py-2 text-sm text-slate-400">Loading classes…</p>;
-  if (query.isError)   return <p className="px-3 py-2 text-sm text-slate-300">Couldn't load classes.</p>;
+  if (query.isLoading) return <p className="px-3 py-2 text-[0.8125rem] text-slate-400">Loading classes…</p>;
+  if (query.isError)   return <p className="px-3 py-2 text-[0.8125rem] text-slate-300">Couldn't load classes.</p>;
 
   const tree = isInstructor
     ? buildInstructorTree(classesQ.data ?? [], summaryQ.data, pathname, activeClassId)
     : buildStudentTree(studentQ.data ?? [], pathname, activeClassId);
 
   if (tree.classes.length === 0) {
-    return <p className="px-3 py-2 text-sm text-slate-400">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
+    return <p className="px-3 py-2 text-[0.8125rem] text-slate-400">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
   }
 
   return (
@@ -176,7 +176,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
                 {c.groups.length === 0 && (
                   <li>
                     {isInstructor ? (
-                      <p className="px-3 py-2 text-sm text-slate-400">No groups yet.</p>
+                      <p className="px-3 py-2 text-[0.8125rem] text-slate-400">No groups yet.</p>
                     ) : (
                       <SidebarLink href={c.href} onNavigate={onNavigate} className={viewAllClass}>Find a group</SidebarLink>
                     )}
@@ -256,14 +256,14 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
   const avatar = (
     <span
       aria-hidden="true"
-      className={`flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border text-sm font-bold ${AVATAR_STYLE[role] ?? AVATAR_STYLE.STUDENT}`}
+      className={`flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border text-[0.8125rem] font-bold ${AVATAR_STYLE[role] ?? AVATAR_STYLE.STUDENT}`}
       style={{ background: AVATAR_BG[role] ?? AVATAR_BG.STUDENT }}
     >
       {initials(user.name)}
     </span>
   );
   const badge = (
-    <span className={`inline-block rounded-md border px-2 py-0.5 text-[0.8125rem] font-medium ${ROLE_BADGE_DARK[role] ?? ROLE_BADGE_DARK.STUDENT}`}>
+    <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${ROLE_BADGE_DARK[role] ?? ROLE_BADGE_DARK.STUDENT}`}>
       {ROLE_LABEL[role] ?? role}
     </span>
   );
@@ -271,7 +271,7 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
   function go(path: string) { navigate(path); setOpen(false); onNavigate?.(); }
   function handleLogout() { logout(); navigate("/"); setOpen(false); onNavigate?.(); }
 
-  const itemClass = `flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-base font-medium text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`;
+  const itemClass = `flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`;
 
   return (
     <div ref={ref} className="group relative">
@@ -287,7 +287,7 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
         {avatar}
         {!collapsed && (
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-base font-semibold text-white">{user.name}</span>
+            <span className="block truncate text-sm font-semibold text-white">{user.name}</span>
             {badge}
           </span>
         )}
@@ -304,7 +304,7 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
           }`}
         >
           <div className="px-3 py-2">
-            <p className="truncate text-base font-semibold text-white">{user.name}</p>
+            <p className="truncate text-sm font-semibold text-white">{user.name}</p>
             <p className="mt-0.5">{badge}</p>
           </div>
           <button type="button" onClick={() => go("/settings")} className={itemClass}>
