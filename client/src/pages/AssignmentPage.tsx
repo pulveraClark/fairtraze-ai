@@ -9,6 +9,9 @@ import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
+import { BriefCard } from "../components/BriefCard";
+import { EditAssignmentModal } from "../components/EditAssignmentModal";
+import type { BriefAttachment } from "../lib/briefAttachments";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface AssignmentMeta {
@@ -20,6 +23,8 @@ interface AssignmentMeta {
   sourceType: "GITHUB" | "EDITOR" | "COMBINED";
   createdAt: string;
   classSectionId: number;
+  description: string | null;
+  attachments: BriefAttachment[];
 }
 
 interface ClassInfo {
@@ -93,6 +98,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
   const [tasksGroupId, setTasksGroupId]       = useState<number | null>(null);
+  const [editingBrief, setEditingBrief]       = useState(false);
 
   // ── Bulk selection / bulk analyze / bulk export ────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -279,6 +285,15 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         />
       )}
 
+      {editingBrief && assignment && !isAdmin && (
+        <EditAssignmentModal
+          assignmentId={assignment.id}
+          token={token}
+          onClose={() => setEditingBrief(false)}
+          onSaved={() => void fetchData()}
+        />
+      )}
+
       {tasksGroupId !== null && (
         <TaskManageModal
           projectId={tasksGroupId}
@@ -350,6 +365,18 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       </div>
 
       <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* Project brief — instructor-written context for students; never affects scoring */}
+        {assignment && (
+          <div className="mb-6">
+            <BriefCard
+              assignmentId={assignment.id}
+              description={assignment.description}
+              attachments={assignment.attachments}
+              onEdit={isAdmin ? undefined : () => setEditingBrief(true)}
+            />
+          </div>
+        )}
 
         {/* Bulk select / bulk action bar — instructors only */}
         {!isAdmin && !loading && !loadError && processed.length > 0 && (

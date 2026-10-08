@@ -1,3 +1,4 @@
+import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -219,6 +220,8 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
     : [];
   const pendingCountByProject = new Map(pendingCountRows.map((r) => [r.projectId, r._count.id]));
 
+  const briefMeta = await attachmentMetaFor(cs.assignments.map((a) => a.id));
+
   const assignments = cs.assignments.map((a) => {
     const myProject    = a.projects.find((p) => p.groupMemberships.some((m) => m.userId === userId)) ?? null;
     const myMembership = myProject?.groupMemberships.find((m) => m.userId === userId) ?? null;
@@ -237,6 +240,8 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
       deadline:     a.deadline?.toISOString() ?? null,
       sourceType:   a.sourceType,
       maxGroupSize: a.maxGroupSize,
+      description:  a.description,
+      attachments:  briefMeta.get(a.id) ?? [],
       myGroup: myMembership && myProject
         ? {
             id:                   myProject.id,
@@ -630,6 +635,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       id: asgn.id, title: asgn.title,
       deadline:   asgn.deadline?.toISOString() ?? null,
       sourceType: asgn.sourceType,
+      description: asgn.description,
+      attachments: (await attachmentMetaFor([asgn.id])).get(asgn.id) ?? [],
     },
     project: {
       id: project.id,

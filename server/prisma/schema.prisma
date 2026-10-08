@@ -20,6 +20,11 @@ enum SourceType {
   COMBINED
 }
 
+enum AttachmentKind {
+  IMAGE
+  PDF
+}
+
 enum MembershipRole {
   LEADER
   MEMBER
@@ -213,9 +218,29 @@ model Assignment {
   maxGroupSize   Int          @default(5)
   sourceType     SourceType
   joinCode       String       @unique
+  // Instructor-written project brief (plain text, max 5000 chars). Context only — never read by scoring.
+  description    String?
   createdAt      DateTime     @default(now())
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   projects       Project[]
+  attachments    ProjectAttachment[]
+}
+
+// Brief attachments (<=5 images + <=1 PDF per assignment). Stored in Postgres because
+// Render's disk is ephemeral. Display only — never read by scoring, collab or analyze.
+model ProjectAttachment {
+  id           Int            @id @default(autoincrement())
+  assignmentId Int
+  kind         AttachmentKind
+  mime         String
+  data         Bytes
+  size         Int
+  filename     String
+  order        Int            @default(0)
+  createdAt    DateTime       @default(now())
+  assignment   Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, order])
 }
 
 model GroupMembership {

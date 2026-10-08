@@ -6,6 +6,9 @@ import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
+import { BriefEditor } from "../components/BriefEditor";
+import { EditAssignmentModal, UploadFailurePanel } from "../components/EditAssignmentModal";
+import { emptyDraft, retryUploads, syncBrief, type BriefDraft, type DraftItem } from "../lib/briefAttachments";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -93,11 +96,14 @@ function CreateAssignmentModal({
   token,
   onClose,
   onCreated,
+  onEditCreated,
 }: {
   classSectionId: number;
   token: string | null;
   onClose: () => void;
   onCreated: () => void;
+  /** Opens the edit form for the just-created project (used when attachment uploads fail). */
+  onEditCreated: (assignmentId: number) => void;
 }) {
   const [title, setTitle]           = useState("");
   const [deadline, setDeadline]     = useState("");
@@ -108,6 +114,11 @@ function CreateAssignmentModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [draft, setDraft] = useState<BriefDraft>(emptyDraft());
+  const [createdId, setCreatedId] = useState<number | null>(null);
+  const [failedUploads, setFailedUploads] = useState<DraftItem[]>([]);
+  const [retrying, setRetrying] = useState(false);
 
   // Soft warning only — does not block submission
   const todayStr        = new Date().toISOString().slice(0, 10);
@@ -135,6 +146,7 @@ function CreateAssignmentModal({
         maxGroupSize: parseInt(maxGroupSize) || 5,
         sourceType,
         deadline: new Date(deadline + "T00:00:00").toISOString(),
+        ...(description.trim() ? { description } : {}),
       };
 
       const res = await fetch("/api/assignments", {
@@ -143,6 +155,11 @@ function CreateAssignmentModal({
         body:    JSON.stringify(body),
       });
       if (res.ok) {
+        const created = (await res.json()) as { id: number };
+        setCreatedId(created.id);
+        // The project exists now; a failed upload must not look like a failed create.
+        const { failed } = await syncBrief(created.id, draft, token ?? "");
+        setFailedUploads(failed);
         setCreatedCode("ok");
         onCreated();
       } else {
@@ -156,6 +173,15 @@ function CreateAssignmentModal({
     }
   }
 
+  async function handleRetryUploads() {
+    if (createdId === null) return;
+    setRetrying(true);
+    const { failed } = await retryUploads(createdId, failedUploads, token ?? "");
+    setRetrying(false);
+    setFailedUploads(failed);
+    onCreated();
+  }
+
   const SOURCE_OPTS = [
     { value: "GITHUB",   label: "GitHub" },
     { value: "EDITOR",   label: "FairTraze Docs" },
@@ -164,7 +190,7 @@ function CreateAssignmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !createdCode && onClose()}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -184,7 +210,18 @@ function CreateAssignmentModal({
         </div>
 
         {/* Success state */}
-        {createdCode ? (
+        {createdCode && failedUploads.length > 0 && createdId !== null ? (
+          <>
+            <div className="px-6 pt-5 text-sm text-emerald-800">&quot;{title}&quot; was created.</div>
+            <UploadFailurePanel
+              failed={failedUploads}
+              retrying={retrying}
+              onRetry={() => void handleRetryUploads()}
+              onEdit={() => onEditCreated(createdId)}
+              onDone={onClose}
+            />
+          </>
+        ) : createdCode ? (
           <div className="px-6 py-6 space-y-4">
             <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -270,6 +307,15 @@ function CreateAssignmentModal({
                 </div>
                 {sourceTypeErr && <p className="text-xs text-red-600 mt-1">{sourceTypeErr}</p>}
               </div>
+
+              <BriefEditor
+                assignmentId={null}
+                description={description}
+                onDescriptionChange={setDescription}
+                draft={draft}
+                onDraftChange={setDraft}
+                disabled={submitting}
+              />
 
             </div>
 
@@ -437,6 +483,7 @@ export function ClassPage({ classId }: Props) {
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState<string | null>(null);
   const [showModal, setShowModal]           = useState(false);
+  const [editingId, setEditingId]            = useState<number | null>(null);
   const [filterAtRisk, setFilterAtRisk]     = useState(false);
   const [search, setSearch]                 = useState("");
   const [deleteTarget, setDeleteTarget]     = useState<LifecycleAssignment | null>(null);
@@ -529,6 +576,15 @@ export function ClassPage({ classId }: Props) {
           token={token}
           onClose={() => setShowModal(false)}
           onCreated={() => { void fetchData(); void summaryQuery.refetch(); }}
+          onEditCreated={(id) => { setShowModal(false); setEditingId(id); }}
+        />
+      )}
+      {!isAdmin && editingId !== null && (
+        <EditAssignmentModal
+          assignmentId={editingId}
+          token={token}
+          onClose={() => setEditingId(null)}
+          onSaved={() => { void fetchData(); void summaryQuery.refetch(); }}
         />
       )}
       {deleteTarget && (() => {

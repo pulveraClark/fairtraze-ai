@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { BriefModal } from "../components/BriefCard";
+import type { BriefAttachment } from "../lib/briefAttachments";
 import { useQueryClient } from "@tanstack/react-query";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
@@ -52,6 +54,8 @@ interface AssignmentDetail {
   deadline: string | null;
   sourceType: string;
   maxGroupSize: number;
+  description: string | null;
+  attachments: BriefAttachment[];
   myGroup: MyGroup | null;
   myRequest: MyRequest | null;
   groups: AvailableGroup[];
@@ -119,6 +123,7 @@ function ProjectCard({
   refreshUser: () => Promise<{ githubUsername?: string | null } | null>;
 }) {
   const [mode, setMode]             = useState<"idle" | "create" | "join">("idle");
+  const [showBrief, setShowBrief]   = useState(false);
   const [groupName, setGroupName]   = useState("");
   const [repoUrl, setRepoUrl]       = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -218,6 +223,31 @@ function ProjectCard({
                 Max {asgn.maxGroupSize} per group
               </span>
             </div>
+            {(asgn.description || asgn.attachments.length > 0) && (
+              <div className="mt-2 flex items-center gap-2 min-w-0">
+                <p className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                  {asgn.description
+                    ? asgn.description.replace(/\s+/g, " ")
+                    : `${asgn.attachments.length} attachment${asgn.attachments.length === 1 ? "" : "s"}`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowBrief(true)}
+                  className="min-h-9 shrink-0 rounded-lg px-2 text-sm font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  View brief
+                </button>
+              </div>
+            )}
+            {showBrief && (
+              <BriefModal
+                assignmentId={asgn.id}
+                title={asgn.title}
+                description={asgn.description}
+                attachments={asgn.attachments}
+                onClose={() => setShowBrief(false)}
+              />
+            )}
           </div>
         </div>
       </div>

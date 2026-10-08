@@ -14,6 +14,8 @@ import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { TaskManageModal, type GroupTask } from "../components/TaskManageModal";
 import { FlagTag } from "../components/FlagTag";
+import { BriefCard } from "../components/BriefCard";
+import type { BriefAttachment } from "../lib/briefAttachments";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, type MyContribution } from "../lib/contributionStats";
 
@@ -27,7 +29,7 @@ interface RoleSuggestionData {
 
 interface GroupDetail {
   classSection: { id: number; subjectCode: string; subjectName: string; department: { id: number; name: string; code: string } | null; edpCode: string; };
-  assignment:   { id: number; title: string; deadline: string | null; sourceType: string; };
+  assignment:   { id: number; title: string; deadline: string | null; sourceType: string; description: string | null; attachments: BriefAttachment[]; };
   project:      { id: number; groupName: string; repoUrl: string; };
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
@@ -536,6 +538,18 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       </div>
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* Project brief — read-only context from the instructor; open the first time it is seen */}
+        {(assignment.description || assignment.attachments.length > 0) && (
+          <div className="mb-6">
+            <BriefCard
+              assignmentId={assignment.id}
+              description={assignment.description}
+              attachments={assignment.attachments}
+              rememberOpenState
+            />
+          </div>
+        )}
 
         {/* ── Your tasks widget ───────────────────────────────────────────────── */}
         {myTasks.length > 0 && (

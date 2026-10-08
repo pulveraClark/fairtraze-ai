@@ -602,7 +602,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { assignment: { select: { classSection: { select: { instructorId: true } } } } },
+    include: { assignment: { select: { description: true, classSection: { select: { instructorId: true } } } } },
   });
   if (!project) {
     res.status(404).json({ error: `Project ${projectId} not found` });
@@ -643,7 +643,11 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
 
   // Generate via Gemini
   try {
-    const narrative = await generateFairnessNarrative(project.groupName || `Group ${projectId}`, stored.report);
+    const narrative = await generateFairnessNarrative(
+      project.groupName || `Group ${projectId}`,
+      stored.report,
+      project.assignment?.description ?? null // context only; never affects scores
+    );
     await prisma.report.update({
       where: { id: latestReport.id },
       data: { content: JSON.stringify({ ...stored, narrative }) },

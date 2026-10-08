@@ -16,6 +16,7 @@ import { disputesRouter } from "./routes/disputes.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
 import { avatarRouter, avatarBodyErrors } from "./routes/avatar.js";
+import { briefsRouter, briefBodyErrors, BRIEF_RAW_LIMIT, BRIEF_RAW_TYPES } from "./routes/briefs.js";
 import { authenticateToken } from "./middleware/auth.js";
 import {
   corsOptions,
@@ -41,6 +42,9 @@ export function createApp() {
   // Profile photo upload is a raw image body (already client-resized to ~200KB), not JSON.
   app.put("/api/users/me/avatar", express.raw({ type: ["image/jpeg", "image/webp"], limit: "256kb" }));
   app.use("/api/users/me/avatar", avatarBodyErrors);
+  // Project brief attachments are raw image/PDF bodies; per-kind size limits are enforced in the route.
+  app.post("/api/assignments/:id/attachments", express.raw({ type: BRIEF_RAW_TYPES, limit: BRIEF_RAW_LIMIT }));
+  app.use("/api/assignments/:id/attachments", briefBodyErrors);
   app.use(express.json());
   app.use(cookieParser());
   app.use(globalLimiter);
@@ -65,6 +69,7 @@ export function createApp() {
   app.use(avatarRouter);
   app.use(classesRouter);
   app.use(assignmentsRouter);
+  app.use(briefsRouter);
   app.use(joinRouter);
   app.use(groupsRouter);
   app.use(documentsRouter);
