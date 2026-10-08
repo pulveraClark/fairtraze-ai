@@ -854,7 +854,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           // ScoringSettingsModal.tsx/GroupManageModal.tsx — this isn't a dialog, it's an
           // immersive canvas) with the toolbar's own bg-slate-50 pinned at the top and the page
           // scrolling beneath it.
-          <div className="fixed inset-0 z-50 bg-slate-300 overflow-y-auto flex flex-col">
+          <div className="ft-focus-scroll fixed inset-0 z-50 bg-slate-300 overflow-y-auto flex flex-col">
             <div className="bg-white border-b border-slate-200 shadow-sm shrink-0">{toolbar}</div>
             <div className="flex-1 flex justify-center px-4 py-10">
               <div

@@ -186,6 +186,16 @@ body {
   color: var(--brand-text-primary);
   margin: 1rem 0 0.5rem;
 }
+/* TOC click target: clear AppTopBar (sticky, h-16 + 1px border at every breakpoint) plus 0.5rem. */
+.ft-doc-content h1,
+.ft-doc-content h2 {
+  scroll-margin-top: calc(4rem + 1px + 0.5rem);
+}
+/* Focus mode is a fixed full-viewport overlay above AppTopBar, so no header to clear. */
+.ft-focus-scroll .ft-doc-content h1,
+.ft-focus-scroll .ft-doc-content h2 {
+  scroll-margin-top: 1rem;
+}
 .ft-doc-content p {
   margin: 0 0 0.85rem;
 }
