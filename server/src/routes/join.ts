@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
+import { notify } from "../lib/notify.js";
 import type {
   TeamReport, AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember,
 } from "@shared/types.js";
@@ -361,7 +362,10 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVeri
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.assignment.findUnique({
       where: { id: result.data.assignmentId },
-      select: { id: true, classSectionId: true, sourceType: true, maxGroupSize: true },
+      select: {
+        id: true, title: true, classSectionId: true, sourceType: true, maxGroupSize: true,
+        classSection: { select: { instructorId: true } },
+      },
     }),
   ]);
 
@@ -432,6 +436,15 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVeri
       studentName:    user!.name,
       githubUsername: user!.githubUsername ?? "",
     },
+  });
+
+  await notify({
+    recipientIds: assignment.classSection.instructorId,
+    actorId:      userId,
+    type:         "GROUP_CREATED",
+    message:      `New group created: ${project.groupName} (${assignment.title})`,
+    link:         `/project/${project.id}`,
+    projectId:    project.id,
   });
 
   res.status(201).json({ id: project.id, groupName: project.groupName, role: "LEADER" });

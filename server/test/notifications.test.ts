@@ -402,6 +402,303 @@ describe("lazy pruning", () => {
   });
 });
 
+// ── Phase 2 ───────────────────────────────────────────────────────────────────
+
+type AuthUser = Parameters<typeof authHeaderFor>[0];
+const ANCHOR = Buffer.from("anchor-bytes").toString("base64");
+
+async function alertsFor(userId: number) {
+  return prisma.alert.findMany({ where: { recipientId: userId } });
+}
+
+describe("comment-reply notifications", () => {
+  async function setupWithDocument() {
+    const ctx = await setupGroup();
+    await prisma.document.create({ data: { groupId: ctx.project.id } });
+    return ctx;
+  }
+  async function comment(user: AuthUser, projectId: number, extra: object = {}) {
+    return request(app)
+      .post(`/api/groups/${projectId}/document/comments`)
+      .set("Authorization", authHeaderFor(user))
+      .send({ text: "Hello", anchor: ANCHOR, ...extra });
+  }
+
+  it("a reply notifies only the parent author, with the student document link", async () => {
+    const { leader, member, project } = await setupWithDocument();
+    const root = await comment(leader, project.id);
+    expect(await prisma.alert.count()).toBe(0); // a top-level comment notifies nobody
+
+    const reply = await comment(member, project.id, { parentId: root.body.id });
+    expect(reply.status).toBe(201);
+    expect(await prisma.alert.count()).toBe(1);
+    const [a] = await alertsFor(leader.id);
+    expect(a.type).toBe("COMMENT_REPLY");
+    expect(a.link).toBe(`/student/group/${project.id}?tab=document`);
+    expect(a.projectId).toBe(project.id);
+  });
+
+  it("replying to your own comment notifies nobody", async () => {
+    const { leader, project } = await setupWithDocument();
+    const root = await comment(leader, project.id);
+    await comment(leader, project.id, { parentId: root.body.id });
+    expect(await prisma.alert.count()).toBe(0);
+  });
+
+  it("the instructor cannot comment, so can never be a reply recipient", async () => {
+    const { instructor, project } = await setupWithDocument();
+    const res = await comment(instructor, project.id);
+    expect(res.status).toBe(403);
+    expect(await prisma.alert.count()).toBe(0);
+  });
+});
+
+describe("report-ready notifications", () => {
+  it("analyze notifies each member once (not the instructor), without scores, and collapses on re-analyze", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR", emailVerified: true });
+    const { user: a } = await createUser({ systemRole: "STUDENT", emailVerified: true });
+    const { user: b } = await createUser({ systemRole: "STUDENT", emailVerified: true });
+    const cs = await createClassSection(instructor.id);
+    const asg = await createAssignment(cs.id, { sourceType: "EDITOR" });
+    const project = await createProject({ assignmentId: asg.id, groupName: "Group R" });
+    await createMembership(a.id, project.id, "LEADER");
+    await createMembership(b.id, project.id, "MEMBER");
+
+    for (let i = 0; i < 2; i++) {
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/analyze`)
+        .set("Authorization", authHeaderFor(instructor));
+      expect(res.status).toBe(200);
+    }
+
+    const ready = await prisma.alert.findMany({ where: { type: "REPORT_READY" } });
+    expect(ready.map((r) => r.recipientId).sort()).toEqual([a.id, b.id].sort());
+    expect(ready.every((r) => !r.read && r.link === `/student/group/${project.id}`)).toBe(true);
+    expect(ready.every((r) => !/\d/.test(r.message.replace("Group R", "")))).toBe(true); // no scores
+    expect(await prisma.alert.count({ where: { recipientId: instructor.id, type: "REPORT_READY" } })).toBe(0);
+  });
+});
+
+describe("leader-change notifications", () => {
+  it("instructor reassigning notifies the new and the old leader", async () => {
+    const { instructor, leader, member, project } = await setupGroup();
+    const res = await request(app)
+      .post(`/api/groups/${project.id}/reassign-leader`)
+      .set("Authorization", authHeaderFor(instructor))
+      .send({ userId: member.id });
+    expect(res.status).toBe(200);
+    expect(await prisma.alert.count()).toBe(2);
+    expect((await alertsFor(member.id))[0].type).toBe("LEADER_CHANGED");
+    expect((await alertsFor(leader.id))[0].type).toBe("LEADER_CHANGED");
+  });
+
+  it("the leader handing over notifies only the new leader", async () => {
+    const { leader, member, project } = await setupGroup();
+    await request(app)
+      .post(`/api/groups/${project.id}/reassign-leader`)
+      .set("Authorization", authHeaderFor(leader))
+      .send({ userId: member.id });
+    expect(await prisma.alert.count()).toBe(1);
+    expect(await alertsFor(member.id)).toHaveLength(1);
+  });
+});
+
+describe("member-removal notifications", () => {
+  it("leader removing a member notifies only the removed member (class link)", async () => {
+    const { leader, member, classSection, project } = await setupGroup();
+    const res = await request(app)
+      .delete(`/api/groups/${project.id}/members/${member.id}`)
+      .set("Authorization", authHeaderFor(leader));
+    expect(res.status).toBe(200);
+    expect(await prisma.alert.count()).toBe(1);
+    const [a] = await alertsFor(member.id);
+    expect(a.type).toBe("MEMBER_REMOVED");
+    expect(a.link).toBe(`/student/class/${classSection.id}`);
+  });
+
+  it("a member leaving notifies only the leader", async () => {
+    const { leader, member, project } = await setupGroup();
+    await request(app)
+      .delete(`/api/groups/${project.id}/members/${member.id}`)
+      .set("Authorization", authHeaderFor(member));
+    expect(await prisma.alert.count()).toBe(1);
+    const [a] = await alertsFor(leader.id);
+    expect(a.type).toBe("MEMBER_REMOVED");
+    expect(a.link).toBe(`/student/group/${project.id}`);
+  });
+});
+
+describe("role-suggestion notifications", () => {
+  async function suggest(member: AuthUser, projectId: number) {
+    return request(app)
+      .post(`/api/groups/${projectId}/role-suggestions`)
+      .set("Authorization", authHeaderFor(member))
+      .send({ suggestedRoles: ["DOCUMENTATION"] });
+  }
+
+  it("a suggestion notifies only the leader, with the manage link and a ref", async () => {
+    const { leader, member, project } = await setupGroup();
+    const res = await suggest(member, project.id);
+    expect(res.status).toBe(201);
+    expect(await prisma.alert.count()).toBe(1);
+    const [a] = await alertsFor(leader.id);
+    expect(a.type).toBe("ROLE_SUGGESTION_RECEIVED");
+    expect(a.link).toBe(`/student/group/${project.id}?manage=1`);
+    expect(a.refType).toBe("ROLE_SUGGESTION");
+    expect(a.refId).toBe(res.body.id);
+  });
+
+  it.each(["accept", "decline"] as const)("%s clears the leader's pending item and notifies the member", async (action) => {
+    const { leader, member, project } = await setupGroup();
+    const res = await suggest(member, project.id);
+    const out = await request(app)
+      .post(`/api/groups/role-suggestions/${res.body.id}/${action}`)
+      .set("Authorization", authHeaderFor(leader));
+    expect(out.status).toBe(200);
+    expect(await alertsFor(leader.id)).toHaveLength(0);
+    const mine = await alertsFor(member.id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].type).toBe("ROLE_SUGGESTION_RESOLVED");
+    expect(mine[0].message).toContain(action === "accept" ? "accepted" : "declined");
+  });
+
+  it("a newer suggestion replaces the stale pending notification", async () => {
+    const { leader, member, project } = await setupGroup();
+    await suggest(member, project.id);
+    const second = await suggest(member, project.id);
+    const pending = await alertsFor(leader.id);
+    expect(pending).toHaveLength(1);
+    expect(pending[0].refId).toBe(second.body.id);
+  });
+
+  it("a direct role assignment clears the stale pending notification", async () => {
+    const { leader, member, project } = await setupGroup();
+    await suggest(member, project.id);
+    const res = await request(app)
+      .put(`/api/groups/${project.id}/members/${member.id}/functional-roles`)
+      .set("Authorization", authHeaderFor(leader))
+      .send({ functionalRoles: ["DOCUMENTATION"] });
+    expect(res.status).toBe(200);
+    expect(await alertsFor(leader.id)).toHaveLength(0);
+  });
+});
+
+describe("group-created notifications", () => {
+  it("creating a group notifies the class instructor only", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+    const cs = await createClassSection(instructor.id);
+    const asg = await createAssignment(cs.id, { sourceType: "EDITOR", title: "Capstone" });
+    const student = await createRequester(cs.id);
+
+    const res = await request(app)
+      .post("/api/join/create-group")
+      .set("Authorization", authHeaderFor(student))
+      .send({ assignmentId: asg.id, groupName: "Team Zeta" });
+    expect(res.status).toBe(201);
+
+    expect(await prisma.alert.count()).toBe(1);
+    const [a] = await alertsFor(instructor.id);
+    expect(a.type).toBe("GROUP_CREATED");
+    expect(a.link).toBe(`/project/${res.body.id}`);
+    expect(a.message).toContain("Team Zeta");
+  });
+});
+
+describe("department-created notifications", () => {
+  it("notifies other active admins only", async () => {
+    const { user: actor } = await createUser({ systemRole: "ADMIN" });
+    const { user: other } = await createUser({ systemRole: "ADMIN" });
+    await createUser({ systemRole: "ADMIN", active: false });
+    await createUser({ systemRole: "INSTRUCTOR" });
+
+    const res = await request(app)
+      .post("/api/admin/departments")
+      .set("Authorization", authHeaderFor(actor))
+      .send({ name: "College of Law", code: "LAW" });
+    expect(res.status).toBe(201);
+
+    expect(await prisma.alert.count()).toBe(1);
+    const [a] = await alertsFor(other.id);
+    expect(a.type).toBe("DEPARTMENT_CREATED");
+    expect(a.link).toBe("/admin");
+  });
+
+  it("a sole admin notifies nobody", async () => {
+    const { user: actor } = await createUser({ systemRole: "ADMIN" });
+    await request(app)
+      .post("/api/admin/departments")
+      .set("Authorization", authHeaderFor(actor))
+      .send({ name: "College of Law", code: "LAW" });
+    expect(await prisma.alert.count()).toBe(0);
+  });
+});
+
+describe("instructor-registration notifications", () => {
+  const register = (role?: string) =>
+    request(app).post("/api/auth/register").send({
+      email: `reg-${role ?? "none"}@example.com`,
+      password: "password123",
+      name: "Newcomer",
+      ...(role ? { role } : {}),
+    });
+
+  it("INSTRUCTOR signup notifies every active admin once, and no one else", async () => {
+    const { user: a1 } = await createUser({ systemRole: "ADMIN" });
+    const { user: a2 } = await createUser({ systemRole: "ADMIN" });
+    await createUser({ systemRole: "ADMIN", active: false });
+    await createUser({ systemRole: "INSTRUCTOR" });
+
+    const res = await register("INSTRUCTOR");
+    expect(res.status).toBe(201);
+
+    expect(await prisma.alert.count()).toBe(2);
+    for (const admin of [a1, a2]) {
+      const [a] = await alertsFor(admin.id);
+      expect(a.type).toBe("USER_REGISTERED");
+      expect(a.link).toBe("/admin");
+      expect(a.refType).toBe("USER");
+      expect(a.refId).toBe(res.body.user.id);
+      expect(a.message).not.toContain("@"); // no email in the notification
+    }
+  });
+
+  it("STUDENT signup (explicit or default) notifies nobody", async () => {
+    await createUser({ systemRole: "ADMIN" });
+    expect((await register("STUDENT")).status).toBe(201);
+    expect((await register()).status).toBe(201);
+    expect(await prisma.alert.count()).toBe(0);
+  });
+
+  it("a rejected ADMIN signup notifies nobody", async () => {
+    await createUser({ systemRole: "ADMIN" });
+    expect((await register("ADMIN")).status).toBe(400);
+    expect(await prisma.alert.count()).toBe(0);
+  });
+});
+
+describe("phase 2 failures never fail the main action", () => {
+  it("a department is still created (201) when notification insertion throws", async () => {
+    const { user: actor } = await createUser({ systemRole: "ADMIN" });
+    await createUser({ systemRole: "ADMIN" });
+    const spy = vi.spyOn(prisma.alert, "create").mockRejectedValue(new Error("db down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await request(app)
+        .post("/api/admin/departments")
+        .set("Authorization", authHeaderFor(actor))
+        .send({ name: "College of Law", code: "LAW" });
+      expect(res.status).toBe(201);
+      expect(await prisma.department.count({ where: { code: "LAW" } })).toBe(1);
+    } finally {
+      spy.mockRestore();
+      errSpy.mockRestore();
+    }
+  });
+});
+
+// NOTE: kept at the END of the file on purpose. These tests spy on prisma.alert.create, and the
+// spy is not reliably undone by mockRestore() here, so any notification test that ran after them
+// would see inserts failing. (Found when adding the Phase 2 tests after them.)
 // ── Failure isolation ─────────────────────────────────────────────────────────
 
 describe("notification failures never fail the main action", () => {

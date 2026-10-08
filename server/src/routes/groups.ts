@@ -61,6 +61,33 @@ function canManage(
   return isInstructorOf(req, project) || !!leaderMembership(req, project);
 }
 
+function groupLabel(project: { id: number; groupName: string }): string {
+  return project.groupName.trim() || `Group ${project.id}`;
+}
+
+// Declines a member's PENDING role suggestion(s) (a newer suggestion or a direct leader/instructor
+// assignment supersedes them) and clears the leader's now-stale "role suggestion received"
+// notifications. Reading the ids is best-effort so it can never fail the calling route.
+async function supersedePendingSuggestions(userId: number, projectId: number): Promise<void> {
+  let ids: number[] = [];
+  try {
+    const pending = await prisma.roleSuggestion.findMany({
+      where:  { userId, projectId, status: "PENDING" },
+      select: { id: true },
+    });
+    ids = pending.map((p) => p.id);
+  } catch (err) {
+    console.error("[notify] failed to load pending role suggestions:", err);
+  }
+  await prisma.roleSuggestion.updateMany({
+    where: { userId, projectId, status: "PENDING" },
+    data:  { status: "DECLINED", resolvedAt: new Date() },
+  });
+  for (const refId of ids) {
+    await resolveNotifications({ type: "ROLE_SUGGESTION_RECEIVED", refType: "ROLE_SUGGESTION", refId });
+  }
+}
+
 // GET /api/groups/:id — group info + member list (requireAuth + member or instructor)
 groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Response) => {
   const idResult = idParam.safeParse(req.params.id);
@@ -189,6 +216,26 @@ groupsRouter.post("/api/groups/:id/reassign-leader", requireAuth, async (req: Re
     await tx.groupMembership.update({ where: { id: target.id }, data: { role: "LEADER" } });
   });
 
+  const label = groupLabel(project);
+  await notify({
+    recipientIds: targetId,
+    actorId:      req.user!.sub,
+    type:         "LEADER_CHANGED",
+    message:      `You are now the leader of ${label}`,
+    link:         `/student/group/${project.id}`,
+    projectId:    project.id,
+  });
+  if (currentLeader) {
+    await notify({
+      recipientIds: currentLeader.userId,
+      actorId:      req.user!.sub,
+      type:         "LEADER_CHANGED",
+      message:      `Leadership of ${label} was reassigned`,
+      link:         `/student/group/${project.id}`,
+      projectId:    project.id,
+    });
+  }
+
   res.json({ message: "Leadership reassigned.", newLeaderId: targetId });
 });
 
@@ -241,10 +288,7 @@ groupsRouter.put("/api/groups/:id/members/:userId/functional-roles", requireAuth
   }
 
   // Auto-decline any pending suggestion from that member since the leader/instructor is overriding directly
-  await prisma.roleSuggestion.updateMany({
-    where: { userId: targetUserId, projectId, status: "PENDING" },
-    data:  { status: "DECLINED", resolvedAt: new Date() },
-  });
+  await supersedePendingSuggestions(targetUserId, projectId);
 
   await prisma.groupMembership.update({
     where: { id: targetMembership.id },
@@ -301,10 +345,7 @@ groupsRouter.post("/api/groups/:id/role-suggestions", requireAuth, async (req: R
   }
 
   // Cancel any existing PENDING suggestion before creating a new one
-  await prisma.roleSuggestion.updateMany({
-    where: { userId: requesterId, projectId, status: "PENDING" },
-    data:  { status: "DECLINED", resolvedAt: new Date() },
-  });
+  await supersedePendingSuggestions(requesterId, projectId);
 
   const suggestion = await prisma.roleSuggestion.create({
     data: {
@@ -313,6 +354,20 @@ groupsRouter.post("/api/groups/:id/role-suggestions", requireAuth, async (req: R
       suggestedRoles: JSON.stringify(suggested),
       status:         "PENDING",
     },
+  });
+
+  await notify({
+    recipientIds: () => {
+      const leader = project.groupMemberships.find((m) => m.role === "LEADER");
+      return leader ? [leader.userId] : [];
+    },
+    actorId:   requesterId,
+    type:      "ROLE_SUGGESTION_RECEIVED",
+    message:   `${myMembership.user.name} suggested a role in ${groupLabel(project)}`,
+    link:      `/student/group/${projectId}?manage=1`,
+    projectId,
+    refType:   "ROLE_SUGGESTION",
+    refId:     suggestion.id,
   });
 
   res.status(201).json({
@@ -391,6 +446,16 @@ groupsRouter.post("/api/groups/role-suggestions/:id/accept", requireAuth, async 
     }),
   ]);
 
+  await resolveNotifications({ type: "ROLE_SUGGESTION_RECEIVED", refType: "ROLE_SUGGESTION", refId: suggestion.id });
+  await notify({
+    recipientIds: suggestion.userId,
+    actorId:      req.user!.sub,
+    type:         "ROLE_SUGGESTION_RESOLVED",
+    message:      `Your role suggestion in ${groupLabel(project)} was accepted`,
+    link:         `/student/group/${project.id}`,
+    projectId:    project.id,
+  });
+
   res.json({
     message:        "Role suggestion accepted.",
     functionalRoles: JSON.parse(suggestion.suggestedRoles) as string[],
@@ -420,6 +485,16 @@ groupsRouter.post("/api/groups/role-suggestions/:id/decline", requireAuth, async
   await prisma.roleSuggestion.update({
     where: { id: suggestion.id },
     data:  { status: "DECLINED", resolvedAt: new Date() },
+  });
+
+  await resolveNotifications({ type: "ROLE_SUGGESTION_RECEIVED", refType: "ROLE_SUGGESTION", refId: suggestion.id });
+  await notify({
+    recipientIds: suggestion.userId,
+    actorId:      req.user!.sub,
+    type:         "ROLE_SUGGESTION_RESOLVED",
+    message:      `Your role suggestion in ${groupLabel(project)} was declined`,
+    link:         `/student/group/${project.id}`,
+    projectId:    project.id,
   });
 
   res.json({ message: "Role suggestion declined." });
@@ -707,6 +782,29 @@ groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: 
   if (targetGitHub) {
     await prisma.member.deleteMany({
       where: { projectId, githubUsername: targetGitHub },
+    });
+  }
+
+  if (selfRemove) {
+    // The leader can't self-leave (blocked above), so the leader is always a different user.
+    await notify({
+      recipientIds: () => {
+        const leader = project.groupMemberships.find((m) => m.role === "LEADER");
+        return leader ? [leader.userId] : [];
+      },
+      actorId:   requesterId,
+      type:      "MEMBER_REMOVED",
+      message:   `${targetMembership.user.name} left ${groupLabel(project)}`,
+      link:      `/student/group/${projectId}`,
+      projectId,
+    });
+  } else {
+    await notify({
+      recipientIds: targetUserId,
+      actorId:      requesterId,
+      type:         "MEMBER_REMOVED",
+      message:      `You were removed from ${groupLabel(project)}`,
+      link:         project.assignment ? `/student/class/${project.assignment.classSectionId}` : "/student",
     });
   }
 

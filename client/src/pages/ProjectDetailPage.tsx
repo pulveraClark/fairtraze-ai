@@ -48,7 +48,11 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [disputedMembers, setDisputedMembers]   = useState<Set<string>>(new Set());
   // Per-flag review outcomes from resolved/dismissed disputes — shown as badges next to flags
   const [resolvedFlagOutcomes, setResolvedFlagOutcomes] = useState<Map<string, Map<string, "RESOLVED" | "DISMISSED">>>(new Map());
-  const [activeTab, setActiveTab]               = useState<Tab>("report");
+  // A "comment reply" notification links here with ?tab=document. effectiveTab falls back to
+  // "report" when the Document tab isn't available for this project.
+  const [activeTab, setActiveTab]               = useState<Tab>(() =>
+    new URLSearchParams(window.location.search).get("tab") === "document" ? "document" : "report"
+  );
   const [viewingHistory, setViewingHistory]     = useState(false);
 
   // Summary used for breadcrumb + group switcher — shared with the dashboard/class pages
