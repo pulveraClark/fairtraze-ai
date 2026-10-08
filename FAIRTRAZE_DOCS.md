@@ -855,13 +855,13 @@ Four new software modules are required to implement FairTraze Docs. Each has a d
 **UC-S-D2: View own document contribution summary (Phase C)**
 - **Actor:** Student
 - **Trigger:** Student navigates to their personal dashboard.
-- **Flow:** The student sees their own document metrics: edit sessions, active editing days, net retained text percentage, and their document contribution share. They do not see other members' individual metrics.
+- **Flow:** The student sees their own document metrics: edit sessions, active editing days, net retained text percentage, and their document contribution share. Regular members do not see other members' individual metrics; the group leader sees each member's share, flags and task counts to distribute work fairly.
 - **Result:** The student has a factual self-assessment of their document contribution.
 
 **UC-S-D3: View own combined contribution (Phase C, COMBINED assignments)**
 - **Actor:** Student
 - **Trigger:** Student views the combined contribution report for their group.
-- **Flow:** The student sees their `combinedContributionShare` and its breakdown (GitHub share + document share at the configured weights). They do not see teammates' individual scores.
+- **Flow:** The student sees their `combinedContributionShare` and its breakdown (GitHub share + document share at the configured weights). Regular members do not see teammates' individual scores; the group leader sees each member's combined share, GitHub/Docs split, flags and task counts to distribute work fairly.
 - **Result:** The student understands how their combined contribution is assessed.
 
 **UC-S-D4: Dispute a document or combined contribution assessment (Phase C)**
@@ -1033,7 +1033,7 @@ An instructor can see:
 
 ### Group Leader (Coordination View)
 
-The group leader has access to a **participation status view** — a lightweight summary showing whether each member has opened the document and whether they have made any edit sessions. This is a binary presence indicator (has participated / has not participated), not a full metric breakdown. The purpose is coordination: the leader can see if a member has not opened the document at all and follow up. The leader does not see specific scores or character counts for teammates.
+The group leader has access to a **participation status view** — a lightweight summary showing whether each member has opened the document and whether they have made any edit sessions. This is a binary presence indicator (has participated / has not participated), not a full metric breakdown. The purpose is coordination: the leader can see if a member has not opened the document at all and follow up. Separately, on the student group page the leader also sees each member's contribution share, GitHub/Docs split, flags and open/done task counts (not raw character counts).
 
 ---
 

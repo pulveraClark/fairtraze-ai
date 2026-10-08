@@ -94,7 +94,7 @@ Students interact with FairTraze AI to register their team and, for writing-base
 
 - **Group leader:** The first student to use an assignment join code creates the group, sets the group name, and connects the GitHub repository. They become the group's leader for administrative purposes — this is a structural designation only and carries no contribution credit.
 - **Group member:** Subsequent students use the same join code to join their existing group. Each student registers their own GitHub username from their account profile, ensuring that identity mapping is accurate and self-attributed.
-- Each student can view their own contribution report (their scores and flags only — not other members' data) and submit a short written dispute or note for the instructor to consider.
+- Each student can view their own contribution report (their scores and flags only — not other members' data; the group leader additionally sees each member's share to distribute work fairly) and submit a short written dispute or note for the instructor to consider.
 
 ### Admin *(implemented)*
 
@@ -359,7 +359,7 @@ The instructor is the single point of authority. They:
 
 ### Student view and dispute *(implemented)*
 
-Each student can view their own contribution report — their scores and flags only, not other members' data. If a student believes the analysis does not accurately reflect their contribution (for example, due to offline work not captured in digital traces, or a GitHub username mapping error), they can submit a short written note or dispute through the platform. The instructor is notified and retains final authority over the response.
+Each student can view their own contribution report — their scores and flags only, not other members' data (the one exception is the group leader, who also sees each member's contribution share, flags and task counts so work can be rebalanced). If a student believes the analysis does not accurately reflect their contribution (for example, due to offline work not captured in digital traces, or a GitHub username mapping error), they can submit a short written note or dispute through the platform. The instructor is notified and retains final authority over the response.
 
 ### Identity integrity
 

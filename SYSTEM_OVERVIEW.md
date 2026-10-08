@@ -93,7 +93,7 @@ If a student's request is declined, they can request to join a different group. 
 
 ### Step 7 — Student views their own report
 
-**Working now:** Students see a read-only version of the report for their own group. They can see the team's overall health, their own contribution share, and any flags applied to them. They cannot see other members' individual data.
+**Working now:** Students see a read-only version of the report for their own group. They can see the team's overall health, their own contribution share, and any flags applied to them. Regular members cannot see other members' individual data; the group leader also sees each member's share, flags and task counts to distribute work fairly.
 
 ### Step 8 — Student disputes a flag (optional)
 

@@ -524,6 +524,59 @@ joinRouter.delete("/api/student/classes/:classSectionId/leave", ...requireRole("
   res.json({ message: "Left class." });
 });
 
+
+export interface LeaderTeamMemberView {
+  userId: number;
+  name: string;
+  isLeader: boolean;
+  functionalRoles: string[];
+  hasAvatar: boolean;
+  avatarUpdatedAt: string | null;
+  contributionShare: number | null;
+  githubContributionShare: number | null;
+  documentContributionShare: number | null;
+  flags: string[];
+  tasks: { open: number; done: number };
+}
+
+/** Whitelisted per-member view for the group leader. Members absent from the report get null stats. */
+export async function buildLeaderTeamView(
+  projectId: number,
+  reportMembers: AnyScoredMember[],
+  sourceType: string,
+): Promise<LeaderTeamMemberView[]> {
+  const [memberships, tasks] = await Promise.all([
+    prisma.groupMembership.findMany({
+      where: { projectId },
+      orderBy: { joinedAt: "asc" },
+      include: { user: { select: { id: true, name: true, githubUsername: true, avatarUpdatedAt: true } } },
+    }),
+    prisma.task.findMany({ where: { projectId }, select: { assignedToUserId: true, done: true } }),
+  ]);
+
+  return memberships.map((m) => {
+    const gh = m.user.githubUsername?.toLowerCase() ?? null;
+    const scored = sourceType === "GITHUB"
+      ? (gh ? reportMembers.find((r) => r.githubUsername.toLowerCase() === gh) : undefined)
+      : reportMembers.find((r) => "userId" in r && r.userId === m.userId);
+    const combined = scored && sourceType === "COMBINED" ? (scored as CombinedScoredMember) : null;
+    const mine = tasks.filter((t) => t.assignedToUserId === m.userId);
+    return {
+      userId: m.userId,
+      name: m.user.name,
+      isLeader: m.role === "LEADER",
+      functionalRoles: JSON.parse(m.functionalRoles) as string[],
+      hasAvatar: m.user.avatarUpdatedAt != null,
+      avatarUpdatedAt: m.user.avatarUpdatedAt?.toISOString() ?? null,
+      contributionShare: scored?.contributionShare ?? null,
+      githubContributionShare: combined?.githubContributionShare ?? null,
+      documentContributionShare: combined?.documentContributionShare ?? null,
+      flags: scored?.flags ?? [],
+      tasks: { open: mine.filter((t) => !t.done).length, done: mine.filter((t) => t.done).length },
+    };
+  });
+}
+
 // ─── GET /api/student/group/:projectId ───────────────────────────────────────
 // Student's drill-down: their contribution data for a specific group.
 joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async (req, res) => {
@@ -671,8 +724,14 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     }
   }
 
-  // Privacy: only the requesting student's own data leaves this endpoint. No other member's
-  // contributionShare, name, userId, or githubUsername is included anywhere in the response.
+  // Privacy: a regular member receives only their own data — no other member's contributionShare,
+  // name, userId, or githubUsername is included. The group LEADER (decided here, server-side, from
+  // GroupMembership.role) additionally receives `team`, a whitelisted per-member view used to
+  // distribute work fairly. Never includes disputes, instructor notes, emails or raw stats.
+  const team = membership.role === "LEADER"
+    ? await buildLeaderTeamView(projectId, teamReport.members, sourceType)
+    : undefined;
+
   res.json({
     ...base,
     hasReport: true,
@@ -685,6 +744,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       memberCount: teamReport.memberCount,
       deadlineWindowBasis: teamReport.deadlineWindowBasis,
       myContribution,
+      ...(team ? { team } : {}),
     },
   });
 });

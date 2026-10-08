@@ -15,6 +15,7 @@ import { alertsRouter } from "./routes/alerts.js";
 import { disputesRouter } from "./routes/disputes.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
+import { avatarRouter, avatarBodyErrors } from "./routes/avatar.js";
 import { authenticateToken } from "./middleware/auth.js";
 import {
   corsOptions,
@@ -37,6 +38,9 @@ export function createApp() {
   // this one path with a larger limit — body-parser skips re-parsing once req._body is already
   // set, so the global default limit still governs every other route untouched.
   app.use("/api/groups/:id/document/import", express.json({ limit: "8mb" }));
+  // Profile photo upload is a raw image body (already client-resized to ~200KB), not JSON.
+  app.put("/api/users/me/avatar", express.raw({ type: ["image/jpeg", "image/webp"], limit: "256kb" }));
+  app.use("/api/users/me/avatar", avatarBodyErrors);
   app.use(express.json());
   app.use(cookieParser());
   app.use(globalLimiter);
@@ -58,6 +62,7 @@ export function createApp() {
   app.use(analyzeRouter);
   app.use(authRouter);
   app.use(usersRouter);
+  app.use(avatarRouter);
   app.use(classesRouter);
   app.use(assignmentsRouter);
   app.use(joinRouter);

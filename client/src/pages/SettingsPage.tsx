@@ -1,6 +1,8 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
+import { Avatar } from "../components/Avatar";
+import { ProfilePhotoControls } from "../components/ProfilePhotoControls";
 
 function roleHome(role?: string): string {
   if (role === "STUDENT") return "/student";
@@ -14,6 +16,7 @@ interface FullProfile {
   name: string;
   systemRole: string;
   githubUsername: string | null;
+  avatarUpdatedAt?: string | null;
   createdAt: string;
 }
 
@@ -378,9 +381,12 @@ export function SettingsPage() {
         {profile && (
           <div className="bg-white border border-slate-200 rounded-xl p-6">
             <div className="flex items-center gap-4 pb-5 mb-5 border-b border-slate-100">
-              <div className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center shrink-0 text-indigo-600 font-bold text-base select-none">
-                {profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
-              </div>
+              <Avatar
+                userId={profile.id}
+                name={profile.name}
+                avatarUpdatedAt={profile.avatarUpdatedAt}
+                className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center shrink-0 text-indigo-900 font-bold text-base"
+              />
               <div className="min-w-0">
                 <p className="font-semibold text-slate-800 truncate">{profile.name}</p>
                 <p className="text-xs text-slate-500 truncate">{profile.email}</p>
@@ -437,6 +443,15 @@ export function SettingsPage() {
               Edit
             </button>
           </div>
+
+          {profile && (
+            <ProfilePhotoControls
+              userId={profile.id}
+              name={profile.name}
+              avatarUpdatedAt={profile.avatarUpdatedAt ?? null}
+              onChanged={(v) => setProfile((p) => (p ? { ...p, avatarUpdatedAt: v } : p))}
+            />
+          )}
 
           {profileSuccess && (
             <div className="mt-4">

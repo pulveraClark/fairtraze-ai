@@ -14,6 +14,7 @@ import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { TaskManageModal, type GroupTask } from "../components/TaskManageModal";
 import { FlagTag } from "../components/FlagTag";
+import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -39,6 +40,8 @@ interface GroupDetail {
     memberCount: number;
     deadlineWindowBasis: "assignment-deadline" | "activity-span";
     myContribution: MyContribution | null;
+    /** Present only when the caller is this group's leader (enforced server-side). */
+    team?: LeaderTeamMember[];
   } | null;
 }
 
@@ -767,6 +770,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   </div>
                 )}
 
+                {/* Leader-only: every member's share, so work can be rebalanced */}
+                {report.team && <LeaderTeamCard team={report.team} sourceType={sourceType} />}
+
                 {/* Team context */}
                 <div className="bg-white border border-slate-200 rounded-xl p-5">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
@@ -796,7 +802,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     </div>
                   </div>
                   <p className="text-xs text-slate-400 mt-4 leading-relaxed">
-                    The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. The Gini coefficient and team health label are aggregate measures computed from all members' activity — individual teammates' scores are not shared with you.
+                    The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. The Gini coefficient and team health label are aggregate measures computed from all members' activity.{membership.role === "LEADER"
+                      ? " As group leader you can see each member's share in the team contributions card above."
+                      : " Your group leader can see each member's contribution share."}
                   </p>
                 </div>
 

@@ -342,6 +342,7 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
     githubUsername:            user.githubUsername,
     emailVerified:             user.emailVerified,
     instructorStatus:          user.instructorStatus,
+    avatarUpdatedAt:           user.avatarUpdatedAt ? user.avatarUpdatedAt.toISOString() : null,
     createdAt:                 user.createdAt,
     emailVerificationRequired: isEmailVerificationRequired(),
   });

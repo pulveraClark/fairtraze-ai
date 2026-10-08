@@ -1,7 +1,8 @@
 import type { AnyScoredMember, MemberRoleInfo } from "@shared/types";
 import { ListRow, StatusPill, CARD } from "../ui";
 import { PILL_TONES } from "../ui/StatusPill";
-import { formatPct, initials, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
+import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
+import { Avatar } from "../Avatar";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -61,9 +62,12 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                 ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? m.flags.join(", ") : "no flags"}. Open details`}
               >
                 <span className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto_minmax(8rem,auto)]">
-                  <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900">
-                    {initials(m.studentName)}
-                  </span>
+                  <Avatar
+                    userId={info?.userId}
+                    name={m.studentName}
+                    avatarUpdatedAt={info?.avatarUpdatedAt}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
+                  />
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="break-words text-sm font-semibold leading-snug text-slate-900">{m.studentName}</span>
                     <RoleChips info={info} />

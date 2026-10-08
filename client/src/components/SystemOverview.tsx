@@ -190,7 +190,7 @@ function SystemRoles() {
       items: [
         "Enrolls in a class using the instructor's join code",
         "Creates or joins a group per assignment (first student in becomes leader)",
-        "Views their own contribution report and flags — cannot see other members' individual scores",
+        "Views their own contribution report and flags; a group leader also sees each member's share to distribute work fairly",
         "Can flag a finding for review with a free-text note (dispute path to the instructor)",
       ],
     },
@@ -248,7 +248,7 @@ function PrivacySection() {
     },
     {
       title: "Scoped student visibility",
-      body: "Students see their own contribution report and flags. They cannot see other members' individual scores or raw data. The full team view is instructor-only.",
+      body: "Students see their own contribution report and flags. Regular members cannot see other members' individual scores or raw data. The group leader additionally sees each member's contribution share, GitHub/Docs split, flags and task counts so work can be rebalanced. Dispute details and instructor notes remain instructor-only.",
     },
     {
       title: "Leadership carries no advantage",

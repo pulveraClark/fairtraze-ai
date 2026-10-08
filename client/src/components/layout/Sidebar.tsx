@@ -17,7 +17,8 @@ import {
   resolveActiveClassId,
 } from "../../lib/navModel";
 import type { InstructorClassInput, NavItemDef, SystemRole } from "../../lib/navModel";
-import { AVATAR_BG, AVATAR_STYLE, ROLE_BADGE_DARK, ROLE_LABEL, initials } from "../../lib/roleStyle";
+import { AVATAR_BG, AVATAR_STYLE, ROLE_BADGE_DARK, ROLE_LABEL } from "../../lib/roleStyle";
+import { Avatar } from "../Avatar";
 import { AlertsBell } from "../AlertsBell";
 import { ChevronIcon, CloseIcon, CollapseIcon, NavIcon, SignOutIcon } from "./icons";
 import { FOCUS_RING, RAIL_TOOLTIP, navItemClass } from "./navStyles";
@@ -276,13 +277,13 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
 
   const role = user.systemRole;
   const avatar = (
-    <span
-      aria-hidden="true"
-      className={`flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border text-sm font-bold ${AVATAR_STYLE[role] ?? AVATAR_STYLE.STUDENT}`}
+    <Avatar
+      userId={user.id}
+      name={user.name}
+      avatarUpdatedAt={user.avatarUpdatedAt}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${AVATAR_STYLE[role] ?? AVATAR_STYLE.STUDENT}`}
       style={{ background: AVATAR_BG[role] ?? AVATAR_BG.STUDENT }}
-    >
-      {initials(user.name)}
-    </span>
+    />
   );
   const badge = (
     <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${ROLE_BADGE_DARK[role] ?? ROLE_BADGE_DARK.STUDENT}`}>

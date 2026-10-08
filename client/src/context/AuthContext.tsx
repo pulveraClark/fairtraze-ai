@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "../lib/apiBase";
+import { clearAvatarCache } from "../components/Avatar";
 
 export interface AuthUser {
   id: number;
@@ -13,6 +14,8 @@ export interface AuthUser {
   emailVerificationRequired?: boolean;
   /** Only meaningful for INSTRUCTOR accounts; anyone else is effectively APPROVED. */
   instructorStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  /** Version of the optional profile photo; null/absent = initials fallback. */
+  avatarUpdatedAt?: string | null;
 }
 
 interface AuthContextValue {
@@ -208,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     // Drop every cached query so the next account on this browser starts clean.
     queryClient.clear();
+    clearAvatarCache();
   }
 
   return (
@@ -215,6 +219,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+/** Like useAuth, but returns null outside an <AuthProvider> (display-only consumers such as Avatar). */
+export function useAuthOptional(): AuthContextValue | null {
+  return useContext(AuthContext);
 }
 
 export function useAuth(): AuthContextValue {

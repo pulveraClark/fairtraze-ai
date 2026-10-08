@@ -224,7 +224,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     include: {
       assignment: { select: { sourceType: true, classSection: { select: { instructorId: true } } } },
       groupMemberships: {
-        include: { user: { select: { id: true, githubUsername: true } } },
+        include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
         orderBy: { joinedAt: "asc" },
       },
     },
@@ -290,7 +290,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     const mismatchNotes = buildMismatchNotes(functionalRoles, scored, docActivity);
     const taskSummary = buildTaskSummary(tasks, m.user.id);
 
-    return { userId: m.user.id, githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes, taskSummary };
+    return { userId: m.user.id, githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes, taskSummary, avatarUpdatedAt: m.user.avatarUpdatedAt ? m.user.avatarUpdatedAt.toISOString() : null };
   });
 
   const response: StoredReportResponse = {

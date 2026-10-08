@@ -63,6 +63,8 @@ export interface MemberRoleInfo {
   // endpoints). Purely informational, self-reported — never a scoring input, same as
   // mismatchNotes above. { completed: 0, total: 0 } when no tasks are assigned.
   taskSummary: { completed: number; total: number };
+  // Optional profile photo version (ISO timestamp), null/absent = initials fallback. Display only.
+  avatarUpdatedAt?: string | null;
 }
 
 export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AVATAR_BG, AVATAR_STYLE, ROLE_BADGE_DARK, ROLE_LABEL, initials } from "../lib/roleStyle";
+import { AVATAR_BG, AVATAR_STYLE, ROLE_BADGE_DARK, ROLE_LABEL } from "../lib/roleStyle";
+import { Avatar } from "./Avatar";
 
 // Role badge: dark theme uses translucent; light theme uses solid for readability on white
 const ROLE_BADGE_LIGHT: Record<string, string> = {
@@ -95,12 +96,13 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
         aria-expanded={open}
         className={s.trigger}
       >
-        <span
-          className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 select-none ${avatarStyle}`}
+        <Avatar
+          userId={user.id}
+          name={user.name}
+          avatarUpdatedAt={user.avatarUpdatedAt}
+          className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${avatarStyle}`}
           style={{ background: avatarBg }}
-        >
-          {initials(user.name)}
-        </span>
+        />
         <span className={s.nameText}>{user.name}</span>
         {/* Role pill — visible md+ only to avoid crowding the nav at 640px */}
         <span className={`hidden md:inline-block shrink-0 text-xs font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badge}`}>
@@ -120,12 +122,13 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
           {/* Header */}
           <div className={s.header}>
             <div className="flex items-center gap-3">
-              <span
-                className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold shrink-0 select-none ${avatarStyle}`}
+              <Avatar
+                userId={user.id}
+                name={user.name}
+                avatarUpdatedAt={user.avatarUpdatedAt}
+                className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold shrink-0 ${avatarStyle}`}
                 style={{ background: avatarBg }}
-              >
-                {initials(user.name)}
-              </span>
+              />
               <div className="min-w-0">
                 <p className={s.nameTitle}>{user.name}</p>
                 <span className={`inline-block text-xs font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border mt-1 ${badge}`}>

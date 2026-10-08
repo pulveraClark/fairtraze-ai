@@ -116,6 +116,10 @@ model User {
   approvalReviewedAt   DateTime?
   approvalReviewedById Int?
   createdAt        DateTime          @default(now())
+  // Optional profile photo (256x256 WebP/JPEG, <=~200KB), stored in-DB because Render's disk is ephemeral.
+  avatarData       Bytes?
+  avatarMime       String?
+  avatarUpdatedAt  DateTime?
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
   classEnrollments ClassEnrollment[]

@@ -465,9 +465,12 @@ Separately, `client/src/lib/benchmark.ts`'s `computeAssignmentBenchmark()` compa
 
 **Authentication method.** Only email/password + JWT is implemented (`server/src/routes/auth.ts`, bcryptjs + JWT). **Google OAuth does not exist in this codebase** — there is no OAuth client, callback route, or Google-related dependency anywhere in `server/` or `client/`. If OAuth sign-in is wanted, treat it as new work, not a fix to something broken.
 
+## Profile photos (IMPLEMENTED, optional)
+`User.avatarData/avatarMime/avatarUpdatedAt` (nullable, stored in Postgres because Render's disk is ephemeral). The client crops to a square, resizes to 256x256 and re-encodes to WebP/JPEG <=~200KB (`client/src/lib/avatarImage.ts`; re-encoding strips EXIF/GPS). `PUT/DELETE /api/users/me/avatar` re-validate magic bytes and size; `GET /api/users/:id/avatar` is authenticated (self, admin, group-mates, the class's instructor) with ETag + `?v=<avatarUpdatedAt>` caching (`server/src/routes/avatar.ts`). `Avatar.tsx` falls back to initials everywhere. Display only; no scoring effect.
+
 ## Student Agency (IMPLEMENTED — Phase C)
 
-Students get a **read-only view of their own contribution report** — they can see their scores and flags but cannot see other members' individual data (`StudentGroupPage.tsx`, `GET /api/student/group/:projectId`). They have one action: **"Flag for review / add a note"**, which submits a short free-text note to the instructor (`Dispute` model, `disputes.ts`, `DisputesPage.tsx`). The instructor is notified and retains final authority.
+Students get a **read-only view of their own contribution report** — they can see their scores and flags but a regular member cannot see other members' individual data (`StudentGroupPage.tsx`, `GET /api/student/group/:projectId`). The one exception is the group's **leader**: the server adds a whitelisted `report.team` view (each member's share, GitHub/Docs split, flags, open/done task counts) to the response only when the caller's `GroupMembership.role` is `LEADER`, so work can be distributed fairly. Dispute details and instructor notes are never included. Display-only, never a scoring input. They have one action: **"Flag for review / add a note"**, which submits a short free-text note to the instructor (`Dispute` model, `disputes.ts`, `DisputesPage.tsx`). The instructor is notified and retains final authority.
 
 ## Known Limitations (design record)
 

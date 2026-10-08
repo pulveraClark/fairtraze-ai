@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared/types";
 import { Drawer, StatusPill, BUTTON_SECONDARY } from "../ui";
 import { RoleChips } from "./MemberContributionList";
+import { Avatar } from "../Avatar";
 import { describeFlagRule, type DeadlineBasis, type FlagSource } from "../../lib/flagRules";
 import { docsStatsOf, formatPct, githubStatsOf, isCombinedMember, roleInfoOf } from "../../lib/memberView";
 
@@ -71,7 +72,17 @@ export function MemberDrawer({
   const topActiveDays = !combined && "activeDays" in member ? member.activeDays : null;
 
   return (
-    <Drawer open={open} onClose={onClose} title={member.studentName} restoreFocusTo={restoreFocusTo} subtitle={<RoleChips info={info} />}>
+    <Drawer open={open} onClose={onClose} title={member.studentName} restoreFocusTo={restoreFocusTo} subtitle={
+        <span className="flex items-center gap-3">
+          <Avatar
+            userId={info?.userId}
+            name={member.studentName}
+            avatarUpdatedAt={info?.avatarUpdatedAt}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
+          />
+          <RoleChips info={info} />
+        </span>
+      }>
       <Section title="Contribution share">
         <p className="text-xl font-semibold tabular-nums leading-tight text-slate-900">{formatPct(member.contributionShare)}</p>
         <p className="mt-1 text-sm leading-normal text-slate-800">
