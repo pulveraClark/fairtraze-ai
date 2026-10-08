@@ -124,7 +124,7 @@ function routeElement(pathname: string) {
   );
 
   if (pathname === "/alerts") return (
-    <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
+    <ProtectedRoute>
       <AlertsPage />
     </ProtectedRoute>
   );

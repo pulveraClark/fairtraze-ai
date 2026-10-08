@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
+import { notify } from "../lib/notify.js";
 import type { TeamReport } from "@shared/types.js";
 
 export const disputesRouter = Router();
@@ -120,6 +121,8 @@ async function createDisputeAlert(projectId: number, studentName: string): Promi
     data: {
       projectId,
       instructorId,
+      recipientId: instructorId,
+      link:    "/disputes",
       type:    "DISPUTE_FILED",
       message: `New dispute from ${studentName} — ${groupName}, ${subjectCode}`,
       teamHealth,
@@ -325,6 +328,17 @@ disputesRouter.post("/api/disputes/:id/resolve", ...requireRole("INSTRUCTOR"), a
       instructorResponse: bodyResult.data.instructorResponse,
       resolvedAt:         new Date(),
     },
+  });
+
+  await notify({
+    recipientIds: dispute.studentUserId,
+    actorId:      req.user!.sub,
+    type:         "DISPUTE_RESPONDED",
+    message:      "Your instructor responded to your review request",
+    link:         `/student/group/${dispute.projectId}`,
+    projectId:    dispute.projectId,
+    refType:      "DISPUTE",
+    refId:        dispute.id,
   });
 
   res.json(updated);

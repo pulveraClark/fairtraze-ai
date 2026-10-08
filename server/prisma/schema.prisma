@@ -35,6 +35,12 @@ enum AlertType {
   MODERATE_RISK
   MEMBER_FLAGGED
   DISPUTE_FILED
+  JOIN_REQUEST_RECEIVED
+  JOIN_REQUEST_ACCEPTED
+  JOIN_REQUEST_DECLINED
+  TASK_ASSIGNED
+  DISPUTE_RESPONDED
+  ACCOUNT_LOCKED
 }
 
 enum DisputeStatus {
@@ -91,7 +97,8 @@ model User {
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
   classEnrollments ClassEnrollment[]
-  alerts           Alert[]
+  alerts           Alert[]           @relation("AlertInstructor")
+  receivedAlerts   Alert[]           @relation("AlertRecipient")
   disputes         Dispute[]
   auditLogs        AuditLog[]
   joinRequests     GroupJoinRequest[]
@@ -328,17 +335,27 @@ model CombinedContribution {
   @@index([reportId])
 }
 
+// Per-recipient notification. Originally instructor-only (instructorId /
+// projectId / teamHealth); now generalised via recipientId + link + ref*.
+// instructorId stays populated for the four legacy instructor types.
 model Alert {
   id           Int       @id @default(autoincrement())
-  projectId    Int
-  instructorId Int
+  projectId    Int?
+  instructorId Int?
+  recipientId  Int?
   type         AlertType
   message      String
-  teamHealth   String
+  teamHealth   String?
+  link         String?
+  refType      String?
+  refId        Int?
   read         Boolean   @default(false)
   createdAt    DateTime  @default(now())
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  instructor   User      @relation(fields: [instructorId], references: [id])
+  project      Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  instructor   User?     @relation("AlertInstructor", fields: [instructorId], references: [id])
+  recipient    User?     @relation("AlertRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, read, createdAt])
 }
 
 model Dispute {

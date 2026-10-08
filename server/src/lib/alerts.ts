@@ -78,6 +78,8 @@ export async function generateAlertsForProject(
         data: {
           projectId,
           instructorId,
+          recipientId: instructorId,
+          link: `/project/${projectId}`,
           type,
           message,
           teamHealth: report.teamHealth,

@@ -185,7 +185,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     return params.get("tab") === "document" ? "document" : "report";
   });
   const [viewingHistory, setViewingHistory]     = useState(false);
-  const [showManageModal, setShowManageModal]   = useState(false);
+  // A "join request" notification links here with ?manage=1 to open the manage modal.
+  const [showManageModal, setShowManageModal]   = useState(
+    () => new URLSearchParams(window.location.search).get("manage") === "1"
+  );
   const [showTasksModal, setShowTasksModal]     = useState(false);
   const [refreshKey, setRefreshKey]             = useState(0);
   const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);

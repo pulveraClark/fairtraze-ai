@@ -2,14 +2,7 @@ import { AppTopBar } from "../components/AppTopBar";
 import { SystemOverview } from "../components/SystemOverview";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import type { AppRoute } from "../router";
-
-function roleHome(role: string | undefined): { route: AppRoute; label: string } {
-  if (role === "ADMIN") return { route: "/admin", label: "Admin" };
-  if (role === "STUDENT") return { route: "/student", label: "Dashboard" };
-  if (role === "INSTRUCTOR") return { route: "/dashboard", label: "Dashboard" };
-  return { route: "/", label: "Home" };
-}
+import { roleHome } from "../lib/roleHome";
 
 export function OverviewPage() {
   const { user } = useAuth();

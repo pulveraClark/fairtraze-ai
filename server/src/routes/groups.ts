@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
+import { notify, resolveNotifications } from "../lib/notify.js";
 
 export const groupsRouter = Router();
 
@@ -18,6 +19,7 @@ export async function loadGroup(projectId: number) {
         select: {
           maxGroupSize:  true,
           sourceType:    true,
+          classSectionId: true,
           classSection:  { select: { instructorId: true } },
         },
       },
@@ -488,6 +490,19 @@ groupsRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res
     },
   });
 
+  if (task.assignedToUserId != null) {
+    await notify({
+      recipientIds: task.assignedToUserId,
+      actorId:      req.user!.sub,
+      type:         "TASK_ASSIGNED",
+      message:      `You were assigned a task: ${task.title}`,
+      link:         `/student/group/${projectId}`,
+      projectId,
+      refType:      "TASK",
+      refId:        task.id,
+    });
+  }
+
   res.status(201).json(serializeTask(task));
 });
 
@@ -555,6 +570,20 @@ groupsRouter.put("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Reque
       ...(assignedToUserId !== undefined ? { assignedToUserId } : {}),
     },
   });
+
+  // Only a genuine (re)assignment to someone new notifies; clearing or keeping the assignee does not.
+  if (assignedToUserId != null && assignedToUserId !== task.assignedToUserId) {
+    await notify({
+      recipientIds: assignedToUserId,
+      actorId:      req.user!.sub,
+      type:         "TASK_ASSIGNED",
+      message:      `You were assigned a task: ${updated.title}`,
+      link:         `/student/group/${project.id}`,
+      projectId:    project.id,
+      refType:      "TASK",
+      refId:        updated.id,
+    });
+  }
 
   res.json(serializeTask(updated));
 });
@@ -762,6 +791,24 @@ groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), r
     data: { userId, projectId, status: "PENDING" },
   });
 
+  // Tell the group's leader — the message carries only the requester's name.
+  await notify({
+    recipientIds: async () => {
+      const leaders = await prisma.groupMembership.findMany({
+        where: { projectId, role: "LEADER" },
+        select: { userId: true },
+      });
+      return leaders.map((l) => l.userId);
+    },
+    actorId:      userId,
+    type:         "JOIN_REQUEST_RECEIVED",
+    message:      `${user?.name ?? "A student"} requested to join ${project.groupName || `Group ${project.id}`}`,
+    link:         `/student/group/${project.id}?manage=1`,
+    projectId:    project.id,
+    refType:      "JOIN_REQUEST",
+    refId:        joinRequest.id,
+  });
+
   res.status(201).json({
     id:        joinRequest.id,
     projectId: project.id,
@@ -862,6 +909,16 @@ groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Re
     },
   });
 
+  await resolveNotifications({ type: "JOIN_REQUEST_RECEIVED", refType: "JOIN_REQUEST", refId: joinReq.id });
+  await notify({
+    recipientIds: joinReq.userId,
+    actorId:      req.user!.sub,
+    type:         "JOIN_REQUEST_ACCEPTED",
+    message:      `Your request to join ${project.groupName || `Group ${project.id}`} was accepted`,
+    link:         `/student/group/${project.id}`,
+    projectId:    project.id,
+  });
+
   res.json({ message: "Request accepted. Member added to the group." });
 });
 
@@ -892,6 +949,17 @@ groupsRouter.post("/api/groups/requests/:id/decline", requireAuth, async (req: R
     data:  { status: "DECLINED", resolvedAt: new Date() },
   });
 
+  await resolveNotifications({ type: "JOIN_REQUEST_RECEIVED", refType: "JOIN_REQUEST", refId: joinReq.id });
+  const classSectionId = project.assignment?.classSectionId;
+  await notify({
+    recipientIds: joinReq.userId,
+    actorId:      req.user!.sub,
+    type:         "JOIN_REQUEST_DECLINED",
+    message:      `Your request to join ${project.groupName || `Group ${project.id}`} was declined`,
+    link:         classSectionId ? `/student/class/${classSectionId}` : "/student",
+    projectId:    project.id,
+  });
+
   res.json({ message: "Request declined." });
 });
 
@@ -915,6 +983,9 @@ groupsRouter.post("/api/groups/requests/:id/cancel", requireAuth, async (req: Re
   }
 
   await prisma.groupJoinRequest.delete({ where: { id: joinReq.id } });
+
+  // The request is gone — remove the leader's pending notification so it never points at nothing.
+  await resolveNotifications({ type: "JOIN_REQUEST_RECEIVED", refType: "JOIN_REQUEST", refId: joinReq.id });
 
   res.json({ message: "Request cancelled." });
 });

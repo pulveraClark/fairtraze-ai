@@ -123,7 +123,7 @@ export function AppTopBar() {
             <div className="hidden sm:flex items-center gap-2">
               {user ? (
                 <>
-                  {user.systemRole === "INSTRUCTOR" && <AlertsBell />}
+                  <AlertsBell />
                   <UserMenu theme="dark" />
                 </>
               ) : (
@@ -143,6 +143,13 @@ export function AppTopBar() {
                   </button>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Mobile bell (desktop one lives in the user cluster above) */}
+          {!authLoading && user && (
+            <div className="sm:hidden">
+              <AlertsBell />
             </div>
           )}
 
