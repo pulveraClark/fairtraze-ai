@@ -5,6 +5,10 @@ import {
   streamAnalyze,
   AnalyzeError,
   INITIAL_PROGRESS,
+  startProgress,
+  markDone,
+  stageDurations,
+  formatSeconds,
   type AnalyzeStreamEvent,
 } from "./analyzeStream";
 
@@ -36,11 +40,56 @@ describe("parseSseFrames", () => {
 
 describe("applyStreamEvent", () => {
   it("folds counts and stage transitions into progress", () => {
-    let p = applyStreamEvent(INITIAL_PROGRESS, { event: "github", data: { contributors: 2, commits: 9, files: 14 } });
-    p = applyStreamEvent(p, { event: "docs", data: { sessions: 3, characters: 1200 } });
-    expect(p).toEqual({ stage: "collecting", github: { contributors: 2, commits: 9, files: 14 }, docs: { sessions: 3, characters: 1200 } });
-    expect(applyStreamEvent(p, { event: "compute", data: {} }).stage).toBe("compute");
-    expect(applyStreamEvent(p, { event: "save", data: {} }).stage).toBe("save");
+    let p = applyStreamEvent(INITIAL_PROGRESS, { event: "github", data: { contributors: 2, commits: 9, files: 14 } }, 100);
+    p = applyStreamEvent(p, { event: "docs", data: { sessions: 3, characters: 1200 } }, 150);
+    expect(p).toEqual({
+      ...INITIAL_PROGRESS,
+      github: { contributors: 2, commits: 9, files: 14 },
+      docs: { sessions: 3, characters: 1200 },
+      times: { githubAt: 100, docsAt: 150 },
+    });
+    expect(applyStreamEvent(p, { event: "compute", data: {} }, 200).stage).toBe("compute");
+    expect(applyStreamEvent(p, { event: "save", data: {} }, 300).stage).toBe("save");
+  });
+
+  it("accumulates members (one row per name) and per-day counts per source", () => {
+    let p = applyStreamEvent(INITIAL_PROGRESS, {
+      event: "github",
+      data: { contributors: 1, commits: 2, files: 3, member: { name: "Member A", commits: 2 }, days: [{ d: "2026-09-17", n: 1 }, { d: "2026-09-18", n: 1 }] },
+    });
+    p = applyStreamEvent(p, {
+      event: "github",
+      data: { contributors: 2, commits: 3, files: 4, member: { name: "Member B", commits: 1 }, days: [{ d: "2026-09-18", n: 1 }] },
+    });
+    p = applyStreamEvent(p, { event: "github", data: { contributors: 2, commits: 3, files: 4, member: { name: "Member B", commits: 0 }, days: [] } });
+    p = applyStreamEvent(p, {
+      event: "docs",
+      data: { sessions: 1, characters: 20, member: { name: "Member A", sessions: 1, characters: 20 }, days: [{ d: "2026-09-18", n: 1 }] },
+    });
+
+    expect(p.githubMembers).toEqual([{ name: "Member A", commits: 2 }, { name: "Member B", commits: 0 }]);
+    expect(p.githubDays).toEqual({ "2026-09-17": 1, "2026-09-18": 2 });
+    expect(p.docsMembers).toEqual([{ name: "Member A", sessions: 1, characters: 20 }]);
+    expect(p.docsDays).toEqual({ "2026-09-18": 1 });
+    // Only the cumulative totals are kept on github/docs, never the per-member payload.
+    expect(p.github).toEqual({ contributors: 2, commits: 3, files: 4 });
+  });
+
+  it("measures per-stage durations from the arrival timestamps", () => {
+    let p = startProgress(1000);
+    p = applyStreamEvent(p, { event: "github", data: { contributors: 1, commits: 1, files: 1 } }, 6700);
+    p = applyStreamEvent(p, { event: "docs", data: { sessions: 1, characters: 1 } }, 5200);
+    p = applyStreamEvent(p, { event: "compute", data: {} }, 6700);
+    p = applyStreamEvent(p, { event: "save", data: {} }, 7400);
+    p = markDone(p, 8000);
+    expect(p.stage).toBe("done");
+    expect(stageDurations(p.times)).toEqual({ github: 5.7, docs: 4.2, compute: 0.7, save: 0.6, total: 7 });
+  });
+
+  it("formats durations, never showing a misleading 0.0s", () => {
+    expect(formatSeconds(0.004)).toBe("<0.1s");
+    expect(formatSeconds(7)).toBe("7.0s");
+    expect(formatSeconds(5.74)).toBe("5.7s");
   });
 });
 

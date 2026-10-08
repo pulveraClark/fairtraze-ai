@@ -19,7 +19,7 @@ import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
-import { streamAnalyze, applyStreamEvent, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
+import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -183,12 +183,14 @@ export function ProjectDetailPage({ projectId }: Props) {
   async function handleAnalyze() {
     setReanalyzing(true);
     setStepperDone(false);
-    setProgress(INITIAL_PROGRESS);
+    setProgress(startProgress());
     setReanalyzeError(null);
     try {
       await streamAnalyze(projectId, token, (ev) => setProgress((prev) => applyStreamEvent(prev, ev)));
-      // The analyze call itself is finished: release the button right away and let the
-      // panel show a "Loading report…" row while the follow-up reads run in parallel.
+      // The analyze call itself is finished: release the button right away. The panel shows its
+      // completed state with a report skeleton beneath while the follow-up reads run in parallel.
+      const doneAt = performance.now();
+      setProgress((prev) => markDone(prev, doneAt));
       setStepperDone(true);
       setReanalyzing(false);
       setLoadingReport(true);
@@ -209,6 +211,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   }
 
   const reducedMotion = usePrefersReducedMotion();
+  // Measured duration of this session's last analysis run; shown as a note once the report is up.
+  const analysisSeconds = progress.stage === "done" ? stageDurations(progress.times).total : undefined;
   const [selectedMember, setSelectedMember]= useState<AnyScoredMember | null>(null);
   const [drawerOpener, setDrawerOpener]     = useState<HTMLElement | null>(null);
 
@@ -419,9 +423,9 @@ export function ProjectDetailPage({ projectId }: Props) {
 
       <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-4 space-y-4">
 
-        {/* Loading stepper */}
+        {/* Analysis panel: live while running, completed state while the report reloads */}
         {(reanalyzing || loadingReport) && (
-          <AnalysisStepper progress={progress} done={stepperDone} loadingReport={loadingReport} sourceType={sourceType} />
+          <AnalysisStepper progress={progress} done={stepperDone} sourceType={sourceType} />
         )}
 
         {/* Re-analyze error */}
@@ -452,7 +456,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* ── Report tab ─────────────────────────────────────────────────────── */}
         {effectiveTab === "report" && (
           <>
-        {loading && (
+        {(loading || loadingReport) && (
           <div aria-busy="true" role="status" className="space-y-4">
             <span className="sr-only">Loading report…</span>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -494,6 +498,13 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* Stored report */}
         {stored && !reanalyzing && (
           <>
+            {analysisSeconds !== undefined && (
+              <p className="flex items-center gap-2 text-xs text-slate-600">
+                <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 border border-emerald-300 text-emerald-700">✓</span>
+                Analysis complete in {formatSeconds(analysisSeconds)}
+              </p>
+            )}
+
             {/* Summary row */}
             <section aria-label="Summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile

@@ -10,6 +10,7 @@ import { computeDocumentRawStats } from "../collab/editStats.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
 import { notify } from "../lib/notify.js";
+import { countByDay } from "../lib/dayCounts.js";
 import type { Request, Response } from "express";
 import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
@@ -21,8 +22,9 @@ export const analyzeRouter = Router();
 // returns. Every other client gets exactly the previous single JSON response: finish() falls
 // through to res.status(...).json(...) and emit() is a no-op.
 //
-// Event payloads are built from literal count fields only — never spread from a report or member
-// object — so no score, flag, Gini or team-health value can appear before `done`.
+// Event payloads are built from literal fields only (counts, display names, YYYY-MM-DD day
+// buckets) — never spread from a report or member object — so no score, flag, Gini or
+// team-health value can appear before `done`.
 //
 // If compression() middleware is ever added to app.ts, it must skip text/event-stream responses
 // (the no-transform header below only stops well-behaved intermediaries).
@@ -30,7 +32,7 @@ interface ProgressEmitter {
   readonly stream: boolean;
   readonly opened: boolean;
   open(): void;
-  emit(event: "github" | "docs" | "compute" | "save", data: Record<string, number>): void;
+  emit(event: "github" | "docs" | "compute" | "save", data: object): void;
   finish(status: number, body: object): void;
 }
 
@@ -84,16 +86,58 @@ function createProgressEmitter(req: Request, res: Response): ProgressEmitter {
   };
 }
 
-function emitGithubProgress(progress: ProgressEmitter, p: GitHubProgress): void {
-  progress.emit("github", { contributors: p.contributors, commits: p.commits, files: p.files });
+// Matched member display name, else the GitHub login. Case-insensitive, like buildRawMembers.
+function githubNameResolver(members: Array<{ studentName: string; githubUsername: string }>): (login: string) => string {
+  const byLogin = new Map(members.map((m) => [m.githubUsername.toLowerCase(), m.studentName]));
+  return (login) => byLogin.get(login.toLowerCase()) ?? login;
 }
 
-// Counts summed from the already-computed raw doc stats (computeDocumentRawStats is untouched).
+// One github event per finished contributor: cumulative counts, that contributor's raw commit
+// count, and their per-day commit counts (Asia/Manila days). Counts and dates only.
+function emitGithubProgress(progress: ProgressEmitter, p: GitHubProgress, resolveName: (login: string) => string): void {
+  const data: Record<string, unknown> = { contributors: p.contributors, commits: p.commits, files: p.files };
+  if (p.member) {
+    data.member = { name: resolveName(p.member.login), commits: p.member.commits };
+    data.days = countByDay(p.member.commitDates);
+  }
+  progress.emit("github", data);
+}
+
+// Roster members the GitHub fetch never returned (no commits) are announced with a zero count, so
+// they appear in the list. Emitted after collection and before `compute`.
+function emitZeroCommitMembers(
+  progress: ProgressEmitter,
+  rawMembers: RawMemberStats[],
+  contributors: Array<{ githubUsername: string; commits: number; filesChanged?: number }>
+): void {
+  const seen = new Set(contributors.map((c) => c.githubUsername.toLowerCase()));
+  const totals = {
+    contributors: contributors.length,
+    commits:      contributors.reduce((s, c) => s + c.commits, 0),
+    files:        contributors.reduce((s, c) => s + (c.filesChanged ?? 0), 0),
+  };
+  for (const m of rawMembers) {
+    if (seen.has(m.githubUsername.toLowerCase())) continue;
+    progress.emit("github", { ...totals, member: { name: m.studentName, commits: 0 }, days: [] });
+  }
+}
+
+// One docs event per roster member, from the already-computed raw doc stats
+// (computeDocumentRawStats is untouched): running totals, that member's raw session and
+// character counts, and their per-day session counts (Asia/Manila days).
 function emitDocsProgress(progress: ProgressEmitter, raw: RawDocumentMemberStats[]): void {
-  progress.emit("docs", {
-    sessions:   raw.reduce((s, m) => s + m.sessionCount, 0),
-    characters: raw.reduce((s, m) => s + m.totalInsertedChars, 0),
-  });
+  let sessions = 0;
+  let characters = 0;
+  for (const m of raw) {
+    sessions += m.sessionCount;
+    characters += m.totalInsertedChars;
+    progress.emit("docs", {
+      sessions,
+      characters,
+      member: { name: m.studentName, sessions: m.sessionCount, characters: m.totalInsertedChars },
+      days:   countByDay(m.sessionDates),
+    });
+  }
 }
 
 // Tells each group member a fresh report is available. Students see the latest report as soon
@@ -324,9 +368,10 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     // them concurrently changes no scoring input. allSettled (not all) keeps today's error
     // precedence: a GitHub failure is reported with the same mapped status/body as before even if
     // the docs read also failed, and a docs-only failure propagates exactly as it did sequentially.
+    const resolveName = githubNameResolver(project.members);
     progress.emit("github", { contributors: 0, commits: 0, files: 0 });
     const [githubResult, docsResult] = await Promise.allSettled([
-      fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p)),
+      fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName)),
       computeDocumentRawStats(project.document?.id ?? null, roster).then((raw) => {
         emitDocsProgress(progress, raw);
         return raw;
@@ -371,6 +416,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
       },
     };
 
+    emitZeroCommitMembers(progress, githubRaw, rawData.contributors);
     progress.emit("compute", {});
     const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
 
@@ -446,10 +492,11 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
   const requiredLogins = project.members.map((m) => m.githubUsername);
   console.log(`[analyze] project ${projectId}: ${requiredLogins.length} DB member(s): ${requiredLogins.join(", ")}`);
 
+  const resolveName = githubNameResolver(project.members);
   let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
   try {
     progress.emit("github", { contributors: 0, commits: 0, files: 0 });
-    rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p));
+    rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName));
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
     if (e.status === 404) {
@@ -483,6 +530,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     },
   };
 
+  emitZeroCommitMembers(progress, rawMembers, rawData.contributors);
   progress.emit("compute", {});
   const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);

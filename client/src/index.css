@@ -374,3 +374,19 @@ body {
   pointer-events: none;
   z-index: 20;
 }
+
+/* Analysis panel: dots travelling along a data-flow line while that source's events arrive. */
+.ft-flow-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #4f46e5;
+}
+.ft-flow-dot-x { top: -2px; left: -6px; animation: ft-flow-x 0.9s linear infinite; }
+.ft-flow-dot-y { left: -2px; top: -6px; animation: ft-flow-y 0.9s linear infinite; }
+@keyframes ft-flow-x { to { left: 100%; } }
+@keyframes ft-flow-y { to { top: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .ft-flow-dot { animation: none; display: none; }
+}

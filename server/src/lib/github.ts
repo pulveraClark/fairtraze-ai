@@ -29,10 +29,13 @@ export interface GitHubContributorData {
 }
 
 // Cumulative collection counts reported while fetchRepoStats runs. Counts only, never scores.
+// `member` is the contributor whose collection just finished; analyze.ts turns it into display
+// counts and per-day buckets and never forwards it as-is.
 export interface GitHubProgress {
   contributors: number;
   commits: number;
   files: number;
+  member?: { login: string; commits: number; commitDates: string[] };
 }
 
 function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
@@ -324,13 +327,14 @@ export async function fetchRepoStats(
   const processedLogins = new Set<string>();
 
   // Running totals after each contributor completes. Never throws into the fetch path.
-  const reportProgress = () => {
+  const reportProgress = (done: GitHubContributorData) => {
     if (!onProgress) return;
     try {
       onProgress({
         contributors: contributors.length,
         commits:      contributors.reduce((s, c) => s + c.commits, 0),
         files:        contributors.reduce((s, c) => s + (c.filesChanged ?? 0), 0),
+        member:       { login: done.githubUsername, commits: done.commits, commitDates: done.commitDates },
       });
     } catch {
       // progress reporting is best-effort
@@ -355,15 +359,16 @@ export async function fetchRepoStats(
     const shasToSample = shas.slice(0, COMMIT_DIFF_SAMPLE_CAP);
     const lineCounts = await fetchCommitDiffs(octokit, owner, repo, shasToSample);
 
-    contributors.push({
+    const entry: GitHubContributorData = {
       githubUsername: login,
       commits: contributor.total,
       additions,
       deletions,
       commitDates,
       ...lineCounts,
-    });
-    reportProgress();
+    };
+    contributors.push(entry);
+    reportProgress(entry);
   }
 
   // For any required login the stats API didn't return, fetch directly.
@@ -394,15 +399,16 @@ export async function fetchRepoStats(
 
     console.log(`[github] "${login}" recovered: ${shas.length} commit(s) via direct fetch`);
 
-    contributors.push({
+    const recovered: GitHubContributorData = {
       githubUsername: login,
       commits: shas.length,
       additions,
       deletions: 0,
       commitDates,
       ...lineCounts,
-    });
-    reportProgress();
+    };
+    contributors.push(recovered);
+    reportProgress(recovered);
   }
 
   return { contributors };

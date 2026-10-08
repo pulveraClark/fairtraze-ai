@@ -3,6 +3,7 @@ import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 import { fetchRepoStats } from "../src/lib/github.js";
+import { countByDay } from "../src/lib/dayCounts.js";
 import type { GitHubContributorData, GitHubProgress } from "../src/lib/github.js";
 import {
   createUser,
@@ -69,10 +70,22 @@ function contributor(login: string, commits: number): GitHubContributorData {
   };
 }
 
-// fetchRepoStats stand-in that reports progress the way the real one does, then resolves.
+// fetchRepoStats stand-in that reports progress the way the real one does (cumulative totals plus
+// the contributor that just finished, one call per contributor), then resolves.
 function githubReturning(contributors: GitHubContributorData[]) {
   return async (_url: string, _token: string, _logins?: string[], onProgress?: (p: GitHubProgress) => void) => {
-    onProgress?.({ contributors: 1, commits: contributors[0]?.commits ?? 0, files: contributors[0]?.filesChanged ?? 0 });
+    let commits = 0;
+    let files = 0;
+    contributors.forEach((c, i) => {
+      commits += c.commits;
+      files += c.filesChanged ?? 0;
+      onProgress?.({
+        contributors: i + 1,
+        commits,
+        files,
+        member: { login: c.githubUsername, commits: c.commits, commitDates: c.commitDates },
+      });
+    });
     return { contributors };
   };
 }
@@ -108,12 +121,34 @@ async function seedEditorActivity(projectId: number, userId: number) {
 
 // Any key/value that looks like scoring output. None of this may appear before `done`.
 const SCORE_WORDS = /share|flag|gini|health|report|score|contribution|inactive|free-rider|overload/i;
-const ALLOWED_KEYS: Record<string, string[]> = {
-  github: ["contributors", "commits", "files"],
-  docs: ["sessions", "characters"],
-  compute: [],
-  save: [],
+// Top-level keys per event: the numeric totals are required, `member`/`days` appear on per-member events.
+const ALLOWED_KEYS: Record<string, { numbers: string[]; optional: string[] }> = {
+  github: { numbers: ["contributors", "commits", "files"], optional: ["member", "days"] },
+  docs: { numbers: ["sessions", "characters"], optional: ["member", "days"] },
+  compute: { numbers: [], optional: [] },
+  save: { numbers: [], optional: [] },
 };
+// Exact shape of the per-member object: a display name plus raw counts, nothing else.
+const MEMBER_KEYS: Record<string, string[]> = {
+  github: ["commits", "name"],
+  docs: ["characters", "name", "sessions"],
+};
+
+function assertPerMemberAndDayShape(e: SseEvent) {
+  const { member, days } = e.data as { member?: Record<string, unknown>; days?: unknown };
+  if (member !== undefined) {
+    expect(Object.keys(member).sort()).toEqual(MEMBER_KEYS[e.event]);
+    for (const [k, v] of Object.entries(member)) expect(typeof v).toBe(k === "name" ? "string" : "number");
+  }
+  if (days !== undefined) {
+    expect(Array.isArray(days)).toBe(true);
+    for (const day of days as Array<Record<string, unknown>>) {
+      expect(Object.keys(day).sort()).toEqual(["d", "n"]);
+      expect(day.d).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(typeof day.n).toBe("number");
+    }
+  }
+}
 
 function assertNoScoresBeforeDone(events: SseEvent[]) {
   const doneIdx = events.findIndex((e) => e.event === "done");
@@ -121,10 +156,16 @@ function assertNoScoresBeforeDone(events: SseEvent[]) {
   for (const e of events.slice(0, doneIdx)) {
     expect(Object.keys(ALLOWED_KEYS)).toContain(e.event);
     expect(JSON.stringify(e)).not.toMatch(SCORE_WORDS);
-    expect(Object.keys(e.data).sort()).toEqual([...ALLOWED_KEYS[e.event]].sort());
-    for (const v of Object.values(e.data)) expect(typeof v).toBe("number");
+    const { numbers, optional } = ALLOWED_KEYS[e.event];
+    const keys = Object.keys(e.data);
+    for (const k of numbers) expect(typeof e.data[k]).toBe("number");
+    for (const k of keys) expect([...numbers, ...optional]).toContain(k);
+    assertPerMemberAndDayShape(e);
   }
 }
+
+const memberEvents = (events: SseEvent[], name: string) =>
+  events.filter((e) => (e.data.member as { name?: string } | undefined)?.name === name);
 
 function stageOrder(events: SseEvent[]) {
   return events.map((e) => e.event).filter((name, i, all) => all.indexOf(name) === i);
@@ -148,9 +189,40 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
     expect(res.headers["cache-control"]).toMatch(/no-transform/);
     expect(res.headers["content-encoding"]).toBeUndefined();
     expect(stageOrder(events)).toEqual(["github", "compute", "save", "done"]);
-    expect(events.find((e) => e.event === "github" && (e.data.commits as number) > 0)?.data).toEqual({ contributors: 1, commits: 3, files: 3 });
+    expect(events.find((e) => e.event === "github" && (e.data.commits as number) > 0)?.data).toEqual({
+      contributors: 1,
+      commits: 3,
+      files: 3,
+      member: { name: "Member A", commits: 3 },
+      days: [{ d: "2026-01-01", n: 1 }, { d: "2026-01-02", n: 1 }, { d: "2026-01-03", n: 1 }],
+    });
     assertNoScoresBeforeDone(events);
     expect(events[events.length - 1].event).toBe("done");
+  });
+
+  it("GITHUB: a roster member with no commits is announced with a zero count before compute", async () => {
+    process.env.GITHUB_TOKEN = "test-token";
+    const { instructor, project } = await setupProject("GITHUB");
+    mockedFetchRepoStats.mockImplementationOnce(githubReturning([contributor("member-a", 2)]));
+
+    const { events } = await analyzeStream(project.id, instructor);
+
+    const zero = memberEvents(events, "Member B");
+    expect(zero).toHaveLength(1);
+    expect(zero[0].data).toMatchObject({ member: { name: "Member B", commits: 0 }, days: [] });
+    expect(events.indexOf(zero[0])).toBeLessThan(events.findIndex((e) => e.event === "compute"));
+    assertNoScoresBeforeDone(events);
+  });
+
+  it("GITHUB: an unmatched contributor is shown by GitHub login", async () => {
+    process.env.GITHUB_TOKEN = "test-token";
+    const { instructor, project } = await setupProject("GITHUB");
+    mockedFetchRepoStats.mockImplementationOnce(githubReturning([contributor("stranger-x", 1)]));
+
+    const { events } = await analyzeStream(project.id, instructor);
+
+    expect(memberEvents(events, "stranger-x")).toHaveLength(1);
+    assertNoScoresBeforeDone(events);
   });
 
   it("EDITOR: emits docs → compute → save → done, with the seeded session/character counts", async () => {
@@ -160,7 +232,14 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
     const { events } = await analyzeStream(project.id, instructor);
 
     expect(stageOrder(events)).toEqual(["docs", "compute", "save", "done"]);
-    expect(events.find((e) => e.event === "docs")?.data).toEqual({ sessions: 1, characters: 20 });
+    // One docs event per roster member, with running totals; Member B has no edit activity.
+    expect(events.filter((e) => e.event === "docs")).toHaveLength(2);
+    const evA = memberEvents(events, "Member A")[0];
+    const evB = memberEvents(events, "Member B")[0];
+    expect(evA.data).toMatchObject({ member: { name: "Member A", sessions: 1, characters: 20 } });
+    expect(evA.data.days).toEqual(countByDay([new Date(Date.now() - 60_000).toISOString()]));
+    expect(evB.data).toMatchObject({ member: { name: "Member B", sessions: 0, characters: 0 }, days: [] });
+    expect(events.filter((e) => e.event === "docs").pop()?.data).toMatchObject({ sessions: 1, characters: 20 });
     assertNoScoresBeforeDone(events);
   });
 
@@ -178,6 +257,10 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
     expect(names.lastIndexOf("github")).toBeLessThan(names.indexOf("compute"));
     expect(names.indexOf("docs")).toBeLessThan(names.indexOf("compute"));
     expect(stageOrder(events).slice(-3)).toEqual(["compute", "save", "done"]);
+    // The zero-commit roster member (Member B) is announced before compute too.
+    const zero = memberEvents(events, "Member B").find((e) => e.event === "github");
+    expect(zero?.data).toMatchObject({ member: { name: "Member B", commits: 0 } });
+    expect(events.indexOf(zero!)).toBeLessThan(names.indexOf("compute"));
     assertNoScoresBeforeDone(events);
   });
 
