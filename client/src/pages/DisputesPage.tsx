@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { disputeKeys } from "../hooks/useGroupQueries";
+import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
@@ -169,14 +172,11 @@ function ResolveModal({
 type StatusFilter = "open" | "all";
 
 export function DisputesPage() {
-  const { token }    = useAuth();
-  const { navigate } = useRouter();
+  const { token, user } = useAuth();
+  const { navigate }    = useRouter();
+  const queryClient     = useQueryClient();
+  const uid             = user?.id ?? null;
 
-  const [disputes,      setDisputes]      = useState<DisputeItem[]>([]);
-  const [openCount,     setOpenCount]     = useState(0);
-  const [meta,          setMeta]          = useState<PageMeta>({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
-  const [loading,       setLoading]       = useState(true);
-  const [error,         setError]         = useState("");
   const [filter,        setFilter]        = useState<StatusFilter>("open");
   const [classSectionId, setClassSectionId] = useState<number | "">("");
   const [page,          setPage]          = useState(1);
@@ -187,24 +187,33 @@ export function DisputesPage() {
   const classesQuery = useClassesListQuery<ClassOption>(token);
   const classOptions = classesQuery.data ?? [];
 
-  const load = useCallback(() => {
-    if (!token) return;
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(page), pageSize: "20", status: filter });
-    if (classSectionId) params.set("classSectionId", String(classSectionId));
-    fetch(`/api/disputes?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { disputes: DisputeItem[]; openCount: number; total?: number; page?: number; pageSize?: number; totalPages?: number; error?: string };
-        if (!r.ok) { setError(json.error ?? "Could not load disputes."); return; }
-        setDisputes(json.disputes ?? []);
-        setOpenCount(json.openCount ?? 0);
-        setMeta({ total: json.total ?? 0, page: json.page ?? 1, pageSize: json.pageSize ?? 20, totalPages: json.totalPages ?? 1 });
-      })
-      .catch(() => setError("Network error — could not load disputes."))
-      .finally(() => setLoading(false));
-  }, [token, filter, classSectionId, page]);
+  type DisputesResponse = { disputes: DisputeItem[]; openCount: number; total?: number; page?: number; pageSize?: number; totalPages?: number };
+  const listQuery = useQuery({
+    queryKey: disputeKeys.list(uid, { page, filter, classSectionId }),
+    queryFn: async (): Promise<DisputesResponse> => {
+      const params = new URLSearchParams({ page: String(page), pageSize: "20", status: filter });
+      if (classSectionId) params.set("classSectionId", String(classSectionId));
+      const r = await fetch(`/api/disputes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await r.json() as DisputesResponse & { error?: string };
+      if (!r.ok) throw new Error(json.error ?? "Could not load disputes.");
+      return json;
+    },
+    enabled: !!token && uid !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+  });
+  // A new dispute filed (instructor alert) changes the unread count → refresh the list.
+  useInvalidateOnAlertCount([disputeKeys.all(uid)]);
 
-  useEffect(() => { load(); }, [load]);
+  const data      = listQuery.data;
+  const disputes  = data?.disputes ?? [];
+  const openCount = data?.openCount ?? 0;
+  const meta: PageMeta = { total: data?.total ?? 0, page: data?.page ?? 1, pageSize: data?.pageSize ?? 20, totalPages: data?.totalPages ?? 1 };
+  const loading   = listQuery.isLoading || listQuery.isPlaceholderData; // spinner on filter/page change, as before
+  const error     = listQuery.isError
+    ? (listQuery.error instanceof TypeError ? "Network error — could not load disputes." : listQuery.error.message)
+    : "";
+  const load = () => { void listQuery.refetch(); };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -401,7 +410,7 @@ export function DisputesPage() {
           dispute={resolving}
           token={token}
           onClose={() => setResolving(null)}
-          onResolved={() => { setResolving(null); load(); }}
+          onResolved={() => { setResolving(null); void queryClient.invalidateQueries({ queryKey: disputeKeys.all(uid) }); }}
         />
       )}
     </div>

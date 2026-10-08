@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { groupKeys, useGroupManageQuery, useGroupTasksQuery } from "../hooks/useGroupQueries";
 
 // Leader/instructor-assigned checklist item. Purely informational — completion
 // never affects contribution scores (see server/src/routes/groups.ts Task routes).
@@ -37,13 +39,26 @@ interface Props {
 export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }: Props) {
   const { user, token } = useAuth();
 
-  const [group, setGroup]       = useState<GroupLite | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [fetchErr, setFetchErr] = useState("");
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? null;
 
-  const [tasks, setTasks]             = useState<GroupTask[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [tasksErr, setTasksErr]       = useState("");
+  // Both queries are shared with the page underneath (tasks key polls every 60 s while mounted;
+  // the group lookup shares GroupManageModal's key). The modal is mounted only while open.
+  const groupQuery = useGroupManageQuery<GroupLite>(projectId);
+  const tasksQuery = useGroupTasksQuery<GroupTask>(projectId);
+  const group      = groupQuery.data ?? null;
+  const loading    = groupQuery.isLoading;
+  const fetchErr   = group || !groupQuery.error ? "" : groupQuery.error.message || "Could not load group.";
+  const tasks        = tasksQuery.data ?? [];
+  const tasksLoading = tasksQuery.isLoading;
+
+  const tasksKey = groupKeys.tasks(uid, projectId);
+  const setTasks = (fn: (prev: GroupTask[]) => GroupTask[]) =>
+    queryClient.setQueryData<GroupTask[]>(tasksKey, (prev) => fn(prev ?? []));
+
+  const [tasksActionErr, setTasksActionErr] = useState("");
+  const tasksErr = tasksActionErr || (tasksQuery.data ? "" : tasksQuery.error?.message ?? "");
+  const setTasksErr = setTasksActionErr;
   const [taskBusy, setTaskBusy]       = useState<number | null>(null);
   const [newTaskTitle, setNewTaskTitle]         = useState("");
   const [newTaskAssignee, setNewTaskAssignee]   = useState<number | "">("");
@@ -56,43 +71,7 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
 
   const currentUserId = user?.id ?? 0;
 
-  async function fetchGroup() {
-    setLoading(true);
-    setFetchErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string } & Partial<GroupLite>;
-      if (!res.ok) { setFetchErr(data.error ?? "Could not load group."); return; }
-      setGroup(data as GroupLite);
-    } catch {
-      setFetchErr("Network error — could not load group.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchTasks() {
-    setTasksLoading(true);
-    setTasksErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/tasks`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { tasks?: GroupTask[]; error?: string };
-      if (!res.ok) { setTasksErr(data.error ?? "Could not load tasks."); return; }
-      setTasks(data.tasks ?? []);
-    } catch {
-      setTasksErr("Network error — could not load tasks.");
-    } finally {
-      setTasksLoading(false);
-    }
-  }
-
   useEffect(() => {
-    void fetchGroup();
-    void fetchTasks();
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") handleClose(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -145,11 +124,11 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
         body:    JSON.stringify({ done: !task.done }),
       });
       const data = await res.json() as GroupTask & { error?: string };
-      if (!res.ok) { setTasks(prevTasks); setTasksErr(data.error ?? "Could not update task."); return; }
+      if (!res.ok) { setTasks(() => prevTasks); setTasksErr(data.error ?? "Could not update task."); return; }
       setTasks((prev) => prev.map((t) => t.id === task.id ? data : t));
       setDirty(true);
     } catch {
-      setTasks(prevTasks);
+      setTasks(() => prevTasks);
       setTasksErr("Network error — could not update task.");
     } finally {
       setTaskBusy(null);

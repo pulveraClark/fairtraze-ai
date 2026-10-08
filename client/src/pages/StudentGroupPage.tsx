@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import {
+  ApiError, classKeys, disputeKeys, groupKeys,
+  useGroupTasksQuery, useMyDisputesQuery, useStudentGroupQuery,
+} from "../hooks/useGroupQueries";
+import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { DocumentGate } from "../components/DocumentGate";
@@ -176,10 +182,27 @@ const FUNCTIONAL_ROLE_META: Record<string, { label: string; activeClass: string;
 export function StudentGroupPage({ projectId }: { projectId: number }) {
   const { token, user } = useAuth();
   const { navigate }    = useRouter();
+  const queryClient     = useQueryClient();
+  const uid             = user?.id ?? null;
 
-  const [data, setData]           = useState<GroupDetail | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
+  // Server state lives in React Query. The group page itself reads the stored report only.
+  const groupQuery    = useStudentGroupQuery<GroupDetail>(projectId);
+  const tasksQuery    = useGroupTasksQuery<GroupTask>(projectId);
+  const disputesQuery = useMyDisputesQuery<DisputeRecord>();
+  // A notification (join accepted, role response, task assigned, report ready, dispute response…)
+  // changes the unread count → refresh this user's group data and own disputes.
+  useInvalidateOnAlertCount([groupKeys.all(uid), disputeKeys.mine(uid)]);
+
+  const data    = groupQuery.data ?? null;
+  const loading = groupQuery.isLoading;
+  const queryErr = groupQuery.error;
+  const error   = data || !queryErr
+    ? ""
+    : queryErr instanceof ApiError ? queryErr.message : "Network error — could not load group.";
+  const dispute: DisputeRecord | null | undefined = disputesQuery.isPending
+    ? undefined
+    : (disputesQuery.data?.find((d) => d.projectId === projectId) ?? null);
+
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("tab") === "document" ? "document" : "report";
@@ -190,74 +213,42 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     () => new URLSearchParams(window.location.search).get("manage") === "1"
   );
   const [showTasksModal, setShowTasksModal]     = useState(false);
-  const [refreshKey, setRefreshKey]             = useState(0);
-  const [dispute, setDispute]                   = useState<DisputeRecord | null | undefined>(undefined);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   // Functional role suggestion state
-  const [myRoles, setMyRoles]             = useState<string[]>([]);
-  const [mySuggestion, setMySuggestion]   = useState<RoleSuggestionData | null>(null);
+  const myRoles      = data?.membership?.functionalRoles ?? [];
+  const mySuggestion = data?.membership?.roleSuggestion ?? null;
   const [suggestDraft, setSuggestDraft]   = useState<string[]>([]);
   const [suggestBusy, setSuggestBusy]     = useState(false);
   const [suggestErr, setSuggestErr]       = useState("");
+  // Seed the draft once per group so a background refetch never overwrites what the user is picking.
+  const draftSeededFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (data && draftSeededFor.current !== projectId) {
+      draftSeededFor.current = projectId;
+      setSuggestDraft(data.membership?.functionalRoles ?? []);
+    }
+  }, [data, projectId]);
   // Group name rename (leader only)
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [groupNameDraft, setGroupNameDraft]     = useState("");
   const [groupNameBusy, setGroupNameBusy]       = useState(false);
   const [groupNameErr, setGroupNameErr]         = useState("");
   // My open tasks (read-only preview — full management lives in the Tasks modal)
-  const [myTasks, setMyTasks] = useState<GroupTask[]>([]);
+  const myTasks = useMemo(
+    () => (tasksQuery.data ?? []).filter((t) => t.assignedToUserId === user?.id && !t.done),
+    [tasksQuery.data, user?.id]
+  );
 
+  // Not a member / group gone → back to the class list.
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
-    setLoading(true);
-    setError("");
-    fetch(`/api/student/group/${projectId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        const json = await res.json() as GroupDetail & { error?: string };
-        if (!res.ok) {
-          if (res.status === 403 || res.status === 404) { navigate("/student"); return; }
-          setError(json.error ?? "Could not load group.");
-          return;
-        }
-        setData(json);
-        const roles = json.membership?.functionalRoles ?? [];
-        setMyRoles(roles);
-        setMySuggestion(json.membership?.roleSuggestion ?? null);
-        setSuggestDraft(roles);
-      })
-      .catch(() => setError("Network error — could not load group."))
-      .finally(() => setLoading(false));
+    if (queryErr instanceof ApiError && (queryErr.status === 403 || queryErr.status === 404)) navigate("/student");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, projectId, refreshKey]);
+  }, [queryErr]);
 
-  // Fetch the student's disputes to find any existing one for this group
-  useEffect(() => {
-    if (!token) return;
-    fetch("/api/disputes/mine", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        if (!r.ok) return;
-        const json = await r.json() as { disputes: DisputeRecord[] };
-        const found = json.disputes.find((d) => d.projectId === projectId) ?? null;
-        setDispute(found);
-      })
-      .catch(() => setDispute(null));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, projectId]);
-
-  // Fetch tasks to surface the current user's own open assignments
-  useEffect(() => {
-    if (!token || !user) return;
-    fetch(`/api/groups/${projectId}/tasks`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        if (!r.ok) return;
-        const json = await r.json() as { tasks?: GroupTask[] };
-        setMyTasks((json.tasks ?? []).filter((t) => t.assignedToUserId === user.id && !t.done));
-      })
-      .catch(() => setMyTasks([]));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, projectId, user, refreshKey]);
+  /** Patch the cached group detail in place (no refetch). */
+  function patchDetail(fn: (d: GroupDetail) => GroupDetail) {
+    queryClient.setQueryData<GroupDetail>(groupKeys.detail(uid, projectId), (d) => (d ? fn(d) : d));
+  }
 
   async function handleSuggestRole() {
     if (!token) return;
@@ -278,7 +269,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       });
       const json = await res.json() as RoleSuggestionData & { error?: string };
       if (!res.ok) { setSuggestErr(json.error ?? "Could not submit suggestion."); return; }
-      setMySuggestion({ id: json.id, suggestedRoles: json.suggestedRoles, status: "PENDING", createdAt: json.createdAt });
+      patchDetail((d) => ({
+        ...d,
+        membership: {
+          ...d.membership,
+          roleSuggestion: { id: json.id, suggestedRoles: json.suggestedRoles, status: "PENDING", createdAt: json.createdAt },
+        },
+      }));
     } catch {
       setSuggestErr("Network error — could not submit suggestion.");
     } finally {
@@ -307,7 +304,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       });
       const json = await res.json() as { groupName?: string; error?: string };
       if (!res.ok) { setGroupNameErr(json.error ?? "Could not update name."); return; }
-      setData((d) => d ? { ...d, project: { ...d.project, groupName: json.groupName ?? trimmed } } : d);
+      patchDetail((d) => ({ ...d, project: { ...d.project, groupName: json.groupName ?? trimmed } }));
       setEditingGroupName(false);
     } catch {
       setGroupNameErr("Network error — could not update name.");
@@ -381,7 +378,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           onClose={() => setShowManageModal(false)}
           onChanged={() => {
             setShowManageModal(false);
-            setRefreshKey((k) => k + 1);
+            void queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
+            void queryClient.invalidateQueries({ queryKey: classKeys.all(uid) });
           }}
         />
       )}
@@ -391,7 +389,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           projectId={projectId}
           isInstructor={false}
           onClose={() => setShowTasksModal(false)}
-          onChanged={() => setRefreshKey((k) => k + 1)}
+          onChanged={() => void queryClient.invalidateQueries({ queryKey: groupKeys.tasks(uid, projectId) })}
         />
       )}
 
@@ -401,7 +399,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           token={token}
           onClose={() => setShowDisputeModal(false)}
           onSubmitted={(d) => {
-            setDispute(d);
+            queryClient.setQueryData<DisputeRecord[]>(disputeKeys.mine(uid), (old) => [d, ...(old ?? [])]);
+            void queryClient.invalidateQueries({ queryKey: disputeKeys.mine(uid) });
             setShowDisputeModal(false);
           }}
         />

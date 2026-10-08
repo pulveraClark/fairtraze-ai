@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { useToast } from "./Toast";
+import {
+  groupKeys, useGroupManageQuery, useGroupRequestsQuery, useRoleSuggestionsQuery,
+} from "../hooks/useGroupQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
@@ -86,89 +90,47 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const { navigate }    = useRouter();
   const { showSuccessToast } = useToast();
 
-  const [group, setGroup]       = useState<GroupDetail | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [fetchErr, setFetchErr] = useState("");
+  const queryClient = useQueryClient();
+  const currentUserId = user?.id ?? 0;
+  const uid = user?.id ?? null;
+
   const [step, setStep]         = useState<Step>("list");
   const [busy, setBusy]         = useState(false);
   const [actionErr, setActionErr] = useState("");
   const [reassignTarget, setReassignTarget] = useState<number | null>(null);
   const [roleBusy, setRoleBusy] = useState<number | null>(null);
   const [roleErr, setRoleErr]   = useState("");
-  const [requests, setRequests]           = useState<JoinRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
-  const [requestsErr, setRequestsErr]     = useState("");
-  const [roleSuggestions, setRoleSuggestions]       = useState<RoleSuggestion[]>([]);
-  const [roleSuggestionsLoading, setRoleSuggestionsLoading] = useState(false);
-  const [roleSuggestionsErr, setRoleSuggestionsErr] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft]     = useState("");
   const [nameBusy, setNameBusy]       = useState(false);
   const [nameErr, setNameErr]         = useState("");
 
-  const currentUserId = user?.id ?? 0;
+  // The modal is mounted only while open, so these queries only run while it is open.
+  const groupQuery = useGroupManageQuery<GroupDetail>(projectId);
+  const group      = groupQuery.data ?? null;
+  const loading    = groupQuery.isLoading;
+  const fetchErr   = group || !groupQuery.error ? "" : groupQuery.error.message || "Could not load group.";
 
-  async function fetchRequests() {
-    setRequestsLoading(true);
-    setRequestsErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { requests?: JoinRequest[]; error?: string };
-      if (!res.ok) { setRequestsErr(data.error ?? "Could not load requests."); return; }
-      setRequests(data.requests ?? []);
-    } catch {
-      setRequestsErr("Network error — could not load requests.");
-    } finally {
-      setRequestsLoading(false);
-    }
-  }
+  const myMem      = group?.members.find((m) => m.userId === currentUserId);
+  const canSeeQueues = !!group && (myMem?.role === "LEADER" || isInstructor);
+  const requestsQuery    = useGroupRequestsQuery<JoinRequest>(projectId, canSeeQueues);
+  const suggestionsQuery = useRoleSuggestionsQuery<RoleSuggestion>(projectId, canSeeQueues);
+  const requests              = requestsQuery.data ?? [];
+  const requestsLoading       = requestsQuery.isLoading;
+  const requestsErr           = requestsQuery.data ? "" : requestsQuery.error?.message ?? "";
+  const roleSuggestions       = suggestionsQuery.data ?? [];
+  const roleSuggestionsLoading = suggestionsQuery.isLoading;
+  const roleSuggestionsErr    = suggestionsQuery.data ? "" : suggestionsQuery.error?.message ?? "";
 
-  async function fetchRoleSuggestions() {
-    setRoleSuggestionsLoading(true);
-    setRoleSuggestionsErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/role-suggestions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { suggestions?: RoleSuggestion[]; error?: string };
-      if (!res.ok) { setRoleSuggestionsErr(data.error ?? "Could not load role suggestions."); return; }
-      setRoleSuggestions(data.suggestions ?? []);
-    } catch {
-      setRoleSuggestionsErr("Network error — could not load role suggestions.");
-    } finally {
-      setRoleSuggestionsLoading(false);
-    }
-  }
-
-  async function fetchGroup() {
-    setLoading(true);
-    setFetchErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string } & Partial<GroupDetail>;
-      if (!res.ok) { setFetchErr(data.error ?? "Could not load group."); return; }
-      const groupData = data as GroupDetail;
-      setGroup(groupData);
-      // Fetch pending requests and role suggestions if this user is leader or instructor
-      const myMem    = groupData.members.find((m) => m.userId === currentUserId);
-      const isLeader = myMem?.role === "LEADER";
-      if (isLeader || isInstructor) {
-        void fetchRequests();
-        void fetchRoleSuggestions();
-      }
-    } catch {
-      setFetchErr("Network error — could not load group.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const groupKey = groupKeys.manage(uid, projectId);
+  const setGroup = (fn: GroupDetail | ((g: GroupDetail | null) => GroupDetail | null)) =>
+    queryClient.setQueryData<GroupDetail | null>(groupKey, (g) => (typeof fn === "function" ? fn(g ?? null) : fn));
+  /** After the user's own mutation: refresh everything this user caches about the group. */
+  const refreshGroup = () => queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
+  const refreshRequests = () => queryClient.invalidateQueries({ queryKey: groupKeys.requests(uid, projectId) });
+  const refreshSuggestions = () => queryClient.invalidateQueries({ queryKey: groupKeys.roleSuggestions(uid, projectId) });
 
   useEffect(() => {
-    void fetchGroup();
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -195,7 +157,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       onChanged();
       setStep("list");
       setReassignTarget(null);
-      await fetchGroup();
+      await refreshGroup();
     } finally {
       setBusy(false);
     }
@@ -213,7 +175,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       const data = await res.json() as { error?: string };
       if (!res.ok) { setActionErr(data.error ?? "Could not accept request."); return; }
       onChanged();
-      await fetchGroup();
+      await refreshGroup();
     } finally {
       setBusy(false);
     }
@@ -229,7 +191,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setActionErr(data.error ?? "Could not decline request."); return; }
-      await fetchRequests();
+      await refreshRequests();
     } finally {
       setBusy(false);
     }
@@ -247,7 +209,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       const data = await res.json() as { error?: string };
       if (!res.ok) { setActionErr(data.error ?? "Could not accept suggestion."); return; }
       onChanged();
-      await fetchGroup();
+      await refreshGroup();
     } finally {
       setBusy(false);
     }
@@ -263,7 +225,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setActionErr(data.error ?? "Could not decline suggestion."); return; }
-      await fetchRoleSuggestions();
+      await refreshSuggestions();
     } finally {
       setBusy(false);
     }
@@ -286,7 +248,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         onClose();
       } else {
         setStep("list");
-        await fetchGroup();
+        await refreshGroup();
       }
     } finally {
       setBusy(false);

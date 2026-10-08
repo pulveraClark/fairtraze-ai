@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { ApiError, classKeys, groupKeys, useClassProjectsQuery } from "../hooks/useGroupQueries";
+import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { GroupManageModal } from "../components/GroupManageModal";
@@ -469,30 +472,28 @@ export function StudentClassPage({ classId }: Props) {
   const { user, token, refreshUser } = useAuth();
   const { navigate }                 = useRouter();
 
-  const [detail, setDetail]           = useState<ClassDetail | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState("");
-  const [refreshKey, setRefreshKey]   = useState(0);
+  const queryClient = useQueryClient();
+  const uid         = user?.id ?? null;
+
+  // Refetches on tab return (classmates' new groups raise no alert for students) and when the
+  // unread count changes (join accepted/declined, removal, leader change…).
+  const classQuery = useClassProjectsQuery<ClassDetail>(classId);
+  useInvalidateOnAlertCount([classKeys.all(uid), groupKeys.all(uid)]);
+  const detail  = classQuery.data ?? null;
+  const loading = classQuery.isLoading;
+  const error   = detail || !classQuery.error
+    ? ""
+    : classQuery.error instanceof ApiError ? classQuery.error.message : "Network error — is the server running?";
   const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveLoading, setLeaveLoading]     = useState(false);
   const [leaveError, setLeaveError]         = useState("");
 
-  useEffect(() => {
-    if (!token) { setLoading(false); return; }
-    setLoading(true);
-    setError("");
-    fetch(`/api/student/classes/${classId}/projects`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        const data = (await res.json()) as ClassDetail & { error?: string };
-        if (!res.ok) { setError(data.error ?? "Could not load class."); return; }
-        setDetail(data);
-      })
-      .catch(() => setError("Network error — is the server running?"))
-      .finally(() => setLoading(false));
-  }, [token, classId, refreshKey]);
+  /** After the user's own mutation (create/join/cancel/manage): refresh class and group data. */
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: classKeys.all(uid) });
+    void queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
+  };
 
   async function handleLeaveClass() {
     setLeaveLoading(true);
@@ -524,7 +525,7 @@ export function StudentClassPage({ classId }: Props) {
           projectId={managingProjectId}
           isInstructor={false}
           onClose={() => setManagingProjectId(null)}
-          onChanged={() => setRefreshKey((k) => k + 1)}
+          onChanged={refresh}
         />
       )}
 
@@ -657,7 +658,7 @@ export function StudentClassPage({ classId }: Props) {
                   user={user}
                   onNavigate={(projectId, tab) => navigate(`/student/group/${projectId}${tab ? `?tab=${tab}` : ""}`)}
                   onManage={(projectId) => setManagingProjectId(projectId)}
-                  onChanged={() => setRefreshKey((k) => k + 1)}
+                  onChanged={refresh}
                   refreshUser={refreshUser}
                 />
               ))}

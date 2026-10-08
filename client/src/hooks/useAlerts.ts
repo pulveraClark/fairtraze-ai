@@ -122,6 +122,24 @@ export function timeAgo(iso: string): string {
 export const ALERTS_KEY = ["alerts"] as const;
 
 /**
+ * Shared options for the unread-count query. The bell and useInvalidateOnAlertCount both
+ * use these, so they dedupe into one request even on pages where the bell isn't mounted.
+ */
+export function unreadCountQueryOptions(token: string | null, userId: number | null) {
+  return {
+    queryKey: [...ALERTS_KEY, "unread-count", userId],
+    queryFn: async () => {
+      const res = await fetch("/api/alerts/unread-count", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Could not load unread count.");
+      const data = (await res.json()) as { unreadCount?: number };
+      return data.unreadCount ?? 0;
+    },
+    enabled: !!token && userId !== null,
+    ...POLL_30S,
+  };
+}
+
+/**
  * Bell state. The unread count is polled (30 s, foreground tabs only) from the
  * count-only endpoint; the full list is fetched only while the dropdown is open.
  * Both bells mounted by AppTopBar share one count query (same key → one request).
@@ -132,17 +150,7 @@ export function useAlerts(options: { listEnabled?: boolean } = {}): UseAlertsRet
   const queryClient = useQueryClient();
   const userId = user?.id ?? null;
 
-  const countQuery = useQuery({
-    queryKey: [...ALERTS_KEY, "unread-count", userId],
-    queryFn: async () => {
-      const res = await fetch("/api/alerts/unread-count", { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error("Could not load unread count.");
-      const data = (await res.json()) as { unreadCount?: number };
-      return data.unreadCount ?? 0;
-    },
-    enabled: !!token && userId !== null,
-    ...POLL_30S,
-  });
+  const countQuery = useQuery(unreadCountQueryOptions(token, userId));
   const unreadCount = countQuery.data ?? 0;
 
   const listQuery = useQuery({
