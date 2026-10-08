@@ -43,7 +43,7 @@ function ChartTooltip({
   return (
     <div
       style={{
-        fontSize: 12,
+        fontSize: 13,
         borderRadius: 8,
         border: "1px solid #e2e8f0",
         boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
@@ -52,8 +52,8 @@ function ChartTooltip({
       }}
     >
       <p className="font-medium text-slate-700">{pt.label}</p>
-      <p className="text-slate-500">Gini: {pt.gini !== null ? pt.gini.toFixed(3) : "—"}</p>
-      {pt.teamHealth && <p className="text-slate-500">{pt.teamHealth}</p>}
+      <p className="text-slate-700">Gini: {pt.gini !== null ? pt.gini.toFixed(3) : "—"}</p>
+      {pt.teamHealth && <p className="text-slate-700">{pt.teamHealth}</p>}
     </div>
   );
 }
@@ -81,20 +81,20 @@ export function TrendChart({ history }: Props) {
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 12, fill: "#64748b" }}
+          tick={{ fontSize: 13, fill: "#475569" }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
           domain={[0, 1]}
-          tick={{ fontSize: 11, fill: "#94a3b8" }}
+          tick={{ fontSize: 13, fill: "#475569" }}
           axisLine={false}
           tickLine={false}
-          width={32}
+          width={36}
         />
         <Tooltip content={<ChartTooltip />} />
-        <ReferenceLine y={0.2} stroke="#94a3b8" strokeDasharray="4 4" />
-        <ReferenceLine y={0.4} stroke="#94a3b8" strokeDasharray="4 4" />
+        <ReferenceLine y={0.2} stroke="#64748b" strokeDasharray="4 4" />
+        <ReferenceLine y={0.4} stroke="#64748b" strokeDasharray="4 4" />
         <Line
           type="monotone"
           dataKey="gini"
@@ -112,7 +112,7 @@ export function TrendChart({ history }: Props) {
     {visibleLegend.length > 0 && (
       <div className="flex items-center gap-4 px-1 pt-1 pb-2 flex-wrap">
         {visibleLegend.map((e) => (
-          <span key={e.color} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          <span key={e.color} className="flex items-center gap-1.5 text-[0.8125rem] text-slate-700">
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
             {e.label}
           </span>

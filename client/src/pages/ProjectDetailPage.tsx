@@ -1,12 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
-import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint } from "@shared/types";
-import { Breadcrumbs } from "../components/layout/Breadcrumbs";
+import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint, AnyScoredMember } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
-import { TeamHealthBanner } from "../components/TeamHealthBanner";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
-import { ContributionChart } from "../components/ContributionChart";
 import { TrendChart } from "../components/TrendChart";
-import { MemberTable } from "../components/MemberTable";
+import { PageHeader, StatTile, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT } from "../components/ui";
+import { MemberContributionList } from "../components/report/MemberContributionList";
+import { MemberDrawer } from "../components/report/MemberDrawer";
+import { LorenzCard } from "../components/report/LorenzCard";
+import { ReportDetailsCard } from "../components/report/ReportDetailsCard";
+import { giniBandsText } from "../lib/giniBands";
+import type { FlagSource } from "../lib/flagRules";
+import { usePrefersReducedMotion } from "../lib/usePrefersReducedMotion";
 import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
@@ -21,7 +25,7 @@ import { streamAnalyze, applyStreamEvent, AnalyzeError, INITIAL_PROGRESS, type A
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
   EDITOR:   "FairTraze Docs",
-  COMBINED: "GitHub + Docs",
+  COMBINED: "Combined",
 };
 
 type Tab = "report" | "document";
@@ -205,6 +209,10 @@ export function ProjectDetailPage({ projectId }: Props) {
     }
   }
 
+  const reducedMotion = usePrefersReducedMotion();
+  const [selectedMember, setSelectedMember]= useState<AnyScoredMember | null>(null);
+  const [drawerOpener, setDrawerOpener]     = useState<HTMLElement | null>(null);
+
   const isAdmin = user?.systemRole === "ADMIN";
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
 
@@ -213,10 +221,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   // exists; stored.sourceType (from the report) is kept as a fallback for safety.
   const sourceType = projectMeta?.sourceType ?? stored?.sourceType ?? null;
   const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub (scoring settings button)
-  // The GitHub-only chart/table/narrative block below is for GITHUB/legacy projects only —
-  // COMBINED gets its own blended report block (chart+table+narrative) further down.
-  const showGithubOnly = sourceType === "GITHUB" || sourceType === null;
-  const showCombined   = sourceType === "COMBINED";
+  const showCombined = sourceType === "COMBINED";
+  const flagSource: FlagSource = showCombined ? "combined" : sourceType === "EDITOR" ? "document" : "github";
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
       ? ["document", "report"]
@@ -233,10 +239,6 @@ export function ProjectDetailPage({ projectId }: Props) {
   const classUrl      = classId      ? `/class/${classId}`                              : dashboardUrl;
   const assignmentUrl = classId && assignmentId ? `/class/${classId}/assignment/${assignmentId}` : classUrl;
 
-  // Most specific real parent: assignment, else class, else dashboard/admin.
-  const backTarget = assignmentId ? assignmentUrl : classId ? classUrl : dashboardUrl;
-  const backLabel   = assignmentId ? (subjectName || "Project") : classId ? code : (isAdmin ? "Admin" : "Dashboard");
-
   // This group's Gini vs. the average across its other analyzed siblings under the same
   // assignment — omitted entirely (averageGini: null) when there are no such siblings.
   const benchmark = computeAssignmentBenchmark(siblings, assignmentId, { excludeProjectId: projectId });
@@ -249,192 +251,164 @@ export function ProjectDetailPage({ projectId }: Props) {
   const nextGroup  = currentIdx >= 0 && currentIdx < siblings.length - 1
     ? siblings[currentIdx + 1] : null;
 
+  // ── Summary values (read straight from the stored report) ─────────────────
+  const reportMembers = stored?.report.members ?? [];
+  const memberCount   = stored?.report.memberCount ?? 0;
+  const equalSharePct = memberCount > 0 ? 100 / memberCount : 0;
+  const flagged       = reportMembers.filter((m) => m.flags.length > 0);
+  const totalFlags    = reportMembers.reduce((s, m) => s + m.flags.length, 0);
+  const healthTone    = stored
+    ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
+    : "neutral";
+
+  const switchBtn = `flex h-11 w-11 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-
-          {/* Left: back link + title */}
-          <div>
-            <Breadcrumbs
-              items={[
-                { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
-                ...(classId ? [{ label: code || "Class", href: classUrl }] : []),
-                ...(assignmentId ? [{ label: subjectName || "Assignment", href: assignmentUrl }] : []),
-                { label: groupName },
-              ]}
-            />
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900">{groupName}</h1>
-              {sourceType && (
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
-                  {sourceType}
-                </span>
-              )}
-            </div>
-
-            <p className="text-sm text-slate-400">
-              {stored ? (
+        <div className="max-w-6xl mx-auto px-4 sm:px-8 pt-2 pb-4">
+          <PageHeader
+            breadcrumbs={[
+              { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
+              ...(classId ? [{ label: code || "Class", href: classUrl }] : []),
+              ...(assignmentId ? [{ label: subjectName || "Assignment", href: assignmentUrl }] : []),
+              { label: groupName },
+            ]}
+            title={groupName}
+            badges={
+              <>
+                {sourceType && <StatusPill kind="status" label={SOURCE_LABEL[sourceType] ?? sourceType} />}
+                {isAdmin && <StatusPill kind="status" tone="violet" label="Admin view — read only" />}
+              </>
+            }
+            meta={
+              stored ? (
                 <>
-                  <a
-                    href={stored.repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline text-slate-400"
-                  >
-                    {stored.repoUrl.replace("https://github.com/", "")}
-                  </a>
-                  {" · "}
+                  {sourceType !== "EDITOR" && stored.repoUrl && (
+                    <>
+                      <a
+                        href={stored.repoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex min-h-11 items-center font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
+                      >
+                        {stored.repoUrl.replace("https://github.com/", "")}
+                      </a>
+                      {" · "}
+                    </>
+                  )}
                   {stored.report.memberCount} members
                 </>
               ) : (
                 "Contribution analysis"
-              )}
-            </p>
-          </div>
-
-          {/* Right: group switcher + re-analyze */}
-          <div className="flex items-center gap-2 flex-wrap">
-
-            {isAdmin && (
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
-                Admin view — read only
-              </span>
-            )}
-
-            {/* Group switcher — shown once siblings load */}
-            {siblings.length > 1 && (
-              <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
-                <button
-                  onClick={() => prevGroup && navigate(`/project/${prevGroup.projectId}`)}
-                  disabled={!prevGroup}
-                  title={prevGroup ? `← ${prevGroup.groupName}` : undefined}
-                  className={`w-7 h-8 flex items-center justify-center transition-colors ${
-                    prevGroup
-                      ? "text-slate-800 hover:bg-slate-100 cursor-pointer"
-                      : "text-slate-300 cursor-not-allowed"
-                  }`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <select
-                  value={projectId}
-                  onChange={(e) => navigate(`/project/${e.target.value}`)}
-                  className="text-xs font-medium text-slate-700 bg-transparent border-none outline-none cursor-pointer px-1.5 h-8 max-w-[160px]"
-                >
-                  {siblings.map((g) => (
-                    <option key={g.projectId} value={g.projectId}>
-                      {g.groupName}
-                      {g.isAnalyzed && g.teamHealth ? ` · ${g.teamHealth}` : " · Not analyzed"}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => nextGroup && navigate(`/project/${nextGroup.projectId}`)}
-                  disabled={!nextGroup}
-                  title={nextGroup ? `${nextGroup.groupName} →` : undefined}
-                  className={`w-7 h-8 flex items-center justify-center transition-colors ${
-                    nextGroup
-                      ? "text-slate-800 hover:bg-slate-100 cursor-pointer"
-                      : "text-slate-300 cursor-not-allowed"
-                  }`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            )}
-
-            {/* Scoring settings button — shown only when a report exists, not for admin.
-                Disabled (not hidden) for EDITOR reports: weight override isn't wired for document scoring yet. */}
-            {stored && !reanalyzing && !isAdmin && showGitHub && (
-              <button
-                onClick={() => setShowScoringModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-sm font-semibold rounded-lg transition-colors"
-                title="Adjust scoring weights and flag thresholds for this group"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-                Scoring settings
-              </button>
-            )}
-            {stored && !reanalyzing && !isAdmin && !showGitHub && (
-              <button
-                disabled
-                title="Weight adjustment isn't available for Docs-only scoring yet"
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 border border-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-                Scoring settings
-              </button>
-            )}
-
-            {/* Export / Print button — shown only when a report exists */}
-            {stored && !reanalyzing && (
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-sm font-semibold rounded-lg transition-colors"
-                title="Export a clean PDF via the browser print dialog"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a1 1 0 001-1v-4a1 1 0 00-1-1H9a1 1 0 00-1 1v4a1 1 0 001 1zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Export / Print
-              </button>
-            )}
-
-            {/* Re-analyze / Analyze button — hidden for admin */}
-            {!isAdmin && (
-              <button
-                onClick={handleAnalyze}
-                disabled={reanalyzing}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 text-white text-sm font-semibold rounded-lg transition-colors ${
-                  reanalyzing
-                    ? "bg-indigo-400 cursor-not-allowed"
-                    : "bg-indigo-600 hover:bg-indigo-700"
-                }`}
-              >
-                {reanalyzing ? (
-                  <>
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin shrink-0" />
-                    {sourceType === "EDITOR"
-                      ? "Fetching FairTraze Docs data…"
-                      : sourceType === "COMBINED"
-                      ? "Fetching GitHub + FairTraze Docs data…"
-                      : "Fetching GitHub data…"}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    {notFound ? "Analyze" : "Re-analyze"}
-                  </>
+              )
+            }
+            actions={
+              <>
+                {/* Group switcher — shown once siblings load */}
+                {siblings.length > 1 && (
+                  <div role="group" aria-label="Switch group" className="flex items-center overflow-hidden rounded-lg border border-slate-300 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => prevGroup && navigate(`/project/${prevGroup.projectId}`)}
+                      disabled={!prevGroup}
+                      aria-label={prevGroup ? `Previous group: ${prevGroup.groupName}` : "Previous group (none)"}
+                      className={switchBtn}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <select
+                      value={projectId}
+                      onChange={(e) => navigate(`/project/${e.target.value}`)}
+                      aria-label="Group"
+                      className={`h-11 max-w-[11rem] cursor-pointer bg-transparent px-2 text-sm font-medium text-slate-900 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
+                    >
+                      {siblings.map((g) => (
+                        <option key={g.projectId} value={g.projectId}>
+                          {g.groupName}
+                          {g.isAnalyzed && g.teamHealth ? ` · ${g.teamHealth}` : " · Not analyzed"}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => nextGroup && navigate(`/project/${nextGroup.projectId}`)}
+                      disabled={!nextGroup}
+                      aria-label={nextGroup ? `Next group: ${nextGroup.groupName}` : "Next group (none)"}
+                      className={switchBtn}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
                 )}
-              </button>
-            )}
-          </div>
+
+                {/* Scoring settings — shown only when a report exists, not for admin.
+                    Disabled (not hidden) for EDITOR reports: weight override isn't wired for document scoring yet. */}
+                {stored && !reanalyzing && !isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowScoringModal(true)}
+                    disabled={!showGitHub}
+                    title={showGitHub ? "Adjust scoring weights and flag thresholds for this group" : "Weight adjustment isn't available for Docs-only scoring yet"}
+                    className={BUTTON_SECONDARY}
+                  >
+                    Scoring settings
+                  </button>
+                )}
+
+                {/* Export / Print — shown only when a report exists */}
+                {stored && !reanalyzing && (
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    title="Export a clean PDF via the browser print dialog"
+                    className={BUTTON_SECONDARY}
+                  >
+                    Export / Print
+                  </button>
+                )}
+
+                {/* Re-analyze / Analyze — hidden for admin */}
+                {!isAdmin && (
+                  <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY}>
+                    {reanalyzing ? (
+                      <>
+                        <span aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full border-2 border-white/40 border-t-white motion-safe:animate-spin" />
+                        {sourceType === "EDITOR"
+                          ? "Fetching FairTraze Docs data…"
+                          : sourceType === "COMBINED"
+                          ? "Fetching GitHub + FairTraze Docs data…"
+                          : "Fetching GitHub data…"}
+                      </>
+                    ) : (
+                      notFound ? "Analyze" : "Re-analyze"
+                    )}
+                  </button>
+                )}
+              </>
+            }
+          />
         </div>
 
         {/* Tab bar — only shown when Document tab is also available */}
         {visibleTabs.length > 1 && (
-          <div className="max-w-6xl mx-auto px-6 sm:px-8 flex border-t border-slate-100">
+          <div role="tablist" aria-label="Report sections" className="max-w-6xl mx-auto px-4 sm:px-8 flex border-t border-slate-200">
             {visibleTabs.map((tab) => (
               <button
                 key={tab}
+                type="button"
+                role="tab"
+                aria-selected={effectiveTab === tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
+                className={`min-h-11 px-4 text-base font-semibold transition-colors border-b-2 -mb-px ${FOCUS_LIGHT} focus-visible:-outline-offset-2 ${
                   effectiveTab === tab
-                    ? "border-indigo-500 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    ? "border-indigo-700 text-indigo-800"
+                    : "border-transparent text-slate-700 hover:text-slate-900"
                 }`}
               >
                 {tab === "report" ? "Report" : "FairTraze Docs"}
@@ -444,7 +418,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         )}
       </div>
 
-      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-6">
+      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 space-y-6">
 
         {/* Loading stepper */}
         {(reanalyzing || loadingReport) && (
@@ -453,19 +427,25 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* Re-analyze error */}
         {reanalyzeError && !reanalyzing && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
-            <span className="text-red-400 mt-0.5 text-base leading-none">&#9888;</span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-red-800">Analysis failed</p>
-              <p className="text-sm text-red-700 mt-0.5">{reanalyzeError}</p>
+          <div role="alert" className="bg-red-50 border border-red-300 rounded-xl p-4 flex items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-semibold text-red-900">Analysis failed</p>
+              <p className="text-base leading-normal text-red-900 break-words">{reanalyzeError}</p>
             </div>
-            <button onClick={() => setReanalyzeError(null)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
+            <button
+              type="button"
+              onClick={() => setReanalyzeError(null)}
+              aria-label="Dismiss error"
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-2xl leading-none text-red-900 hover:bg-red-100 ${FOCUS_LIGHT}`}
+            >
+              &times;
+            </button>
           </div>
         )}
 
         {/* Network / fetch error */}
         {fetchError && !reanalyzing && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-sm text-red-700">
+          <div role="alert" className="bg-red-50 border border-red-300 rounded-xl p-4 text-base leading-normal text-red-900">
             {fetchError}
           </div>
         )}
@@ -474,29 +454,26 @@ export function ProjectDetailPage({ projectId }: Props) {
         {effectiveTab === "report" && (
           <>
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
-            <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            Loading report…
+          <div aria-busy="true" role="status" className="space-y-6">
+            <span className="sr-only">Loading report…</span>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
+            </div>
+            <Skeleton className="h-72" />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <Skeleton className="h-64" />
+              <Skeleton className="h-64" />
+            </div>
           </div>
         )}
 
         {/* Stale report — membership changed and/or scoring config changed after last analysis */}
         {reportStale && stored && !reanalyzing && (
-          <div className="bg-amber-100 border-2 border-amber-300 rounded-xl px-5 py-4 flex items-center gap-4 flex-wrap shadow-sm">
-            <svg className="w-6 h-6 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-            <p className="flex-1 min-w-[220px] text-sm font-semibold text-amber-900">
-              Report may be outdated — membership or settings have changed. Click Re-analyze to update.
+          <div className="bg-amber-100 border-2 border-amber-400 rounded-xl px-5 py-4 flex items-center gap-4 flex-wrap">
+            <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
+              Report may be outdated — membership or settings have changed. Re-analyze to update.
             </p>
-            <button
-              onClick={handleAnalyze}
-              disabled={reanalyzing}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+            <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY}>
               Re-analyze
             </button>
           </div>
@@ -504,256 +481,135 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* Not analyzed yet */}
         {notFound && !reanalyzing && !reanalyzeError && (
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-8 flex flex-col items-center gap-4 text-center">
-            <div className="h-12 w-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 text-xl">
-              ?
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-700">No report yet</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Click <span className="font-semibold">Analyze</span> in the header to fetch GitHub activity
-                and generate a contribution report for this project.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            title="No report yet"
+            description={
+              <>
+                Select <span className="font-semibold">Analyze</span> in the header to collect activity
+                and generate a contribution report for this group.
+              </>
+            }
+          />
         )}
 
         {/* Stored report */}
         {stored && !reanalyzing && (
           <>
-            {/* Team health — the visual focal point of the report, shown first (source-agnostic) */}
-            <TeamHealthBanner
-              teamHealth={stored.report.teamHealth}
-              gini={stored.report.gini}
-              projectName={stored.groupName}
-              memberCount={stored.report.memberCount}
-              benchmark={benchmark}
+            {/* Summary row */}
+            <section aria-label="Summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatTile
+                label="Team health"
+                tone={healthTone}
+                value={<StatusPill kind="health" value={stored.report.teamHealth} className="!text-base" />}
+                detail={
+                  <>
+                    <span className="block">{giniBandsText()}</span>
+                    {benchmark.averageGini !== null && (
+                      <span className="mt-1 block">
+                        Average for other groups in this assignment: {benchmark.averageGini.toFixed(3)} —{" "}
+                        {stored.report.gini > benchmark.averageGini
+                          ? "this group is more uneven"
+                          : stored.report.gini < benchmark.averageGini
+                          ? "this group is more even"
+                          : "equal"}.
+                      </span>
+                    )}
+                  </>
+                }
+              />
+              <StatTile
+                label="Gini coefficient"
+                value={stored.report.gini.toFixed(3)}
+                bar={{ value: stored.report.gini, label: "Gini coefficient, 0 to 1", valueText: `${stored.report.gini.toFixed(3)} out of 1` }}
+                detail="0 = perfectly equal, 1 = one member holds everything."
+              />
+              <StatTile
+                label="Flags"
+                value={totalFlags}
+                detail={
+                  flagged.length === 0
+                    ? "No members flagged."
+                    : flagged.map((m) => m.studentName).join(", ")
+                }
+              />
+              <StatTile
+                label="Members"
+                value={memberCount}
+                detail={`Equal share = ${equalSharePct.toFixed(1)}% each`}
+              />
+            </section>
+
+            {/* Member contributions — replaces the old bar chart and table */}
+            <MemberContributionList
+              members={stored.report.members}
+              memberRoles={stored.memberRoles}
+              disputedMembers={disputedMembers}
+              resolvedFlagOutcomes={resolvedFlagOutcomes}
+              onOpen={(m, el) => { setDrawerOpener(el); setSelectedMember(m); }}
             />
 
-            {/* Report details */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">
-                Report Details
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                <div>
-                  <span className="text-slate-400 text-xs block mb-0.5">Group</span>
-                  <p className="font-medium text-slate-800">{stored.groupName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block mb-0.5">Repository</span>
-                  <a
-                    href={stored.repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-indigo-600 hover:underline break-all"
-                  >
-                    {stored.repoUrl.replace("https://github.com/", "")}
-                  </a>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block mb-0.5">Source</span>
-                  <p className="font-medium text-slate-800">
-                    {SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block mb-0.5">Analyzed</span>
-                  <p className="font-medium text-slate-800">
-                    {new Date(stored.analyzedAt).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-xs block mb-0.5">Members</span>
-                  <p className="font-medium text-slate-800">{stored.report.memberCount}</p>
-                </div>
+            {/* Unmatched logins (GitHub-based sources only) */}
+            {sourceType !== "EDITOR" && stored.unmatchedGitHubLogins.length > 0 && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-base leading-normal text-amber-950">
+                <span className="font-semibold">Unmatched GitHub contributors: </span>
+                {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
+                repository but are not in the team member list.
               </div>
+            )}
 
-              {/* Scoring settings used for this report */}
-              {stored.scoringConfig && (
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] text-slate-400 font-medium">Scored with:</span>
-                  <ScoredWithPill label="commits" display={String(stored.scoringConfig.weights.commits)} />
-                  <ScoredWithPill label="lines" display={String(stored.scoringConfig.weights.lines)} />
-                  <ScoredWithPill label="days" display={String(stored.scoringConfig.weights.activeDays)} />
-                  <span className="text-slate-200 text-xs mx-0.5">|</span>
-                  <ScoredWithPill label="free-rider" display={`${stored.scoringConfig.thresholds.freeRider}×`} />
-                  <ScoredWithPill label="overload" display={`${stored.scoringConfig.thresholds.overload}×`} />
-                  <ScoredWithPill label="deadline" display={`${Math.round(stored.scoringConfig.thresholds.deadlineDriven * 100)}%`} />
-                  {reportStale && (
-                    <span className="text-xs text-amber-600 font-semibold ml-1">(settings changed — re-analyze to update)</span>
-                  )}
-                </div>
-              )}
+            {/* AI explanation + Lorenz curve */}
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+              {/* keyed to projectId so it always reflects the current group */}
+              <Narrative
+                key={projectId}
+                narrative={narrativeText}
+                projectId={projectId}
+                onNarrativeGenerated={(text) => setNarrativeText(text)}
+              />
+              <LorenzCard shares={stored.report.members.map((m) => m.contributionShare)} gini={stored.report.gini} />
             </div>
 
-            {/* Imbalance trend — Gini/team health across all past analysis runs.
-                Omitted until there are at least 2 runs, since a single point isn't a trend. */}
-            {reportHistory.length >= 2 && (
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setTrendExpanded((v) => !v)}
-                  aria-expanded={trendExpanded}
-                  className="w-full text-left px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4 hover:bg-slate-50/60 transition-colors"
-                >
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-700">Imbalance Trend</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Gini coefficient across all analysis runs for this group</p>
-                  </div>
-                  <svg
-                    className={`w-4 h-4 mt-0.5 shrink-0 transition-transform duration-200 text-slate-400 ${trendExpanded ? "rotate-180" : ""}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
+            {/* Trend + details */}
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+              {/* Imbalance trend — omitted until there are at least 2 runs, since a single point isn't a trend. */}
+              {reportHistory.length >= 2 && (
+                <section aria-labelledby="trend-title" className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTrendExpanded((v) => !v)}
+                    aria-expanded={trendExpanded}
+                    className={`flex min-h-11 w-full items-start justify-between gap-4 px-5 py-4 text-left hover:bg-slate-50 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {trendExpanded && (
-                  <div className="px-6 pt-4 pb-2">
-                    <TrendChart history={reportHistory} />
-                  </div>
-                )}
+                    <span>
+                      <span id="trend-title" className="block text-lg font-semibold text-slate-900">Imbalance trend</span>
+                      <span className="block text-sm leading-normal text-slate-700">Gini coefficient across all analysis runs for this group</span>
+                    </span>
+                    <svg
+                      className={`mt-1.5 h-5 w-5 shrink-0 text-slate-700 ${reducedMotion ? "" : "transition-transform duration-200"} ${trendExpanded ? "rotate-180" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {trendExpanded && (
+                    <div className="border-t border-slate-200 px-5 pt-4 pb-2">
+                      <TrendChart history={reportHistory} />
+                    </div>
+                  )}
+                </section>
+              )}
+              <div className={reportHistory.length >= 2 ? "" : "lg:col-span-2"}>
+                <ReportDetailsCard
+                  stored={stored}
+                  sourceLabel={SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}
+                  stale={reportStale}
+                />
               </div>
-            )}
-
-            {/* GitHub-specific sections (GITHUB-only / legacy projects) */}
-            {showGithubOnly && (
-              <>
-                {/* Contribution chart — the "quick picture" at a glance */}
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — GitHub</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's share at a glance</p>
-                  </div>
-                  <div className="px-6 pt-4 pb-2">
-                    <ContributionChart members={stored.report.members} />
-                  </div>
-                </div>
-
-                {/* Member table — the "detail view", clearly separated from the chart above */}
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — per-member stats, significance, and flags</p>
-                  </div>
-                  <MemberTable members={stored.report.members} disputedMembers={disputedMembers} resolvedFlagOutcomes={resolvedFlagOutcomes} memberRoles={stored.memberRoles} deadlineWindowBasis={stored.report.deadlineWindowBasis} />
-                </div>
-
-                {/* AI narrative — keyed to projectId so it always reflects the current group */}
-                <Narrative
-                  key={projectId}
-                  narrative={narrativeText}
-                  projectId={projectId}
-                  onNarrativeGenerated={(text) => setNarrativeText(text)}
-                />
-
-                {/* Unmatched logins */}
-                {stored.unmatchedGitHubLogins.length > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                    <span className="font-semibold">Unmatched GitHub contributors: </span>
-                    {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
-                    repository but are not in the team member list.
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Combined (GitHub + Docs) sections — one blended report, not two separate ones */}
-            {showCombined && (
-              <>
-                {stored.scoringConfig?.blend && (
-                  <div className="flex items-center gap-1.5 flex-wrap -mt-2">
-                    <span className="text-[11px] text-slate-400 font-medium">Source blend:</span>
-                    <ScoredWithPill label="GitHub" display={`${Math.round(stored.scoringConfig.blend.wGitHub * 100)}%`} />
-                    <ScoredWithPill label="Docs" display={`${Math.round(stored.scoringConfig.blend.wDocs * 100)}%`} />
-                  </div>
-                )}
-
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — GitHub + Docs</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's blended share at a glance</p>
-                  </div>
-                  <div className="px-6 pt-4 pb-2">
-                    <ContributionChart members={stored.report.members} />
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — GitHub share, Docs share, blend weights, and flags</p>
-                  </div>
-                  <MemberTable
-                    members={stored.report.members}
-                    variant="combined"
-                    disputedMembers={disputedMembers}
-                    resolvedFlagOutcomes={resolvedFlagOutcomes}
-                    memberRoles={stored.memberRoles}
-                    deadlineWindowBasis={stored.report.deadlineWindowBasis}
-                  />
-                </div>
-
-                <Narrative
-                  key={projectId}
-                  narrative={narrativeText}
-                  projectId={projectId}
-                  onNarrativeGenerated={(text) => setNarrativeText(text)}
-                />
-
-                {stored.unmatchedGitHubLogins.length > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                    <span className="font-semibold">Unmatched GitHub contributors: </span>
-                    {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
-                    repository but are not in the team member list.
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* FairTraze Docs (EDITOR) sections */}
-            {sourceType === "EDITOR" && (
-              <>
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-700">Contribution Profiling — FairTraze Docs</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Quick picture — each member's share at a glance</p>
-                  </div>
-                  <div className="px-6 pt-4 pb-2">
-                    <ContributionChart members={stored.report.members} />
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-700">Member Contributions</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Detail view — per-member stats and flags</p>
-                  </div>
-                  <MemberTable
-                    members={stored.report.members}
-                    variant="document"
-                    disputedMembers={disputedMembers}
-                    resolvedFlagOutcomes={resolvedFlagOutcomes}
-                    deadlineWindowBasis={stored.report.deadlineWindowBasis}
-                  />
-                </div>
-
-                {/* AI narrative — keyed to projectId so it always reflects the current group */}
-                <Narrative
-                  key={projectId}
-                  narrative={narrativeText}
-                  projectId={projectId}
-                  onNarrativeGenerated={(text) => setNarrativeText(text)}
-                />
-              </>
-            )}
-
-            {/* Timestamp */}
-            <p className="text-xs text-slate-400 text-right">
-              Report generated {new Date(stored.analyzedAt).toLocaleString()}
-            </p>
+            </div>
           </>
         )}
           </>
@@ -763,20 +619,14 @@ export function ProjectDetailPage({ projectId }: Props) {
         {effectiveTab === "document" && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
+              <h2 className="text-lg font-semibold text-slate-900">FairTraze Docs</h2>
+              <p className="hidden text-sm leading-normal text-slate-700 sm:block">
                 {viewingHistory
                   ? "Past versions of this group's document, captured at each analysis run"
                   : "Collaborative editor — shared document for this group. Highlighting shows who wrote each part of the current text — it does not show edit history or deleted content."}
-              </span>
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
-                Read-only — instructor view
-              </span>
-              <button
-                type="button"
-                onClick={() => setViewingHistory((v) => !v)}
-                className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline"
-              >
+              </p>
+              <StatusPill kind="status" label="Read-only — instructor view" />
+              <button type="button" onClick={() => setViewingHistory((v) => !v)} className={`${BUTTON_SECONDARY} ml-auto`}>
                 {viewingHistory ? "Back to live document" : "History"}
               </button>
             </div>
@@ -790,18 +640,36 @@ export function ProjectDetailPage({ projectId }: Props) {
       </main>
 
       <footer className="print:hidden border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8 py-2 flex items-center justify-between flex-wrap gap-2">
+          <p className="text-sm leading-normal text-slate-700">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
           <button
+            type="button"
             onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            className={`inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-medium text-slate-800 underline underline-offset-2 hover:text-slate-950 ${FOCUS_LIGHT}`}
           >
-            System Overview →
+            System overview →
           </button>
         </div>
       </footer>
+
+      {/* Member details drawer */}
+      {stored && (
+        <MemberDrawer
+          member={selectedMember}
+          onClose={() => setSelectedMember(null)}
+          restoreFocusTo={drawerOpener}
+          source={flagSource}
+          thresholds={stored.scoringConfig?.thresholds ?? null}
+          deadlineBasis={stored.report.deadlineWindowBasis ?? null}
+          memberCount={stored.report.memberCount}
+          memberRoles={stored.memberRoles}
+          disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
+          flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
+          onOpenDisputes={() => { setSelectedMember(null); navigate("/disputes"); }}
+        />
+      )}
 
       {/* Print-only layout — hidden on screen, rendered when printing */}
       {stored && !reanalyzing && (
@@ -828,15 +696,5 @@ export function ProjectDetailPage({ projectId }: Props) {
         />
       )}
     </div>
-  );
-}
-
-// ── Small helper component ────────────────────────────────────────────────────
-
-function ScoredWithPill({ label, display }: { label: string; display: string }) {
-  return (
-    <span className="text-[11px] font-mono text-slate-500 bg-slate-100 rounded px-1.5 py-0.5">
-      {label} <strong className="text-slate-700">{display}</strong>
-    </span>
   );
 }

@@ -212,6 +212,14 @@ body {
   to   { transform: none; }
 }
 .ft-drawer-in { animation: ft-drawer-in 0.2s ease-out; }
+@keyframes ft-drawer-right-in {
+  from { transform: translateX(100%); }
+  to   { transform: none; }
+}
+.ft-drawer-right-in { animation: ft-drawer-right-in 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .ft-drawer-in, .ft-drawer-right-in { animation: none; }
+}
 .ft-doc-content p {
   margin: 0 0 0.85rem;
 }
