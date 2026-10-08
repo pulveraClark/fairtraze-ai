@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireRole } from "../middleware/auth.js";
 import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
 
@@ -306,6 +307,8 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     scoringConfigChangedAt: project.scoringConfigChangedAt?.toISOString() ?? null,
     membershipChangedAt:    project.membershipChangedAt?.toISOString() ?? null,
     memberRoles,
+    docsDataApproximate: await docsDataApproximateFor(projectId, project.assignment?.sourceType),
+    docsDataFixedAt: getAuthorshipFixAt().toISOString(),
   };
 
   res.json(response);

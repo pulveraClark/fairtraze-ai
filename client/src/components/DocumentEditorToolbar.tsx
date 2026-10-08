@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import type { AuthorshipUser } from "../lib/authorshipHighlight";
 import { getUserColor } from "../lib/collabColors";
+import { DocsDataApproximateNotice } from "./DocsDataApproximateNotice";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
@@ -522,7 +523,17 @@ export function PresenceChip({ user }: { user: PresentUser }) {
   );
 }
 
-export function AuthorshipLegend({ users, memberIds }: { users: AuthorshipUser[]; memberIds: number[] }) {
+export function AuthorshipLegend({
+  users,
+  memberIds,
+  approximate = false,
+  fixedAt,
+}: {
+  users: AuthorshipUser[];
+  memberIds: number[];
+  approximate?: boolean;
+  fixedAt?: string | null;
+}) {
   if (users.length === 0) return null;
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 flex-wrap">
@@ -532,6 +543,7 @@ export function AuthorshipLegend({ users, memberIds }: { users: AuthorshipUser[]
           {u.name}
         </span>
       ))}
+      {approximate && <DocsDataApproximateNotice fixedAt={fixedAt} className="basis-full" />}
     </div>
   );
 }

@@ -90,14 +90,22 @@ interface RoomState {
 // replacing it here is correct, not a race to guard against.
 const rooms = new Map<string, RoomState>();
 
-// Walks the Yjs XML tree and concatenates only real document text — Y.XmlText content via
-// `.toString()`. This walk only ever touches `ydoc.getXmlFragment("default")`, the exact shared
+// Walks the Yjs XML tree and concatenates only real document text — each Y.XmlText's string
+// inserts via `.toDelta()`, attributes ignored. NOT `.toString()`: that wraps marked runs in
+// XML tags (`<bold>…</bold>`), which inflated offsets past what the client's text-node walk
+// (authorshipHighlight.ts plainTextRangeToPMRange) sees and turned bare mark toggles into
+// phantom INSERT/DELETE events. Embeds (non-string inserts) contribute nothing, same as image
+// nodes. No separator between blocks — matches the client's offset model. This walk only ever touches `ydoc.getXmlFragment("default")`, the exact shared
 // type `Collaboration.configure({document: ydoc})` syncs as document content. It never touches
 // `provider.awareness` (a completely separate wire message type), which is where
 // CollaborationCursor's name/color labels live — so cursor decorations can never leak in here.
 function extractPlainText(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText): string {
   if (node instanceof Y.XmlText) {
-    return node.toString();
+    let text = "";
+    for (const op of node.toDelta() as { insert?: unknown }[]) {
+      if (typeof op.insert === "string") text += op.insert;
+    }
+    return text;
   }
   let out = "";
   for (const child of node.toArray()) {

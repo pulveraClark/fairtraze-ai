@@ -3,6 +3,7 @@ import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, Re
 import { useAuth } from "../context/AuthContext";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { TrendChart } from "../components/TrendChart";
+import { DocsDataApproximateNotice } from "../components/DocsDataApproximateNotice";
 import { PageHeader, StatTile, InfoTip, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT, CARD } from "../components/ui";
 import { MemberContributionList } from "../components/report/MemberContributionList";
 import { MemberDrawer } from "../components/report/MemberDrawer";
@@ -556,6 +557,10 @@ export function ProjectDetailPage({ projectId }: Props) {
                 }
               />
             </section>
+
+            {stored.docsDataApproximate && (
+              <DocsDataApproximateNotice fixedAt={stored.docsDataFixedAt} className="mb-4" />
+            )}
 
             {/* Member contributions — replaces the old bar chart and table */}
             <MemberContributionList

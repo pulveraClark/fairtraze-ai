@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { docs } from "y-websocket/bin/utils";
 import { prisma } from "../lib/prisma.js";
+import { documentHasPreFixEvents, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
@@ -316,12 +317,16 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
 
   const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
   if (!doc) {
-    res.json({ spans: [], users: [] });
+    res.json({ spans: [], users: [], docsDataApproximate: false });
     return;
   }
 
   const map = await computeAuthorshipMap(doc.id);
-  res.json(map);
+  res.json({
+    ...map,
+    docsDataApproximate: await documentHasPreFixEvents(doc.id),
+    docsDataFixedAt: getAuthorshipFixAt().toISOString(),
+  });
 });
 
 // GET /api/groups/:id/document/export — download the document's current content as a file.

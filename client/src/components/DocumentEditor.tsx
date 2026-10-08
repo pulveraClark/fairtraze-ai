@@ -98,6 +98,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // editable view, so "who wrote what" is visible without needing to discover the toggle first.
   const [showAuthorship, setShowAuthorship] = useState(true);
   const [authorshipUsers, setAuthorshipUsers] = useState<AuthorshipUser[]>([]);
+  // From the initial authorship fetch only (the live push socket doesn't carry it).
+  const [authorshipApproximate, setAuthorshipApproximate] = useState(false);
+  const [authorshipFixedAt, setAuthorshipFixedAt] = useState<string | null>(null);
   // The group's full, stable member roster (sorted userIds) — used to color-index spans/cursors
   // collision-free within the group, instead of by raw global User.id (see collabColors.ts).
   const [memberIds, setMemberIds] = useState<number[]>([]);
@@ -413,9 +416,14 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     fetch(`/api/groups/${groupId}/document/authorship`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => (res.ok ? (res.json() as Promise<AuthorshipUpdate>) : null))
+      .then((res) => (res.ok ? (res.json() as Promise<AuthorshipUpdate & { docsDataApproximate?: boolean; docsDataFixedAt?: string }>) : null))
       .then((data) => {
-        if (data) applyUpdate(data);
+        if (!data) return;
+        if (!cancelled) {
+          setAuthorshipApproximate(!!data.docsDataApproximate);
+          setAuthorshipFixedAt(data.docsDataFixedAt ?? null);
+        }
+        applyUpdate(data);
       })
       .catch((err) => console.error("[authorship] initial fetch failed", err));
 
@@ -783,7 +791,14 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           </button>
         </div>
       )}
-      {showAuthorship && <AuthorshipLegend users={authorshipUsers} memberIds={memberIds} />}
+      {showAuthorship && (
+        <AuthorshipLegend
+          users={authorshipUsers}
+          memberIds={memberIds}
+          approximate={authorshipApproximate}
+          fixedAt={authorshipFixedAt}
+        />
+      )}
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
           <DragHandle

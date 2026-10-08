@@ -292,6 +292,10 @@ export interface StoredReportResponse {
   membershipChangedAt: string | null;
   // Functional roles + soft mismatch notes per member (context only — never changes scores)
   memberRoles: MemberRoleInfo[];
+  // Computed at read time (never stored): true when an EDITOR/COMBINED group's document has
+  // EditEvents recorded before AUTHORSHIP_FIX_AT, i.e. before the authorship-capture offset fix.
+  docsDataApproximate?: boolean;
+  docsDataFixedAt?: string; // ISO date of the fix, for the notice text
 }
 
 // One point in a project's analysis history — returned by GET /api/projects/:id/report/history.

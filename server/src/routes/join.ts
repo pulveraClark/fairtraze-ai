@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify } from "../lib/notify.js";
@@ -595,6 +596,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     },
   };
 
+  const docsDataApproximate = await docsDataApproximateFor(projectId, asgn.sourceType);
+
   const latestReport = project.reports[0] ?? null;
   if (!latestReport?.content) {
     res.json({ ...base, hasReport: false, report: null });
@@ -673,6 +676,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   res.json({
     ...base,
     hasReport: true,
+    docsDataApproximate,
+    docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     report: {
       gini:        teamReport.gini,
       teamHealth:  teamReport.teamHealth,

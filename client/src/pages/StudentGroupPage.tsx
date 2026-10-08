@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
+import { DocsDataApproximateNotice } from "../components/DocsDataApproximateNotice";
 import {
   ApiError, classKeys, disputeKeys, groupKeys,
   useGroupTasksQuery, useMyDisputesQuery, useStudentGroupQuery,
@@ -29,6 +30,8 @@ interface GroupDetail {
   project:      { id: number; groupName: string; repoUrl: string; };
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
+  docsDataApproximate?: boolean;
+  docsDataFixedAt?: string;
   report: {
     gini:        number;
     teamHealth:  string;
@@ -704,6 +707,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             {/* Report available */}
             {hasReport && report && (
               <>
+                {data.docsDataApproximate && <DocsDataApproximateNotice fixedAt={data.docsDataFixedAt} />}
                 {/* No contribution data for this student in the current report */}
                 {report.myContribution === null && (
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm text-slate-500 leading-relaxed">
