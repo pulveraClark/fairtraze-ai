@@ -1,6 +1,13 @@
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
-import type { TeamReport } from "@shared/types.js";
+import type { TeamReport, AnyScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types.js";
+
+function isCombinedMember(m: AnyScoredMember): m is CombinedScoredMember {
+  return "githubContributionShare" in m;
+}
+function isDocumentMember(m: AnyScoredMember): m is DocumentScoredMember {
+  return "sessionCount" in m;
+}
 
 // Validate at startup — fail clearly rather than silently at call time
 if (!process.env.GEMINI_API_KEY) {
@@ -46,15 +53,37 @@ Tone: fair, factual, non-accusatory. Never use words like "lazy", "cheating", or
 // Build a readable plain-text representation of the team report.
 // Using explicit "Flags: none" (not an empty array) is the key guard against the model
 // misreading [] and inventing flags from the contribution numbers.
-function formatPrompt(projectName: string, teamReport: TeamReport): string {
+// Branches per member shape (GitHub / Docs / Combined) so each source's own signals are
+// described accurately — a Docs or Combined member has no .commits/.additions/.deletions,
+// and reading those unconditionally would render as "undefined"/"NaN" in the prompt.
+function formatPrompt(projectName: string, teamReport: TeamReport<AnyScoredMember>): string {
   const equalShare = (100 / teamReport.memberCount).toFixed(1);
   const memberLines = teamReport.members
     .map((m) => {
       const flagsText = m.flags.length > 0 ? m.flags.join(", ") : "none";
+      const shareLine = `  Contribution share: ${(m.contributionShare * 100).toFixed(1)}% (equal share for this team: ${equalShare}%)`;
+
+      if (isCombinedMember(m)) {
+        return [
+          `Member: ${m.studentName} (GitHub: ${m.githubUsername})`,
+          shareLine,
+          `  GitHub share: ${(m.githubContributionShare * 100).toFixed(1)}% (weight ${Math.round(m.wGitHub * 100)}%) | Docs share: ${(m.documentContributionShare * 100).toFixed(1)}% (weight ${Math.round(m.wDocs * 100)}%)`,
+          `  Commits: ${m.github?.commits ?? 0} | Docs sessions: ${m.document?.sessionCount ?? 0}`,
+          `  Flags: ${flagsText}`,
+        ].join("\n");
+      }
+      if (isDocumentMember(m)) {
+        return [
+          `Member: ${m.studentName}`,
+          shareLine,
+          `  Edit sessions: ${m.sessionCount} | Active days: ${m.activeDays} | Churn: ${m.churn.toLocaleString()} characters`,
+          `  Flags: ${flagsText}`,
+        ].join("\n");
+      }
       const churn = m.additions + m.deletions;
       return [
         `Member: ${m.studentName} (GitHub: ${m.githubUsername})`,
-        `  Contribution share: ${(m.contributionShare * 100).toFixed(1)}% (equal share for this team: ${equalShare}%)`,
+        shareLine,
         `  Commits: ${m.commits} | Active days: ${m.activeDays} | Churn: ${churn.toLocaleString()} lines`,
         `  Flags: ${flagsText}`,
       ].join("\n");
@@ -72,7 +101,7 @@ function formatPrompt(projectName: string, teamReport: TeamReport): string {
   ].join("\n");
 }
 
-async function callOnce(projectName: string, teamReport: TeamReport): Promise<string> {
+async function callOnce(projectName: string, teamReport: TeamReport<AnyScoredMember>): Promise<string> {
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: formatPrompt(projectName, teamReport),
@@ -83,7 +112,7 @@ async function callOnce(projectName: string, teamReport: TeamReport): Promise<st
 
 export async function generateFairnessNarrative(
   projectName: string,
-  teamReport: TeamReport
+  teamReport: TeamReport<AnyScoredMember>
 ): Promise<string> {
   try {
     return await callOnce(projectName, teamReport);

@@ -1,27 +1,44 @@
 import { useEffect, useState } from "react";
 
-const STEPS = [
-  {
-    label: "Data Collection",
-    desc: "Fetching per-contributor commit history from GitHub",
-  },
-  {
-    label: "Contribution Profiling",
-    desc: "Computing weighted scores and contribution shares",
-  },
-  {
-    label: "Participation Imbalance Detection",
-    desc: "Evaluating flags and Gini coefficient",
-  },
-  {
-    label: "Significance Scoring",
-    desc: "Applying file-type weights, commit impact, and self-churn penalty",
-  },
-  {
-    label: "Saving Report",
-    desc: "Persisting scores and flags; AI explanation available on demand",
-  },
-];
+type SourceType = string | null;
+
+const DATA_COLLECTION_DESC: Record<"GITHUB" | "EDITOR" | "COMBINED", string> = {
+  GITHUB: "Fetching per-contributor commit history from GitHub",
+  EDITOR: "Fetching per-contributor edit history from FairTraze Docs",
+  COMBINED: "Fetching commit history from GitHub and edit history from FairTraze Docs",
+};
+
+const DATA_COLLECTION_FOOTER: Record<"GITHUB" | "EDITOR" | "COMBINED", string> = {
+  GITHUB: "Data collection from GitHub usually takes the longest (10–30 seconds).",
+  EDITOR: "Data collection from FairTraze Docs usually takes the longest (10–30 seconds).",
+  COMBINED: "Data collection from GitHub and FairTraze Docs usually takes the longest (10–30 seconds).",
+};
+
+function getSteps(sourceType: SourceType) {
+  const key = sourceType === "EDITOR" || sourceType === "COMBINED" ? sourceType : "GITHUB";
+  return [
+    {
+      label: "Data Collection",
+      desc: DATA_COLLECTION_DESC[key],
+    },
+    {
+      label: "Contribution Profiling",
+      desc: "Computing weighted scores and contribution shares",
+    },
+    {
+      label: "Participation Imbalance Detection",
+      desc: "Evaluating flags and Gini coefficient",
+    },
+    {
+      label: "Significance Scoring",
+      desc: "Applying file-type weights, commit impact, and self-churn penalty",
+    },
+    {
+      label: "Saving Report",
+      desc: "Persisting scores and flags; AI explanation available on demand",
+    },
+  ];
+}
 
 // Approximate cumulative times (ms) at which each step becomes active.
 // Step 5 is resolved externally when the API call completes.
@@ -29,10 +46,12 @@ const STEP_DELAYS = [0, 4000, 7000, 10000];
 
 interface Props {
   done: boolean; // true when the API call has completed successfully
+  sourceType?: SourceType;
 }
 
-export function AnalysisStepper({ done }: Props) {
+export function AnalysisStepper({ done, sourceType = null }: Props) {
   const [activeStep, setActiveStep] = useState(0); // 0-indexed
+  const STEPS = getSteps(sourceType);
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -107,7 +126,7 @@ export function AnalysisStepper({ done }: Props) {
       </ol>
       {!done && (
         <p className="mt-5 text-xs text-slate-400">
-          Data collection from GitHub usually takes the longest (10–30 seconds).
+          {DATA_COLLECTION_FOOTER[sourceType === "EDITOR" || sourceType === "COMBINED" ? sourceType : "GITHUB"]}
         </p>
       )}
     </div>

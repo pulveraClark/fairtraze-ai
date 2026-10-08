@@ -3,21 +3,16 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
-import { timeAgo } from "../hooks/useAlerts";
+import { timeAgo, alertMeta, alertLink } from "../hooks/useAlerts";
+import { roleHome } from "../lib/roleHome";
 import type { AlertItem } from "../hooks/useAlerts";
 
 interface PageMeta { total: number; page: number; pageSize: number; totalPages: number; }
 
-const ALERT_TYPE_LIGHT: Record<AlertItem["type"], { label: string; color: string; navigateTo: "project" | "disputes" }> = {
-  HIGH_RISK:      { label: "High Risk",       color: "text-red-700 bg-red-50 border-red-200",         navigateTo: "project" },
-  MODERATE_RISK:  { label: "Moderate Risk",   color: "text-amber-700 bg-amber-50 border-amber-200",   navigateTo: "project" },
-  MEMBER_FLAGGED: { label: "Members Flagged", color: "text-orange-700 bg-orange-50 border-orange-200", navigateTo: "project" },
-  DISPUTE_FILED:  { label: "Dispute",         color: "text-violet-700 bg-violet-50 border-violet-200", navigateTo: "disputes" },
-};
-
 export function AlertsPage() {
-  const { token }    = useAuth();
+  const { token, user } = useAuth();
   const { navigate } = useRouter();
+  const { route: backRoute, label: backLabel } = roleHome(user?.systemRole);
 
   const [alerts,      setAlerts]  = useState<AlertItem[]>([]);
   const [unreadCount, setUnread]  = useState(0);
@@ -67,8 +62,8 @@ export function AlertsPage() {
       setAlerts((prev) => prev.map((a) => (a.id === alert.id ? { ...a, read: true } : a)));
       setUnread((prev) => Math.max(0, prev - 1));
     }
-    const typeMeta = ALERT_TYPE_LIGHT[alert.type];
-    navigate(typeMeta.navigateTo === "disputes" ? "/disputes" : `/project/${alert.projectId}`);
+    const link = alertLink(alert);
+    if (link) navigate(link);
   }
 
   async function handleMarkAllRead() {
@@ -89,23 +84,25 @@ export function AlertsPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
-              >
-                Dashboard
-              </button>
-              <span className="text-slate-300 text-xs shrink-0">›</span>
-              <span className="shrink-0 text-xs font-semibold text-slate-800">Alerts</span>
+            <button
+              onClick={() => navigate(backRoute)}
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to {backLabel}
+            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">Notifications</h1>
               {unreadCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[10px] font-semibold">
                   {unreadCount} unread
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">
-              Team health alerts and flag notifications
+            <p className="text-sm text-slate-400">
+              {user?.systemRole === "INSTRUCTOR" ? "Team health alerts and flag notifications" : "Updates about your groups and account"}
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>
           </div>
@@ -148,14 +145,14 @@ export function AlertsPage() {
 
         {/* Empty state */}
         {!loading && !error && alerts.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-24 text-center">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col items-center gap-3 py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
               <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <p className="text-base font-semibold text-slate-700">No alerts</p>
-            <p className="text-sm text-slate-400">All your groups look healthy</p>
+            <p className="text-base font-semibold text-slate-700">No notifications</p>
+            <p className="text-sm text-slate-400">You're all caught up</p>
           </div>
         )}
 
@@ -163,21 +160,22 @@ export function AlertsPage() {
         {!loading && !error && alerts.length > 0 && (
           <>
             <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 bg-white shadow-sm">
-              {alerts.map((alert) => {
-                const typeMeta = ALERT_TYPE_LIGHT[alert.type];
+              {alerts.map((alert, i) => {
+                const typeMeta = alertMeta(alert.type);
+                const stripe   = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                 return (
                   <button
                     key={alert.id}
                     onClick={() => handleClick(alert)}
-                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-50 ${
-                      !alert.read ? "bg-indigo-50/60" : "bg-white"
+                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-slate-100 ${
+                      !alert.read ? "bg-indigo-50/60" : stripe
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       <span className={`mt-[9px] w-2 h-2 rounded-full shrink-0 ${!alert.read ? "bg-indigo-500" : "bg-transparent border border-slate-300"}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.color}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.light}`}>
                             {typeMeta.label}
                           </span>
                           <span className="text-xs text-slate-400">{timeAgo(alert.createdAt)}</span>
@@ -185,7 +183,7 @@ export function AlertsPage() {
                         <p className={`text-sm leading-snug ${!alert.read ? "text-slate-800 font-semibold" : "text-slate-600"}`}>
                           {alert.message}
                         </p>
-                        {alert.project.groupName && (
+                        {alert.project?.groupName && (
                           <p className="text-xs text-slate-400 mt-1 truncate">
                             {alert.project.groupName}
                             {alert.project.assignmentLabel ? ` · ${alert.project.assignmentLabel}` : ""}
@@ -207,7 +205,7 @@ export function AlertsPage() {
                 total={meta.total}
                 pageSize={meta.pageSize}
                 onPage={setPage}
-                label="alerts"
+                label="notifications"
               />
             </div>
           </>
@@ -217,9 +215,11 @@ export function AlertsPage() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
           <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
+            {user?.systemRole === "INSTRUCTOR"
+              ? "Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments."
+              : "Notifications are informational and do not constitute grades or final assessments."}
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

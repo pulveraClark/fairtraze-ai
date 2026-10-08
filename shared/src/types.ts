@@ -46,17 +46,23 @@ export type Flag = "inactive" | "free-rider" | "overload" | "deadline-driven";
 
 // Functional roles — context only; never affect contribution scores, Gini, or flags.
 // DEVELOPER  → expected source: GitHub (active now)
-// DOCUMENTATION → expected source: FairTraze Docs (planned — Phase D)
+// DOCUMENTATION → expected source: FairTraze Docs (active now)
 export type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
 
 export interface MemberRoleInfo {
+  userId:          number;
   githubUsername:  string;
   functionalRoles: FunctionalRole[];
   isLeader:        boolean;
-  // Soft informational note for the instructor when a member's activity doesn't match
-  // their assigned role.  Never a contribution flag; never changes any score.
-  // null = no mismatch (or role not traceable yet)
-  mismatchNote: string | null;
+  // Soft informational notes for the instructor when a member's activity doesn't match
+  // their assigned role(s). Never a contribution flag; never changes any score.
+  // Empty array = no mismatch. A member holding both DEVELOPER and DOCUMENTATION can
+  // mismatch on both at once — each gets its own entry, none overwrite each other.
+  mismatchNotes: string[];
+  // Leader/instructor-assigned checklist completion (server/src/routes/groups.ts Task
+  // endpoints). Purely informational, self-reported — never a scoring input, same as
+  // mismatchNotes above. { completed: 0, total: 0 } when no tasks are assigned.
+  taskSummary: { completed: number; total: number };
 }
 
 export type TeamHealth = "Healthy" | "Moderate Risk" | "High Risk";
@@ -87,11 +93,16 @@ export interface ScoredMember {
   flags: Flag[];
 }
 
-export interface TeamReport {
-  members: ScoredMember[];
+export interface TeamReport<M = ScoredMember> {
+  members: M[];
   memberCount: number;
   gini: number;
   teamHealth: TeamHealth;
+  // Discloses which basis produced the deadline-driven flag's "last third" window for this
+  // report: anchored to the real Assignment.deadline, or (when no deadline is set) falling
+  // back to a 2/3 split of the group's own observed activity span. Never per-member — one
+  // window applies to the whole report.
+  deadlineWindowBasis: "assignment-deadline" | "activity-span";
 }
 
 export interface ScoringWeights {
@@ -109,7 +120,112 @@ export interface ScoringThresholds {
 export interface ProjectScoringConfig {
   weights: ScoringWeights;
   thresholds: ScoringThresholds;
+  // Only ever set for COMBINED projects' persisted scoringConfig snapshot; always populated on
+  // currentConfig (server/src/routes/projects.ts) regardless of sourceType. Optional so historical
+  // GITHUB/EDITOR report snapshots (which never set it) remain valid.
+  blend?: BlendWeights;
 }
+
+// ── Document (FairTraze Docs) scoring pipeline types — mirrors RawMemberStats/ScoredMember ──
+
+// Raw per-member input built from EditEvent/EditSession replay (server/src/collab/editStats.ts).
+// userId is the authoritative identity — EditEvent.userId/EditSession.userId are User.id.
+// githubUsername may be "" for EDITOR members (not required at join time) — display only, never a lookup key.
+export interface RawDocumentMemberStats {
+  studentName: string;
+  userId: number;
+  githubUsername: string;
+  retainedChars: number;       // net chars this user currently owns in the live document
+  totalInsertedChars: number;  // gross chars inserted (selfChurnRatio denominator)
+  totalDeletedChars: number;   // gross chars this user deleted (any owner)
+  selfDeletedChars: number;    // of totalDeletedChars, how many they originally inserted themselves
+  sessionCount: number;
+  sessionDates: string[];      // ISO EditSession.startedAt values — analogous to commitDates
+  // Edit-type significance (Step 4b; optional so existing test fixtures without them still compile)
+  weightedRetainedChars?: number;
+  editTypeBreakdown?: { substantive: number; revision: number; formatting: number; trivial: number };
+  // .docx-import scoring (step 3; optional, falls back to pre-step-3 behavior when absent)
+  liveSessionCount?: number;              // EditSession count with source: LIVE only; falls back to sessionCount when absent
+  importedRetainedChars?: number;         // of retainedChars, how many originated from source: IMPORT rows (unweighted, for display)
+  importedWeightedRetainedChars?: number; // of weightedRetainedChars, the IMPORT-origin portion (drives session credit)
+  // Gross count of image nodes this user inserted (net new, not decremented on delete). Disclosed
+  // on the report only — never enters contributionShare or any share/weight formula. Optional so
+  // existing test fixtures without it still compile.
+  insertedImageCount?: number;
+}
+
+export interface DocumentScoredMember {
+  studentName: string;
+  userId: number;
+  githubUsername: string;
+  sessionCount: number;
+  totalInsertedChars: number;
+  totalDeletedChars: number;
+  retainedChars: number;
+  effectiveRetainedChars: number; // retainedChars after self-churn discount
+  churn: number;                  // totalInsertedChars + totalDeletedChars
+  activeDays: number;
+  lastPhaseRatio: number;
+  sessionShare: number;       // log-scaled session-count share (mirrors commitShare)
+  retainedTextShare: number;  // mirrors linesShare
+  activeDaysShare: number;
+  contributionShare: number;  // same field name as the GitHub side, so generic UI reads it unchanged
+  selfChurnRatio: number;
+  // Edit-type significance (Step 4b)
+  weightedRetainedChars: number;
+  editTypeBreakdown: { substantive: number; revision: number; formatting: number; trivial: number };
+  flags: Flag[];
+  // .docx-import scoring (step 3)
+  importedRetainedChars: number; // echoes the raw imported count used in importNote's {N}
+  importNote: string | null;
+  // Image insertion disclosure — never scored, purely echoed for display (see MemberTable.tsx).
+  insertedImageCount: number;
+}
+
+export type DocumentTeamReport = TeamReport<DocumentScoredMember>;
+
+// Dedicated weights type — not a reuse of ScoringWeights, since that type's field names
+// (commits/lines/activeDays) don't semantically fit the document pipeline's signals.
+export interface DocumentScoringWeights {
+  retainedText: number;
+  sessions: number;
+  activeDays: number;
+}
+
+// ── Combined (GitHub + Docs) scoring pipeline types ──────────────────────────
+
+// Blend weights for COMBINED-sourceType projects. Must sum to 1.0 (validated at the API layer,
+// same pattern as ScoringWeights). Default 50/50 — see shared/src/combinedScoring.ts.
+export interface BlendWeights {
+  wGitHub: number;
+  wDocs: number;
+}
+
+export interface CombinedScoredMember {
+  studentName: string;
+  userId: number;
+  githubUsername: string;
+  // Each member's share within its own source's independent normalization (0 when no
+  // matching record/activity on that source — never null/undefined).
+  githubContributionShare: number;
+  documentContributionShare: number;
+  wGitHub: number;
+  wDocs: number;
+  // Same field name as ScoredMember/DocumentScoredMember so generic UI (ContributionChart, the
+  // primary MemberTable row) reads it unchanged. This IS the blended combinedContributionShare.
+  contributionShare: number;
+  // Computed over the UNIFIED timeline (GitHub commit dates + document session dates combined),
+  // not either source's own lastPhaseRatio.
+  lastPhaseRatio: number;
+  flags: Flag[];
+  // Full per-source breakdowns, for the report's sub-figure display. null = no matching scored
+  // record on that source (member never appears in that source's roster/report).
+  github: ScoredMember | null;
+  document: DocumentScoredMember | null;
+}
+
+export type CombinedTeamReport = TeamReport<CombinedScoredMember>;
+export type AnyScoredMember = ScoredMember | DocumentScoredMember | CombinedScoredMember;
 
 // API shapes
 
@@ -118,7 +234,7 @@ export interface AnalyzeResponse {
   repoUrl: string;
   analyzedAt: string;
   unmatchedGitHubLogins: string[];
-  report: TeamReport;
+  report: TeamReport<AnyScoredMember>;
   narrative: string | null; // null when no narrative has been generated yet
 }
 
@@ -132,11 +248,14 @@ export interface NarrativeResponse {
 // Never calls GitHub; reads stored report data only.
 export interface ProjectSummaryItem {
   projectId: number;
-  groupName: string;      // student team name, e.g. "Group 1" — primary instructor-facing identifier
-  name: string;           // app/project name, e.g. "FairTraze AI"
+  groupName: string;      // student team name, e.g. "Group 1" — the group's single name
   assignmentLabel: string;
   classId: number | null;      // ClassSection.id — for breadcrumb navigation
   assignmentId: number | null; // Assignment.id   — for breadcrumb navigation
+  // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment).
+  // Available even before any report exists — unlike report-derived fields below,
+  // this doesn't depend on the project having been analyzed.
+  sourceType: string | null;
   memberCount: number;
   teamHealth: TeamHealth | null;
   gini: number | null;
@@ -156,11 +275,10 @@ export interface ProjectSummaryItem {
 // Reads the latest persisted analysis; no GitHub fetch.
 export interface StoredReportResponse {
   projectId: number;
-  groupName: string;  // student team name — primary identifier
-  name: string;       // app/project name
+  groupName: string;  // student team name — the group's single name
   repoUrl: string;
   analyzedAt: string;
-  report: TeamReport;
+  report: TeamReport<AnyScoredMember>;
   narrative: string | null;
   unmatchedGitHubLogins: string[];
   sourceType: string | null; // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment)
@@ -170,6 +288,20 @@ export interface StoredReportResponse {
   currentConfig: ProjectScoringConfig;
   // Set when config was changed after the last analysis run; cleared by re-analyze
   scoringConfigChangedAt: string | null;
+  // Set when members were added/removed after the last analysis run; cleared by re-analyze
+  membershipChangedAt: string | null;
   // Functional roles + soft mismatch notes per member (context only — never changes scores)
   memberRoles: MemberRoleInfo[];
+}
+
+// One point in a project's analysis history — returned by GET /api/projects/:id/report/history.
+// Read-only over already-computed, already-stored Report rows; no new scoring.
+export interface ReportHistoryPoint {
+  generatedAt: string;
+  gini: number | null;
+  teamHealth: TeamHealth | null;
+}
+
+export interface ReportHistoryResponse {
+  history: ReportHistoryPoint[];
 }

@@ -17,6 +17,14 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      "/collab-authorship": {
+        target: "ws://localhost:3001",
+        ws: true,
+      },
+      "/collab": {
+        target: "ws://localhost:3001",
+        ws: true,
+      },
     },
   },
 });

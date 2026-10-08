@@ -3,6 +3,10 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
+import { FlagTag } from "../components/FlagTag";
+import { useToast } from "../components/Toast";
+import type { Flag } from "@shared/types";
+import { useClassesListQuery } from "../hooks/useSharedQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DisputeItem {
@@ -54,23 +58,13 @@ const STATUS_STYLE: Record<string, string> = {
   DISMISSED: "text-slate-500 bg-slate-50 border-slate-200",
 };
 
-function FlagChip({ flag }: { flag: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5 leading-none">
-      <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {flag}
-    </span>
-  );
-}
-
 // ── Resolve modal ─────────────────────────────────────────────────────────────
 function ResolveModal({
   dispute, token, onClose, onResolved,
 }: {
   dispute: DisputeItem; token: string; onClose: () => void; onResolved: () => void;
 }) {
+  const { showSuccessToast } = useToast();
   const [resolution, setResolution] = useState<"RESOLVED" | "DISMISSED">("RESOLVED");
   const [response,   setResponse]   = useState("");
   const [saving,     setSaving]     = useState(false);
@@ -92,6 +86,7 @@ function ResolveModal({
       });
       const json = await res.json() as { error?: string };
       if (!res.ok) { setError(json.error ?? "Could not resolve dispute."); return; }
+      showSuccessToast("Dispute resolved.");
       onResolved();
     } catch {
       setError("Network error — could not resolve.");
@@ -124,7 +119,7 @@ function ResolveModal({
 
         <div className="px-6 pt-5">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Student's note</p>
-          <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
+          <p className="text-base text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
             {dispute.reason}
           </p>
         </div>
@@ -187,18 +182,10 @@ export function DisputesPage() {
   const [page,          setPage]          = useState(1);
   const [resolving,     setResolving]     = useState<DisputeItem | null>(null);
 
-  // Class dropdown options — loaded from instructor's classes
-  const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
-
-  useEffect(() => {
-    if (!token) return;
-    fetch("/api/classes", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data: { classes?: Array<{ id: number; subjectCode: string; subjectName: string; edpCode: string }> }) => {
-        setClassOptions(data.classes ?? []);
-      })
-      .catch(() => { /* non-critical — filter simply won't show */ });
-  }, [token]);
+  // Class dropdown options — shared with the dashboard page via useClassesListQuery so this
+  // doesn't re-issue its own fetch if the classes list is already cached.
+  const classesQuery = useClassesListQuery<ClassOption>(token);
+  const classOptions = classesQuery.data ?? [];
 
   const load = useCallback(() => {
     if (!token) return;
@@ -227,19 +214,21 @@ export function DisputesPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <button onClick={() => navigate("/dashboard")} className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">
-                Dashboard
-              </button>
-              <span className="text-slate-300 text-xs shrink-0">›</span>
-              <span className="shrink-0 text-xs font-semibold text-slate-800">Disputes</span>
+            <button onClick={() => navigate("/dashboard")} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
+            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">Disputes</h1>
               {openCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold">
                   {openCount} open
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">Student-raised score disputes awaiting your review</p>
+            <p className="text-sm text-slate-400">Student-raised score disputes awaiting your review</p>
           </div>
           <button onClick={load} className="text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">Refresh</button>
         </div>
@@ -318,11 +307,12 @@ export function DisputesPage() {
         {!loading && !error && disputes.length > 0 && (
           <>
             <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 bg-white shadow-sm">
-              {disputes.map((d) => {
+              {disputes.map((d, i) => {
                 const cs   = d.project.assignment?.classSection;
                 const asgn = d.project.assignment;
+                const stripe = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                 return (
-                  <div key={d.id} className={`px-5 py-5 ${d.status !== "OPEN" ? "opacity-60" : ""}`}>
+                  <div key={d.id} className={`px-5 py-5 ${stripe} ${d.status !== "OPEN" ? "opacity-60" : ""}`}>
                     <div className="flex items-start gap-3">
                       <span className={`mt-[7px] w-2 h-2 rounded-full shrink-0 ${d.status === "OPEN" ? "bg-amber-400" : "bg-transparent border border-slate-300"}`} />
 
@@ -337,7 +327,7 @@ export function DisputesPage() {
 
                         {d.disputedFlags.length > 0 && (
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {d.disputedFlags.map((flag) => <FlagChip key={flag} flag={flag} />)}
+                            {d.disputedFlags.map((flag) => <FlagTag key={flag} flag={flag as Flag} />)}
                           </div>
                         )}
 
@@ -354,11 +344,11 @@ export function DisputesPage() {
                           {cs && <><span className="text-slate-300">·</span><span className="text-slate-400">{cs.subjectName}</span></>}
                         </div>
 
-                        <p className="text-sm text-slate-700 leading-relaxed">{d.reason}</p>
+                        <p className="text-base text-slate-700 leading-relaxed">{d.reason}</p>
 
                         {d.instructorResponse && (
                           <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Your response</p>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Your response</p>
                             <p className="text-xs text-slate-600 leading-relaxed">{d.instructorResponse}</p>
                           </div>
                         )}
@@ -400,7 +390,7 @@ export function DisputesPage() {
           <p className="text-xs text-slate-400">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
-          <button onClick={() => navigate("/overview")} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
             System Overview →
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useAlerts, ALERT_TYPE_META, timeAgo } from "../hooks/useAlerts";
+import { useAlerts, alertMeta, alertLink, timeAgo } from "../hooks/useAlerts";
 import type { AlertItem } from "../hooks/useAlerts";
 import { useRouter } from "../router";
 
@@ -7,7 +7,7 @@ const PREVIEW_COUNT = 6;
 
 export function AlertsBell() {
   const { alerts, unreadCount, markRead, markAllRead } = useAlerts();
-  const { navigate } = useRouter();
+  const { navigate, pathname } = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -31,8 +31,12 @@ export function AlertsBell() {
   async function handleAlertClick(alert: AlertItem) {
     setOpen(false);
     if (!alert.read) await markRead(alert.id);
-    const meta = ALERT_TYPE_META[alert.type];
-    navigate(meta.navigateTo === "disputes" ? "/disputes" : `/project/${alert.projectId}`);
+    const link = alertLink(alert);
+    if (!link) return;
+    // Same page, different query (e.g. ?manage=1): pathname-driven routing wouldn't
+    // re-mount the page, so reload so the page reads the new query.
+    if (link.split("?")[0] === pathname) window.location.assign(link);
+    else navigate(link);
   }
 
   const preview  = alerts.slice(0, PREVIEW_COUNT);
@@ -93,15 +97,15 @@ export function AlertsBell() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-slate-300">No alerts</p>
-              <p className="text-xs text-slate-500">All your groups look healthy</p>
+              <p className="text-sm font-medium text-slate-300">No notifications</p>
+              <p className="text-xs text-slate-500">You're all caught up</p>
             </div>
           ) : (
             <>
               {/* Alert list */}
               <div className="max-h-[22rem] overflow-y-auto divide-y divide-slate-800/60">
                 {preview.map((alert) => {
-                  const meta = ALERT_TYPE_META[alert.type];
+                  const meta = alertMeta(alert.type);
                   return (
                     <button
                       key={alert.id}
@@ -128,7 +132,7 @@ export function AlertsBell() {
                           }`}>
                             {alert.message}
                           </p>
-                          <p className="text-[10px] text-slate-600 mt-1">{timeAgo(alert.createdAt)}</p>
+                          <p className="text-xs text-slate-600 mt-1">{timeAgo(alert.createdAt)}</p>
                         </div>
                       </div>
                     </button>
@@ -143,8 +147,8 @@ export function AlertsBell() {
                   className="w-full text-xs text-indigo-400 hover:text-indigo-300 font-medium text-center transition-colors py-0.5"
                 >
                   {hasMore
-                    ? `View all ${alerts.length} alerts →`
-                    : "View all alerts →"}
+                    ? `View all ${alerts.length} notifications →`
+                    : "View all notifications →"}
                 </button>
               </div>
             </>

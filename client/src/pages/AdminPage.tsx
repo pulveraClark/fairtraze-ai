@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
+import {
+  useAdminUsersQuery,
+  useAdminOverviewQuery,
+  useAdminClassesQuery,
+  useAdminDepartmentsQuery,
+} from "../hooks/useAdminQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface UserRecord {
@@ -12,18 +19,8 @@ interface UserRecord {
   systemRole:     "ADMIN" | "INSTRUCTOR" | "STUDENT";
   githubUsername: string | null;
   active:         boolean;
+  lockedUntil:    string | null;
   createdAt:      string;
-}
-
-interface AtRiskGroup {
-  projectId:      number;
-  groupName:      string;
-  classDisplay:   string;
-  subjectName:    string;
-  instructorName: string;
-  teamHealth:     string;
-  gini:           number | null;
-  analyzedAt:     string;
 }
 
 interface ClassSectionItem {
@@ -31,11 +28,19 @@ interface ClassSectionItem {
   subjectCode: string;
   subjectName: string;
   edpCode:     string;
-  course:      string;
+  department:  { id: number; name: string; code: string } | null;
   type:        string;
   createdAt:   string;
   instructor:  { id: number; name: string; email: string };
   assignments: Array<{ id: number; title: string; _count: { projects: number } }>;
+}
+
+interface DepartmentItem {
+  id:        number;
+  name:      string;
+  code:      string;
+  createdAt: string;
+  _count:    { classSections: number };
 }
 
 interface OverviewData {
@@ -44,9 +49,6 @@ interface OverviewData {
   totalProjects:      number;
   totalGroups:        number;
   analyzedGroups:     number;
-  healthDistribution: { healthy: number; moderateRisk: number; highRisk: number };
-  flagTotals:         { inactive: number; freeRider: number; overload: number; deadlineDriven: number };
-  atRiskGroups:       AtRiskGroup[];
   openDisputesCount:  number;
 }
 
@@ -62,18 +64,6 @@ const ROLE_LABEL: Record<string, string> = {
   INSTRUCTOR: "Instructor",
   STUDENT:    "Student",
 };
-
-const HEALTH_BADGE: Record<string, string> = {
-  "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "High Risk":     "text-red-700     bg-red-50     border-red-200",
-  "Moderate Risk": "text-amber-700   bg-amber-50   border-amber-200",
-};
-
-const HEALTH_BAR: Array<{ key: keyof OverviewData["healthDistribution"]; label: string; cls: string }> = [
-  { key: "healthy",      label: "Healthy",       cls: "bg-emerald-400" },
-  { key: "moderateRisk", label: "Moderate Risk",  cls: "bg-amber-400"  },
-  { key: "highRisk",     label: "High Risk",      cls: "bg-red-400"    },
-];
 
 // ── Small reusable pieces ─────────────────────────────────────────────────────
 function DisabledBtn({ children }: { children: React.ReactNode }) {
@@ -94,13 +84,9 @@ export function AdminPage() {
   const { navigate }     = useRouter();
 
   // ── User management state ──────────────────────────────────────────────────
-  const [displayedUsers, setDisplayedUsers] = useState<UserRecord[]>([]);
-  const [usersLoading,   setUsersLoading]   = useState(true);
-  const [usersError,     setUsersError]     = useState("");
   const [search,         setSearch]         = useState("");
   const [roleFilter,     setRoleFilter]     = useState("");
   const [usersPage,      setUsersPage]      = useState(1);
-  const [usersMeta,      setUsersMeta]      = useState({ total: 0, totalPages: 1, pageSize: 20 });
   const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -110,25 +96,24 @@ export function AdminPage() {
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   }
 
-  const loadUsers = useCallback(() => {
-    if (!token) return;
-    setUsersLoading(true);
-    setUsersError("");
-    const params = new URLSearchParams({ page: String(usersPage), pageSize: "20" });
-    if (search)     params.set("search", search);
-    if (roleFilter) params.set("role",   roleFilter);
-    fetch(`/api/admin/users?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { users?: UserRecord[]; total?: number; totalPages?: number; pageSize?: number; error?: string };
-        if (!r.ok) { setUsersError(json.error ?? "Could not load users."); return; }
-        setDisplayedUsers(json.users ?? []);
-        setUsersMeta({ total: json.total ?? 0, totalPages: json.totalPages ?? 1, pageSize: json.pageSize ?? 20 });
-      })
-      .catch(() => setUsersError("Network error — could not load users."))
-      .finally(() => setUsersLoading(false));
-  }, [token, search, roleFilter, usersPage]);
+  const queryClient = useQueryClient();
+  const usersQueryParams = { page: usersPage, search, roleFilter };
+  const usersQuery = useAdminUsersQuery(token, usersQueryParams);
+  const displayedUsers = usersQuery.data?.users ?? [];
+  const usersMeta = {
+    total:      usersQuery.data?.total ?? 0,
+    totalPages: usersQuery.data?.totalPages ?? 1,
+    pageSize:   usersQuery.data?.pageSize ?? 20,
+  };
+  const usersLoading = usersQuery.isLoading;
+  const usersError = usersQuery.isError
+    ? (usersQuery.error instanceof Error ? usersQuery.error.message : "Could not load users.")
+    : "";
+  const usersQueryKey = ["admin-users", usersQueryParams.page, usersQueryParams.search, usersQueryParams.roleFilter] as const;
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  function loadUsers() {
+    void usersQuery.refetch();
+  }
 
   async function changeRole(u: UserRecord, newRole: string) {
     if (newRole === u.systemRole) return;
@@ -141,7 +126,9 @@ export function AdminPage() {
       });
       const json = await res.json() as UserRecord & { error?: string };
       if (!res.ok) { showToast("error", json.error ?? "Could not change role."); return; }
-      setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, systemRole: json.systemRole } : x));
+      queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
+        ...old, users: old.users.map((x) => x.id === u.id ? { ...x, systemRole: json.systemRole } : x),
+      });
       showToast("success", `${u.name} is now ${ROLE_LABEL[json.systemRole]}.`);
     } catch {
       showToast("error", "Network error.");
@@ -159,8 +146,27 @@ export function AdminPage() {
       });
       const json = await res.json() as UserRecord & { error?: string };
       if (!res.ok) { showToast("error", json.error ?? `Could not ${action} user.`); return; }
-      setDisplayedUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, active: json.active } : x));
+      queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
+        ...old, users: old.users.map((x) => x.id === u.id ? { ...x, active: json.active } : x),
+      });
       showToast("success", `${u.name} ${json.active ? "activated" : "deactivated"}.`);
+    } catch {
+      showToast("error", "Network error.");
+    }
+  }
+
+  async function unlockUser(u: UserRecord) {
+    try {
+      const res  = await fetch(`/api/admin/users/${u.id}/unlock`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json() as UserRecord & { error?: string };
+      if (!res.ok) { showToast("error", json.error ?? "Could not unlock account."); return; }
+      queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
+        ...old, users: old.users.map((x) => x.id === u.id ? { ...x, lockedUntil: json.lockedUntil } : x),
+      });
+      showToast("success", `${u.name}'s account unlocked.`);
     } catch {
       showToast("error", "Network error.");
     }
@@ -178,56 +184,63 @@ export function AdminPage() {
       const json = await res.json() as { message?: string; error?: string };
       if (!res.ok) { showToast("error", json.error ?? "Could not delete user."); return; }
       showToast("success", json.message ?? `${u.name} deleted.`);
-      loadUsers();
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch {
       showToast("error", "Network error.");
     }
   }
 
   // ── Institution overview state ─────────────────────────────────────────────
-  const [overview,        setOverview]        = useState<OverviewData | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(true);
-  const [overviewError,   setOverviewError]   = useState("");
-
-  const loadOverview = useCallback(() => {
-    if (!token) return;
-    setOverviewLoading(true);
-    setOverviewError("");
-    fetch("/api/admin/overview", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as OverviewData & { error?: string };
-        if (!r.ok) { setOverviewError(json.error ?? "Could not load overview."); return; }
-        setOverview(json);
-      })
-      .catch(() => setOverviewError("Network error — could not load overview."))
-      .finally(() => setOverviewLoading(false));
-  }, [token]);
-
-  useEffect(() => { loadOverview(); }, [loadOverview]);
+  const overviewQuery = useAdminOverviewQuery(token);
+  const overview = overviewQuery.data ?? null;
+  const overviewLoading = overviewQuery.isLoading;
+  const overviewError = overviewQuery.isError
+    ? (overviewQuery.error instanceof Error ? overviewQuery.error.message : "Could not load overview.")
+    : "";
+  function loadOverview() { void overviewQuery.refetch(); }
 
   // ── Browse Classes state ───────────────────────────────────────────────────
-  const [classes,        setClasses]        = useState<ClassSectionItem[]>([]);
-  const [classesLoading, setClassesLoading] = useState(true);
-  const [classesError,   setClassesError]   = useState("");
+  const classesQuery = useAdminClassesQuery(token);
+  const classes = classesQuery.data ?? [];
+  const classesLoading = classesQuery.isLoading;
+  const classesError = classesQuery.isError
+    ? (classesQuery.error instanceof Error ? classesQuery.error.message : "Could not load classes.")
+    : "";
+  function loadClasses() { void classesQuery.refetch(); }
 
-  const loadClasses = useCallback(() => {
-    if (!token) return;
-    setClassesLoading(true);
-    setClassesError("");
-    fetch("/api/admin/classes", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { classes?: ClassSectionItem[]; error?: string };
-        if (!r.ok) { setClassesError(json.error ?? "Could not load classes."); return; }
-        setClasses(json.classes ?? []);
-      })
-      .catch(() => setClassesError("Network error — could not load classes."))
-      .finally(() => setClassesLoading(false));
-  }, [token]);
+  // ── Departments state ──────────────────────────────────────────────────────
+  const departmentsQuery = useAdminDepartmentsQuery(token);
+  const departments = departmentsQuery.data ?? [];
+  const departmentsLoading = departmentsQuery.isLoading;
+  const departmentsError = departmentsQuery.isError
+    ? (departmentsQuery.error instanceof Error ? departmentsQuery.error.message : "Could not load departments.")
+    : "";
+  const [showDeptForm,       setShowDeptForm]       = useState(false);
+  const [deptName,           setDeptName]           = useState("");
+  const [deptCode,           setDeptCode]           = useState("");
+  const [deptSubmitting,     setDeptSubmitting]     = useState(false);
 
-  useEffect(() => { loadClasses(); }, [loadClasses]);
-
-  const [atRiskPage, setAtRiskPage] = useState(1);
-  const AT_RISK_PAGE_SIZE = 8;
+  async function createDepartment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deptName.trim() || !deptCode.trim()) return;
+    setDeptSubmitting(true);
+    try {
+      const res  = await fetch("/api/admin/departments", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ name: deptName.trim(), code: deptCode.trim() }),
+      });
+      const json = await res.json() as { name?: string; error?: string };
+      if (!res.ok) { showToast("error", json.error ?? "Could not create department."); return; }
+      showToast("success", `Department "${json.name}" created.`);
+      setDeptName(""); setDeptCode(""); setShowDeptForm(false);
+      await departmentsQuery.refetch();
+    } catch {
+      showToast("error", "Network error.");
+    } finally {
+      setDeptSubmitting(false);
+    }
+  }
 
   const selfId = user?.id ?? -1;
 
@@ -348,17 +361,18 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {displayedUsers.map((u) => {
+                  {displayedUsers.map((u, i) => {
                     const isSelf = u.id === selfId;
+                    const stripe = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                     return (
-                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-50/60 ${!u.active ? "opacity-50" : ""}`}>
+                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-100 ${stripe} ${!u.active ? "opacity-50" : ""}`}>
 
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">
                           <p className="font-medium text-slate-800 leading-tight">{u.name}</p>
                           <p className="text-xs text-slate-400 mt-0.5">{u.email}</p>
                           {isSelf && (
-                            <span className="text-[10px] text-indigo-500 font-semibold">you</span>
+                            <span className="text-xs text-indigo-500 font-semibold">you</span>
                           )}
                         </td>
 
@@ -378,13 +392,23 @@ export function AdminPage() {
 
                         {/* Status */}
                         <td className="px-5 py-3.5">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                            u.active
-                              ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                              : "text-slate-500 bg-slate-100 border-slate-200"
-                          }`}>
-                            {u.active ? "Active" : "Inactive"}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                              u.active
+                                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                : "text-slate-500 bg-slate-100 border-slate-200"
+                            }`}>
+                              {u.active ? "Active" : "Inactive"}
+                            </span>
+                            {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
+                              <span
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
+                                title="Too many failed login attempts — auto-unlocks after a cooldown, or unlock now below"
+                              >
+                                Locked
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Joined */}
@@ -424,6 +448,17 @@ export function AdminPage() {
                               >
                                 {u.active ? "Deactivate" : "Activate"}
                               </button>
+
+                              {/* Unlock */}
+                              {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
+                                <button
+                                  onClick={() => { void unlockUser(u); }}
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-amber-200 hover:text-amber-600 hover:bg-amber-50 font-medium transition-colors"
+                                  title="Clear login lockout now"
+                                >
+                                  Unlock
+                                </button>
+                              )}
 
                               {/* Delete */}
                               <button
@@ -503,7 +538,7 @@ export function AdminPage() {
                   { label: "Analyzed",    value: overview.analyzedGroups,    textCls: "text-emerald-600", borderCls: "border-emerald-200" },
                 ].map(({ label, value, textCls, borderCls }) => (
                   <div key={label} className={`bg-white border ${borderCls} rounded-xl p-4 text-center`}>
-                    <p className={`text-2xl font-bold ${textCls}`}>{value}</p>
+                    <p className={`text-3xl font-bold ${textCls}`}>{value}</p>
                     <p className="text-xs text-slate-500 mt-1">{label}</p>
                   </div>
                 ))}
@@ -517,137 +552,6 @@ export function AdminPage() {
             </>
           )}
         </section>
-
-        {/* ── Health Distribution + At-Risk Groups ─────────────────────────────── */}
-        {!overviewLoading && !overviewError && overview && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            {/* Team Health Distribution */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">
-                Team Health Distribution
-              </h2>
-              <p className="text-xs text-slate-400 mb-5">
-                {overview.analyzedGroups > 0
-                  ? `Across ${overview.analyzedGroups} analyzed group${overview.analyzedGroups !== 1 ? "s" : ""}`
-                  : "No groups analyzed yet"}
-              </p>
-
-              {overview.analyzedGroups === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">
-                  No groups analyzed yet. Run an analysis to see health data.
-                </p>
-              ) : (
-                <>
-                  <div className="space-y-3">
-                    {HEALTH_BAR.map(({ key, label, cls }) => {
-                      const count = overview.healthDistribution[key];
-                      const pct   = (count / overview.analyzedGroups) * 100;
-                      return (
-                        <div key={key} className="flex items-center gap-3">
-                          <span className="text-xs text-slate-500 w-24 text-right shrink-0">{label}</span>
-                          <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${cls} opacity-80 rounded-full transition-all`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-semibold text-slate-700 w-6 text-right shrink-0">{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Flag totals */}
-                  <div className="mt-5 pt-4 border-t border-slate-100">
-                    <p className="text-[11px] text-slate-400 mb-2">Flag totals across all latest reports</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { label: "Free Rider",      count: overview.flagTotals.freeRider,     cls: "text-orange-700 bg-orange-50 border-orange-200" },
-                        { label: "Overload",        count: overview.flagTotals.overload,      cls: "text-red-700    bg-red-50    border-red-200"    },
-                        { label: "Inactive",        count: overview.flagTotals.inactive,      cls: "text-slate-600  bg-slate-50  border-slate-200"  },
-                        { label: "Deadline-Driven", count: overview.flagTotals.deadlineDriven, cls: "text-blue-700  bg-blue-50   border-blue-200"   },
-                      ].map(({ label, count, cls }) => (
-                        <span key={label} className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${cls}`}>
-                          {count} {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* At-Risk Groups */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">
-                At-Risk Groups
-              </h2>
-              <p className="text-xs text-slate-400 mb-5">
-                Moderate/High Risk or flagged members — newest analyzed first
-              </p>
-
-              {overview.atRiskGroups.length === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">
-                  No at-risk groups detected across the institution.
-                </p>
-              ) : (() => {
-                const totalAtRisk = overview.atRiskGroups.length;
-                const atRiskTotalPages = Math.max(1, Math.ceil(totalAtRisk / AT_RISK_PAGE_SIZE));
-                const pagedGroups = overview.atRiskGroups.slice(
-                  (atRiskPage - 1) * AT_RISK_PAGE_SIZE,
-                  atRiskPage * AT_RISK_PAGE_SIZE
-                );
-                return (
-                  <>
-                    <div className="space-y-2">
-                      {pagedGroups.map((g) => (
-                        <div
-                          key={g.projectId}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-semibold text-slate-800">{g.groupName}</span>
-                              {g.classDisplay && (
-                                <span className="text-[10px] font-mono text-indigo-600">{g.classDisplay}</span>
-                              )}
-                              {g.instructorName && g.instructorName !== "Unknown" && (
-                                <span className="text-[10px] text-slate-400">{g.instructorName}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[g.teamHealth] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
-                                {g.teamHealth}
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                Gini {g.gini != null ? g.gini.toFixed(2) : "—"}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => navigate(`/project/${g.projectId}`)}
-                            className="shrink-0 text-[11px] text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
-                          >
-                            View →
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <PaginationBar
-                      page={atRiskPage}
-                      totalPages={atRiskTotalPages}
-                      total={totalAtRisk}
-                      pageSize={AT_RISK_PAGE_SIZE}
-                      onPage={setAtRiskPage}
-                      label="groups"
-                    />
-                  </>
-                );
-              })()}
-            </section>
-          </div>
-        )}
 
         {/* ── Browse Classes ───────────────────────────────────────────────────── */}
         <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -698,15 +602,17 @@ export function AdminPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono font-bold text-indigo-600">{cls.subjectCode}</span>
                       {cls.edpCode && (
-                        <span className="text-[10px] text-indigo-400 font-mono">EDP {cls.edpCode}</span>
+                        <span className="text-xs text-indigo-400 font-mono">EDP {cls.edpCode}</span>
                       )}
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
-                      <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.course}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
+                      {cls.department && (
+                        <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
+                      )}
+                      <span className="text-xs text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
                       <span className="text-xs text-slate-400">{cls.instructor.name}</span>
-                      <span className="text-[10px] text-slate-300">·</span>
+                      <span className="text-xs text-slate-300">·</span>
                       <span className="text-xs text-slate-400">
                         {cls.assignments.length} assignment{cls.assignments.length !== 1 ? "s" : ""}
                         {" · "}
@@ -727,23 +633,67 @@ export function AdminPage() {
             Hierarchy Management
           </h2>
           <p className="text-xs text-slate-400 mb-5">
-            Create and manage institutions, departments, and instructors. Coming soon.
+            Create and manage departments and instructors.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Departments</p>
-              <p className="text-xs text-slate-400 mb-3">Create or rename departments within the institution.</p>
-              <DisabledBtn>Create Department</DisabledBtn>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="border border-slate-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-semibold text-slate-600">Departments</p>
+                <button
+                  onClick={() => setShowDeptForm((v) => !v)}
+                  className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  {showDeptForm ? "Cancel" : "+ New"}
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">Instructors pick from this list when creating a class section.</p>
+
+              {showDeptForm && (
+                <form onSubmit={(e) => void createDepartment(e)} className="space-y-2 mb-3">
+                  <input
+                    required
+                    value={deptName}
+                    onChange={(e) => setDeptName(e.target.value)}
+                    placeholder="e.g. College of Computer Studies"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                  <input
+                    required
+                    value={deptCode}
+                    onChange={(e) => setDeptCode(e.target.value)}
+                    placeholder="e.g. CCS"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                  <button
+                    type="submit"
+                    disabled={deptSubmitting || !deptName.trim() || !deptCode.trim()}
+                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+                  >
+                    {deptSubmitting ? "Creating…" : "Create"}
+                  </button>
+                </form>
+              )}
+
+              {departmentsLoading && <p className="text-[11px] text-slate-400">Loading…</p>}
+              {!departmentsLoading && departmentsError && <p className="text-[11px] text-red-600">{departmentsError}</p>}
+              {!departmentsLoading && !departmentsError && departments.length === 0 && (
+                <p className="text-[11px] text-slate-400">No departments yet.</p>
+              )}
+              {!departmentsLoading && !departmentsError && departments.length > 0 && (
+                <ul className="space-y-1 max-h-32 overflow-y-auto">
+                  {departments.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-700 truncate">{d.name}</span>
+                      <span className="text-slate-400 font-mono ml-2 shrink-0">{d.code}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="border border-dashed border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-600 mb-1">Instructors</p>
               <p className="text-xs text-slate-400 mb-3">Invite instructors and assign them to departments.</p>
               <DisabledBtn>Invite Instructor</DisabledBtn>
-            </div>
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Classes</p>
-              <p className="text-xs text-slate-400 mb-3">View and manage all class sections across departments.</p>
-              <DisabledBtn>Manage Classes</DisabledBtn>
             </div>
             <div className="border border-dashed border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-600 mb-1">Reports</p>
@@ -752,7 +702,7 @@ export function AdminPage() {
             </div>
           </div>
           <p className="text-[11px] text-slate-400 mt-4">
-            All management actions are disabled in this preview.
+            Departments are live. Instructor invitations and report export remain disabled in this preview.
           </p>
         </section>
 

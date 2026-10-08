@@ -1,13 +1,61 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { fetchRepoStats } from "../lib/github.js";
 import { computeTeamReport } from "@shared/scoring.js";
+import { computeDocumentTeamReport } from "@shared/documentScoring.js";
+import { computeCombinedTeamReport } from "@shared/combinedScoring.js";
+import { computeDocumentRawStats } from "../collab/editStats.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
-import type { RawMemberStats, AnalyzeResponse, TeamReport, ProjectScoringConfig } from "@shared/types.js";
+import type { RawMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
 export const analyzeRouter = Router();
+
+// Persists one DocumentContribution row per member, alongside the existing Report.content JSON
+// blob — see CLAUDE.md/manuscript Table 61. Shared between the EDITOR and COMBINED branches
+// below since both compute a DocumentScoredMember[] the same way.
+async function writeDocumentContributionRows(
+  documentId: number,
+  reportId: number,
+  members: DocumentScoredMember[]
+): Promise<void> {
+  if (members.length === 0) return;
+  await prisma.documentContribution.createMany({
+    data: members.map((m) => ({
+      documentId,
+      userId:                    m.userId,
+      reportId,
+      netRetainedChars:          m.retainedChars,
+      weightedRetainedChars:     m.weightedRetainedChars,
+      effectiveRetainedChars:    m.effectiveRetainedChars,
+      totalCharsInserted:        m.totalInsertedChars,
+      totalCharsDeleted:         m.totalDeletedChars,
+      selfChurnRatio:            m.selfChurnRatio,
+      editSessionCount:          m.sessionCount,
+      activeEditingDays:         m.activeDays,
+      lastPhaseRatio:            m.lastPhaseRatio,
+      retainedTextShare:         m.retainedTextShare,
+      sessionShare:              m.sessionShare,
+      activeDaysShare:           m.activeDaysShare,
+      documentContributionShare: m.contributionShare,
+    })),
+  });
+}
+
+// Copies the document's already-current, already-debounce-persisted yjsState column into a new
+// DocumentSnapshot row — a point-in-time revision-history entry anchored to this analysis run's
+// Report. This is a plain Prisma read + insert: it never calls getYDoc(), never touches the live
+// Y.Doc, and registers no Yjs update listener, so it has zero interaction with
+// server/src/collab/authorshipCapture.ts or the live collab room.
+async function writeDocumentSnapshot(documentId: number, reportId: number): Promise<void> {
+  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { yjsState: true } });
+  if (!doc?.yjsState) return;
+  await prisma.documentSnapshot.create({
+    data: { documentId, reportId, yjsState: doc.yjsState },
+  });
+}
 
 // ── Shared helper: build RawMemberStats from DB members + GitHub data ─────────
 
@@ -53,7 +101,7 @@ function buildRawMembers(
 // Does NOT call Gemini. Returns any previously saved narrative but never
 // generates a new one — use the /narrative endpoint for that.
 
-analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
+analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), requireVerifiedEmail, async (req, res) => {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid project id" });
@@ -63,10 +111,188 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { members: true },
+    include: {
+      members: true,
+      assignment: { select: { sourceType: true, deadline: true, classSection: { select: { instructorId: true } } } },
+      document: { select: { id: true } },
+      groupMemberships: { include: { user: { select: { id: true, name: true, githubUsername: true } } } },
+    },
   });
   if (!project) {
     res.status(404).json({ error: `Project ${projectId} not found` });
+    return;
+  }
+
+  // Ownership: if the project belongs to an assignment, the instructor must own that class
+  if (project.assignment) {
+    if (project.assignment.classSection.instructorId !== req.user!.sub) {
+      res.status(403).json({ error: "You do not have access to this project" });
+      return;
+    }
+  }
+
+  const sourceType = project.assignment?.sourceType ?? null;
+  const deadlineMs = project.assignment?.deadline ? project.assignment.deadline.getTime() : null;
+
+  if (sourceType === "EDITOR") {
+    const roster = project.groupMemberships.map((m) => ({
+      userId: m.user.id,
+      studentName: m.user.name,
+      githubUsername: m.user.githubUsername ?? "",
+    }));
+    const rawMembers = await computeDocumentRawStats(project.document?.id ?? null, roster);
+    const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
+
+    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
+    const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+    const savedNarrative = stored.narrative ?? null;
+    const createdReport = await prisma.report.create({
+      data: {
+        projectId,
+        gini:      report.gini,
+        teamHealth: report.teamHealth,
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null }),
+      },
+    });
+
+    if (project.document?.id) {
+      await writeDocumentContributionRows(project.document.id, createdReport.id, report.members);
+      await writeDocumentSnapshot(project.document.id, createdReport.id);
+    }
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+    });
+
+    generateAlertsForProject(projectId, report, {
+      groupName:      project.groupName,
+      assignmentLabel: project.assignmentLabel,
+      assignmentId:   project.assignmentId,
+    }).catch((err) => console.error("[alerts] generation failed:", err));
+
+    const response: AnalyzeResponse = {
+      projectId,
+      repoUrl:               project.repoUrl,
+      analyzedAt:            new Date().toISOString(),
+      unmatchedGitHubLogins: [],
+      report,
+      narrative:             savedNarrative,
+    };
+    res.status(200).json(response);
+    return;
+  }
+
+  if (sourceType === "COMBINED") {
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (!githubToken) {
+      res.status(500).json({ error: "GITHUB_TOKEN is not set" });
+      return;
+    }
+
+    const requiredLogins = project.members.map((m) => m.githubUsername);
+
+    let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
+    try {
+      rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins);
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      if (e.status === 404) {
+        res.status(404).json({ error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
+        return;
+      }
+      if (e.status === 403 || e.status === 429) {
+        res.status(429).json({ error: "GitHub rate limit exceeded" });
+        return;
+      }
+      res.status(502).json({ error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
+      return;
+    }
+
+    const { rawMembers: githubRaw, unmatchedLogins } = buildRawMembers(project.members, rawData.contributors);
+
+    const scoringConfig: ProjectScoringConfig = {
+      weights: {
+        commits:    project.weightCommits,
+        lines:      project.weightLines,
+        activeDays: project.weightActiveDays,
+      },
+      thresholds: {
+        freeRider:      project.freeRiderThreshold,
+        overload:       project.overloadThreshold,
+        deadlineDriven: project.deadlineDrivenThreshold,
+      },
+      blend: {
+        wGitHub: project.weightGithub,
+        wDocs:   project.weightDocs,
+      },
+    };
+
+    const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
+
+    const roster = project.groupMemberships.map((m) => ({
+      userId:         m.user.id,
+      studentName:    m.user.name,
+      githubUsername: m.user.githubUsername ?? "",
+    }));
+    const documentRaw    = await computeDocumentRawStats(project.document?.id ?? null, roster);
+    const documentReport = computeDocumentTeamReport(documentRaw, undefined, undefined, deadlineMs);
+
+    const report = computeCombinedTeamReport(
+      roster, githubRaw, githubReport.members, documentRaw, documentReport.members,
+      scoringConfig.blend!, scoringConfig.thresholds, deadlineMs
+    );
+
+    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
+    const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+    const savedNarrative = stored.narrative ?? null;
+    const createdReport = await prisma.report.create({
+      data: {
+        projectId,
+        gini:      report.gini,
+        teamHealth: report.teamHealth,
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+      },
+    });
+
+    if (project.document?.id) {
+      await writeDocumentContributionRows(project.document.id, createdReport.id, documentReport.members);
+      await writeDocumentSnapshot(project.document.id, createdReport.id);
+    }
+    await prisma.combinedContribution.createMany({
+      data: report.members.map((m) => ({
+        reportId:                  createdReport.id,
+        userId:                    m.userId,
+        githubContributionShare:   m.githubContributionShare,
+        documentContributionShare: m.documentContributionShare,
+        wGitHub:                   m.wGitHub,
+        wDocs:                     m.wDocs,
+        combinedContributionShare: m.contributionShare,
+        flags:                     JSON.stringify(m.flags),
+        mismatchNotes:             null,
+      })),
+    });
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+    });
+
+    generateAlertsForProject(projectId, report, {
+      groupName:      project.groupName,
+      assignmentLabel: project.assignmentLabel,
+      assignmentId:   project.assignmentId,
+    }).catch((err) => console.error("[alerts] generation failed:", err));
+
+    const response: AnalyzeResponse = {
+      projectId,
+      repoUrl:               project.repoUrl,
+      analyzedAt:            new Date().toISOString(),
+      unmatchedGitHubLogins: unmatchedLogins,
+      report,
+      narrative:             savedNarrative,
+    };
+    res.status(200).json(response);
     return;
   }
 
@@ -115,41 +341,30 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
     },
   };
 
-  const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds);
+  const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);
 
-  // Upsert: update existing report row for this project (preserving narrative),
-  // or create a fresh one.
+  // Always create a new Report row per analysis run — history accumulates so the
+  // instructor can see how Gini/team health changed across the project lifecycle
+  // (see GET /api/projects/:id/report/history). Only the previous row's narrative
+  // is carried forward, so re-analyzing doesn't silently blank a saved AI explanation.
   const existing = await prisma.report.findFirst({
     where: { projectId },
     orderBy: { generatedAt: "desc" },
   });
 
-  let savedNarrative: string | null = null;
-  if (existing) {
-    const stored = existing.content
-      ? (JSON.parse(existing.content) as { report?: TeamReport; narrative?: string })
-      : {};
-    savedNarrative = stored.narrative ?? null;
-    await prisma.report.update({
-      where: { id: existing.id },
-      data: {
-        generatedAt: new Date(),
-        gini:        report.gini,
-        teamHealth:  report.teamHealth,
-        content:     JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
-      },
-    });
-  } else {
-    await prisma.report.create({
-      data: {
-        projectId,
-        gini:      report.gini,
-        teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: null, unmatchedLogins, scoringConfig }),
-      },
-    });
-  }
+  const stored = existing?.content
+    ? (JSON.parse(existing.content) as { report?: TeamReport; narrative?: string })
+    : {};
+  const savedNarrative = stored.narrative ?? null;
+  await prisma.report.create({
+    data: {
+      projectId,
+      gini:      report.gini,
+      teamHealth: report.teamHealth,
+      content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+    },
+  });
 
   // Clear stale flags — report now reflects current membership and scoring config
   await prisma.project.update({
@@ -180,7 +395,7 @@ analyzeRouter.post("/api/projects/:id/analyze", async (req, res) => {
 // Generates (or returns cached) the AI narrative for the project's latest report.
 // Query: ?regenerate=true  — forces a fresh Gemini call even if one is saved.
 
-analyzeRouter.post("/api/projects/:id/narrative", async (req, res) => {
+analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), requireVerifiedEmail, async (req, res) => {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid project id" });
@@ -191,10 +406,21 @@ analyzeRouter.post("/api/projects/:id/narrative", async (req, res) => {
   const regenerate =
     req.query.regenerate === "true" || (req.body as Record<string, unknown>)?.regenerate === true;
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { assignment: { select: { classSection: { select: { instructorId: true } } } } },
+  });
   if (!project) {
     res.status(404).json({ error: `Project ${projectId} not found` });
     return;
+  }
+
+  // Ownership: if the project belongs to an assignment, the instructor must own that class
+  if (project.assignment) {
+    if (project.assignment.classSection.instructorId !== req.user!.sub) {
+      res.status(403).json({ error: "You do not have access to this project" });
+      return;
+    }
   }
 
   const latestReport = await prisma.report.findFirst({
@@ -223,7 +449,7 @@ analyzeRouter.post("/api/projects/:id/narrative", async (req, res) => {
 
   // Generate via Gemini
   try {
-    const narrative = await generateFairnessNarrative(project.name, stored.report);
+    const narrative = await generateFairnessNarrative(project.groupName || `Group ${projectId}`, stored.report);
     await prisma.report.update({
       where: { id: latestReport.id },
       data: { content: JSON.stringify({ ...stored, narrative }) },

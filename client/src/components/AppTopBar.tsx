@@ -8,6 +8,7 @@ import logoUrl from "../assets/logo_transparent.png";
 
 const DASHBOARD_ITEM = { label: "Dashboard",       route: "/dashboard" as AppRoute };
 const ADMIN_ITEM     = { label: "Admin Dashboard", route: "/admin"     as AppRoute };
+const STUDENT_ITEM   = { label: "Dashboard",       route: "/student"   as AppRoute };
 
 const ROLE_LABEL: Record<string, string> = {
   INSTRUCTOR: "Instructor",
@@ -40,6 +41,7 @@ function initials(name: string): string {
 function isActive(pathname: string, route: AppRoute): boolean {
   if (pathname === route) return true;
   if (route === "/dashboard" && (pathname.startsWith("/project/") || pathname.startsWith("/class/"))) return true;
+  if (route === "/student" && (pathname.startsWith("/student/"))) return true;
   return false;
 }
 
@@ -51,6 +53,7 @@ export function AppTopBar() {
   const navItems: { label: string; route: AppRoute }[] = [];
   if (user?.systemRole === "INSTRUCTOR") navItems.push(DASHBOARD_ITEM);
   if (user?.systemRole === "ADMIN")      navItems.push(ADMIN_ITEM);
+  if (user?.systemRole === "STUDENT")    navItems.push(STUDENT_ITEM);
 
   function go(route: string) {
     navigate(route);
@@ -120,7 +123,7 @@ export function AppTopBar() {
             <div className="hidden sm:flex items-center gap-2">
               {user ? (
                 <>
-                  {user.systemRole === "INSTRUCTOR" && <AlertsBell />}
+                  <AlertsBell />
                   <UserMenu theme="dark" />
                 </>
               ) : (
@@ -140,6 +143,13 @@ export function AppTopBar() {
                   </button>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Mobile bell (desktop one lives in the user cluster above) */}
+          {!authLoading && user && (
+            <div className="sm:hidden">
+              <AlertsBell />
             </div>
           )}
 

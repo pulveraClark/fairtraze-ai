@@ -21,7 +21,6 @@ const SOURCE_LABEL: Record<string, string> = {
 interface MyGroup {
   id: number;
   groupName: string;
-  name: string;
   repoUrl: string;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
@@ -60,7 +59,7 @@ interface ClassDetail {
     id: number;
     subjectCode: string;
     subjectName: string;
-    course: string;
+    department: { id: number; name: string; code: string } | null;
     edpCode: string;
     joinCode: string | null;
   };
@@ -77,7 +76,7 @@ function JoinCodeBadge({ code }: { code: string }) {
   }
   return (
     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-      <span className="text-[10px] text-slate-400 shrink-0">Class code:</span>
+      <span className="text-xs text-slate-400 shrink-0">Class code:</span>
       <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
       <button
         onClick={() => void handleCopy()}
@@ -176,6 +175,23 @@ function ProjectCard({
     }
   }
 
+  async function handleCancelRequest() {
+    if (!asgn.myRequest) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/groups/requests/${asgn.myRequest.id}/cancel`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Could not cancel request."); return; }
+      onChanged();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function fmtDeadline(iso: string | null): string {
     if (!iso) return "No deadline";
     return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
@@ -234,7 +250,7 @@ function ProjectCard({
                 {g.role === "LEADER" && (
                   <button
                     onClick={() => onManage(g.id)}
-                    className="relative inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
+                    className="relative inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
                   >
                     Manage group
                     {g.pendingRequestCount > 0 && (
@@ -246,14 +262,14 @@ function ProjectCard({
                 )}
                 <button
                   onClick={() => onNavigate(g.id)}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
+                  className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
                 >
                   View report →
                 </button>
                 {(asgn.sourceType === "EDITOR" || asgn.sourceType === "COMBINED") && (
                   <button
                     onClick={() => onNavigate(g.id, "document")}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
                   >
                     FairTraze Docs
                   </button>
@@ -277,8 +293,16 @@ function ProjectCard({
                 <p className="text-[11px] text-amber-700 mt-0.5">
                   Waiting for the group leader to respond. You will be notified when your request is accepted or declined.
                 </p>
+                <button
+                  onClick={handleCancelRequest}
+                  disabled={submitting}
+                  className="mt-2 text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
+                >
+                  Cancel request
+                </button>
               </div>
             </div>
+            {error && <p className="text-[11px] text-red-600">{error}</p>}
           </div>
         ) : (
           /* Student has no group yet — show create/join UI */
@@ -364,7 +388,7 @@ function ProjectCard({
                     Cancel
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Leadership is administrative only — it grants no contribution credit.
                 </p>
               </div>
@@ -403,7 +427,7 @@ function ProjectCard({
                             {g.memberCount} / {asgn.maxGroupSize} members
                           </span>
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <span className="text-xs text-slate-400 shrink-0">
                           {g.isFull ? "Full" : g.leaderName ? `Leader: ${g.leaderName}` : ""}
                         </span>
                       </label>
@@ -411,14 +435,14 @@ function ProjectCard({
                   </div>
                 )}
                 {error && <p className="text-xs text-red-600">{error}</p>}
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   The group leader must approve your request before you are added.
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleRequest()}
                     disabled={submitting || !selectedId || noGithub}
-                    className="flex-1 py-1.5 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Sending…" : "Send Request"}
                   </button>
@@ -542,30 +566,34 @@ export function StudentClassPage({ classId }: Props) {
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <div className="min-w-0 flex-1">
             <button
               onClick={() => navigate("/student")}
-              className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium"
+              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
             >
-              Dashboard
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
             </button>
-            <span className="text-slate-300 text-xs shrink-0">›</span>
             <div className="min-w-0">
               {cls ? (
                 <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl font-bold text-slate-900">{cls.subjectName}</h1>
                   <span className="text-xs font-mono font-bold text-indigo-600">
                     {cls.subjectCode}
                     {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
                   </span>
-                  <h1 className="text-sm font-semibold text-slate-800">{cls.subjectName}</h1>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
-                    {cls.course}
-                  </span>
+                  {cls.department && (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                      {cls.department.code}
+                    </span>
+                  )}
                 </div>
               ) : (
-                <h1 className="text-sm font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
+                <h1 className="text-xl font-bold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
               )}
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-400 mt-0.5">
                 {assignments.length} project{assignments.length !== 1 ? "s" : ""}
                 {" · "}
                 {assignments.filter((a) => a.myGroup !== null).length} joined

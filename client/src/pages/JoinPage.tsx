@@ -126,8 +126,8 @@ export function JoinPage() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-6 pt-5 pb-4 border-b border-slate-100">
-            <h1 className="text-sm font-semibold text-slate-800">Joining a Class</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h1 className="text-xl font-bold text-slate-900">Joining a Class</h1>
+            <p className="text-sm text-slate-400 mt-0.5">
               Code: <span className="font-mono font-bold text-indigo-600">{code}</span>
             </p>
           </div>

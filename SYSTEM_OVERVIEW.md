@@ -2,13 +2,12 @@
 
 > **How to read this document.** Throughout, features are clearly labelled:
 > - **Working now** — built, tested, and running in the current codebase.
-> - **Coming next** — designed and planned but not yet built.
 
 ---
 
 ## What Is FAIR TRAZE AI?
 
-FAIR TRAZE AI helps instructors fairly assess each individual's contribution in a student group project. It gathers digital traces of collaboration — currently from GitHub — scores each member's contribution deterministically using transparent math, detects participation problems (free-riding, overload, deadline-driven work), and produces a plain-language fairness report that instructors can act on.
+FAIR TRAZE AI helps instructors fairly assess each individual's contribution in a student group project. It gathers digital traces of collaboration — from GitHub and the built-in FairTraze Docs collaborative editor — scores each member's contribution deterministically using transparent math, detects participation problems (free-riding, overload, deadline-driven work), and produces a plain-language fairness report that instructors can act on.
 
 **The core principle: the math scores, the AI explains.**
 
@@ -69,7 +68,7 @@ Traditional group assignments grade the group, not the individual. It is difficu
 
 ### Step 3 — Instructor creates an assignment
 
-**Working now:** Inside the class, the instructor creates one or more assignments. Each assignment has a title, optional deadline, optional maximum group size, and a source type (currently GitHub). The system generates a separate join code for each assignment, which students use to form or join groups under that assignment.
+**Working now:** Inside the class, the instructor creates one or more assignments. Each assignment has a title, optional deadline, optional maximum group size, and a source type (GitHub, FairTraze Docs, or Combined). The system generates a separate join code for each assignment, which students use to form or join groups under that assignment.
 
 ### Step 4 — Students form groups
 
@@ -205,7 +204,7 @@ Every group member has a **functional role** that describes their contribution r
 ### The roles
 
 - **Developer** — expected to contribute primarily via GitHub commits. Available on GitHub and Combined assignments.
-- **Documentation Lead** — expected to contribute primarily via written documents. Available on Combined assignments only (the document source is planned but not yet live).
+- **Documentation Lead** — expected to contribute primarily via written documents. Available on FairTraze Docs and Combined assignments.
 - A member may hold both roles if their work spans both areas.
 
 ### Who assigns roles
@@ -220,7 +219,7 @@ When a leader or instructor directly assigns a role to a member who has a pendin
 
 Roles are informational context only. They help the instructor understand what each member was supposed to be doing. They do not affect contribution scores, flag thresholds, or team health in any way. A Developer with low commit activity will still receive a free-rider flag based on their actual commit data, regardless of their role label.
 
-In a future phase, the system will flag mismatches — for example, a member assigned the Developer role who has no recorded GitHub activity — and surface this as an informational note for the instructor to investigate. This mismatch check is informational only and will not affect scores.
+**Working now:** the system flags mismatches — for example, a member assigned the Developer role who has no recorded GitHub activity, or a Documentation Lead with no recorded editor activity — and surfaces this as an informational note for the instructor to investigate. This mismatch check is informational only and does not affect scores.
 
 ---
 
@@ -297,26 +296,21 @@ Each entry records who performed the action, what was changed, and when.
 
 ---
 
-## Coming Next
+## FairTraze Docs — Collaborative Editor (Working Now)
 
-The following features are designed and planned but not yet built.
+FairTraze Docs is the second data source for contribution analysis, live for `EDITOR` and `COMBINED` assignments. It is a collaborative writing environment built directly into FAIR TRAZE AI (not Google Docs or any external tool). Multiple students can edit a shared document in real time, with each person's edits tracked and attributed to their account. Real-time cursors and presence are shown in a distinct colour per member.
 
-### FairTraze Docs — Collaborative Editor
-
-**Coming next:** The second data source for contribution analysis. FairTraze Docs is a live collaborative writing environment built directly into FAIR TRAZE AI (not Google Docs or any external tool). Multiple students can edit a shared document in real-time, with each person's edits tracked and attributed to their account.
-
-What it will record:
+**Working now — what it records:**
 - Text each member inserted and deleted, with timestamps
 - How much of each member's writing survived to the final document (net retained text — the writing equivalent of meaningful lines in GitHub)
 - Edit sessions, activity rhythms, and whether edits were concentrated near the deadline
-- Comments written, suggestions made, and whether those suggestions were accepted by others
 - Whether each edit was substantive prose, revision of existing text, formatting-only, or trivial
 
-The editor will display each member's contributions in a distinct colour, giving the instructor an at-a-glance visual of who wrote what.
+**Not yet implemented (documented limitation, not a bug):** comments authored and tracked-change suggestions (accepted/rejected) — there is no comment/suggestion data model, only insert/delete edits are captured. There is also no point-in-time document revision history/snapshot; the system replays the edit log to reconstruct current ownership.
 
-### Combined GitHub + Docs scoring
+## Combined GitHub + Docs Scoring (Working Now)
 
-**Coming next:** For assignments where both GitHub and document contributions are relevant, the system will score each source independently, then blend the results:
+For assignments where both GitHub and document contributions are relevant, the system scores each source independently, then blends the results:
 
 ```
 Combined Share = (GitHub Share × GitHub weight) + (Docs Share × Docs weight)
@@ -324,9 +318,9 @@ Combined Share = (GitHub Share × GitHub weight) + (Docs Share × Docs weight)
 
 The default blend is 50/50, configurable per assignment by the instructor. Both sources go through the same deterministic math — the AI explains the combined result but does not compute it.
 
-### Role-source mismatch detection
+## Role-Source Mismatch Detection (Working Now)
 
-**Coming next:** Once both data sources are active, the system will flag cases where a member's assigned functional role does not match their recorded activity. For example, a member assigned as Developer who has no GitHub commits, or a Documentation Lead who has no editor activity. This is surfaced as an informational note for the instructor — it does not change scores or assign blame.
+The system flags cases where a member's assigned functional role does not match their recorded activity. For example, a member assigned as Developer who has no GitHub commits, or a Documentation Lead who has no editor activity. This is surfaced as an informational note for the instructor — it does not change scores or assign blame.
 
 ---
 
