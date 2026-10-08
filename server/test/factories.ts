@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import type { SystemRole } from "@prisma/client";
+import type { InstructorStatus, SystemRole } from "@prisma/client";
 import { prisma } from "../src/lib/prisma.js";
 import { signToken } from "../src/lib/jwt.js";
 
@@ -13,6 +13,7 @@ export async function createUser(overrides: {
   systemRole?: SystemRole;
   active?: boolean;
   emailVerified?: boolean;
+  instructorStatus?: InstructorStatus;
 } = {}) {
   emailCounter += 1;
   const password = overrides.password ?? "password123";
@@ -25,6 +26,7 @@ export async function createUser(overrides: {
       systemRole: overrides.systemRole ?? "INSTRUCTOR",
       active: overrides.active ?? true,
       ...(overrides.emailVerified !== undefined ? { emailVerified: overrides.emailVerified } : {}),
+      ...(overrides.instructorStatus !== undefined ? { instructorStatus: overrides.instructorStatus } : {}),
     },
   });
   return { user, password };

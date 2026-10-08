@@ -28,15 +28,45 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   });
 }
 
+export const INSTRUCTOR_PENDING_MESSAGE  = "Your instructor account is waiting for admin approval.";
+export const INSTRUCTOR_REJECTED_MESSAGE = "Your instructor request was not approved. Contact your administrator.";
+
+// Instructors are gated on admin approval. Status is read from the DB (not the JWT) so an
+// approval or rejection takes effect on the very next request, without waiting for the
+// 15-minute token refresh. Selects only the two fields it needs.
 export function requireRole(...roles: SystemRole[]) {
   return [
     requireAuth,
-    (req: Request, res: Response, next: NextFunction): void => {
-      if (!req.user || !roles.includes(req.user.role)) {
-        res.status(403).json({ error: "Insufficient permissions" });
-        return;
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        if (!req.user || !roles.includes(req.user.role)) {
+          res.status(403).json({ error: "Insufficient permissions" });
+          return;
+        }
+
+        if (req.user.role === "INSTRUCTOR") {
+          const row = await prisma.user.findUnique({
+            where:  { id: req.user.sub },
+            select: { instructorStatus: true, active: true },
+          });
+          if (!row || !row.active) {
+            res.status(403).json({ error: "Insufficient permissions" });
+            return;
+          }
+          if (row.instructorStatus === "PENDING") {
+            res.status(403).json({ error: INSTRUCTOR_PENDING_MESSAGE, code: "INSTRUCTOR_PENDING" });
+            return;
+          }
+          if (row.instructorStatus === "REJECTED") {
+            res.status(403).json({ error: INSTRUCTOR_REJECTED_MESSAGE, code: "INSTRUCTOR_REJECTED" });
+            return;
+          }
+        }
+
+        next();
+      } catch (err) {
+        next(err);
       }
-      next();
     },
   ];
 }

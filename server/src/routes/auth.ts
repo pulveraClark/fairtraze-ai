@@ -98,6 +98,8 @@ authRouter.post("/api/auth/register", async (req, res) => {
       name,
       systemRole: (role ?? "STUDENT") as SystemRole,
       emailVerified: false,
+      // Instructor sign-ups need admin approval before any instructor feature works.
+      ...(role === "INSTRUCTOR" ? { instructorStatus: "PENDING" as const } : {}),
     },
   });
 
@@ -107,8 +109,8 @@ authRouter.post("/api/auth/register", async (req, res) => {
     await notify({
       recipientIds: activeAdminIds,
       type:         "USER_REGISTERED",
-      message:      `New instructor account registered: ${user.name}`,
-      link:         "/admin",
+      message:      `New instructor account awaiting approval: ${user.name}`,
+      link:         "/admin?section=instructor-approvals",
       refType:      "USER",
       refId:        user.id,
     });
@@ -130,7 +132,7 @@ authRouter.post("/api/auth/register", async (req, res) => {
 
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus },
     emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
@@ -207,7 +209,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus },
     emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
@@ -339,6 +341,7 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
     systemRole:                user.systemRole,
     githubUsername:            user.githubUsername,
     emailVerified:             user.emailVerified,
+    instructorStatus:          user.instructorStatus,
     createdAt:                 user.createdAt,
     emailVerificationRequired: isEmailVerificationRequired(),
   });

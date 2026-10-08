@@ -50,6 +50,16 @@ enum AlertType {
   GROUP_CREATED
   DEPARTMENT_CREATED
   USER_REGISTERED
+  INSTRUCTOR_APPROVED
+  INSTRUCTOR_REJECTED
+}
+
+// Admin sign-off for self-registered instructors. Only meaningful when systemRole is
+// INSTRUCTOR; the default APPROVED backfills every pre-existing row (and seed data).
+enum InstructorStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum DisputeStatus {
@@ -102,6 +112,9 @@ model User {
   emailVerified    Boolean           @default(true)
   failedLoginAttempts Int            @default(0)
   lockedUntil      DateTime?
+  instructorStatus InstructorStatus  @default(APPROVED)
+  approvalReviewedAt   DateTime?
+  approvalReviewedById Int?
   createdAt        DateTime          @default(now())
   classSections    ClassSection[]
   groupMemberships GroupMembership[]

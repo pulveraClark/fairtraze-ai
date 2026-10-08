@@ -655,7 +655,7 @@ describe("instructor-registration notifications", () => {
     for (const admin of [a1, a2]) {
       const [a] = await alertsFor(admin.id);
       expect(a.type).toBe("USER_REGISTERED");
-      expect(a.link).toBe("/admin");
+      expect(a.link).toBe("/admin?section=instructor-approvals");
       expect(a.refType).toBe("USER");
       expect(a.refId).toBe(res.body.user.id);
       expect(a.message).not.toContain("@"); // no email in the notification

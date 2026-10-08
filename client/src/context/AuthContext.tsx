@@ -11,6 +11,8 @@ export interface AuthUser {
   githubUsername?: string | null;
   emailVerified?: boolean;
   emailVerificationRequired?: boolean;
+  /** Only meaningful for INSTRUCTOR accounts; anyone else is effectively APPROVED. */
+  instructorStatus?: "PENDING" | "APPROVED" | "REJECTED";
 }
 
 interface AuthContextValue {

@@ -22,7 +22,9 @@ export type AlertType =
   | "ROLE_SUGGESTION_RESOLVED"
   | "GROUP_CREATED"
   | "DEPARTMENT_CREATED"
-  | "USER_REGISTERED";
+  | "USER_REGISTERED"
+  | "INSTRUCTOR_APPROVED"
+  | "INSTRUCTOR_REJECTED";
 
 export interface AlertItem {
   id: number;
@@ -79,6 +81,8 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   GROUP_CREATED:           { label: "New Group", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
   DEPARTMENT_CREATED:      { label: "New Department", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
   USER_REGISTERED:         { label: "New Instructor", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", light: "text-amber-700 bg-amber-50 border-amber-200" },
+  INSTRUCTOR_APPROVED:     { label: "Account Approved", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  INSTRUCTOR_REJECTED:     { label: "Request Not Approved", color: "text-slate-300 bg-slate-500/10 border-slate-500/30", light: "text-slate-700 bg-slate-100 border-slate-200" },
 };
 
 const FALLBACK_META: AlertTypeMeta = {

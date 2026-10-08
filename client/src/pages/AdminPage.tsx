@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { PaginationBar } from "../components/PaginationBar";
+import { InstructorApprovals } from "../components/InstructorApprovals";
 import {
   useAdminUsersQuery,
   useAdminOverviewQuery,
@@ -63,19 +64,6 @@ const ROLE_LABEL: Record<string, string> = {
   INSTRUCTOR: "Instructor",
   STUDENT:    "Student",
 };
-
-// ── Small reusable pieces ─────────────────────────────────────────────────────
-function DisabledBtn({ children }: { children: React.ReactNode }) {
-  return (
-    <button
-      disabled
-      title="Coming soon"
-      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-semibold cursor-not-allowed border border-slate-200"
-    >
-      {children}
-    </button>
-  );
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function AdminPage() {
@@ -644,7 +632,7 @@ export function AdminPage() {
             Hierarchy Management
           </h2>
           <p className="text-xs text-slate-400 mb-5">
-            Create and manage departments and instructors.
+            Create departments and approve new instructor accounts.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="border border-slate-200 rounded-lg p-4">
@@ -701,20 +689,10 @@ export function AdminPage() {
                 </ul>
               )}
             </div>
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Instructors</p>
-              <p className="text-xs text-slate-400 mb-3">Invite instructors and assign them to departments.</p>
-              <DisabledBtn>Invite Instructor</DisabledBtn>
-            </div>
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Reports</p>
-              <p className="text-xs text-slate-400 mb-3">Export aggregated fairness data across the institution.</p>
-              <DisabledBtn>Export Reports</DisabledBtn>
+            <div className="border border-slate-200 rounded-lg p-4 sm:col-span-1 lg:col-span-2">
+              <InstructorApprovals onToast={showToast} />
             </div>
           </div>
-          <p className="text-[11px] text-slate-400 mt-4">
-            Departments are live. Instructor invitations and report export remain disabled in this preview.
-          </p>
         </section>
 
       </main>

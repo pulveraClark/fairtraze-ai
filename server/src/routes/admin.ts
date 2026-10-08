@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
@@ -428,6 +429,121 @@ adminRouter.post("/api/admin/departments", ...requireRole("ADMIN"), async (req, 
 
   res.status(201).json(department);
 });
+
+// ── Instructor approvals ──────────────────────────────────────────────────────
+// Self-registered instructors start PENDING (auth.ts register) and are gated out of every
+// instructor route by requireRole until an admin approves them here.
+
+const APPROVAL_SELECT = {
+  id:                  true,
+  name:                true,
+  email:               true,
+  createdAt:           true,
+  instructorStatus:    true,
+  approvalReviewedAt:  true,
+  approvalReviewedById: true,
+} as const;
+
+// GET /api/admin/instructor-approvals — pending queue plus recently reviewed requests.
+adminRouter.get("/api/admin/instructor-approvals", ...requireRole("ADMIN"), async (_req, res) => {
+  const [pending, reviewed] = await Promise.all([
+    prisma.user.findMany({
+      where:   { systemRole: "INSTRUCTOR", instructorStatus: "PENDING" },
+      select:  APPROVAL_SELECT,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    prisma.user.findMany({
+      where:   { systemRole: "INSTRUCTOR", instructorStatus: { not: "PENDING" }, approvalReviewedAt: { not: null } },
+      select:  APPROVAL_SELECT,
+      orderBy: { approvalReviewedAt: "desc" },
+      take:    10,
+    }),
+  ]);
+
+  const reviewerIds = [...new Set(reviewed.map((u) => u.approvalReviewedById).filter((id): id is number => id !== null))];
+  const reviewers = reviewerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: reviewerIds } }, select: { id: true, name: true } })
+    : [];
+  const reviewerName = new Map(reviewers.map((r) => [r.id, r.name]));
+
+  res.json({
+    pendingCount: pending.length,
+    pending: pending.map((u) => ({ id: u.id, name: u.name, email: u.email, createdAt: u.createdAt })),
+    recent: reviewed.map((u) => ({
+      id:             u.id,
+      name:           u.name,
+      email:          u.email,
+      status:         u.instructorStatus,
+      reviewedAt:     u.approvalReviewedAt,
+      reviewedByName: u.approvalReviewedById !== null ? (reviewerName.get(u.approvalReviewedById) ?? null) : null,
+    })),
+  });
+});
+
+// Shared by approve/reject. `from` is the set of statuses the transition is allowed from; the
+// guarded updateMany makes it atomic so two admins acting at once can't both "win".
+async function reviewInstructor(
+  req: Request,
+  res: Response,
+  decision: "APPROVED" | "REJECTED",
+  from: Array<"PENDING" | "REJECTED">,
+): Promise<void> {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid user id" }); return; }
+  const targetId = idResult.data;
+
+  const target = await prisma.user.findUnique({
+    where:  { id: targetId },
+    select: { id: true, name: true, systemRole: true, instructorStatus: true },
+  });
+  if (!target || target.systemRole !== "INSTRUCTOR") {
+    res.status(404).json({ error: "Instructor not found" });
+    return;
+  }
+
+  const updated = await prisma.user.updateMany({
+    where: { id: targetId, systemRole: "INSTRUCTOR", instructorStatus: { in: from } },
+    data:  { instructorStatus: decision, approvalReviewedAt: new Date(), approvalReviewedById: req.user!.sub },
+  });
+  if (updated.count === 0) {
+    res.status(409).json({ error: `This request is already ${target.instructorStatus.toLowerCase()}.` });
+    return;
+  }
+
+  const actorName = await getActorName(req.user!.sub);
+  const approved  = decision === "APPROVED";
+
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     approved ? "INSTRUCTOR_APPROVED" : "INSTRUCTOR_REJECTED",
+      targetType: "USER",
+      targetId:   String(targetId),
+      details:    `${target.name}: ${target.instructorStatus} → ${decision}`,
+    },
+  });
+
+  await notify({
+    recipientIds: targetId,
+    actorId:      req.user!.sub,
+    type:         approved ? "INSTRUCTOR_APPROVED" : "INSTRUCTOR_REJECTED",
+    message:      approved
+      ? "Your instructor account has been approved. You can now use instructor features."
+      : "Your instructor request was not approved. Contact your administrator.",
+    link:         "/dashboard",
+    refType:      "USER",
+    refId:        targetId,
+  });
+
+  res.json({ id: targetId, status: decision });
+}
+
+adminRouter.post("/api/admin/instructor-approvals/:id/approve", ...requireRole("ADMIN"), (req, res) =>
+  reviewInstructor(req, res, "APPROVED", ["PENDING", "REJECTED"]));
+
+adminRouter.post("/api/admin/instructor-approvals/:id/reject", ...requireRole("ADMIN"), (req, res) =>
+  reviewInstructor(req, res, "REJECTED", ["PENDING"]));
 
 // ── GET /api/admin/audit ──────────────────────────────────────────────────────
 // Audit log entries newest-first, paginated. Optional ?action= filter.

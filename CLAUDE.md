@@ -23,6 +23,7 @@ Flow: pick a project → fetch/compute each member's activity for the assignment
 - **Phase B**: `ClassSection`, `Assignment`, `GroupMembership`; join-code flow; student group creation (leader) and joining (member); leader reassignment; member removal/leave. GitHub usernames sourced from `User.githubUsername`.
 - **Phase C**: Student read-only dashboards (`StudentPage`, `StudentClassPage`, `StudentGroupPage`) showing a member's own report and flags; dispute/"flag for review" workflow (`Dispute` model, `disputes.ts`, `DisputesPage.tsx`).
 - **Phase D**: FAIR TRAZE Collaborative Editor (TipTap + Yjs) with per-user edit capture, editor scoring, and `COMBINED` blended scoring (`shared/src/documentScoring.ts`, `shared/src/combinedScoring.ts`, `server/src/collab/*`). Role-aware source-presence mismatch notes are implemented (see "Group Roles" below).
+- **Instructor approval**: new instructor sign-ups are pending until an admin approves them (see "Instructor approval" below).
 - Basic admin/audit tooling: user management (create/edit/promote/deactivate), role assignment, and a system-wide audit log (`admin.ts`, `AdminPage.tsx`, `AuditLogPage.tsx`, `AuditLog` model). This is account administration, not the cross-section analytics dashboards described under Phase F below, which remain unbuilt.
 
 ## FAIR TRAZE Collaborative Editor (Second Data Source)
@@ -148,6 +149,24 @@ Documented measurement challenges, not bugs:
 - **Concurrent real-time attribution** — in real-time collaborative editing (multiple cursors simultaneously), character-level attribution is harder to resolve unambiguously than discrete Git commits. The Yjs CRDT tracks per-user edits, but concurrent simultaneous edits to the same region require a resolution policy.
 - **Image move split across two transactions could misattribute a phantom insert** — see "Image resize and reposition — IMPLEMENTED" above; a manual cut-then-separate-paste of an image (not the drag feature itself, which is atomic) can transiently double-count in `EditSession.imageInsertCount` due to the gross-count, non-identity-tracked design already used for image-insert disclosure.
 - **Room bind/eviction race — CONFIRMED and FIXED.** This was previously logged as "unconfirmed, not reproduced under normal usage." That assessment was wrong: it caused real, permanent content loss on a live project under completely ordinary usage (an instructor's first-ever view of a document that had only ever received a `.docx` import — no rapid cycling involved). Root cause: `y-websocket`'s `getYDoc()` (`node_modules/y-websocket/bin/utils.js`) calls `persistence.bindState()` without awaiting it, so `setupWSConnection` can hand a connection a still-empty in-memory `Y.Doc` while `bindState`'s own `Document.findUnique()` + `Y.applyUpdate()` restore is still in flight (a cold Neon round trip, observed ~1.9s). If that connection closes before the restore finishes, `y-websocket`'s `closeConn` immediately calls `persistence.writeState()`, which used to encode and persist the still-empty doc — silently overwriting real, previously-good `yjsState` with an empty encoding. Import-created rooms (`docxImport.ts`) were the realistic trigger: per the room-eviction limitation below, such a room is never evicted from memory until something eventually restarts the server, and its first real connection afterward is very often a brief read-only instructor view — exactly the fast-connect/fast-disconnect shape the race needs. Fixed in `server/src/collab/persistence.ts`: a per-room `restoreReady` promise, set synchronously in `bindState` before its first `await`, that `writeState` now awaits before ever persisting — so a room's state can never be written until its own restore has had the chance to apply. Regression test: `server/test/persistenceRestoreRace.test.ts` (seeds real import-only content, forces the exact race via a delayed `prisma.document.findUnique`, and asserts the content survives; fails against the pre-fix code, reproducing the original loss).
+
+## Instructor approval (IMPLEMENTED)
+Instructor accounts are gated on admin sign-off. Students and admins are unaffected.
+- `User.instructorStatus` (`PENDING | APPROVED | REJECTED`, default `APPROVED` so existing users and seed data are approved) plus `approvalReviewedAt` / `approvalReviewedById`. Registering as `INSTRUCTOR` (`routes/auth.ts`) creates the account as `PENDING`.
+- **The guard reads the database, not the JWT.** `requireRole` (`middleware/auth.ts`) looks up `instructorStatus` and `active` for INSTRUCTOR callers on every request, so approval or rejection takes effect immediately without waiting for the 15-minute token refresh. Pending/rejected callers get 403 with `code: "INSTRUCTOR_PENDING"` / `"INSTRUCTOR_REJECTED"`. Because it lives in `requireRole`, every instructor route is covered; routes guarded only by `requireAuth` + ownership (`groups.ts`, `documents.ts`, `comments.ts`, collab WebSocket) are unreachable for unapproved instructors since they cannot own a class.
+- A pending or rejected instructor can log in; `App.tsx` renders `PendingApprovalPage` instead of the app shell. `/api/auth/*` returns `instructorStatus`.
+- Admin: `GET /api/admin/instructor-approvals`, `POST .../:id/approve` (from PENDING or REJECTED), `POST .../:id/reject` (from PENDING only). Each writes an `AuditLog` entry (`INSTRUCTOR_APPROVED` / `INSTRUCTOR_REJECTED`) and an in-app `Alert` to the instructor (no email). UI: `InstructorApprovals.tsx` in the admin Hierarchy section; the `USER_REGISTERED` notification links to `/admin?section=instructor-approvals`.
+- There is no instructor-to-department link on `User` (departments attach only through `ClassSection`), so approval does not assign a department.
+
+## Readability rules
+Follow these for all new UI (`client/src/components/ui/styles.ts` implements most of them):
+- Font sizes in rem. Body 14px (0.875rem), secondary 13px, smallest 12px (nothing below), card titles 16px, page titles 24px, tile numbers 24px.
+- Sentence-case labels, not all caps.
+- Text contrast at least 4.5:1. No pale grey text.
+- Buttons 36-40px tall; clickable rows and nav items at least 44px.
+- Visible focus outline on every interactive element.
+- Never color alone: statuses always include text.
+- No horizontal scroll at 375px width or 200% zoom.
 
 ## Setup-responsibilities workflow (IMPLEMENTED)
 Setup is distributed so an instructor with many sections and many groups per section is not a data-entry bottleneck. This is real, working flow — not a proposed design:

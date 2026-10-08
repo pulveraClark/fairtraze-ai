@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { useRouter } from "./router";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
+import { useAuth } from "./context/AuthContext";
 
 const LandingPage = lazy(() => import("./pages/LandingPage").then((m) => ({ default: m.LandingPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
@@ -22,6 +23,7 @@ const AuditLogPage = lazy(() => import("./pages/AuditLogPage").then((m) => ({ de
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AlertsPage = lazy(() => import("./pages/AlertsPage").then((m) => ({ default: m.AlertsPage })));
 const DisputesPage = lazy(() => import("./pages/DisputesPage").then((m) => ({ default: m.DisputesPage })));
+const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage").then((m) => ({ default: m.PendingApprovalPage })));
 const JoinPage = lazy(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })));
 
 function RouteFallback() {
@@ -151,10 +153,17 @@ function pageElement(pathname: string) {
 
 export default function App() {
   const { pathname } = useRouter();
+  const { user, loading } = useAuth();
+
+  // An instructor an admin has not approved yet sees only the approval notice, never the app
+  // shell or any instructor page. The server enforces the same rule on every instructor API.
+  const gated =
+    !loading && user?.systemRole === "INSTRUCTOR" && user.instructorStatus !== undefined &&
+    user.instructorStatus !== "APPROVED" && usesShell(pathname);
 
   return (
     <Suspense fallback={<RouteFallback />}>
-      {routeElement(pathname)}
+      {gated ? <PendingApprovalPage /> : routeElement(pathname)}
     </Suspense>
   );
 }
