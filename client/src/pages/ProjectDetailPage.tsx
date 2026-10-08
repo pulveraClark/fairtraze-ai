@@ -40,6 +40,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [loading, setLoading]             = useState(true);
   const [reanalyzing, setReanalyzing]     = useState(false);
   const [stepperDone, setStepperDone]     = useState(false);
+  // True between the analyze response and the follow-up report reads finishing
+  const [loadingReport, setLoadingReport] = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
   const [showScoringModal, setShowScoringModal] = useState(false);
   // Tracks whether scoring config or membership changed after the last analysis (stale report warning)
@@ -186,16 +188,22 @@ export function ProjectDetailPage({ projectId }: Props) {
         setReanalyzeError((data as { error?: string }).error ?? `Server error ${res.status}`);
         return;
       }
+      // The analyze call itself is finished: release the button right away and let the
+      // panel show a "Loading report…" row while the follow-up reads run in parallel.
       setStepperDone(true);
-      await new Promise((r) => setTimeout(r, 800));
-      await fetchStored();
-      await summaryQuery.refetch();   // refresh health labels in switcher
-      await fetchHistory();   // refresh trend chart with the new run
+      setReanalyzing(false);
+      setLoadingReport(true);
+      await Promise.all([
+        fetchStored(),
+        summaryQuery.refetch(),   // refresh health labels in switcher
+        fetchHistory(),           // refresh trend chart with the new run
+      ]);
       setNotFound(false);
     } catch {
       setReanalyzeError("Network error — could not reach the server.");
     } finally {
       setReanalyzing(false);
+      setLoadingReport(false);
     }
   }
 
@@ -446,7 +454,9 @@ export function ProjectDetailPage({ projectId }: Props) {
       <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-6">
 
         {/* Loading stepper */}
-        {reanalyzing && <AnalysisStepper done={stepperDone} sourceType={sourceType} />}
+        {(reanalyzing || loadingReport) && (
+          <AnalysisStepper done={stepperDone} loadingReport={loadingReport} sourceType={sourceType} />
+        )}
 
         {/* Re-analyze error */}
         {reanalyzeError && !reanalyzing && (

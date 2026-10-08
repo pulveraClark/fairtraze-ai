@@ -47,9 +47,10 @@ const STEP_DELAYS = [0, 4000, 7000, 10000];
 interface Props {
   done: boolean; // true when the API call has completed successfully
   sourceType?: SourceType;
+  loadingReport?: boolean; // true while the finished report is being re-read after the API call
 }
 
-export function AnalysisStepper({ done, sourceType = null }: Props) {
+export function AnalysisStepper({ done, sourceType = null, loadingReport = false }: Props) {
   const [activeStep, setActiveStep] = useState(0); // 0-indexed
   const STEPS = getSteps(sourceType);
 
@@ -124,6 +125,12 @@ export function AnalysisStepper({ done, sourceType = null }: Props) {
           );
         })}
       </ol>
+      {loadingReport && (
+        <div className="mt-5 flex items-center gap-2 text-xs text-slate-500">
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin motion-reduce:animate-none" />
+          Loading report…
+        </div>
+      )}
       {!done && (
         <p className="mt-5 text-xs text-slate-400">
           {DATA_COLLECTION_FOOTER[sourceType === "EDITOR" || sourceType === "COMBINED" ? sourceType : "GITHUB"]}
