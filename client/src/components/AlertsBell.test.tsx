@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { AlertsBell } from "./AlertsBell";
 import { alertLink, alertMeta } from "../hooks/useAlerts";
@@ -25,6 +26,15 @@ function signInAs(systemRole: "ADMIN" | "INSTRUCTOR" | "STUDENT") {
   });
 }
 
+function renderBell() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <RouterProvider><AlertsBell /></RouterProvider>
+    </QueryClientProvider>
+  );
+}
+
 const studentAlert = {
   id: 7,
   projectId: 3,
@@ -42,7 +52,11 @@ describe("AlertsBell for non-instructor roles", () => {
     window.history.pushState({}, "", "/student");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, json: async () => ({ alerts: [studentAlert], unreadCount: 1 }) }))
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url === "/api/alerts/unread-count" ? { unreadCount: 1 } : { alerts: [studentAlert], unreadCount: 1 },
+      }))
     );
   });
 
@@ -53,19 +67,22 @@ describe("AlertsBell for non-instructor roles", () => {
 
   it.each(["STUDENT", "ADMIN"] as const)("fetches and shows notifications for a %s", async (role) => {
     signInAs(role);
-    render(<RouterProvider><AlertsBell /></RouterProvider>);
+    renderBell();
 
     expect(await screen.findByRole("button", { name: /1 unread/ })).toBeTruthy();
-    expect(fetch).toHaveBeenCalledWith("/api/alerts", expect.anything());
+    expect(fetch).toHaveBeenCalledWith("/api/alerts/unread-count", expect.anything());
+    // The full list is not fetched until the dropdown opens.
+    expect(fetch).not.toHaveBeenCalledWith("/api/alerts", expect.anything());
 
     await userEvent.click(screen.getByRole("button", { name: /1 unread/ }));
     expect(await screen.findByText("Requester One requested to join Group A")).toBeTruthy();
+    expect(fetch).toHaveBeenCalledWith("/api/alerts", expect.anything());
     expect(screen.getByText("Join Request")).toBeTruthy();
   });
 
   it("navigates via the stored role-correct link and marks the notification read", async () => {
     signInAs("STUDENT");
-    render(<RouterProvider><AlertsBell /></RouterProvider>);
+    renderBell();
 
     await userEvent.click(await screen.findByRole("button", { name: /1 unread/ }));
     await userEvent.click(await screen.findByText("Requester One requested to join Group A"));

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
-import { timeAgo, alertMeta, alertLink } from "../hooks/useAlerts";
+import { timeAgo, alertMeta, alertLink, ALERTS_KEY } from "../hooks/useAlerts";
 import { roleHome } from "../lib/roleHome";
 import type { AlertItem } from "../hooks/useAlerts";
 
@@ -14,44 +15,43 @@ export function AlertsPage() {
   const { navigate } = useRouter();
   const { route: backRoute, label: backLabel } = roleHome(user?.systemRole);
 
-  const [alerts,      setAlerts]  = useState<AlertItem[]>([]);
-  const [unreadCount, setUnread]  = useState(0);
-  const [meta,        setMeta]    = useState<PageMeta>({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
-  const [page,        setPage]    = useState(1);
-  const [loading,     setLoading] = useState(true);
-  const [error,       setError]   = useState("");
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
 
-  const load = useCallback(() => {
-    if (!token) return;
-    setLoading(true);
-    setError("");
-    const params = new URLSearchParams({ page: String(page), pageSize: "20" });
-    fetch(`/api/alerts?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as {
-          alerts?: AlertItem[];
-          unreadCount?: number;
-          total?: number;
-          page?: number;
-          pageSize?: number;
-          totalPages?: number;
-          error?: string;
-        };
-        if (!r.ok) { setError(json.error ?? "Could not load alerts."); return; }
-        setAlerts(json.alerts ?? []);
-        setUnread(json.unreadCount ?? 0);
-        setMeta({
-          total:      json.total      ?? 0,
-          page:       json.page       ?? 1,
-          pageSize:   json.pageSize   ?? 20,
-          totalPages: json.totalPages ?? 1,
-        });
-      })
-      .catch(() => setError("Network error — could not load alerts."))
-      .finally(() => setLoading(false));
-  }, [token, page]);
+  // Explicit page view: fetched on mount/page change/manual refresh only — no interval.
+  const pageQuery = useQuery({
+    queryKey: [...ALERTS_KEY, "page", user?.id ?? null, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), pageSize: "20" });
+      const r = await fetch(`/api/alerts?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await r.json() as {
+        alerts?: AlertItem[];
+        unreadCount?: number;
+        total?: number;
+        page?: number;
+        pageSize?: number;
+        totalPages?: number;
+        error?: string;
+      };
+      if (!r.ok) throw new Error(json.error ?? "Could not load alerts.");
+      return json;
+    },
+    enabled: !!token && !!user,
+    staleTime: 0,
+    placeholderData: keepPreviousData,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const alerts      = pageQuery.data?.alerts ?? [];
+  const unreadCount = pageQuery.data?.unreadCount ?? 0;
+  const meta: PageMeta = {
+    total:      pageQuery.data?.total      ?? 0,
+    page:       pageQuery.data?.page       ?? 1,
+    pageSize:   pageQuery.data?.pageSize   ?? 20,
+    totalPages: pageQuery.data?.totalPages ?? 1,
+  };
+  const loading = pageQuery.isLoading;
+  const error   = pageQuery.isError ? pageQuery.error.message : "";
+  const load    = () => { void pageQuery.refetch(); };
 
   async function handleClick(alert: AlertItem) {
     if (!alert.read && token) {
@@ -59,8 +59,7 @@ export function AlertsPage() {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      setAlerts((prev) => prev.map((a) => (a.id === alert.id ? { ...a, read: true } : a)));
-      setUnread((prev) => Math.max(0, prev - 1));
+      void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
     }
     const link = alertLink(alert);
     if (link) navigate(link);
@@ -72,8 +71,7 @@ export function AlertsPage() {
       method:  "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    setUnread(0);
+    void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
   }
 
   return (

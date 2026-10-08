@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "../lib/apiBase";
 
 export interface AuthUser {
@@ -108,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<AuthUser | null>(null);
   const [token, setToken]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Keep the module-level fetch interceptor in sync with this instance's state.
   useEffect(() => {
@@ -116,12 +118,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSessionExpired = () => {
       setToken(null);
       setUser(null);
+      // Don't let the next account see this one's cached data.
+      queryClient.clear();
     };
     return () => {
       onTokenRefreshed = null;
       onSessionExpired = null;
     };
-  }, []);
+  }, [queryClient]);
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -200,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
+    // Drop every cached query so the next account on this browser starts clean.
+    queryClient.clear();
   }
 
   return (

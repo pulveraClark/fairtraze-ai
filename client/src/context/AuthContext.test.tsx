@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+
+function withQuery(children: ReactNode) {
+  return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
+}
 
 describe("AuthContext", () => {
   beforeEach(() => {
@@ -32,9 +38,11 @@ describe("AuthContext", () => {
     }
 
     const { getByTestId } = render(
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>
+      withQuery(
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      )
     );
 
     await waitFor(() => expect(getByTestId("probe").textContent).toBe("a@example.com"));
@@ -52,9 +60,11 @@ describe("AuthContext", () => {
     }
 
     const { getByTestId } = render(
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>
+      withQuery(
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      )
     );
 
     await waitFor(() => expect(getByTestId("probe").textContent).toBe("no-user"));
@@ -78,9 +88,11 @@ describe("AuthContext", () => {
 
     const { AuthProvider } = await import("./AuthContext");
     render(
-      <AuthProvider>
-        <div />
-      </AuthProvider>
+      withQuery(
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      )
     );
 
     // Let the interceptor-install effect run (no initial fetch happens here

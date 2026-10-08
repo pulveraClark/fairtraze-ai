@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { POLL_30S } from "./pollingOptions";
 
 export type AlertType =
   | "HIGH_RISK"
@@ -113,33 +115,57 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function useAlerts(): UseAlertsReturn {
-  const { token } = useAuth();
-  const [alerts, setAlerts]       = useState<AlertItem[]>([]);
-  const [unreadCount, setUnread]  = useState(0);
-  const [loading, setLoading]     = useState(false);
+/**
+ * Query-key prefix for every alert query; invalidating ["alerts"] refreshes the
+ * bell count, the dropdown list and the full notifications page together.
+ */
+export const ALERTS_KEY = ["alerts"] as const;
 
-  const load = useCallback(() => {
-    if (!token) return;
-    setLoading(true);
-    fetch("/api/alerts", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data: { alerts: AlertItem[]; unreadCount: number }) => {
-        setAlerts(data.alerts ?? []);
-        setUnread(data.unreadCount ?? 0);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token]);
+/**
+ * Bell state. The unread count is polled (30 s, foreground tabs only) from the
+ * count-only endpoint; the full list is fetched only while the dropdown is open.
+ * Both bells mounted by AppTopBar share one count query (same key → one request).
+ */
+export function useAlerts(options: { listEnabled?: boolean } = {}): UseAlertsReturn {
+  const { listEnabled = false } = options;
+  const { token, user } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? null;
 
-  // Initial load + 60 s poll
+  const countQuery = useQuery({
+    queryKey: [...ALERTS_KEY, "unread-count", userId],
+    queryFn: async () => {
+      const res = await fetch("/api/alerts/unread-count", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Could not load unread count.");
+      const data = (await res.json()) as { unreadCount?: number };
+      return data.unreadCount ?? 0;
+    },
+    enabled: !!token && userId !== null,
+    ...POLL_30S,
+  });
+  const unreadCount = countQuery.data ?? 0;
+
+  const listQuery = useQuery({
+    queryKey: [...ALERTS_KEY, "list", userId],
+    queryFn: async () => {
+      const res = await fetch("/api/alerts", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Could not load alerts.");
+      const data = (await res.json()) as { alerts?: AlertItem[] };
+      return data.alerts ?? [];
+    },
+    enabled: !!token && userId !== null && listEnabled,
+    staleTime: 0, // always refetch when the dropdown opens
+  });
+
+  // New notifications arrived while the dropdown is open → refresh its list.
+  const prevCount = useRef<number | undefined>(undefined);
   useEffect(() => {
-    load();
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
-  }, [load]);
+    if (countQuery.data === undefined) return;
+    if (prevCount.current !== undefined && prevCount.current !== countQuery.data && listEnabled) {
+      void queryClient.invalidateQueries({ queryKey: [...ALERTS_KEY, "list"] });
+    }
+    prevCount.current = countQuery.data;
+  }, [countQuery.data, listEnabled, queryClient]);
 
   const markRead = useCallback(
     async (id: number) => {
@@ -148,10 +174,9 @@ export function useAlerts(): UseAlertsReturn {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
-      setUnread((prev) => Math.max(0, prev - 1));
+      void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
     },
-    [token]
+    [token, queryClient]
   );
 
   const markAllRead = useCallback(async () => {
@@ -160,9 +185,19 @@ export function useAlerts(): UseAlertsReturn {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    setUnread(0);
-  }, [token]);
+    void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
+  }, [token, queryClient]);
 
-  return { alerts, unreadCount, loading, markRead, markAllRead, refresh: load };
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
+  }, [queryClient]);
+
+  return {
+    alerts: listQuery.data ?? [],
+    unreadCount,
+    loading: listQuery.isFetching,
+    markRead,
+    markAllRead,
+    refresh,
+  };
 }

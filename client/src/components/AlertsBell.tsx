@@ -6,9 +6,10 @@ import { useRouter } from "../router";
 const PREVIEW_COUNT = 6;
 
 export function AlertsBell() {
-  const { alerts, unreadCount, markRead, markAllRead } = useAlerts();
   const { navigate, pathname } = useRouter();
   const [open, setOpen] = useState(false);
+  // Full list is only fetched while the dropdown is open; the badge polls the count alone.
+  const { alerts, unreadCount, loading, markRead, markAllRead } = useAlerts({ listEnabled: open });
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on outside-click or Escape
@@ -90,7 +91,9 @@ export function AlertsBell() {
           </div>
 
           {/* Empty state */}
-          {alerts.length === 0 ? (
+          {alerts.length === 0 && loading ? (
+            <p className="py-10 px-4 text-center text-xs text-slate-500">Loading…</p>
+          ) : alerts.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
               <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1">
                 <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
