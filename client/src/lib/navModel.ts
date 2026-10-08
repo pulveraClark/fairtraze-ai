@@ -1,11 +1,12 @@
 // Pure navigation model for the sidebar: which top-level items a role sees and how the
-// class → group tree is derived from data the app already fetches. No React, no I/O.
+// class → project → group tree is derived from data the app already fetches. No React, no I/O.
 
 export type SystemRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
 export type NavIconName = "home" | "classes" | "disputes" | "bell" | "settings" | "audit";
 
-export const MAX_CLASSES = 8;
-export const MAX_GROUPS  = 8;
+export const MAX_CLASSES  = 8;
+export const MAX_PROJECTS = 8;
+export const MAX_GROUPS   = 8;
 
 export interface NavItemDef {
   key: "dashboard" | "classes" | "disputes" | "notifications" | "settings" | "audit";
@@ -52,24 +53,25 @@ export function isItemActive(role: SystemRole, key: NavItemDef["key"], href: str
   return pathname === href;
 }
 
-// ── Class → group tree ───────────────────────────────────────────────────────
+// ── Class → project → group tree ─────────────────────────────────────────────
 
 export interface InstructorClassInput {
   id: number;
   subjectCode?: string | null;
   subjectName?: string | null;
-  assignments?: { id: number }[];
+  assignments?: { id: number; title?: string | null }[];
 }
 export interface GroupSummaryInput {
   projectId: number;
   groupName: string;
   classId?: number | null;
+  assignmentId?: number | null;
 }
 export interface StudentClassInput {
   id: number;
   subjectCode?: string | null;
   subjectName?: string | null;
-  assignments?: { myGroup: { id: number; groupName: string } | null }[];
+  assignments?: { id?: number; title?: string | null; myGroup: { id: number; groupName: string } | null }[];
 }
 
 export interface NavGroup {
@@ -78,14 +80,23 @@ export interface NavGroup {
   href: string;
   active: boolean;
 }
+export interface NavProject {
+  id: number;
+  label: string;
+  href: string;
+  active: boolean;
+  /** Populated only for the active project; other projects show just their name. */
+  groups: NavGroup[];
+  hiddenGroupCount: number;
+}
 export interface NavClass {
   id: number;
   label: string;
   title: string;
   href: string;
   active: boolean;
-  groups: NavGroup[];
-  hiddenGroupCount: number;
+  projects: NavProject[];
+  hiddenProjectCount: number;
 }
 export interface NavTree {
   classes: NavClass[];
@@ -124,51 +135,93 @@ export function resolveActiveClassId(
   return null;
 }
 
-/** Cap at MAX_CLASSES, but never drop the active class: it replaces the last visible slot. */
-function capClasses<T extends { id: number }>(all: T[], activeClassId: number | null): { shown: T[]; hidden: number } {
-  if (all.length <= MAX_CLASSES) return { shown: all, hidden: 0 };
-  const shown = all.slice(0, MAX_CLASSES);
-  const active = activeClassId === null ? undefined : all.find((c) => c.id === activeClassId);
-  if (active && !shown.includes(active)) shown[MAX_CLASSES - 1] = active;
-  return { shown, hidden: all.length - MAX_CLASSES };
+/** Assignment ("project") id the current route belongs to, or null when none can be determined (yet). */
+export function resolveActiveAssignmentId(
+  role: SystemRole,
+  pathname: string,
+  instructorGroups: GroupSummaryInput[] | undefined,
+  studentClasses: StudentClassInput[] | undefined
+): number | null {
+  if (role === "INSTRUCTOR" || role === "ADMIN") {
+    const asg = pathname.match(/^\/class\/\d+\/assignment\/(\d+)/);
+    if (asg) return parseInt(asg[1], 10);
+    const proj = pathname.match(/^\/project\/(\d+)$/);
+    if (proj) {
+      const pid = parseInt(proj[1], 10);
+      return instructorGroups?.find((g) => g.projectId === pid)?.assignmentId ?? null;
+    }
+    return null;
+  }
+  const grp = pathname.match(/^\/student\/group\/(\d+)$/);
+  if (grp) {
+    const gid = parseInt(grp[1], 10);
+    for (const c of studentClasses ?? []) {
+      const a = c.assignments?.find((x) => x.myGroup?.id === gid);
+      if (a) return a.id ?? null;
+    }
+  }
+  return null;
 }
 
-function capGroups(groups: NavGroup[]): { groups: NavGroup[]; hidden: number } {
-  if (groups.length <= MAX_GROUPS) return { groups, hidden: 0 };
-  const active = groups.find((g) => g.active);
-  const shown = groups.slice(0, MAX_GROUPS);
-  if (active && !shown.includes(active)) shown[MAX_GROUPS - 1] = active;
-  return { groups: shown, hidden: groups.length - MAX_GROUPS };
+/** Cap at `max`, but never drop the active entry: it replaces the last visible slot. */
+function capKeepingActive<T>(all: T[], max: number, isActive: (item: T) => boolean): { shown: T[]; hidden: number } {
+  if (all.length <= max) return { shown: all, hidden: 0 };
+  const shown = all.slice(0, max);
+  const active = all.find(isActive);
+  if (active && !shown.includes(active)) shown[max - 1] = active;
+  return { shown, hidden: all.length - max };
+}
+
+function buildProject(
+  id: number,
+  label: string,
+  href: string,
+  active: boolean,
+  isActiveProject: boolean,
+  groups: NavGroup[]
+): NavProject {
+  const capped = isActiveProject
+    ? capKeepingActive(groups, MAX_GROUPS, (g) => g.active)
+    : { shown: [] as NavGroup[], hidden: 0 };
+  return { id, label, href, active, groups: capped.shown, hiddenGroupCount: capped.hidden };
 }
 
 export function buildInstructorTree(
   classes: InstructorClassInput[],
   groups: GroupSummaryInput[] | undefined,
   pathname: string,
-  activeClassId: number | null
+  activeClassId: number | null,
+  activeAssignmentId: number | null = null
 ): NavTree {
-  const { shown, hidden } = capClasses(classes, activeClassId);
+  const { shown, hidden } = capKeepingActive(classes, MAX_CLASSES, (c) => c.id === activeClassId);
   return {
     hiddenClassCount: hidden,
     viewAllHref: "/dashboard",
     classes: shown.map((c) => {
-      const all: NavGroup[] = (groups ?? [])
-        .filter((g) => g.classId === c.id)
-        .map((g) => ({
-          id: g.projectId,
-          label: g.groupName || `Group ${g.projectId}`,
-          href: `/project/${g.projectId}`,
-          active: pathname === `/project/${g.projectId}`,
-        }));
-      const capped = capGroups(all);
+      const all = (c.assignments ?? []).map((a) => {
+        const href = `/class/${c.id}/assignment/${a.id}`;
+        const isActiveProject = a.id === activeAssignmentId;
+        const projectGroups: NavGroup[] = isActiveProject
+          ? (groups ?? [])
+              .filter((g) => g.assignmentId === a.id)
+              .map((g) => ({
+                id: g.projectId,
+                label: g.groupName || `Group ${g.projectId}`,
+                href: `/project/${g.projectId}`,
+                active: pathname === `/project/${g.projectId}`,
+              }))
+          : [];
+        return buildProject(a.id, a.title || `Project ${a.id}`, href, pathname === href, isActiveProject, projectGroups);
+      });
+      const capped = capKeepingActive(all, MAX_PROJECTS, (p) => p.id === activeAssignmentId);
       return {
         id: c.id,
         label: classLabel(c),
         title: c.subjectName || classLabel(c),
         href: `/class/${c.id}`,
         active: pathname === `/class/${c.id}` || pathname.startsWith(`/class/${c.id}/`),
-        groups: capped.groups,
-        hiddenGroupCount: capped.hidden,
+        projects: capped.shown,
+        hiddenProjectCount: capped.hidden,
       };
     }),
   };
@@ -177,32 +230,40 @@ export function buildInstructorTree(
 export function buildStudentTree(
   classes: StudentClassInput[],
   pathname: string,
-  activeClassId: number | null
+  activeClassId: number | null,
+  activeAssignmentId: number | null = null
 ): NavTree {
-  const { shown, hidden } = capClasses(classes, activeClassId);
+  const { shown, hidden } = capKeepingActive(classes, MAX_CLASSES, (c) => c.id === activeClassId);
   return {
     hiddenClassCount: hidden,
     viewAllHref: "/student",
     classes: shown.map((c) => {
-      // Students only ever see their own group(s) here — never classmates' groups.
-      const all: NavGroup[] = (c.assignments ?? [])
-        .map((a) => a.myGroup)
-        .filter((g): g is { id: number; groupName: string } => g !== null)
-        .map((g) => ({
-          id: g.id,
-          label: g.groupName || `Group ${g.id}`,
-          href: `/student/group/${g.id}`,
-          active: pathname === `/student/group/${g.id}`,
-        }));
-      const capped = capGroups(all);
+      // Students only ever see their own project(s) and group here — never classmates' groups.
+      // They have no per-assignment page, so a project links to its class page.
+      const href = `/student/class/${c.id}`;
+      const all = (c.assignments ?? [])
+        .filter((a) => a.myGroup !== null)
+        .map((a, i) => {
+          const g = a.myGroup!;
+          const id = a.id ?? -(i + 1);
+          const isActiveProject = a.id !== undefined && a.id === activeAssignmentId;
+          const group: NavGroup = {
+            id: g.id,
+            label: g.groupName || `Group ${g.id}`,
+            href: `/student/group/${g.id}`,
+            active: pathname === `/student/group/${g.id}`,
+          };
+          return buildProject(id, a.title || `Project ${id}`, href, false, isActiveProject, [group]);
+        });
+      const capped = capKeepingActive(all, MAX_PROJECTS, (p) => p.id === activeAssignmentId);
       return {
         id: c.id,
         label: classLabel(c),
         title: c.subjectName || classLabel(c),
-        href: `/student/class/${c.id}`,
-        active: pathname === `/student/class/${c.id}`,
-        groups: capped.groups,
-        hiddenGroupCount: capped.hidden,
+        href,
+        active: pathname === href,
+        projects: capped.shown,
+        hiddenProjectCount: capped.hidden,
       };
     }),
   };

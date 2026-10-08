@@ -25,12 +25,12 @@ function signInAs(systemRole: "ADMIN" | "INSTRUCTOR" | "STUDENT") {
 }
 
 const classList = [
-  { id: 1, subjectCode: "CS101", subjectName: "Intro", assignments: [{ id: 11 }] },
-  { id: 2, subjectCode: "CS202", subjectName: "Systems", assignments: [{ id: 22 }] },
+  { id: 1, subjectCode: "CS101", subjectName: "Intro", assignments: [{ id: 11, title: "Alpha Project" }] },
+  { id: 2, subjectCode: "CS202", subjectName: "Systems", assignments: [{ id: 22, title: "Beta Project" }] },
 ];
 const summary = [
-  { projectId: 5, groupName: "Group Alpha", classId: 1 },
-  { projectId: 6, groupName: "Group Beta", classId: 2 },
+  { projectId: 5, groupName: "Group Alpha", classId: 1, assignmentId: 11 },
+  { projectId: 6, groupName: "Group Beta", classId: 2, assignmentId: 22 },
 ];
 
 function renderShell() {
@@ -70,14 +70,28 @@ describe("AppShell sidebar (instructor)", () => {
     renderShell();
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
 
-    expect(await within(nav).findByRole("link", { name: "Group Alpha" })).toBeTruthy();
-    expect(within(nav).queryByRole("link", { name: "Group Beta" })).toBeNull();
+    expect(await within(nav).findByRole("link", { name: "Alpha Project" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Beta Project" })).toBeNull();
+    // Groups show only inside their project.
+    expect(within(nav).queryByRole("link", { name: "Group Alpha" })).toBeNull();
 
     const toggle = within(nav).getByRole("button", { name: "Expand Systems" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(toggle);
     expect(within(nav).getByRole("button", { name: "Collapse Systems" }).getAttribute("aria-expanded")).toBe("true");
-    expect(await within(nav).findByRole("link", { name: "Group Beta" })).toBeTruthy();
+    expect(await within(nav).findByRole("link", { name: "Beta Project" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Group Beta" })).toBeNull();
+  });
+
+  it("shows a project's groups only under the project you are inside", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/project/5");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    expect(await within(nav).findByRole("link", { name: "Group Alpha" })).toBeTruthy();
+    expect(within(nav).getByRole("link", { name: "Alpha Project" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Group Beta" })).toBeNull();
   });
 
   it("collapses to an icon rail with labelled controls and remembers the choice per user", async () => {

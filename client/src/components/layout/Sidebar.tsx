@@ -13,6 +13,7 @@ import {
   buildStudentTree,
   getNavItems,
   isItemActive,
+  resolveActiveAssignmentId,
   resolveActiveClassId,
 } from "../../lib/navModel";
 import type { InstructorClassInput, NavItemDef, SystemRole } from "../../lib/navModel";
@@ -100,7 +101,7 @@ function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; act
   );
 }
 
-// ── Class → group tree ────────────────────────────────────────────────────────
+// ── Class → project → group tree ────────────────────────────────────────────────────────
 
 const treeLinkClass = (active: boolean, size: "base" | "sm") =>
   [
@@ -134,6 +135,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
   );
 
   const activeClassId = resolveActiveClassId(role, pathname, summaryQ.data, studentQ.data);
+  const activeAssignmentId = resolveActiveAssignmentId(role, pathname, summaryQ.data, studentQ.data);
   // Only the active class auto-expands; changing class drops manual overrides.
   useEffect(() => { setOverrides({}); }, [activeClassId]);
 
@@ -142,8 +144,8 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
   if (query.isError)   return <p className="px-3 py-2 text-[0.8125rem] text-slate-300">Couldn't load classes.</p>;
 
   const tree = isInstructor
-    ? buildInstructorTree(classesQ.data ?? [], summaryQ.data, pathname, activeClassId)
-    : buildStudentTree(studentQ.data ?? [], pathname, activeClassId);
+    ? buildInstructorTree(classesQ.data ?? [], summaryQ.data, pathname, activeClassId, activeAssignmentId)
+    : buildStudentTree(studentQ.data ?? [], pathname, activeClassId, activeAssignmentId);
 
   if (tree.classes.length === 0) {
     return <p className="px-3 py-2 text-[0.8125rem] text-slate-400">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
@@ -173,26 +175,46 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
             </div>
             {expanded && (
               <ul id={listId} className="ml-4 space-y-0.5 border-l border-white/10 pl-2">
-                {c.groups.length === 0 && (
+                {c.projects.length === 0 && (
                   <li>
                     {isInstructor ? (
-                      <p className="px-3 py-2 text-[0.8125rem] text-slate-400">No groups yet.</p>
+                      <p className="px-3 py-2 text-[0.8125rem] text-slate-400">No projects yet.</p>
                     ) : (
                       <SidebarLink href={c.href} onNavigate={onNavigate} className={viewAllClass}>Find a group</SidebarLink>
                     )}
                   </li>
                 )}
-                {c.groups.map((g) => (
-                  <li key={g.id} className="flex">
-                    <SidebarLink href={g.href} active={g.active} onNavigate={onNavigate} className={treeLinkClass(g.active, "sm")}>
-                      <span className="truncate">{g.label}</span>
-                    </SidebarLink>
+                {c.projects.map((p) => (
+                  <li key={p.id}>
+                    <div className="flex">
+                      <SidebarLink href={p.href} active={p.active} title={p.label} onNavigate={onNavigate} className={treeLinkClass(p.active, "sm")}>
+                        <span className="truncate">{p.label}</span>
+                      </SidebarLink>
+                    </div>
+                    {(p.groups.length > 0 || p.hiddenGroupCount > 0) && (
+                      <ul className="ml-4 space-y-0.5 border-l border-white/10 pl-2">
+                        {p.groups.map((g) => (
+                          <li key={g.id} className="flex">
+                            <SidebarLink href={g.href} active={g.active} onNavigate={onNavigate} className={treeLinkClass(g.active, "sm")}>
+                              <span className="truncate">{g.label}</span>
+                            </SidebarLink>
+                          </li>
+                        ))}
+                        {p.hiddenGroupCount > 0 && (
+                          <li>
+                            <SidebarLink href={p.href} onNavigate={onNavigate} className={viewAllClass}>
+                              View all groups ({p.groups.length + p.hiddenGroupCount})
+                            </SidebarLink>
+                          </li>
+                        )}
+                      </ul>
+                    )}
                   </li>
                 ))}
-                {c.hiddenGroupCount > 0 && (
+                {c.hiddenProjectCount > 0 && (
                   <li>
                     <SidebarLink href={c.href} onNavigate={onNavigate} className={viewAllClass}>
-                      View all groups ({c.groups.length + c.hiddenGroupCount})
+                      View all projects ({c.projects.length + c.hiddenProjectCount})
                     </SidebarLink>
                   </li>
                 )}
