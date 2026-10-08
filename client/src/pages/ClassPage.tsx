@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
-import { AppTopBar } from "../components/AppTopBar";
 import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
@@ -555,18 +555,16 @@ export function ClassPage({ classId }: Props) {
           />
         );
       })()}
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <button onClick={() => navigate(dashboardUrl)} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to {isAdmin ? "Admin" : "Dashboard"}
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
+                { label: classInfo?.subjectCode ?? "Class" },
+              ]}
+            />
             <div className="flex items-center gap-2 flex-wrap">
               {classInfo ? (
                 <>

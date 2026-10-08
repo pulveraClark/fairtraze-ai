@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint } from "@shared/types";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
-import { AppTopBar } from "../components/AppTopBar";
 import { TeamHealthBanner } from "../components/TeamHealthBanner";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { ContributionChart } from "../components/ContributionChart";
@@ -251,25 +251,20 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="print:hidden">
-        <AppTopBar />
-      </div>
-
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
 
           {/* Left: back link + title */}
           <div>
-            <button
-              onClick={() => navigate(backTarget)}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to {backLabel}
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
+                ...(classId ? [{ label: code || "Class", href: classUrl }] : []),
+                ...(assignmentId ? [{ label: subjectName || "Assignment", href: assignmentUrl }] : []),
+                { label: groupName },
+              ]}
+            />
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-slate-900">{groupName}</h1>
               {sourceType && (

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
+import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../hooks/useStudentClassesQuery";
+import type { EnrolledClass } from "../hooks/useStudentClassesQuery";
 
 // ── Gradient palette ──────────────────────────────────────────────────────────
 const BAND_GRADIENTS = [
@@ -23,35 +25,6 @@ const HEALTH_BADGE: Record<string, string> = {
   "Moderate Risk": "text-amber-700 bg-amber-50 border-amber-200",
   "High Risk":     "text-red-700 bg-red-50 border-red-200",
 };
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface MyGroup {
-  id: number;
-  groupName: string;
-  repoUrl: string;
-  role: "LEADER" | "MEMBER";
-  report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
-}
-
-interface AssignmentSummary {
-  id: number;
-  title: string;
-  deadline: string | null;
-  sourceType: string;
-  maxGroupSize: number;
-  myGroup: MyGroup | null;
-}
-
-interface EnrolledClass {
-  id: number;
-  subjectCode: string;
-  subjectName: string;
-  department: { id: number; name: string; code: string } | null;
-  edpCode: string;
-  joinCode: string | null;
-  joinedAt: string;
-  assignments: AssignmentSummary[];
-}
 
 // ── Join a Class modal ────────────────────────────────────────────────────────
 function JoinClassModal({
@@ -297,35 +270,20 @@ export function StudentPage() {
   const { user, token } = useAuth();
   const { navigate }    = useRouter();
 
-  const [classes, setClasses]         = useState<EnrolledClass[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState("");
+  const queryClient = useQueryClient();
+  const classesQuery = useStudentClassesQuery();
+  const classes: EnrolledClass[] = classesQuery.data ?? [];
+  const loading = classesQuery.isLoading;
+  const error   = classesQuery.error instanceof Error ? classesQuery.error.message : "";
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [refreshKey, setRefreshKey]   = useState(0);
-
-  useEffect(() => {
-    if (!token) { setLoading(false); return; }
-    setLoading(true);
-    fetch("/api/student/classes", { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to load your classes.");
-        const data = (await res.json()) as { classes: EnrolledClass[] };
-        setClasses(data.classes);
-        setError("");
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load data."))
-      .finally(() => setLoading(false));
-  }, [token, refreshKey]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {showJoinModal && (
         <JoinClassModal
           token={token}
           onClose={() => setShowJoinModal(false)}
-          onJoined={() => setRefreshKey((k) => k + 1)}
+          onJoined={() => { void queryClient.invalidateQueries({ queryKey: [STUDENT_CLASSES_KEY] }); }}
         />
       )}
 

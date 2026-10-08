@@ -1,33 +1,40 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useAlerts, alertMeta, alertLink, timeAgo } from "../hooks/useAlerts";
 import type { AlertItem } from "../hooks/useAlerts";
+import { usePopover } from "../hooks/usePopover";
 import { useRouter } from "../router";
+import { NavIcon } from "./layout/icons";
+import { FOCUS_RING, RAIL_TOOLTIP, navItemClass } from "./layout/navStyles";
 
 const PREVIEW_COUNT = 6;
+// Rough flyout height (header + 22rem list + footer) used only to keep it on screen.
+const FLYOUT_ESTIMATE_PX = 480;
 
-export function AlertsBell() {
+interface AlertsBellProps {
+  /** Icon-rail mode: no label, a red dot instead of the count, and a tooltip. */
+  collapsed?: boolean;
+}
+
+/**
+ * Sidebar "Notifications" item (desktop). Shows the unread count and opens the alerts
+ * preview as a flyout beside the sidebar. The flyout is `fixed` because the expanded
+ * nav area scrolls and would clip an absolutely-positioned child.
+ */
+export function AlertsBell({ collapsed = false }: AlertsBellProps) {
   const { navigate, pathname } = useRouter();
-  const [open, setOpen] = useState(false);
-  // Full list is only fetched while the dropdown is open; the badge polls the count alone.
+  const { open, setOpen, ref, triggerRef } = usePopover();
+  const [pos, setPos] = useState({ left: 0, top: 0 });
+  // Full list is only fetched while the flyout is open; the badge polls the count alone.
   const { alerts, unreadCount, loading, markRead, markAllRead } = useAlerts({ listEnabled: open });
-  const ref = useRef<HTMLDivElement>(null);
 
-  // Close on outside-click or Escape
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+  function toggle() {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const maxTop = Math.max(8, window.innerHeight - FLYOUT_ESTIMATE_PX - 8);
+      setPos({ left: rect.right + 8, top: Math.max(8, Math.min(rect.top, maxTop)) });
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown",   onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown",   onKey);
-    };
-  }, [open]);
+    setOpen(!open);
+  }
 
   async function handleAlertClick(alert: AlertItem) {
     setOpen(false);
@@ -40,102 +47,109 @@ export function AlertsBell() {
     else navigate(link);
   }
 
-  const preview  = alerts.slice(0, PREVIEW_COUNT);
-  const hasMore  = alerts.length > PREVIEW_COUNT;
+  const preview = alerts.slice(0, PREVIEW_COUNT);
+  const hasMore = alerts.length > PREVIEW_COUNT;
+  const countText = unreadCount > 99 ? "99+" : String(unreadCount);
 
   return (
-    <div ref={ref} className="relative">
-      {/* Bell button */}
+    <div ref={ref} className="group relative">
       <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label={`Alerts${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
-        className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+        ref={triggerRef}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+        className={navItemClass(open, collapsed)}
       >
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-        </svg>
-
-        {/* Unread badge */}
-        {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none select-none">
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
+        <span className="relative flex shrink-0">
+          <NavIcon name="bell" />
+          {collapsed && unreadCount > 0 && (
+            <span aria-hidden="true" className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-[#020617]" />
+          )}
+        </span>
+        {!collapsed && (
+          <>
+            <span className="flex-1 truncate">Notifications</span>
+            {unreadCount > 0 && (
+              <span aria-hidden="true" className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[0.8125rem] font-bold leading-none text-white">
+                {countText}
+              </span>
+            )}
+          </>
         )}
       </button>
+      {collapsed && !open && (
+        <span aria-hidden="true" className={RAIL_TOOLTIP}>
+          Notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ""}
+        </span>
+      )}
 
-      {/* Dropdown */}
       {open && (
         <div
           role="dialog"
-          aria-label="Alerts"
-          className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-700/60 shadow-xl shadow-black/50 overflow-hidden bg-slate-900/95 backdrop-blur-xl z-50"
+          aria-label="Notifications"
+          style={{ left: pos.left, top: pos.top, maxHeight: "calc(100vh - 1rem)" }}
+          className="fixed z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-xl shadow-black/50"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-800/50">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-800/50 px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white">Alerts</span>
+              <span className="text-base font-semibold text-white">Notifications</span>
               {unreadCount > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                  {unreadCount}
+                <span className="rounded-full border border-red-500/40 bg-red-500/20 px-2 py-0.5 text-[0.8125rem] font-bold text-red-300">
+                  {unreadCount} unread
                 </span>
               )}
             </div>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={markAllRead}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                className={`min-h-11 rounded-md px-2 text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
               >
                 Mark all as read
               </button>
             )}
           </div>
 
-          {/* Empty state */}
           {alerts.length === 0 && loading ? (
-            <p className="py-10 px-4 text-center text-xs text-slate-500">Loading…</p>
+            <p className="px-4 py-10 text-center text-sm text-slate-400">Loading…</p>
           ) : alerts.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1">
-                <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+              <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
+                <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-slate-300">No notifications</p>
-              <p className="text-xs text-slate-500">You're all caught up</p>
+              <p className="text-base font-medium text-slate-200">No notifications</p>
+              <p className="text-sm text-slate-400">You're all caught up</p>
             </div>
           ) : (
             <>
-              {/* Alert list */}
-              <div className="max-h-[22rem] overflow-y-auto divide-y divide-slate-800/60">
+              <div className="min-h-0 flex-1 divide-y divide-slate-800/60 overflow-y-auto">
                 {preview.map((alert) => {
                   const meta = alertMeta(alert.type);
                   return (
                     <button
                       key={alert.id}
+                      type="button"
                       onClick={() => handleAlertClick(alert)}
-                      className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors ${
-                        !alert.read ? "bg-indigo-500/5" : ""
-                      }`}
+                      className={`min-h-11 w-full px-4 py-3 text-left hover:bg-white/5 ${FOCUS_RING} ${!alert.read ? "bg-indigo-500/10" : ""}`}
                     >
                       <div className="flex items-start gap-2.5">
-                        {/* Unread dot */}
                         <span
-                          className={`mt-[7px] w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
-                            !alert.read ? "bg-indigo-400" : "bg-transparent"
-                          }`}
+                          aria-hidden="true"
+                          className={`mt-2 h-2 w-2 shrink-0 rounded-full ${!alert.read ? "bg-indigo-300" : "bg-transparent"}`}
                         />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${meta.color}`}>
-                              {meta.label}
-                            </span>
-                          </div>
-                          <p className={`text-xs leading-snug break-words ${
-                            !alert.read ? "text-slate-200 font-semibold" : "text-slate-400"
-                          }`}>
+                        <div className="min-w-0 flex-1">
+                          <span className={`mb-1 inline-block rounded border px-1.5 py-0.5 text-[0.8125rem] font-semibold ${meta.color}`}>
+                            {meta.label}
+                          </span>
+                          {!alert.read && <span className="sr-only"> (unread)</span>}
+                          <p className={`break-words text-sm leading-snug ${!alert.read ? "font-semibold text-slate-100" : "text-slate-300"}`}>
                             {alert.message}
                           </p>
-                          <p className="text-xs text-slate-600 mt-1">{timeAgo(alert.createdAt)}</p>
+                          <p className="mt-1 text-[0.8125rem] text-slate-400">{timeAgo(alert.createdAt)}</p>
                         </div>
                       </div>
                     </button>
@@ -143,15 +157,13 @@ export function AlertsBell() {
                 })}
               </div>
 
-              {/* Footer: View all */}
-              <div className="border-t border-slate-800 px-4 py-2.5 bg-slate-900/50">
+              <div className="border-t border-slate-800 bg-slate-900/50 px-4 py-1">
                 <button
+                  type="button"
                   onClick={() => { navigate("/alerts"); setOpen(false); }}
-                  className="w-full text-xs text-indigo-400 hover:text-indigo-300 font-medium text-center transition-colors py-0.5"
+                  className={`min-h-11 w-full rounded-md text-center text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
                 >
-                  {hasMore
-                    ? `View all ${alerts.length} notifications →`
-                    : "View all notifications →"}
+                  {hasMore ? `View all ${alerts.length} notifications →` : "View all notifications →"}
                 </button>
               </div>
             </>

@@ -1,4 +1,3 @@
-import { AppTopBar } from "../components/AppTopBar";
 import { SystemOverview } from "../components/SystemOverview";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
@@ -11,8 +10,6 @@ export function OverviewPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4">

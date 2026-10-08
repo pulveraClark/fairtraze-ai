@@ -1,41 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-
-const ROLE_LABEL: Record<string, string> = {
-  INSTRUCTOR: "Instructor",
-  ADMIN:      "Admin",
-  STUDENT:    "Student",
-};
-
-const AVATAR_STYLE: Record<string, string> = {
-  INSTRUCTOR: "border-indigo-400 text-indigo-300",
-  ADMIN:      "border-amber-400  text-amber-300",
-  STUDENT:    "border-teal-400   text-teal-300",
-};
-
-const AVATAR_BG: Record<string, string> = {
-  INSTRUCTOR: "rgba(99,102,241,0.15)",
-  ADMIN:      "rgba(245,158,11,0.15)",
-  STUDENT:    "rgba(20,184,166,0.15)",
-};
+import { AVATAR_BG, AVATAR_STYLE, ROLE_BADGE_DARK, ROLE_LABEL, initials } from "../lib/roleStyle";
 
 // Role badge: dark theme uses translucent; light theme uses solid for readability on white
-const ROLE_BADGE_DARK: Record<string, string> = {
-  INSTRUCTOR: "text-indigo-300 border-indigo-500/50 bg-indigo-500/10",
-  ADMIN:      "text-amber-300  border-amber-500/50  bg-amber-500/10",
-  STUDENT:    "text-teal-300   border-teal-500/50   bg-teal-500/10",
-};
-
 const ROLE_BADGE_LIGHT: Record<string, string> = {
   INSTRUCTOR: "text-indigo-700 border-indigo-200 bg-indigo-50",
   ADMIN:      "text-amber-700  border-amber-200  bg-amber-50",
   STUDENT:    "text-teal-700   border-teal-200   bg-teal-50",
 };
-
-function initials(name: string): string {
-  return name.split(" ").map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
-}
 
 interface Styles {
   trigger:    string;

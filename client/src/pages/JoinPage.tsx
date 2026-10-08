@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 
 function Spinner() {
   return (
@@ -71,7 +70,6 @@ export function JoinPage() {
   if (!code) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
-        <AppTopBar />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-sm w-full text-center space-y-3">
             <p className="text-sm font-medium text-slate-700">No join code found in this link.</p>
@@ -92,7 +90,6 @@ export function JoinPage() {
   if (user && (user.systemRole === "INSTRUCTOR" || user.systemRole === "ADMIN")) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
-        <AppTopBar />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto">
@@ -122,7 +119,6 @@ export function JoinPage() {
   // Student — enrolling / success / error
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-6 pt-5 pb-4 border-b border-slate-100">

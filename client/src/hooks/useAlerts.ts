@@ -142,7 +142,7 @@ export function unreadCountQueryOptions(token: string | null, userId: number | n
 /**
  * Bell state. The unread count is polled (30 s, foreground tabs only) from the
  * count-only endpoint; the full list is fetched only while the dropdown is open.
- * Both bells mounted by AppTopBar share one count query (same key → one request).
+ * The sidebar bell, the mobile menu badge and useInvalidateOnAlertCount share one count query (same key → one request).
  */
 export function useAlerts(options: { listEnabled?: boolean } = {}): UseAlertsReturn {
   const { listEnabled = false } = options;

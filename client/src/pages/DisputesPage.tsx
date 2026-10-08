@@ -4,7 +4,6 @@ import { useAuth } from "../context/AuthContext";
 import { disputeKeys } from "../hooks/useGroupQueries";
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
 import { FlagTag } from "../components/FlagTag";
 import { useToast } from "../components/Toast";
@@ -217,8 +216,6 @@ export function DisputesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">

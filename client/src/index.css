@@ -186,16 +186,32 @@ body {
   color: var(--brand-text-primary);
   margin: 1rem 0 0.5rem;
 }
-/* TOC click target: clear AppTopBar (sticky, h-16 + 1px border at every breakpoint) plus 0.5rem. */
+/* AppShell chrome height above the page: the mobile top bar (3.5rem) below md, nothing at md+
+   where the sidebar sits beside the content. Public (signed-out) frames always have the bar. */
+.ft-app-content { --ft-header-h: 3.5rem; }
+@media (min-width: 48rem) {
+  .ft-app-content:not(.ft-app-content--public) { --ft-header-h: 0px; }
+}
+/* Page roots are min-h-screen; subtract the chrome so the shell never adds a phantom scrollbar. */
+.ft-app-content > .min-h-screen {
+  min-height: calc(100vh - var(--ft-header-h));
+  min-height: calc(100dvh - var(--ft-header-h));
+}
+/* TOC click target: clear the sticky mobile bar (if any) plus 1rem. */
 .ft-doc-content h1,
 .ft-doc-content h2 {
-  scroll-margin-top: calc(4rem + 1px + 0.5rem);
+  scroll-margin-top: calc(var(--ft-header-h, 0px) + 1rem);
 }
-/* Focus mode is a fixed full-viewport overlay above AppTopBar, so no header to clear. */
+/* Focus mode is a fixed full-viewport overlay above the shell, so no header to clear. */
 .ft-focus-scroll .ft-doc-content h1,
 .ft-focus-scroll .ft-doc-content h2 {
   scroll-margin-top: 1rem;
 }
+@keyframes ft-drawer-in {
+  from { transform: translateX(-100%); }
+  to   { transform: none; }
+}
+.ft-drawer-in { animation: ft-drawer-in 0.2s ease-out; }
 .ft-doc-content p {
   margin: 0 0 0.85rem;
 }

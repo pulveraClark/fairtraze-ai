@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { useRouter } from "./router";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AppShell } from "./components/layout/AppShell";
 
 const LandingPage = lazy(() => import("./pages/LandingPage").then((m) => ({ default: m.LandingPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
@@ -32,6 +33,16 @@ function RouteFallback() {
 }
 
 function routeElement(pathname: string) {
+  const page = pageElement(pathname);
+  return usesShell(pathname) ? <AppShell>{page}</AppShell> : page;
+}
+
+/** Signed-in app routes get the sidebar; landing and auth pages never had the app chrome. */
+function usesShell(pathname: string): boolean {
+  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"].includes(pathname);
+}
+
+function pageElement(pathname: string) {
   // Dynamic route: /project/:id (instructor only)
   const detailMatch = pathname.match(/^\/project\/(\d+)$/);
   if (detailMatch) {

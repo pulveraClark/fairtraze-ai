@@ -1,7 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 
 function roleHome(role?: string): string {
   if (role === "STUDENT") return "/student";
@@ -331,8 +330,6 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {showEditModal && profile && (
         <EditProfileModal
           profile={profile}

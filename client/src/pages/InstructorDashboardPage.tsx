@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
-import { AppTopBar } from "../components/AppTopBar";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
@@ -571,8 +570,6 @@ export function InstructorDashboardPage() {
           />
         );
       })()}
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { ApiError, classKeys, groupKeys, useClassProjectsQuery } from "../hooks/useGroupQueries";
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { GroupManageModal } from "../components/GroupManageModal";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -518,8 +518,6 @@ export function StudentClassPage({ classId }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {managingProjectId !== null && (
         <GroupManageModal
           projectId={managingProjectId}
@@ -568,15 +566,12 @@ export function StudentClassPage({ classId }: Props) {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
-            <button
-              onClick={() => navigate("/student")}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Dashboard
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: "Dashboard", href: "/student" },
+                { label: cls?.subjectCode ?? "Class" },
+              ]}
+            />
             <div className="min-w-0">
               {cls ? (
                 <div className="flex items-center gap-2 flex-wrap">

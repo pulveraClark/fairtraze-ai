@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import {
   ApiError, classKeys, disputeKeys, groupKeys,
@@ -7,7 +8,6 @@ import {
 } from "../hooks/useGroupQueries";
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
@@ -316,7 +316,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
-        <AppTopBar />
         <main className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
@@ -330,7 +329,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   if (error || !data) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
-        <AppTopBar />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
             <p className="text-sm text-red-600">{error || "Group not found."}</p>
@@ -369,8 +367,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {showManageModal && (
         <GroupManageModal
           projectId={projectId}
@@ -410,15 +406,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
-            <button
-              onClick={() => navigate(`/student/class/${classSection.id}`)}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to {bandCode}
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: "Dashboard", href: "/student" },
+                { label: bandCode, href: `/student/class/${classSection.id}` },
+                { label: project.groupName },
+              ]}
+            />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 {editingGroupName ? (
