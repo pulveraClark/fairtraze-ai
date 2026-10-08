@@ -392,6 +392,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         <TaskManageModal
           projectId={projectId}
           isInstructor={false}
+          shares={Object.fromEntries((report?.team ?? []).map((m) => [m.userId, m.contributionShare]))}
           onClose={() => setShowTasksModal(false)}
           onChanged={() => void queryClient.invalidateQueries({ queryKey: groupKeys.tasks(uid, projectId) })}
         />

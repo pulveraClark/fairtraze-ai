@@ -274,6 +274,9 @@ Suggesting a role never changes the member's actual `functionalRoles` — only a
 
 This is low-stakes precisely because roles only add context: a mis-assigned functional role cannot protect a member from a contribution flag, since flags are computed from actual recorded traces regardless of the role label.
 
+## Task workload hint (IMPLEMENTED, display-only)
+In `TaskManageModal`, leaders and instructors see each member's open (not done) task count in the Assign-to picker, plus a "Suggested: fewest open tasks" hint (`client/src/lib/taskWorkload.ts` `suggestAssignee`, unit-tested). Ties go to the lower stored contribution share (passed via the optional `shares` prop; only the leader's page has it), otherwise alphabetical. It never auto-selects, regular members never see it, and open counts use the same definition as the leader's "Team contributions" card. **It never affects scores, flags or anything in `shared/`.** There is no edit-task UI yet; `suggestAssignee` already takes `excludeTaskId` for when one is added.
+
 ## Stack
 - **client**: React + Vite + TypeScript + Tailwind + Recharts — an instructor-facing dashboard
 - **server**: Express + TypeScript + Prisma (PostgreSQL, hosted on Neon) + Octokit (GitHub) + Yjs (Collaborative Editor) + Gemini API

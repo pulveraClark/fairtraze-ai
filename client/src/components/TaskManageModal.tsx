@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { groupKeys, useGroupManageQuery, useGroupTasksQuery } from "../hooks/useGroupQueries";
+import { suggestAssignee } from "../lib/taskWorkload";
 
 // Leader/instructor-assigned checklist item. Purely informational — completion
 // never affects contribution scores (see server/src/routes/groups.ts Task routes).
@@ -34,9 +35,11 @@ interface Props {
   isInstructor: boolean;
   onClose: () => void;
   onChanged?: () => void;
+  /** Stored contribution share per userId, when already loaded (leader view). Only used to break workload ties. */
+  shares?: Record<number, number | null>;
 }
 
-export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }: Props) {
+export function TaskManageModal({ projectId, isInstructor, onClose, onChanged, shares }: Props) {
   const { user, token } = useAuth();
 
   const queryClient = useQueryClient();
@@ -155,6 +158,10 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
 
   function renderBody() {
     if (!group) return null;
+    // Workload hint: display-only, never affects scores, never auto-selects. Only managers see it.
+    const hint = canManage ? suggestAssignee(group.members, tasks, shares) : null;
+    const openOf = (userId: number) => hint?.entries.find((e) => e.userId === userId)?.open ?? 0;
+    const suggested = group.members.find((m) => m.userId === hint?.suggestedUserId);
     return (
       <>
         <p className="text-xs text-slate-400 mb-3">
@@ -227,7 +234,9 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
             >
               <option value="">Unassigned</option>
               {group.members.map((m) => (
-                <option key={m.userId} value={m.userId}>{m.name}</option>
+                <option key={m.userId} value={m.userId}>
+                  {m.name} · {openOf(m.userId)} open{m.userId === hint?.suggestedUserId ? " · Suggested" : ""}
+                </option>
               ))}
             </select>
             <button
@@ -238,6 +247,11 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
               Add
             </button>
           </div>
+        )}
+        {canManage && suggested && (
+          <p className="text-xs text-slate-700 mt-1.5">
+            Suggested: fewest open tasks — {suggested.name}. A hint only; you choose who to assign.
+          </p>
         )}
         {createTaskErr && (
           <p className="text-xs text-red-500 mt-1.5">{createTaskErr}</p>
