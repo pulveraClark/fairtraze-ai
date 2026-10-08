@@ -87,4 +87,56 @@ describe("fetchCommitDiffs commit-diff cache", () => {
     expect(repoB.calls).toEqual(["deadbeef"]);
     expect(resultB.codeLinesAdded).toBe(5);
   });
+
+  it("filesChanged counts distinct filenames across the sampled commits (progress display only)", async () => {
+    const touchesFooAgain = [{ filename: "src/foo.ts", status: "modified", additions: 1, deletions: 0, patch: "@@ -1 +1 @@\n+const z = 0;" }];
+    const { octokit } = stubOctokit({ ...FILES_A, sha4: touchesFooAgain });
+
+    const result = await fetchCommitDiffs(octokit, "acme", "widgets-files", ["sha4", "sha3", "sha2", "sha1"]);
+
+    // foo.ts (sha1, sha4), bar.ts (sha2), README.md (sha3) → 3 distinct
+    expect(result.filesChanged).toBe(3);
+  });
+});
+
+// fetchRepoStats builds its own Octokit, so stub the constructor to drive it without network I/O.
+describe("fetchRepoStats onProgress", () => {
+  it("reports cumulative contributors/commits/files after each contributor, and never reports scores", async () => {
+    vi.resetModules();
+    const filesBySha: Record<string, FakeFile[]> = {
+      s1: [{ filename: "a.ts", status: "modified", additions: 1, deletions: 0, patch: "@@ -0,0 +1 @@\n+x" }],
+      s2: [{ filename: "b.ts", status: "modified", additions: 1, deletions: 0, patch: "@@ -0,0 +1 @@\n+y" }],
+    };
+    vi.doMock("@octokit/rest", () => ({
+      Octokit: class {
+        async request(route: string, params: { author?: string; ref?: string }) {
+          if (route.includes("stats/contributors")) {
+            return {
+              status: 200,
+              data: [
+                { author: { login: "ann" }, total: 1, weeks: [{ w: 0, a: 1, d: 0, c: 1 }] },
+                { author: { login: "bob" }, total: 1, weeks: [{ w: 0, a: 1, d: 0, c: 1 }] },
+              ],
+            };
+          }
+          if (route.endsWith("/commits")) {
+            const sha = params.author === "ann" ? "s1" : "s2";
+            return { data: [{ sha, commit: { author: { date: "2026-01-01T00:00:00Z" }, committer: { date: "2026-01-01T00:00:00Z" } } }] };
+          }
+          return { data: { files: filesBySha[params.ref ?? ""] ?? [] } };
+        }
+      },
+    }));
+    const { fetchRepoStats } = await import("./github.js");
+
+    const seen: Array<{ contributors: number; commits: number; files: number }> = [];
+    const result = await fetchRepoStats("https://github.com/acme/progress-repo", "token", [], (p) => seen.push(p));
+
+    expect(seen).toEqual([
+      { contributors: 1, commits: 1, files: 1 },
+      { contributors: 2, commits: 2, files: 2 },
+    ]);
+    expect(result.contributors).toHaveLength(2);
+    vi.doUnmock("@octokit/rest");
+  });
 });

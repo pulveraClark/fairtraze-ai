@@ -23,6 +23,16 @@ export interface GitHubContributorData {
   selfChurnRatio: number;
   commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
   fileTypeBreakdown: { source: number; test: number; docs: number; style: number; config: number; other: number };
+  // Distinct filenames touched across the sampled commits. Progress display only — analyze.ts's
+  // buildRawMembers copies named fields, so this never reaches RawMemberStats or scoring.
+  filesChanged?: number;
+}
+
+// Cumulative collection counts reported while fetchRepoStats runs. Counts only, never scores.
+export interface GitHubProgress {
+  contributors: number;
+  commits: number;
+  files: number;
 }
 
 function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
@@ -187,7 +197,9 @@ export async function fetchCommitDiffs(
   selfChurnRatio: number;
   commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
   fileTypeBreakdown: { source: number; test: number; docs: number; style: number; config: number; other: number };
+  filesChanged: number;
 }> {
+  const distinctFiles = new Set<string>();
   let codeLinesAdded    = 0;
   let commentLinesAdded = 0;
   let blankLinesAdded   = 0;
@@ -218,6 +230,7 @@ export async function fetchCommitDiffs(
 
     for (const file of files) {
       const filename = file.filename;
+      distinctFiles.add(filename);
       const category = categorizeFile(filename);
       const weight   = getFileWeight(filename);
 
@@ -291,13 +304,15 @@ export async function fetchCommitDiffs(
     selfChurnRatio,
     commitImpactBreakdown,
     fileTypeBreakdown,
+    filesChanged: distinctFiles.size,
   };
 }
 
 export async function fetchRepoStats(
   repoUrl: string,
   githubToken: string,
-  requiredLogins: string[] = []
+  requiredLogins: string[] = [],
+  onProgress?: (progress: GitHubProgress) => void
 ): Promise<{ contributors: GitHubContributorData[] }> {
   const octokit = new Octokit({ auth: githubToken });
   const { owner, repo } = parseRepoUrl(repoUrl);
@@ -307,6 +322,20 @@ export async function fetchRepoStats(
 
   const contributors: GitHubContributorData[] = [];
   const processedLogins = new Set<string>();
+
+  // Running totals after each contributor completes. Never throws into the fetch path.
+  const reportProgress = () => {
+    if (!onProgress) return;
+    try {
+      onProgress({
+        contributors: contributors.length,
+        commits:      contributors.reduce((s, c) => s + c.commits, 0),
+        files:        contributors.reduce((s, c) => s + (c.filesChanged ?? 0), 0),
+      });
+    } catch {
+      // progress reporting is best-effort
+    }
+  };
 
   for (const contributor of contributorStats) {
     if (!contributor.author?.login) continue;
@@ -334,6 +363,7 @@ export async function fetchRepoStats(
       commitDates,
       ...lineCounts,
     });
+    reportProgress();
   }
 
   // For any required login the stats API didn't return, fetch directly.
@@ -372,6 +402,7 @@ export async function fetchRepoStats(
       commitDates,
       ...lineCounts,
     });
+    reportProgress();
   }
 
   return { contributors };

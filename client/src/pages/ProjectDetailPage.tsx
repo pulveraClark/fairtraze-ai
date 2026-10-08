@@ -16,6 +16,7 @@ import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
+import { streamAnalyze, applyStreamEvent, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -42,6 +43,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [stepperDone, setStepperDone]     = useState(false);
   // True between the analyze response and the follow-up report reads finishing
   const [loadingReport, setLoadingReport] = useState(false);
+  // Real collection counts/stage streamed from the server while an analysis runs
+  const [progress, setProgress]           = useState<AnalyzeProgress>(INITIAL_PROGRESS);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
   const [showScoringModal, setShowScoringModal] = useState(false);
   // Tracks whether scoring config or membership changed after the last analysis (stale report warning)
@@ -177,17 +180,10 @@ export function ProjectDetailPage({ projectId }: Props) {
   async function handleAnalyze() {
     setReanalyzing(true);
     setStepperDone(false);
+    setProgress(INITIAL_PROGRESS);
     setReanalyzeError(null);
     try {
-      const res  = await fetch(`/api/projects/${projectId}/analyze`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setReanalyzeError((data as { error?: string }).error ?? `Server error ${res.status}`);
-        return;
-      }
+      await streamAnalyze(projectId, token, (ev) => setProgress((prev) => applyStreamEvent(prev, ev)));
       // The analyze call itself is finished: release the button right away and let the
       // panel show a "Loading report…" row while the follow-up reads run in parallel.
       setStepperDone(true);
@@ -199,8 +195,10 @@ export function ProjectDetailPage({ projectId }: Props) {
         fetchHistory(),           // refresh trend chart with the new run
       ]);
       setNotFound(false);
-    } catch {
-      setReanalyzeError("Network error — could not reach the server.");
+    } catch (err) {
+      setReanalyzeError(
+        err instanceof AnalyzeError ? err.message : "Network error — could not reach the server."
+      );
     } finally {
       setReanalyzing(false);
       setLoadingReport(false);
@@ -455,7 +453,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* Loading stepper */}
         {(reanalyzing || loadingReport) && (
-          <AnalysisStepper done={stepperDone} loadingReport={loadingReport} sourceType={sourceType} />
+          <AnalysisStepper progress={progress} done={stepperDone} loadingReport={loadingReport} sourceType={sourceType} />
         )}
 
         {/* Re-analyze error */}

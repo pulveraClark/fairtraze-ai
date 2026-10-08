@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
-import { fetchRepoStats } from "../lib/github.js";
+import { fetchRepoStats, type GitHubProgress } from "../lib/github.js";
 import { computeTeamReport } from "@shared/scoring.js";
 import { computeDocumentTeamReport } from "@shared/documentScoring.js";
 import { computeCombinedTeamReport } from "@shared/combinedScoring.js";
@@ -10,9 +10,91 @@ import { computeDocumentRawStats } from "../collab/editStats.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
 import { notify } from "../lib/notify.js";
-import type { RawMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
+import type { Request, Response } from "express";
+import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
 export const analyzeRouter = Router();
+
+// ── Optional progress stream (SSE) ────────────────────────────────────────────
+// A client that sends `Accept: text/event-stream` (or ?stream=1) gets stage events while the
+// analysis runs, then a final `done` event carrying the same AnalyzeResponse the plain JSON path
+// returns. Every other client gets exactly the previous single JSON response: finish() falls
+// through to res.status(...).json(...) and emit() is a no-op.
+//
+// Event payloads are built from literal count fields only — never spread from a report or member
+// object — so no score, flag, Gini or team-health value can appear before `done`.
+//
+// If compression() middleware is ever added to app.ts, it must skip text/event-stream responses
+// (the no-transform header below only stops well-behaved intermediaries).
+interface ProgressEmitter {
+  readonly stream: boolean;
+  readonly opened: boolean;
+  open(): void;
+  emit(event: "github" | "docs" | "compute" | "save", data: Record<string, number>): void;
+  finish(status: number, body: object): void;
+}
+
+const KEEP_ALIVE_MS = 10_000;
+
+function createProgressEmitter(req: Request, res: Response): ProgressEmitter {
+  const stream = (req.headers.accept ?? "").includes("text/event-stream") || req.query.stream === "1";
+  let opened = false;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const write = (chunk: string) => {
+    if (res.writableEnded || res.destroyed) return;
+    res.write(chunk);
+    (res as Response & { flush?: () => void }).flush?.();
+  };
+  const stop = () => {
+    if (timer) { clearInterval(timer); timer = null; }
+  };
+
+  return {
+    stream,
+    get opened() { return opened; },
+    open() {
+      if (!stream || opened) return;
+      opened = true;
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+      timer = setInterval(() => write(": keep-alive\n\n"), KEEP_ALIVE_MS);
+      timer.unref();
+      res.on("close", stop);
+    },
+    emit(event, data) {
+      if (!opened) return;
+      write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    },
+    finish(status, body) {
+      if (!stream) {
+        res.status(status).json(body);
+        return;
+      }
+      this.open();
+      if (status === 200) write(`event: done\ndata: ${JSON.stringify(body)}\n\n`);
+      else write(`event: error\ndata: ${JSON.stringify({ status, ...body })}\n\n`);
+      stop();
+      if (!res.writableEnded) res.end();
+    },
+  };
+}
+
+function emitGithubProgress(progress: ProgressEmitter, p: GitHubProgress): void {
+  progress.emit("github", { contributors: p.contributors, commits: p.commits, files: p.files });
+}
+
+// Counts summed from the already-computed raw doc stats (computeDocumentRawStats is untouched).
+function emitDocsProgress(progress: ProgressEmitter, raw: RawDocumentMemberStats[]): void {
+  progress.emit("docs", {
+    sessions:   raw.reduce((s, m) => s + m.sessionCount, 0),
+    characters: raw.reduce((s, m) => s + m.totalInsertedChars, 0),
+  });
+}
 
 // Tells each group member a fresh report is available. Students see the latest report as soon
 // as it is stored (GET /api/student/group/:projectId has no release gate), so this fires right
@@ -120,6 +202,19 @@ function buildRawMembers(
 // generates a new one — use the /narrative endpoint for that.
 
 analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), requireVerifiedEmail, async (req, res) => {
+  const progress = createProgressEmitter(req, res);
+  try {
+    await runAnalyze(req, res, progress);
+  } catch (err) {
+    // Plain JSON clients: rethrow so Express's error handler responds exactly as before.
+    // Once the stream is open, headers are already sent, so report the failure as an event.
+    if (!progress.opened) throw err;
+    console.error(err);
+    progress.finish(500, { error: err instanceof Error ? err.message : "Internal server error" });
+  }
+});
+
+async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter): Promise<void> {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid project id" });
@@ -152,6 +247,10 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
   const sourceType = project.assignment?.sourceType ?? null;
   const deadlineMs = project.assignment?.deadline ? project.assignment.deadline.getTime() : null;
 
+  // Validation/ownership errors above stay plain JSON; from here on a streaming client
+  // gets stage events and a terminal done/error event.
+  progress.open();
+
   if (sourceType === "EDITOR") {
     const roster = project.groupMemberships.map((m) => ({
       userId: m.user.id,
@@ -159,11 +258,14 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
       githubUsername: m.user.githubUsername ?? "",
     }));
     const rawMembers = await computeDocumentRawStats(project.document?.id ?? null, roster);
+    emitDocsProgress(progress, rawMembers);
+    progress.emit("compute", {});
     const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
     const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
     const savedNarrative = stored.narrative ?? null;
+    progress.emit("save", {});
     const createdReport = await prisma.report.create({
       data: {
         projectId,
@@ -199,35 +301,56 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
       report,
       narrative:             savedNarrative,
     };
-    res.status(200).json(response);
+    progress.finish(200, response);
     return;
   }
 
   if (sourceType === "COMBINED") {
     const githubToken = process.env.GITHUB_TOKEN;
     if (!githubToken) {
-      res.status(500).json({ error: "GITHUB_TOKEN is not set" });
+      progress.finish(500, { error: "GITHUB_TOKEN is not set" });
       return;
     }
 
     const requiredLogins = project.members.map((m) => m.githubUsername);
+    const roster = project.groupMemberships.map((m) => ({
+      userId:         m.user.id,
+      studentName:    m.user.name,
+      githubUsername: m.user.githubUsername ?? "",
+    }));
 
-    let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
-    try {
-      rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins);
-    } catch (err: unknown) {
+    // GitHub and editor collection read disjoint inputs (GitHub API + CachedCommitDiff vs.
+    // EditEvent/EditSession) and both results feed the same scoring calls unchanged, so running
+    // them concurrently changes no scoring input. allSettled (not all) keeps today's error
+    // precedence: a GitHub failure is reported with the same mapped status/body as before even if
+    // the docs read also failed, and a docs-only failure propagates exactly as it did sequentially.
+    progress.emit("github", { contributors: 0, commits: 0, files: 0 });
+    const [githubResult, docsResult] = await Promise.allSettled([
+      fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p)),
+      computeDocumentRawStats(project.document?.id ?? null, roster).then((raw) => {
+        emitDocsProgress(progress, raw);
+        return raw;
+      }),
+    ]);
+
+    if (githubResult.status === "rejected") {
+      const err = githubResult.reason;
       const e = err as { status?: number; message?: string };
       if (e.status === 404) {
-        res.status(404).json({ error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
+        progress.finish(404, { error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
         return;
       }
       if (e.status === 403 || e.status === 429) {
-        res.status(429).json({ error: "GitHub rate limit exceeded" });
+        progress.finish(429, { error: "GitHub rate limit exceeded" });
         return;
       }
-      res.status(502).json({ error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
+      progress.finish(502, { error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
       return;
     }
+    if (docsResult.status === "rejected") throw docsResult.reason;
+
+    const rawData = githubResult.value;
+    const documentRaw = docsResult.value;
 
     const { rawMembers: githubRaw, unmatchedLogins } = buildRawMembers(project.members, rawData.contributors);
 
@@ -248,14 +371,9 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
       },
     };
 
+    progress.emit("compute", {});
     const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
 
-    const roster = project.groupMemberships.map((m) => ({
-      userId:         m.user.id,
-      studentName:    m.user.name,
-      githubUsername: m.user.githubUsername ?? "",
-    }));
-    const documentRaw    = await computeDocumentRawStats(project.document?.id ?? null, roster);
     const documentReport = computeDocumentTeamReport(documentRaw, undefined, undefined, deadlineMs);
 
     const report = computeCombinedTeamReport(
@@ -266,6 +384,7 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
     const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
     const savedNarrative = stored.narrative ?? null;
+    progress.emit("save", {});
     const createdReport = await prisma.report.create({
       data: {
         projectId,
@@ -314,13 +433,13 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
       report,
       narrative:             savedNarrative,
     };
-    res.status(200).json(response);
+    progress.finish(200, response);
     return;
   }
 
   const githubToken = process.env.GITHUB_TOKEN;
   if (!githubToken) {
-    res.status(500).json({ error: "GITHUB_TOKEN is not set" });
+    progress.finish(500, { error: "GITHUB_TOKEN is not set" });
     return;
   }
 
@@ -329,18 +448,19 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
 
   let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
   try {
-    rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins);
+    progress.emit("github", { contributors: 0, commits: 0, files: 0 });
+    rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p));
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
     if (e.status === 404) {
-      res.status(404).json({ error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
+      progress.finish(404, { error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
       return;
     }
     if (e.status === 403 || e.status === 429) {
-      res.status(429).json({ error: "GitHub rate limit exceeded" });
+      progress.finish(429, { error: "GitHub rate limit exceeded" });
       return;
     }
-    res.status(502).json({ error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
+    progress.finish(502, { error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
     return;
   }
 
@@ -363,6 +483,7 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     },
   };
 
+  progress.emit("compute", {});
   const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);
 
@@ -379,6 +500,7 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     ? (JSON.parse(existing.content) as { report?: TeamReport; narrative?: string })
     : {};
   const savedNarrative = stored.narrative ?? null;
+  progress.emit("save", {});
   await prisma.report.create({
     data: {
       projectId,
@@ -412,8 +534,8 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     narrative:             savedNarrative,
   };
 
-  res.status(200).json(response);
-});
+  progress.finish(200, response);
+}
 
 // ── POST /api/projects/:id/narrative ─────────────────────────────────────────
 // Generates (or returns cached) the AI narrative for the project's latest report.
