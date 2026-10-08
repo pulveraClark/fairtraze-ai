@@ -15,19 +15,20 @@ export interface PresentUser {
 
 export const ToolbarButton = forwardRef<
   HTMLButtonElement,
-  { onClick: () => void; active: boolean; label: string; children: React.ReactNode }
->(function ToolbarButton({ onClick, active, label, children }, ref) {
+  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean }
+>(function ToolbarButton({ onClick, active, label, children, disabled }, ref) {
   return (
     <button
       ref={ref}
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className={`w-7 h-7 rounded flex items-center justify-center text-sm font-semibold transition-colors ${
+      className={`w-8 h-8 shrink-0 rounded flex items-center justify-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed ${
         active
           ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
-          : "text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+          : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
       }`}
     >
       {children}
@@ -152,10 +153,10 @@ const MenuTriggerButton = forwardRef<
       aria-label={label}
       aria-haspopup="menu"
       aria-expanded={active}
-      className={`h-7 px-2 rounded flex items-center gap-1 text-xs font-semibold transition-colors shrink-0 ${
+      className={`h-8 px-2 rounded flex items-center gap-1 text-xs font-semibold transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 ${
         active
           ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
-          : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+          : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
       }`}
     >
       {label}
@@ -220,16 +221,13 @@ function MenuItemButton({
 // Always visible (not conditional on cursor position) so table editing is discoverable even
 // before/after the cursor is inside a table — row/column operations are shown disabled rather
 // than omitted when there's no table at the cursor, instead of vanishing entirely as they used to.
-function TableMenu({ editor }: { editor: Editor }) {
+function TableMenu({ editor, inline = false }: { editor: Editor; inline?: boolean }) {
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
   const close = () => setOpen(false);
   const inTable = editor.isActive("table");
 
-  return (
+  const body = (
     <>
-      <MenuTriggerButton ref={btnRef} label="Table" active={open} onClick={() => setOpen((v) => !v)} />
-      {open && pos && (
-        <DropdownPanel pos={pos} menuRef={menuRef}>
           <MenuItemButton
             label="Insert table"
             onClick={() => {
@@ -309,6 +307,16 @@ function TableMenu({ editor }: { editor: Editor }) {
               </svg>
             }
           />
+    </>
+  );
+  if (inline) return body;
+
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="Table" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
+          {body}
         </DropdownPanel>
       )}
     </>
@@ -317,14 +325,11 @@ function TableMenu({ editor }: { editor: Editor }) {
 
 // Text color/highlight/family/size/spacing — only ever shown when editable (read-only viewers
 // have nothing to format).
-function FormatMenu({ editor }: { editor: Editor }) {
+function FormatMenu({ editor, inline = false }: { editor: Editor; inline?: boolean }) {
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
 
-  return (
+  const body = (
     <>
-      <MenuTriggerButton ref={btnRef} label="Format" active={open} onClick={() => setOpen((v) => !v)} />
-      {open && pos && (
-        <DropdownPanel pos={pos} menuRef={menuRef}>
           <div className="px-1.5 pb-1.5 flex items-center gap-2">
                 <span className="text-slate-500 w-14 shrink-0">Text color</span>
                 <div className="flex items-center gap-1">
@@ -443,6 +448,16 @@ function FormatMenu({ editor }: { editor: Editor }) {
                   ))}
                 </select>
               </div>
+    </>
+  );
+  if (inline) return body;
+
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="Format" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
+          {body}
         </DropdownPanel>
       )}
     </>
@@ -548,6 +563,52 @@ export function AuthorshipLegend({
   );
 }
 
+const Divider = () => <span className="w-px h-5 bg-slate-300 mx-1.5 shrink-0" aria-hidden="true" />;
+
+const Icon = ({ d }: { d: string }) => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+  </svg>
+);
+
+// Container-width breakpoints (the toolbar's own width, not the viewport — the editor sits beside
+// panels). As the toolbar narrows, groups move into the "More" menu in this order: Review, Insert,
+// Paragraph, Formatting, then the View buttons. File, History and Text style always stay inline.
+function overflowFor(width: number) {
+  return {
+    review: width < 1180,
+    insert: width < 1060,
+    paragraph: width < 940,
+    formatting: width < 820,
+    view: width < 520,
+    showCount: width >= 760,
+    showPresence: width >= 640,
+  };
+}
+
+function MoreMenu({ children }: { children: React.ReactNode }) {
+  const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="More" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={{ top: pos.top, left: Math.max(8, Math.min(pos.left, window.innerWidth - 248)) }} menuRef={menuRef}>
+          {children}
+        </DropdownPanel>
+      )}
+    </>
+  );
+}
+
+function MoreSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="pb-2 mb-2 border-b border-slate-100 last:border-0 last:pb-0 last:mb-0">
+      <p className="px-1.5 pb-1 text-xs font-semibold text-slate-600">{title}</p>
+      <div className="flex flex-wrap items-center gap-0.5">{children}</div>
+    </div>
+  );
+}
+
 export function Toolbar({
   editor,
   editable,
@@ -603,147 +664,177 @@ export function Toolbar({
   const wordCount = editor.storage.characterCount?.words?.() ?? 0;
   const charCount = editor.storage.characterCount?.characters?.() ?? 0;
 
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(1200);
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const measure = () => setWidth(el.getBoundingClientRect().width);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const ov = overflowFor(width);
+
+  const textStyleValue = editor.isActive("heading", { level: 1 })
+    ? "h1"
+    : editor.isActive("heading", { level: 2 })
+      ? "h2"
+      : "p";
+
+  // ── Groups. Each is a plain JSX value so the identical buttons render inline or inside "More". ──
+  const history = (
+    <>
+      <ToolbarButton label="Undo" active={false} disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
+        <Icon d="M3 10h10a5 5 0 010 10H9M3 10l4-4m-4 4l4 4" />
+      </ToolbarButton>
+      <ToolbarButton label="Redo" active={false} disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
+        <Icon d="M21 10H11a5 5 0 000 10h4m6-10l-4-4m4 4l-4 4" />
+      </ToolbarButton>
+    </>
+  );
+
+  const textStyle = (
+    <select
+      title="Text style"
+      aria-label="Text style"
+      value={textStyleValue}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === "p") editor.chain().focus().setParagraph().run();
+        else editor.chain().focus().setHeading({ level: v === "h1" ? 1 : 2 }).run();
+      }}
+      className="h-8 text-xs text-slate-700 border border-slate-300 rounded bg-white px-1.5 w-[7.5rem] shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+    >
+      <option value="p">Normal text</option>
+      <option value="h1">Heading 1</option>
+      <option value="h2">Heading 2</option>
+    </select>
+  );
+
+  const formattingButtons = (
+    <>
+      <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+        B
+      </ToolbarButton>
+      <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <span className="italic">I</span>
+      </ToolbarButton>
+      <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+        <span className="underline">U</span>
+      </ToolbarButton>
+      <ToolbarButton label="Superscript" active={editor.isActive("superscript")} onClick={() => editor.chain().focus().toggleSuperscript().run()}>
+        <span className="text-xs">x<sup>2</sup></span>
+      </ToolbarButton>
+      <ToolbarButton label="Subscript" active={editor.isActive("subscript")} onClick={() => editor.chain().focus().toggleSubscript().run()}>
+        <span className="text-xs">x<sub>2</sub></span>
+      </ToolbarButton>
+    </>
+  );
+
+  const paragraph = (
+    <>
+      <ToolbarButton label="Align left" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
+        <Icon d="M4 6h16M4 12h10M4 18h13" />
+      </ToolbarButton>
+      <ToolbarButton label="Align center" active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
+        <Icon d="M4 6h16M7 12h10M5.5 18h13" />
+      </ToolbarButton>
+      <ToolbarButton label="Align right" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
+        <Icon d="M4 6h16M10 12h10M7 18h13" />
+      </ToolbarButton>
+      <ToolbarButton label="Bulleted list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <Icon d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+      </ToolbarButton>
+      <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <Icon d="M8 6h13M8 12h13M8 18h13M4 6h1v2M4 10h2l-2 2h2M4 18h2M4 16h2" />
+      </ToolbarButton>
+    </>
+  );
+
+  const imageButton = (
+    <ToolbarButton label="Insert image" active={false} onClick={onInsertImageClick}>
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
+      </svg>
+    </ToolbarButton>
+  );
+
+  // Bubble-with-plus, deliberately distinct from the plain-bubble "Comments" panel toggle.
+  const commentButton = (
+    <ToolbarButton label="Add comment" active={false} onClick={onAddComment}>
+      <svg className={`w-4 h-4 ${hasSelection ? "" : "opacity-40"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m-2-2h4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    </ToolbarButton>
+  );
+
+  const viewButtons = (
+    <>
+      <ToolbarButton label="Highlight authorship" active={showAuthorship} onClick={onToggleAuthorship}>
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+      </ToolbarButton>
+      <ToolbarButton label="Comments" active={showComments} onClick={onToggleComments}>
+        <Icon d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </ToolbarButton>
+      <ToolbarButton label="Table of contents" active={showToc} onClick={onToggleToc}>
+        <Icon d="M4 6h16M4 12h10M4 18h7" />
+      </ToolbarButton>
+      <ToolbarButton label={focusMode ? "Exit full screen" : "Full screen"} active={focusMode} onClick={onToggleFocusMode}>
+        {focusMode ? (
+          <Icon d="M9 4v4a1 1 0 01-1 1H4M4 9V4m0 5l6-6m9 1v4a1 1 0 001 1h4m0-5v4m0-4l-6 6M15 20v-4a1 1 0 011-1h4M20 15v5m0-5l-6 6M9 20v-4a1 1 0 00-1-1H4m5 5v-5m0 5l-6-6" />
+        ) : (
+          <Icon d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3" />
+        )}
+      </ToolbarButton>
+    </>
+  );
+
+  const segmented = (label: string, children: React.ReactNode) => (
+    <div className="flex items-center rounded border border-slate-300 overflow-hidden ml-1 shrink-0" role="group" aria-label={label}>
+      {children}
+    </div>
+  );
+  const segBtn = (active: boolean) =>
+    `px-2 h-8 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 ${
+      active ? "bg-indigo-100 text-indigo-700" : "bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+    }`;
+
+  const moreSections: React.ReactNode[] = [];
+  if (editable) {
+    if (ov.formatting) {
+      moreSections.push(
+        <MoreSection key="fmt" title="Formatting">
+          {formattingButtons}
+          <div className="w-full pt-1"><FormatMenu editor={editor} inline /></div>
+        </MoreSection>
+      );
+    }
+    if (ov.paragraph) moreSections.push(<MoreSection key="para" title="Paragraph">{paragraph}</MoreSection>);
+    if (ov.insert) {
+      moreSections.push(
+        <MoreSection key="ins" title="Insert">
+          {imageButton}
+          <div className="w-full pt-1"><TableMenu editor={editor} inline /></div>
+        </MoreSection>
+      );
+    }
+    if (ov.review) moreSections.push(<MoreSection key="rev" title="Review">{commentButton}</MoreSection>);
+  }
+  if (ov.view) moreSections.push(<MoreSection key="view" title="View">{viewButtons}</MoreSection>);
+
   return (
-    <div className="flex items-center gap-0.5 px-3 py-2 border-b border-slate-100 bg-slate-50 overflow-x-auto">
-      {editable && (
-        <>
-          {/* Home: the highest-frequency formatting actions, always visible. */}
-          <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
-            B
-          </ToolbarButton>
-          <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
-            <span className="italic">I</span>
-          </ToolbarButton>
-          <ToolbarButton
-            label="Superscript"
-            active={editor.isActive("superscript")}
-            onClick={() => editor.chain().focus().toggleSuperscript().run()}
-          >
-            <span className="text-xs">x<sup>2</sup></span>
-          </ToolbarButton>
-          <ToolbarButton
-            label="Subscript"
-            active={editor.isActive("subscript")}
-            onClick={() => editor.chain().focus().toggleSubscript().run()}
-          >
-            <span className="text-xs">x<sub>2</sub></span>
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
-          <ToolbarButton
-            label="Heading 1"
-            active={editor.isActive("heading", { level: 1 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          >
-            H1
-          </ToolbarButton>
-          <ToolbarButton
-            label="Heading 2"
-            active={editor.isActive("heading", { level: 2 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          >
-            H2
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
-          <ToolbarButton
-            label="Bullet list"
-            active={editor.isActive("bulletList")}
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
-            </svg>
-          </ToolbarButton>
-          <ToolbarButton
-            label="Numbered list"
-            active={editor.isActive("orderedList")}
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M4 6h1v2M4 10h2l-2 2h2M4 18h2M4 16h2" />
-            </svg>
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
-          <ToolbarButton
-            label="Align left"
-            active={editor.isActive({ textAlign: "left" })}
-            onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h13" />
-            </svg>
-          </ToolbarButton>
-          <ToolbarButton
-            label="Align center"
-            active={editor.isActive({ textAlign: "center" })}
-            onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M7 12h10M5.5 18h13" />
-            </svg>
-          </ToolbarButton>
-          <ToolbarButton
-            label="Align right"
-            active={editor.isActive({ textAlign: "right" })}
-            onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M10 12h10M7 18h13" />
-            </svg>
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
-          {/* Insert: also reached for on essentially every editing pass. Table is a labeled
-              dropdown (not a bare icon) and always visible, so row/column editing is discoverable
-              even outside a table — its entries render disabled rather than vanishing. */}
-          <TableMenu editor={editor} />
-
-          <ToolbarButton label="Insert image" active={false} onClick={onInsertImageClick}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
-            </svg>
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-
-          {/* Bubble-with-plus, deliberately distinct from the plain-bubble "Comments" panel
-              toggle below (they used to share one identical SVG path). */}
-          <ToolbarButton label="Add comment" active={false} onClick={onAddComment}>
-            <svg
-              className={`w-4 h-4 ${hasSelection ? "" : "opacity-40"}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m-2-2h4M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </ToolbarButton>
-
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-        </>
-      )}
-      {!editable && (
-        <>
-          <span className="text-xs text-slate-400 font-medium">Viewing (read-only)</span>
-          <span className="w-px h-4 bg-slate-200 mx-1.5" />
-        </>
-      )}
-
-      {/* Format (color/highlight/font) and File (import/export/print) — the comparatively
-          occasional actions, each behind its own purpose-named dropdown instead of one generic
-          catch-all button. Format only makes sense when editable; File is rendered in both
-          editable and read-only views since Export/Print must stay reachable for an instructor
-          without edit rights (FileMenu hides Import internally when !editable). */}
-      {editable && <FormatMenu editor={editor} />}
+    <div ref={rootRef} className="flex flex-nowrap items-center gap-0.5 px-3 py-2 border-b border-slate-100 bg-slate-50 min-w-0">
+      {/* File: always reachable, including read-only (Export/Print for an instructor). */}
       <FileMenu
         editable={editable}
         importing={importing}
@@ -753,98 +844,104 @@ export function Toolbar({
         onExportPdf={onExportPdf}
       />
 
-      <span className="w-px h-4 bg-slate-200 mx-1.5" />
+      {editable ? (
+        <>
+          <Divider />
+          {history}
+          <Divider />
+          {textStyle}
+          {!ov.formatting && (
+            <>
+              <Divider />
+              {formattingButtons}
+              <FormatMenu editor={editor} />
+            </>
+          )}
+          {!ov.paragraph && (
+            <>
+              <Divider />
+              {paragraph}
+            </>
+          )}
+          {!ov.insert && (
+            <>
+              <Divider />
+              <TableMenu editor={editor} />
+              {imageButton}
+            </>
+          )}
+          {!ov.review && (
+            <>
+              <Divider />
+              {commentButton}
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <Divider />
+          <span className="text-xs text-slate-600 font-medium whitespace-nowrap">Viewing (read-only)</span>
+        </>
+      )}
 
-      {/* View: one-click collaboration/review toggles, always visible. */}
-      <ToolbarButton label="Highlight authorship" active={showAuthorship} onClick={onToggleAuthorship}>
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="3" y="3" width="7" height="7" rx="1.5" />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" />
-        </svg>
-      </ToolbarButton>
+      {moreSections.length > 0 && (
+        <>
+          <Divider />
+          <MoreMenu>{moreSections}</MoreMenu>
+        </>
+      )}
 
-      <ToolbarButton label="Comments" active={showComments} onClick={onToggleComments}>
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      </ToolbarButton>
-
-      <ToolbarButton label="Table of contents" active={showToc} onClick={onToggleToc}>
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h7" />
-        </svg>
-      </ToolbarButton>
-
-      <ToolbarButton
-        label={focusMode ? "Exit full screen" : "Full screen"}
-        active={focusMode}
-        onClick={onToggleFocusMode}
-      >
-        {focusMode ? (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 4v4a1 1 0 01-1 1H4M4 9V4m0 5l6-6m9 1v4a1 1 0 001 1h4m0-5v4m0-4l-6 6M15 20v-4a1 1 0 011-1h4M20 15v5m0-5l-6 6M9 20v-4a1 1 0 00-1-1H4m5 5v-5m0 5l-6-6" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3" />
-          </svg>
+      {/* View: right side — authorship colors, comments panel, outline, focus mode, then counts + presence. */}
+      <div className="ml-auto flex items-center gap-0.5 pl-2 shrink-0">
+        {!ov.view && (
+          <>
+            {viewButtons}
+            {focusMode &&
+              segmented(
+                "Paper size",
+                (["short", "long"] as const).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    title={size === "short" ? "Short — 8.5×11in" : "Long — 8.5×13in"}
+                    aria-label={size === "short" ? "Short paper — 8.5×11in" : "Long paper — 8.5×13in"}
+                    onClick={() => onChangePageSize(size)}
+                    className={`${segBtn(pageSize === size)} capitalize`}
+                  >
+                    {size}
+                  </button>
+                ))
+              )}
+            {focusMode &&
+              segmented(
+                "Zoom",
+                [0.75, 1, 1.25].map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    title={`${Math.round(level * 100)}%`}
+                    aria-label={`Zoom ${Math.round(level * 100)}%`}
+                    onClick={() => onChangeZoom(level)}
+                    className={segBtn(zoom === level)}
+                  >
+                    {Math.round(level * 100)}%
+                  </button>
+                ))
+              )}
+          </>
         )}
-      </ToolbarButton>
-
-      {focusMode && (
-        <div className="flex items-center rounded border border-slate-200 overflow-hidden ml-1" role="group" aria-label="Paper size">
-          {(["short", "long"] as const).map((size) => (
-            <button
-              key={size}
-              type="button"
-              title={size === "short" ? "Short — 8.5×11in" : "Long — 8.5×13in"}
-              onClick={() => onChangePageSize(size)}
-              className={`px-2 h-7 text-xs font-semibold capitalize transition-colors ${
-                pageSize === size
-                  ? "bg-indigo-100 text-indigo-700"
-                  : "bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
-              }`}
-            >
-              {size}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {focusMode && (
-        <div className="flex items-center rounded border border-slate-200 overflow-hidden ml-1" role="group" aria-label="Zoom">
-          {[0.75, 1, 1.25].map((level) => (
-            <button
-              key={level}
-              type="button"
-              title={`${Math.round(level * 100)}%`}
-              onClick={() => onChangeZoom(level)}
-              className={`px-2 h-7 text-xs font-semibold transition-colors ${
-                zoom === level
-                  ? "bg-indigo-100 text-indigo-700"
-                  : "bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
-              }`}
-            >
-              {Math.round(level * 100)}%
-            </button>
-          ))}
-        </div>
-      )}
-
-      <span className="text-xs text-slate-400 whitespace-nowrap pl-1">
-        {wordCount} word{wordCount === 1 ? "" : "s"} · {charCount} char{charCount === 1 ? "" : "s"}
-      </span>
-
-      <div className="ml-auto flex items-center gap-2 pl-2 shrink-0">
+        {ov.showCount && (
+          <span className="text-xs text-slate-600 whitespace-nowrap pl-2 tabular-nums">
+            {wordCount} word{wordCount === 1 ? "" : "s"} · {charCount} char{charCount === 1 ? "" : "s"}
+          </span>
+        )}
         {statusLabel && (
-          <span className={`text-xs ${connStatus === "connecting" ? "text-slate-400" : "text-amber-500"}`}>
+          <span className={`text-xs pl-2 whitespace-nowrap ${connStatus === "connecting" ? "text-slate-600" : "text-amber-700"}`}>
             {statusLabel}
           </span>
         )}
-        {presentUsers.length > 0 && (
-          <div className="flex items-center -space-x-1.5">
+        {ov.showPresence && presentUsers.length > 0 && (
+          <div className="flex items-center -space-x-1.5 pl-2">
             {presentUsers.map((u) => (
               <PresenceChip key={u.clientId} user={u} />
             ))}

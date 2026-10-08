@@ -33,6 +33,8 @@
     "@tiptap/react": "^3.27.2",
     "@tiptap/starter-kit": "^3.27.2",
     "@tiptap/y-tiptap": "^3.0.6",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "framer-motion": "^12.42.2",
     "qrcode.react": "^4.2.0",
     "react": "^19.1.0",

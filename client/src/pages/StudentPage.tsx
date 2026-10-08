@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../hooks/useStudentClassesQuery";
 import type { EnrolledClass } from "../hooks/useStudentClassesQuery";
+import { QrScanner } from "../components/QrScanner";
+import { extractJoinCode } from "../lib/joinCodeFromQr";
 
 // ── Gradient palette ──────────────────────────────────────────────────────────
 const BAND_GRADIENTS = [
@@ -40,6 +42,7 @@ function JoinClassModal({
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
   const [done, setDone]         = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [enrolled, setEnrolled] = useState<{ subjectCode: string; subjectName: string } | null>(null);
 
   useEffect(() => {
@@ -47,6 +50,13 @@ function JoinClassModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  function handleScanResult(text: string) {
+    setScanning(false);
+    const code = extractJoinCode(text);
+    if (code) { setJoinCode(code); setError(""); }
+    else setError("That QR code isn't a FairTraze class code.");
+  }
 
   async function handleEnroll() {
     if (!joinCode.trim()) { setError("Please enter a join code."); return; }
@@ -81,7 +91,7 @@ function JoinClassModal({
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Join a Class</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {done ? "Enrollment successful" : "Enter the class join code from your instructor"}
+              {done ? "Enrollment successful" : "Enter or scan the class join code from your instructor"}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
@@ -137,6 +147,24 @@ function JoinClassModal({
                 </button>
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
+              {scanning ? (
+                <QrScanner onResult={handleScanResult} onCancel={() => setScanning(false)} />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setError(""); setScanning(true); }}
+                  disabled={loading}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path strokeLinecap="round" d="M14 14h2v2h-2zM18 14h3M14 18h2M18 18h3v3M21 14v2" />
+                  </svg>
+                  Scan QR code
+                </button>
+              )}
             </div>
           )}
         </div>
