@@ -10,6 +10,7 @@ import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../li
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
+import { notify, activeAdminIds } from "../lib/notify.js";
 
 export const authRouter = Router();
 
@@ -44,11 +45,15 @@ function clearRefreshCookie(res: Response): void {
   });
 }
 
+// ADMIN is deliberately absent: admin accounts come only from the seed script
+// or an existing admin (PATCH /api/admin/users/:id/role), never from signup.
+const SELF_REGISTRABLE_ROLES = ["INSTRUCTOR", "STUDENT"] as const;
+
 const registerSchema = z.object({
   email:    z.string().email(),
   password: z.string().min(8),
   name:     z.string().min(1),
-  role:     z.enum(["ADMIN", "INSTRUCTOR", "STUDENT"]).optional(),
+  role:     z.enum(SELF_REGISTRABLE_ROLES).optional(),
 });
 
 const loginSchema = z.object({
@@ -154,6 +159,21 @@ authRouter.post("/api/auth/login", async (req, res) => {
         lockedUntil: locked ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null,
       },
     });
+
+    // Locked accounts return early above, so this fires once per lock cycle.
+    // collapse keeps a still-unread notice from stacking if the account re-locks.
+    if (locked) {
+      await notify({
+        recipientIds: activeAdminIds,
+        type:         "ACCOUNT_LOCKED",
+        message:      `Account locked after repeated failed sign-ins: ${user.name}`,
+        link:         "/admin",
+        refType:      "USER",
+        refId:        user.id,
+        collapse:     true,
+      });
+    }
+
     res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
     return;
   }
@@ -231,13 +251,18 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (user && user.active) {
-    const rawToken = await issueResetToken(user.id);
-    const resetLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/reset-password?token=${rawToken}`;
-    // A delivery failure must not change the response — that would leak
+    // Any failure here (token issue, a synchronous throw from the sender, or an
+    // async delivery failure) must not change the response — that would leak
     // whether the email is registered, and would break the UX besides.
-    sendPasswordResetEmail(user.email, user.name, resetLink).catch((err) =>
-      console.error("[auth] failed to send password reset email", err)
-    );
+    try {
+      const rawToken = await issueResetToken(user.id);
+      const resetLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/reset-password?token=${rawToken}`;
+      Promise.resolve(sendPasswordResetEmail(user.email, user.name, resetLink)).catch((err) =>
+        console.error("[auth] failed to send password reset email", err)
+      );
+    } catch (err) {
+      console.error("[auth] failed to start password reset", err);
+    }
   }
 
   res.json({ message: GENERIC_FORGOT_PASSWORD_MESSAGE });

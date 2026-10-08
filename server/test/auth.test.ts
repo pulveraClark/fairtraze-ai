@@ -54,6 +54,28 @@ describe("POST /api/auth/register", () => {
     expect(dbUser?.emailVerified).toBe(false);
   });
 
+  it("rejects a self-registered ADMIN role with 400 and creates no account", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      email: "sneaky-admin@example.com",
+      password: "password123",
+      name: "Sneaky",
+      role: "ADMIN",
+    });
+    expect(res.status).toBe(400);
+    expect(await prisma.user.findUnique({ where: { email: "sneaky-admin@example.com" } })).toBeNull();
+  });
+
+  it.each(["INSTRUCTOR", "STUDENT"] as const)("still allows self-registering as %s", async (role) => {
+    const res = await request(app).post("/api/auth/register").send({
+      email: `${role.toLowerCase()}@example.com`,
+      password: "password123",
+      name: "Allowed",
+      role,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.user.systemRole).toBe(role);
+  });
+
   it("rejects a duplicate email with 409", async () => {
     await createUser({ email: "dup@example.com" });
     const res = await request(app).post("/api/auth/register").send({
@@ -178,6 +200,21 @@ describe("password reset flow", () => {
     expect(existingRes.status).toBe(200);
     expect(nonExistingRes.status).toBe(200);
     expect(existingRes.body.message).toBe(nonExistingRes.body.message);
+  });
+
+  it("returns the identical generic response when the email sender throws synchronously", async () => {
+    await createUser({ email: "sendfails@example.com" });
+    const { sendPasswordResetEmail } = await import("../src/lib/email.js");
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(sendPasswordResetEmail).mockImplementationOnce(() => { throw new Error("boom"); });
+    try {
+      const failing = await request(app).post("/api/auth/forgot-password").send({ email: "sendfails@example.com" });
+      const unknown = await request(app).post("/api/auth/forgot-password").send({ email: "nobody@example.com" });
+      expect(failing.status).toBe(200);
+      expect(failing.body).toEqual(unknown.body);
+    } finally {
+      errSpy.mockRestore();
+    }
   });
 
   it("resets the password and invalidates all existing refresh tokens for that user", async () => {
