@@ -41,7 +41,7 @@ function Avatar({ author, memberIds }: { author: CommentAuthor; memberIds: numbe
   const initial = author.name.trim().charAt(0).toUpperCase() || "?";
   return (
     <span
-      className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
       style={{ backgroundColor: getUserColor(author.id, memberIds) }}
     >
       {initial}
@@ -99,7 +99,7 @@ function ComposeBox({
           type="button"
           disabled={!text.trim() || submitting}
           onClick={handleSubmit}
-          className="px-3 py-1 rounded-md bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+          className="px-3 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors"
         >
           {submitting ? "Posting…" : submitLabel}
         </button>
@@ -107,7 +107,7 @@ function ComposeBox({
           <button
             type="button"
             onClick={onCancel}
-            className="text-[11px] text-slate-400 hover:text-slate-600"
+            className="text-xs text-slate-400 hover:text-slate-600"
           >
             Cancel
           </button>
@@ -186,14 +186,14 @@ function Thread({
         <button
           type="button"
           onClick={() => setReplying((v) => !v)}
-          className="text-[11px] font-medium text-slate-500 hover:text-indigo-600"
+          className="text-xs font-medium text-slate-500 hover:text-indigo-600"
         >
           Reply
         </button>
         <button
           type="button"
           onClick={() => onResolveToggle(root.id, !resolved)}
-          className={`text-[11px] font-medium ${resolved ? "text-slate-400 hover:text-slate-600" : "text-emerald-600 hover:text-emerald-700"}`}
+          className={`text-xs font-medium ${resolved ? "text-slate-400 hover:text-slate-600" : "text-emerald-600 hover:text-emerald-700"}`}
         >
           {resolved ? "Reopen" : "Resolve"}
         </button>
@@ -242,12 +242,12 @@ export function CommentPanel({
   return (
     <div className="w-72 shrink-0 border-l border-slate-100 bg-slate-50/40 flex flex-col max-h-[32rem]">
       <div className="px-3 py-2 border-b border-slate-100">
-        <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Comments</h4>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Comments</h4>
       </div>
 
       {pendingSelection && (
         <div className="px-3 pt-3">
-          <p className="text-[11px] text-slate-400 mb-1">New comment on selected text</p>
+          <p className="text-xs text-slate-400 mb-1">New comment on selected text</p>
           <ComposeBox
             placeholder="Add a comment…"
             submitLabel="Comment"

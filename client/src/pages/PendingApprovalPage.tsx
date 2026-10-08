@@ -37,7 +37,7 @@ export function PendingApprovalPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-8" style={{ background: "var(--brand-bg-light)" }}>
       <div className={`${CARD} w-full max-w-md p-6 text-center`}>
-        <h1 className="text-2xl font-bold leading-tight text-slate-900">
+        <h1 className="text-xl font-semibold leading-tight text-slate-900">
           {rejected ? "Instructor request not approved" : "Waiting for approval"}
         </h1>
         <p className="mt-3 text-sm leading-normal text-slate-800" role="status">
@@ -45,7 +45,7 @@ export function PendingApprovalPage() {
             ? "Your instructor request was not approved. Contact your administrator."
             : "Your account is waiting for admin approval. You will be able to use instructor features as soon as an administrator approves it."}
         </p>
-        {user && <p className="mt-2 break-all text-[0.8125rem] text-slate-700">Signed in as {user.email}</p>}
+        {user && <p className="mt-2 break-all text-sm text-slate-700">Signed in as {user.email}</p>}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <button type="button" onClick={() => void check()} disabled={checking} className={BUTTON_PRIMARY}>
             {checking ? "Checking…" : "Check status"}

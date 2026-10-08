@@ -86,7 +86,7 @@ export function AuditLogPage() {
               </svg>
               Back to Admin
             </button>
-            <h1 className="text-xl font-bold text-slate-900">Audit Log</h1>
+            <h1 className="text-xl font-semibold text-slate-900">Audit Log</h1>
             <p className="text-sm text-slate-400">
               Admin actions recorded most-recent first
               {meta.total > 0 && ` · ${meta.total} total`}
@@ -138,18 +138,18 @@ export function AuditLogPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Action</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Actor</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">Target</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Details</th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-widest">When</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Action</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Actor</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">Target</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Details</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-widest">When</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {entries.map((e, i) => (
                     <tr key={e.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-slate-100 transition-colors`}>
                       <td className="px-5 py-3.5">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ACTION_BADGE[e.action] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
+                        <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ACTION_BADGE[e.action] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
                           {e.action.replace(/_/g, " ")}
                         </span>
                       </td>

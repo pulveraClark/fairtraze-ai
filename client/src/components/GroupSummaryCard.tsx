@@ -155,7 +155,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-[11px] text-amber-800 font-medium leading-snug">
+            <p className="text-xs text-amber-800 font-medium leading-snug">
               Membership changed — re-analyze to update the report
             </p>
           </div>
@@ -163,7 +163,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <button
               onClick={(e) => { e.stopPropagation(); onAnalyze(item.projectId); }}
               disabled={analyzing}
-              className="shrink-0 text-[11px] font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-40"
+              className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-40"
             >
               {analyzing ? "Analyzing…" : "Re-analyze →"}
             </button>

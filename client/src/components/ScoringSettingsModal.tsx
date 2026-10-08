@@ -323,7 +323,7 @@ function WeightRow({ label, description, value, onChange }: WeightRowProps) {
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-1.5 rounded-full accent-indigo-600 cursor-pointer"
       />
-      <p className="text-[11px] text-slate-400 mt-1">{description}</p>
+      <p className="text-xs text-slate-400 mt-1">{description}</p>
     </div>
   );
 }
@@ -357,7 +357,7 @@ function ThresholdRow({ label, description, value, onChange, min, max, step, for
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-1.5 rounded-full accent-indigo-600 cursor-pointer"
       />
-      <p className="text-[11px] text-slate-400 mt-1">{description}</p>
+      <p className="text-xs text-slate-400 mt-1">{description}</p>
     </div>
   );
 }

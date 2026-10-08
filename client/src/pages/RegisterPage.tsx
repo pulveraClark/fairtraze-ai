@@ -94,7 +94,7 @@ export function RegisterPage() {
         <div className="w-full max-w-sm text-center">
           <div className="mb-8">
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
-            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Account created</h1>
+            <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Account created</h1>
           </div>
           {verificationRequired && (
             <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
@@ -226,7 +226,7 @@ export function RegisterPage() {
 
           {/* Heading */}
           <div className="mb-7">
-            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Create your account</h1>
+            <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Create your account</h1>
             <p className="text-slate-500 text-sm">Get started with FairTraze AI</p>
           </div>
 

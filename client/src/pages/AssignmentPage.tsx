@@ -302,13 +302,13 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
             <div className="min-w-0">
               {assignment ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-900 truncate">{assignment.title}</h1>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                  <h1 className="text-xl font-semibold text-slate-900 truncate">{assignment.title}</h1>
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                     {assignment.sourceType}
                   </span>
                 </div>
               ) : (
-                <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
+                <h1 className="text-xl font-semibold text-slate-400">Loading…</h1>
               )}
               <p className="text-sm text-slate-400 mt-0.5">
                 {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}
@@ -328,7 +328,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
           <div className="flex items-center gap-3 flex-wrap">
             {isAdmin && (
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+              <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
                 Admin view — read only
               </span>
             )}

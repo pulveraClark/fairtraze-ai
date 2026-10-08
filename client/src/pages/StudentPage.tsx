@@ -191,7 +191,7 @@ function ClassCard({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
+          <span className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
             {joinedCount}/{totalAssignments} joined
           </span>
         </div>
@@ -232,28 +232,28 @@ function ClassCard({
             </button>
           </div>
         ) : (
-          <span className="text-[11px] text-slate-300 italic">No join code</span>
+          <span className="text-xs text-slate-300 italic">No join code</span>
         )}
 
         {/* Health — shown in addition to (not instead of) join code */}
         {latestReport?.teamHealth ? (
           <div className="flex items-center justify-between">
-            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
               {latestReport.teamHealth}
             </span>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-400">
               Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
             </p>
           </div>
         ) : (
           joinedCount > 0 && (
-            <p className="text-[11px] text-slate-400 italic">Awaiting first analysis</p>
+            <p className="text-xs text-slate-400 italic">Awaiting first analysis</p>
           )
         )}
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-          <span className="text-[11px] text-slate-400">
+          <span className="text-xs text-slate-400">
             {totalAssignments} project{totalAssignments !== 1 ? "s" : ""}
           </span>
           <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">
@@ -291,7 +291,7 @@ export function StudentPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">
+            <h1 className="text-xl font-semibold text-slate-900">
               Welcome back{user ? `, ${user.name.split(" ")[0]}` : ""}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">

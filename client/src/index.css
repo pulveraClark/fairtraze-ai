@@ -1,5 +1,40 @@
 @import "tailwindcss";
 
+/* ── Typography: Geist (self-hosted, imported in main.tsx) + compact in-app scale ───────────────
+   Remapping the theme tokens shifts every text-* utility at once. text-xs stays 12px (the floor).
+   text-3xl and up are untouched. Surfaces that must keep the old scale (landing page) opt out with
+   .ft-legacy-scale below; the document body and print output are pinned with explicit sizes. */
+@theme {
+  --font-sans: "Geist Variable", system-ui, -apple-system, sans-serif;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.8125rem;
+  --text-base--line-height: 1.25rem;
+  --text-lg: 0.875rem;
+  --text-lg--line-height: 1.25rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.5rem;
+  --text-2xl: 1.25rem;
+  --text-2xl--line-height: 1.5rem;
+}
+
+/* Restores Tailwind's default scale for everything inside (landing page). */
+.ft-legacy-scale {
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+}
+
+/* Tabular numerals for tiles, tables, shares and Gini values. */
+table, .tabular-nums { font-variant-numeric: tabular-nums; }
+
 /* ── Brand tokens (CSS custom properties) ──────────────────────────────────── */
 :root {
   /* Primary accent: indigo — used for buttons, links, active states, highlights */
@@ -42,11 +77,11 @@
 
 /* ── Display font for headings and wordmark ────────────────────────────────── */
 .font-display {
-  font-family: "Outfit", system-ui, sans-serif;
+  font-family: "Geist Variable", system-ui, sans-serif;
 }
 
 body {
-  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  font-family: "Geist Variable", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--brand-bg-light);
@@ -173,15 +208,18 @@ body {
 /* ── TipTap document editor content ────────────────────────────────────────── */
 .ft-doc-content {
   outline: none;
+  /* Writing area keeps a comfortable fixed size; independent of the compact UI scale. */
+  font-size: 1rem;
+  line-height: 1.625;
 }
 .ft-doc-content h1 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--brand-text-primary);
   margin: 1.25rem 0 0.75rem;
 }
 .ft-doc-content h2 {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--brand-text-primary);
   margin: 1rem 0 0.5rem;
@@ -325,8 +363,8 @@ body {
   display: inline-block;
   padding: 0.1rem 0.4rem;
   border-radius: 3px 3px 3px 0;
-  font-family: "Outfit", system-ui, sans-serif;
-  font-size: 11px;
+  font-family: "Geist Variable", system-ui, sans-serif;
+  font-size: 12px;
   font-weight: 600;
   font-style: normal;
   line-height: normal;

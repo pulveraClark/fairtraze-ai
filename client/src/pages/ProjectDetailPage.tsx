@@ -3,7 +3,7 @@ import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, Re
 import { useAuth } from "../context/AuthContext";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { TrendChart } from "../components/TrendChart";
-import { PageHeader, StatTile, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT } from "../components/ui";
+import { PageHeader, StatTile, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT, CARD } from "../components/ui";
 import { MemberContributionList } from "../components/report/MemberContributionList";
 import { MemberDrawer } from "../components/report/MemberDrawer";
 import { LorenzCard } from "../components/report/LorenzCard";
@@ -81,9 +81,9 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
   const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
-  // Collapsed by default — the card itself is already gated on having 2+ runs; this only
+  // Expanded by default — the card itself is already gated on having 2+ runs; this only
   // controls whether its body (the chart) is shown within that card.
-  const [trendExpanded, setTrendExpanded] = useState(false);
+  const [trendExpanded, setTrendExpanded] = useState(true);
 
   const fetchStored = useCallback(async () => {
     setFetchError(null);
@@ -261,7 +261,7 @@ export function ProjectDetailPage({ projectId }: Props) {
     ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
     : "neutral";
 
-  const switchBtn = `flex h-11 w-11 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
+  const switchBtn = `flex h-10 w-10 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -291,7 +291,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                         href={stored.repoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`inline-flex min-h-11 items-center font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
+                        className={`inline-flex min-h-10 items-center font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
                       >
                         {stored.repoUrl.replace("https://github.com/", "")}
                       </a>
@@ -324,7 +324,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                       value={projectId}
                       onChange={(e) => navigate(`/project/${e.target.value}`)}
                       aria-label="Group"
-                      className={`h-11 max-w-[11rem] cursor-pointer bg-transparent px-2 text-sm font-medium text-slate-900 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
+                      className={`h-9 max-w-[11rem] cursor-pointer bg-transparent px-2 text-sm font-medium text-slate-900 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
                     >
                       {siblings.map((g) => (
                         <option key={g.projectId} value={g.projectId}>
@@ -405,7 +405,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                 role="tab"
                 aria-selected={effectiveTab === tab}
                 onClick={() => setActiveTab(tab)}
-                className={`min-h-11 px-4 text-base font-semibold transition-colors border-b-2 -mb-px ${FOCUS_LIGHT} focus-visible:-outline-offset-2 ${
+                className={`min-h-10 px-4 text-base font-semibold transition-colors border-b-2 -mb-px ${FOCUS_LIGHT} focus-visible:-outline-offset-2 ${
                   effectiveTab === tab
                     ? "border-indigo-700 text-indigo-800"
                     : "border-transparent text-slate-700 hover:text-slate-900"
@@ -418,7 +418,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         )}
       </div>
 
-      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 space-y-6">
+      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-4 space-y-4">
 
         {/* Loading stepper */}
         {(reanalyzing || loadingReport) && (
@@ -436,7 +436,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               type="button"
               onClick={() => setReanalyzeError(null)}
               aria-label="Dismiss error"
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-2xl leading-none text-red-900 hover:bg-red-100 ${FOCUS_LIGHT}`}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-2xl leading-none text-red-900 hover:bg-red-100 ${FOCUS_LIGHT}`}
             >
               &times;
             </button>
@@ -454,13 +454,13 @@ export function ProjectDetailPage({ projectId }: Props) {
         {effectiveTab === "report" && (
           <>
         {loading && (
-          <div aria-busy="true" role="status" className="space-y-6">
+          <div aria-busy="true" role="status" className="space-y-4">
             <span className="sr-only">Loading report…</span>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
+              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}
             </div>
-            <Skeleton className="h-72" />
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Skeleton className="h-64" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Skeleton className="h-64" />
               <Skeleton className="h-64" />
             </div>
@@ -469,7 +469,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* Stale report — membership changed and/or scoring config changed after last analysis */}
         {reportStale && stored && !reanalyzing && (
-          <div className="bg-amber-100 border-2 border-amber-400 rounded-xl px-5 py-4 flex items-center gap-4 flex-wrap">
+          <div className="bg-amber-100 border-2 border-amber-400 rounded-xl px-4 py-3 flex items-center gap-4 flex-wrap">
             <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
               Report may be outdated — membership or settings have changed. Re-analyze to update.
             </p>
@@ -558,7 +558,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             )}
 
             {/* AI explanation + Report details */}
-            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
               {/* keyed to projectId so it always reflects the current group */}
               <Narrative
                 key={projectId}
@@ -574,15 +574,15 @@ export function ProjectDetailPage({ projectId }: Props) {
             </div>
 
             {/* Trend + Lorenz curve */}
-            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
               {/* Imbalance trend — omitted until there are at least 2 runs, since a single point isn't a trend. */}
               {reportHistory.length >= 2 && (
-                <section aria-labelledby="trend-title" className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <section aria-labelledby="trend-title" className={`${CARD} h-full min-w-0 overflow-hidden`}>
                   <button
                     type="button"
                     onClick={() => setTrendExpanded((v) => !v)}
                     aria-expanded={trendExpanded}
-                    className={`flex min-h-11 w-full items-start justify-between gap-4 px-5 py-4 text-left hover:bg-slate-50 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
+                    className={`flex min-h-10 w-full items-start justify-between gap-4 px-4 py-3 text-left hover:bg-slate-50 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
                   >
                     <span>
                       <span id="trend-title" className="block text-lg font-semibold text-slate-900">Imbalance trend</span>
@@ -600,14 +600,14 @@ export function ProjectDetailPage({ projectId }: Props) {
                     </svg>
                   </button>
                   {trendExpanded && (
-                    <div className="border-t border-slate-200 px-5 pt-4 pb-2">
+                    <div className="border-t border-slate-200 px-4 pt-4 pb-2">
                       <TrendChart history={reportHistory} />
                     </div>
                   )}
                 </section>
               )}
-              <div className={reportHistory.length >= 2 ? "" : "lg:col-span-2"}>
-                <LorenzCard shares={stored.report.members.map((m) => m.contributionShare)} gini={stored.report.gini} />
+              <div className={reportHistory.length >= 2 ? "h-full" : "lg:col-span-2"}>
+                <LorenzCard shares={stored.report.members.map((m) => m.contributionShare)} gini={stored.report.gini} wide={reportHistory.length < 2} />
               </div>
             </div>
           </>
@@ -647,7 +647,7 @@ export function ProjectDetailPage({ projectId }: Props) {
           <button
             type="button"
             onClick={() => navigate("/overview")}
-            className={`inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-medium text-slate-800 underline underline-offset-2 hover:text-slate-950 ${FOCUS_LIGHT}`}
+            className={`inline-flex min-h-10 items-center rounded-lg px-2 text-sm font-medium text-slate-800 underline underline-offset-2 hover:text-slate-950 ${FOCUS_LIGHT}`}
           >
             System overview →
           </button>

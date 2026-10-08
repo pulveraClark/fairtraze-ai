@@ -16,10 +16,10 @@ export function PageHeader({ breadcrumbs, title, badges, meta, actions }: Props)
       <div className="min-w-0 flex-1 basis-72">
         <Breadcrumbs items={breadcrumbs} />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="break-words text-2xl font-bold leading-tight text-slate-900">{title}</h1>
+          <h1 className="break-words text-xl font-semibold leading-tight text-slate-900">{title}</h1>
           {badges}
         </div>
-        {meta && <div className="mt-1 break-words text-[0.8125rem] leading-normal text-slate-700">{meta}</div>}
+        {meta && <div className="mt-1 break-words text-xs leading-normal text-slate-700">{meta}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

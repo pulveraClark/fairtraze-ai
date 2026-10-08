@@ -76,7 +76,7 @@ describe("MemberContributionList", () => {
     const onOpen = vi.fn();
     render(<MemberContributionList members={[gh, { ...doc } as never]} onOpen={onOpen} />);
     expect(screen.getAllByRole("button")).toHaveLength(2);
-    screen.getAllByRole("button").forEach((b) => expect(b.className).toContain("min-h-11"));
+    screen.getAllByRole("button").forEach((b) => expect(b.className).toContain("min-h-10"));
     expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
     expect(screen.getByText("No flags")).toBeInTheDocument();
     expect(screen.getByText(/equal share \(50\.0% each\)/)).toBeInTheDocument();

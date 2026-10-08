@@ -170,7 +170,7 @@ export function LoginPage() {
 
           {/* Heading */}
           <div className="mb-7">
-            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Welcome back</h1>
+            <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Welcome back</h1>
             <p className="text-slate-500 text-sm">Sign in to your account</p>
           </div>
 

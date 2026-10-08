@@ -80,7 +80,7 @@ function JoinCodeBadge({ code }: { code: string }) {
   return (
     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
       <span className="text-xs text-slate-400 shrink-0">Class code:</span>
-      <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+      <span className="font-mono font-bold text-xs text-indigo-700 tracking-wider select-all">{code}</span>
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
@@ -208,13 +208,13 @@ function ProjectCard({
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-slate-800 leading-snug">{asgn.title}</h3>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+              <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
                 {SOURCE_LABEL[asgn.sourceType] ?? asgn.sourceType}
               </span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 {fmtDeadline(asgn.deadline)}
               </span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 Max {asgn.maxGroupSize} per group
               </span>
             </div>
@@ -230,7 +230,7 @@ function ProjectCard({
           return (
             <div className="space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                   g.role === "LEADER"
                     ? "text-indigo-700 bg-indigo-50 border-indigo-200"
                     : "text-slate-500 bg-white border-slate-200"
@@ -239,14 +239,14 @@ function ProjectCard({
                 </span>
                 <span className="text-sm font-semibold text-slate-700">{g.groupName}</span>
                 {g.report?.teamHealth && (
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
                     {g.report.teamHealth}
                   </span>
                 )}
               </div>
 
               {!g.report && (
-                <p className="text-[11px] text-slate-400 italic">No analysis yet — awaiting instructor.</p>
+                <p className="text-xs text-slate-400 italic">No analysis yet — awaiting instructor.</p>
               )}
 
               <div className="flex items-center gap-2 pt-1 flex-wrap">
@@ -257,7 +257,7 @@ function ProjectCard({
                   >
                     Manage group
                     {g.pendingRequestCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold px-1 leading-none">
+                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-xs font-bold px-1 leading-none">
                         {g.pendingRequestCount}
                       </span>
                     )}
@@ -293,19 +293,19 @@ function ProjectCard({
                 <p className="text-xs font-semibold text-amber-800">
                   Request pending — {asgn.myRequest!.groupName}
                 </p>
-                <p className="text-[11px] text-amber-700 mt-0.5">
+                <p className="text-xs text-amber-700 mt-0.5">
                   Waiting for the group leader to respond. You will be notified when your request is accepted or declined.
                 </p>
                 <button
                   onClick={handleCancelRequest}
                   disabled={submitting}
-                  className="mt-2 text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
+                  className="mt-2 text-xs font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
                 >
                   Cancel request
                 </button>
               </div>
             </div>
-            {error && <p className="text-[11px] text-red-600">{error}</p>}
+            {error && <p className="text-xs text-red-600">{error}</p>}
           </div>
         ) : (
           /* Student has no group yet — show create/join UI */
@@ -316,7 +316,7 @@ function ProjectCard({
                 <svg className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-[11px] text-red-700">
+                <p className="text-xs text-red-700">
                   Your request to join <strong>{asgn.myRequest.groupName}</strong> was declined. You can request another group.
                 </p>
               </div>
@@ -351,7 +351,7 @@ function ProjectCard({
                   </button>
                 )}
                 {asgn.groups.length === 0 && (
-                  <p className="text-[11px] text-slate-400 italic">No groups yet — be the first to create one.</p>
+                  <p className="text-xs text-slate-400 italic">No groups yet — be the first to create one.</p>
                 )}
               </div>
             )}
@@ -426,7 +426,7 @@ function ProjectCard({
                         />
                         <span className="flex-1 min-w-0">
                           <span className="text-xs font-medium text-slate-700">{g.groupName}</span>
-                          <span className="text-[11px] text-slate-400 ml-2">
+                          <span className="text-xs text-slate-400 ml-2">
                             {g.memberCount} / {asgn.maxGroupSize} members
                           </span>
                         </span>
@@ -575,19 +575,19 @@ export function StudentClassPage({ classId }: Props) {
             <div className="min-w-0">
               {cls ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-900">{cls.subjectName}</h1>
+                  <h1 className="text-xl font-semibold text-slate-900">{cls.subjectName}</h1>
                   <span className="text-xs font-mono font-bold text-indigo-600">
                     {cls.subjectCode}
                     {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
                   </span>
                   {cls.department && (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {cls.department.code}
                     </span>
                   )}
                 </div>
               ) : (
-                <h1 className="text-xl font-bold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
+                <h1 className="text-xl font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
               )}
               <p className="text-sm text-slate-400 mt-0.5">
                 {assignments.length} project{assignments.length !== 1 ? "s" : ""}

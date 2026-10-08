@@ -103,7 +103,7 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
         </span>
         <span className={s.nameText}>{user.name}</span>
         {/* Role pill — visible md+ only to avoid crowding the nav at 640px */}
-        <span className={`hidden md:inline-block shrink-0 text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badge}`}>
+        <span className={`hidden md:inline-block shrink-0 text-xs font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badge}`}>
           {ROLE_LABEL[user.systemRole] ?? user.systemRole}
         </span>
         <svg
@@ -128,7 +128,7 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
               </span>
               <div className="min-w-0">
                 <p className={s.nameTitle}>{user.name}</p>
-                <span className={`inline-block text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border mt-1 ${badge}`}>
+                <span className={`inline-block text-xs font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border mt-1 ${badge}`}>
                   {ROLE_LABEL[user.systemRole] ?? user.systemRole}
                 </span>
               </div>

@@ -162,13 +162,13 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
         </p>
 
         {tasksErr && (
-          <p className="text-[11px] text-red-500 mb-2">{tasksErr}</p>
+          <p className="text-xs text-red-500 mb-2">{tasksErr}</p>
         )}
 
         {tasksLoading ? (
-          <p className="text-[11px] text-slate-400">Loading tasks…</p>
+          <p className="text-xs text-slate-400">Loading tasks…</p>
         ) : tasks.length === 0 ? (
-          <p className="text-[11px] text-slate-400 italic mb-2">No tasks yet.</p>
+          <p className="text-xs text-slate-400 italic mb-2">No tasks yet.</p>
         ) : (
           <ul className="space-y-2 mb-3">
             {tasks.map((t) => {
@@ -192,7 +192,7 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
                     <p className={`text-xs font-semibold truncate ${t.done ? "text-slate-500 line-through" : "text-slate-800"}`}>
                       {t.title}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 mt-0.5">
                       {assignee ? assignee.name : "Unassigned"}
                     </p>
                   </div>
@@ -240,7 +240,7 @@ export function TaskManageModal({ projectId, isInstructor, onClose, onChanged }:
           </div>
         )}
         {createTaskErr && (
-          <p className="text-[11px] text-red-500 mt-1.5">{createTaskErr}</p>
+          <p className="text-xs text-red-500 mt-1.5">{createTaskErr}</p>
         )}
       </>
     );

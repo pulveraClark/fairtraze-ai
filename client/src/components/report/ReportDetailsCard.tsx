@@ -20,14 +20,14 @@ export function ReportDetailsCard({ stored, sourceLabel, stale }: Props) {
   const cfg = stored.scoringConfig;
   const showRepo = stored.sourceType !== "EDITOR" && !!stored.repoUrl;
   return (
-    <section aria-labelledby="report-details-title" className={`${CARD} min-w-0 p-5`}>
-      <h2 id="report-details-title" className="text-base font-semibold text-slate-900">Report details</h2>
+    <section aria-labelledby="report-details-title" className={`${CARD} h-full min-w-0 p-4`}>
+      <h2 id="report-details-title" className="text-lg font-semibold text-slate-900">Report details</h2>
       <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 text-sm leading-normal sm:grid-cols-2">
-        <div><dt className="text-[0.8125rem] text-slate-700">Source</dt><dd className="font-semibold text-slate-900">{sourceLabel}</dd></div>
-        <div><dt className="text-[0.8125rem] text-slate-700">Analyzed</dt><dd className="font-semibold text-slate-900">{new Date(stored.analyzedAt).toLocaleString()}</dd></div>
+        <div><dt className="text-sm text-slate-700">Source</dt><dd className="font-semibold text-slate-900">{sourceLabel}</dd></div>
+        <div><dt className="text-sm text-slate-700">Analyzed</dt><dd className="font-semibold text-slate-900">{new Date(stored.analyzedAt).toLocaleString()}</dd></div>
         {showRepo && (
           <div className="min-w-0">
-            <dt className="text-[0.8125rem] text-slate-700">Repository</dt>
+            <dt className="text-sm text-slate-700">Repository</dt>
             <dd>
               <a
                 href={stored.repoUrl}
@@ -40,12 +40,12 @@ export function ReportDetailsCard({ stored, sourceLabel, stale }: Props) {
             </dd>
           </div>
         )}
-        <div><dt className="text-[0.8125rem] text-slate-700">Members</dt><dd className="font-semibold text-slate-900">{stored.report.memberCount}</dd></div>
+        <div><dt className="text-sm text-slate-700">Members</dt><dd className="font-semibold text-slate-900">{stored.report.memberCount}</dd></div>
       </dl>
 
       {cfg && (
         <div className="mt-4 border-t border-slate-200 pt-3">
-          <p className="mb-2 text-[0.8125rem] font-medium text-slate-700">Scored with</p>
+          <p className="mb-2 text-sm font-medium text-slate-700">Scored with</p>
           <div className="flex flex-wrap gap-1.5">
             <Pill label="commits" value={String(cfg.weights.commits)} />
             <Pill label="lines" value={String(cfg.weights.lines)} />
@@ -60,7 +60,7 @@ export function ReportDetailsCard({ stored, sourceLabel, stale }: Props) {
               </>
             )}
           </div>
-          {stale && <p className="mt-2 text-[0.8125rem] font-semibold text-amber-900">Settings changed — re-analyze to update.</p>}
+          {stale && <p className="mt-2 text-sm font-semibold text-amber-900">Settings changed — re-analyze to update.</p>}
         </div>
       )}
     </section>

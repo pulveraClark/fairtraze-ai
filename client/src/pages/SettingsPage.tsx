@@ -146,7 +146,7 @@ function EditProfileModal({
                   placeholder="your-github-handle"
                   className={inputClass}
                 />
-                <p className="text-[11px] text-slate-400 mt-1">Used to match your commits in contribution reports.</p>
+                <p className="text-xs text-slate-400 mt-1">Used to match your commits in contribution reports.</p>
               </div>
             )}
           </div>
@@ -351,7 +351,7 @@ export function SettingsPage() {
         {/* Page heading */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Profile &amp; Settings</h1>
+            <h1 className="text-xl font-semibold text-slate-800">Profile &amp; Settings</h1>
             <p className="text-sm text-slate-500 mt-0.5">Manage your account details and password.</p>
           </div>
           <button
@@ -385,7 +385,7 @@ export function SettingsPage() {
                 <p className="font-semibold text-slate-800 truncate">{profile.name}</p>
                 <p className="text-xs text-slate-500 truncate">{profile.email}</p>
               </div>
-              <span className={`ml-auto shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ROLE_BADGE[profile.systemRole] ?? ROLE_BADGE.STUDENT}`}>
+              <span className={`ml-auto shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded border ${ROLE_BADGE[profile.systemRole] ?? ROLE_BADGE.STUDENT}`}>
                 {ROLE_LABEL[profile.systemRole] ?? profile.systemRole}
               </span>
             </div>
@@ -447,12 +447,12 @@ export function SettingsPage() {
           {profile && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <p className="text-[11px] text-slate-400 mb-1">Full name</p>
+                <p className="text-xs text-slate-400 mb-1">Full name</p>
                 <div className={readonlyClass}>{profile.name}</div>
               </div>
               {isStudent && (
                 <div>
-                  <p className="text-[11px] text-slate-400 mb-1">GitHub username</p>
+                  <p className="text-xs text-slate-400 mb-1">GitHub username</p>
                   <div className={`${readonlyClass} font-mono`}>
                     {profile.githubUsername || <span className="text-slate-300 font-sans">Not set</span>}
                   </div>
@@ -487,7 +487,7 @@ export function SettingsPage() {
         </div>
 
         {/* ── Read-only note ────────────────────────────────────────────────── */}
-        <p className="text-[11px] text-slate-400 px-1">
+        <p className="text-xs text-slate-400 px-1">
           Email and role are managed by your institution and cannot be changed here.
         </p>
 

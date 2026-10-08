@@ -304,7 +304,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       shouldRerenderOnTransaction: true,
       editorProps: {
         attributes: {
-          class: "ft-doc-content px-8 py-6 text-base leading-relaxed text-slate-700 min-h-[20rem]",
+          class: "ft-doc-content px-8 py-6 text-slate-700 min-h-[20rem]",
         },
         // Reuses the exact same size-cap/content-sniff validation and setImage() write path as
         // the toolbar's file-picker insert (see insertImageFile in lib/imageInsert.ts) — this is
@@ -746,7 +746,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const editorContentArea = (
     <>
       {awaitingInitialContent && (
-        <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-[11px] text-slate-400 font-medium">
+        <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-400 font-medium">
           Loading document…
         </div>
       )}
@@ -766,7 +766,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       />
       {importMessage && (
         <div
-          className={`flex items-center justify-between gap-3 px-3 py-1.5 border-b text-[11px] ${
+          className={`flex items-center justify-between gap-3 px-3 py-1.5 border-b text-xs ${
             importMessage.kind === "success"
               ? "bg-emerald-50 border-emerald-100 text-emerald-700"
               : "bg-red-50 border-red-100 text-red-700"

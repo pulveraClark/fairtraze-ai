@@ -64,22 +64,22 @@ function RiskPills({ healthy, moderate, highRisk, unanalyzed }: { healthy: numbe
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {highRisk > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-red-600 font-medium">
+        <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
           <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />{highRisk} High Risk
         </span>
       )}
       {moderate > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+        <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />{moderate} Moderate
         </span>
       )}
       {healthy > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />{healthy} Healthy
         </span>
       )}
       {unanalyzed > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+        <span className="inline-flex items-center gap-1 text-xs text-slate-400">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />{unanalyzed} Not analyzed
         </span>
       )}
@@ -231,9 +231,9 @@ function CreateAssignmentModal({
                       deadlineErr ? "border-red-300 focus:border-red-400" : "border-slate-200 focus:border-indigo-400"
                     }`}
                   />
-                  {deadlineErr && <p className="text-[11px] text-red-600 mt-1">{deadlineErr}</p>}
+                  {deadlineErr && <p className="text-xs text-red-600 mt-1">{deadlineErr}</p>}
                   {!deadlineErr && isPastDeadline && (
-                    <p className="text-[11px] text-amber-600 mt-1">This deadline has already passed — are you sure?</p>
+                    <p className="text-xs text-amber-600 mt-1">This deadline has already passed — are you sure?</p>
                   )}
                 </div>
                 <div>
@@ -268,7 +268,7 @@ function CreateAssignmentModal({
                     </label>
                   ))}
                 </div>
-                {sourceTypeErr && <p className="text-[11px] text-red-600 mt-1">{sourceTypeErr}</p>}
+                {sourceTypeErr && <p className="text-xs text-red-600 mt-1">{sourceTypeErr}</p>}
               </div>
 
             </div>
@@ -327,7 +327,7 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
   return (
     <div ref={popoverRef} className="relative flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
       <span className="text-xs text-slate-400 shrink-0">Class code:</span>
-      <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+      <span className="font-mono font-bold text-xs text-indigo-700 tracking-wider select-all">{code}</span>
 
       {/* Copy button */}
       <button
@@ -568,7 +568,7 @@ export function ClassPage({ classId }: Props) {
             <div className="flex items-center gap-2 flex-wrap">
               {classInfo ? (
                 <>
-                  <h1 className="text-xl font-bold text-slate-900 shrink-0">{classInfo.subjectName}</h1>
+                  <h1 className="text-xl font-semibold text-slate-900 shrink-0">{classInfo.subjectName}</h1>
                   <span className="shrink-0 text-xs font-mono font-bold text-indigo-600">
                     {classInfo.subjectCode}
                     {classInfo.edpCode && (
@@ -576,7 +576,7 @@ export function ClassPage({ classId }: Props) {
                     )}
                   </span>
                   {classInfo.department && (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {classInfo.department.code}
                     </span>
                   )}
@@ -587,7 +587,7 @@ export function ClassPage({ classId }: Props) {
                   )}
                 </>
               ) : (
-                <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
+                <h1 className="text-xl font-semibold text-slate-400">Loading…</h1>
               )}
             </div>
             <p className="text-sm text-slate-400">
@@ -601,7 +601,7 @@ export function ClassPage({ classId }: Props) {
               <ClassJoinCodeBadge code={classInfo.joinCode} />
             )}
             {isAdmin && (
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+              <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
                 Admin view — read only
               </span>
             )}
@@ -728,11 +728,11 @@ export function ClassPage({ classId }: Props) {
                             </svg>
                           </div>
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            <span className="text-[10px] font-bold text-white/90 bg-white/20 border border-white/30 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                            <span className="text-xs font-bold text-white/90 bg-white/20 border border-white/30 rounded px-1.5 py-0.5 uppercase tracking-wide">
                               {a.sourceType}
                             </span>
                             {atRisk > 0 && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-[11px] font-semibold whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-xs font-semibold whitespace-nowrap">
                                 ⚠ {atRisk} at risk
                               </span>
                             )}

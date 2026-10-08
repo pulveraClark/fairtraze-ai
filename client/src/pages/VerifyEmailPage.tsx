@@ -48,7 +48,7 @@ export function VerifyEmailPage() {
   const heading = (
     <div className="text-center mb-8">
       <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
-      <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Verify your email</h1>
+      <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Verify your email</h1>
     </div>
   );
 

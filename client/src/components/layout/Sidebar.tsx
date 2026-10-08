@@ -105,14 +105,14 @@ function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; act
 
 const treeLinkClass = (active: boolean, size: "base" | "sm") =>
   [
-    "flex min-h-11 min-w-0 flex-1 items-center rounded-lg px-3",
-    size === "base" ? "text-sm" : "text-[0.8125rem]",
+    "flex min-h-10 min-w-0 flex-1 items-center rounded-lg px-3",
+    size === "base" ? "text-sm" : "text-sm",
     active ? "bg-white/10 font-semibold text-white" : "font-medium text-slate-300 hover:bg-white/5 hover:text-white",
     FOCUS_RING,
   ].join(" ");
 
 const viewAllClass =
-  `flex min-h-11 items-center rounded-lg px-3 text-[0.8125rem] font-medium text-indigo-300 underline-offset-2 hover:text-indigo-200 hover:underline ${FOCUS_RING}`;
+  `flex min-h-10 items-center rounded-lg px-3 text-sm font-medium text-indigo-300 underline-offset-2 hover:text-indigo-200 hover:underline ${FOCUS_RING}`;
 
 function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => void }) {
   const { token } = useAuth();
@@ -140,15 +140,15 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
   useEffect(() => { setOverrides({}); }, [activeClassId]);
 
   const query = isInstructor ? classesQ : studentQ;
-  if (query.isLoading) return <p className="px-3 py-2 text-[0.8125rem] text-slate-400">Loading classes…</p>;
-  if (query.isError)   return <p className="px-3 py-2 text-[0.8125rem] text-slate-300">Couldn't load classes.</p>;
+  if (query.isLoading) return <p className="px-3 py-2 text-sm text-slate-400">Loading classes…</p>;
+  if (query.isError)   return <p className="px-3 py-2 text-sm text-slate-300">Couldn't load classes.</p>;
 
   const tree = isInstructor
     ? buildInstructorTree(classesQ.data ?? [], summaryQ.data, pathname, activeClassId, activeAssignmentId)
     : buildStudentTree(studentQ.data ?? [], pathname, activeClassId, activeAssignmentId);
 
   if (tree.classes.length === 0) {
-    return <p className="px-3 py-2 text-[0.8125rem] text-slate-400">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
+    return <p className="px-3 py-2 text-sm text-slate-400">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
   }
 
   return (
@@ -168,7 +168,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
                 aria-controls={expanded ? listId : undefined}
                 aria-label={`${expanded ? "Collapse" : "Expand"} ${c.title}`}
                 onClick={() => setOverrides((o) => ({ ...o, [c.id]: !expanded }))}
-                className={`flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-white/5 hover:text-white ${FOCUS_RING}`}
+                className={`flex min-h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-white/5 hover:text-white ${FOCUS_RING}`}
               >
                 <ChevronIcon className={`h-4 w-4 ${reduced ? "" : "transition-transform duration-150"} ${expanded ? "" : "-rotate-90"}`} />
               </button>
@@ -178,7 +178,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
                 {c.projects.length === 0 && (
                   <li>
                     {isInstructor ? (
-                      <p className="px-3 py-2 text-[0.8125rem] text-slate-400">No projects yet.</p>
+                      <p className="px-3 py-2 text-sm text-slate-400">No projects yet.</p>
                     ) : (
                       <SidebarLink href={c.href} onNavigate={onNavigate} className={viewAllClass}>Find a group</SidebarLink>
                     )}
@@ -278,7 +278,7 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
   const avatar = (
     <span
       aria-hidden="true"
-      className={`flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border text-[0.8125rem] font-bold ${AVATAR_STYLE[role] ?? AVATAR_STYLE.STUDENT}`}
+      className={`flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border text-sm font-bold ${AVATAR_STYLE[role] ?? AVATAR_STYLE.STUDENT}`}
       style={{ background: AVATAR_BG[role] ?? AVATAR_BG.STUDENT }}
     >
       {initials(user.name)}
@@ -293,7 +293,7 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
   function go(path: string) { navigate(path); setOpen(false); onNavigate?.(); }
   function handleLogout() { logout(); navigate("/"); setOpen(false); onNavigate?.(); }
 
-  const itemClass = `flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`;
+  const itemClass = `flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`;
 
   return (
     <div ref={ref} className="group relative">
@@ -304,7 +304,7 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
         aria-expanded={open}
         aria-label={collapsed ? `Account menu, ${user.name}, ${ROLE_LABEL[role] ?? role}` : undefined}
         onClick={() => setOpen(!open)}
-        className={`flex min-h-11 w-full items-center rounded-lg py-1 hover:bg-white/5 ${collapsed ? "justify-center" : "gap-3 px-2 text-left"} ${FOCUS_RING}`}
+        className={`flex min-h-10 w-full items-center rounded-lg py-1 hover:bg-white/5 ${collapsed ? "justify-center" : "gap-3 px-2 text-left"} ${FOCUS_RING}`}
       >
         {avatar}
         {!collapsed && (
@@ -367,7 +367,7 @@ export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggle
           href="/"
           ariaLabel="FAIR TRAZE AI home"
           onNavigate={onNavigate}
-          className={`flex min-h-11 min-w-0 items-center gap-2.5 rounded-lg px-1 ${FOCUS_RING}`}
+          className={`flex min-h-10 min-w-0 items-center gap-2.5 rounded-lg px-1 ${FOCUS_RING}`}
         >
           <span className="shrink-0 rounded-lg bg-white/90 px-1.5 py-1 shadow-sm">
             <img src={logoUrl} alt="" className="block h-7 w-auto" />
@@ -383,7 +383,7 @@ export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggle
             type="button"
             onClick={onClose}
             aria-label="Close navigation menu"
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-200 hover:bg-white/10 hover:text-white ${FOCUS_RING}`}
           >
             <CloseIcon />
           </button>

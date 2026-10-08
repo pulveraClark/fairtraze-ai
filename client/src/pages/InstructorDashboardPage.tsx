@@ -220,7 +220,7 @@ function CreateClassModal({
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mt-2">
+              <p className="text-xs text-slate-400 mt-2">
                 Students enter this code once to enroll in the class. They can then create or join groups for each project.
               </p>
             </div>
@@ -574,7 +574,7 @@ export function InstructorDashboardPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Instructor Dashboard</h1>
+            <h1 className="text-xl font-semibold text-slate-900">Instructor Dashboard</h1>
             <p className="text-sm text-slate-400 mt-0.5">
               Group contribution overview · GitHub analysis
             </p>
@@ -728,7 +728,7 @@ export function InstructorDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {atRiskGroups.map((item) => (
                   <div key={item.projectId}>
-                    <p className="text-[11px] font-mono font-semibold text-slate-400 mb-1.5 truncate">
+                    <p className="text-xs font-mono font-semibold text-slate-400 mb-1.5 truncate">
                       {parseClassLabel(item.assignmentLabel).code}
                     </p>
                     <GroupSummaryCard item={item} onAnalyze={handleReanalyze} analyzing={analyzing.has(item.projectId)} />
@@ -763,7 +763,7 @@ export function InstructorDashboardPage() {
                         className="w-full flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-sm transition-all text-left"
                       >
                         <div className="shrink-0 w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-indigo-600 leading-none text-center px-0.5">
+                          <span className="text-xs font-bold text-indigo-600 leading-none text-center px-0.5">
                             {cls.subjectCode.slice(0, 4)}
                           </span>
                         </div>
@@ -775,7 +775,7 @@ export function InstructorDashboardPage() {
                           {items.length} group{items.length !== 1 ? "s" : ""}
                         </span>
                         {atRisk > 0 && (
-                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700 whitespace-nowrap">
+                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-xs font-semibold text-red-700 whitespace-nowrap">
                             ⚠ {atRisk} at risk
                           </span>
                         )}

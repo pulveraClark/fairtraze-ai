@@ -60,7 +60,7 @@ describe("ListRow", () => {
     const onClick = vi.fn();
     render(<ListRow onClick={onClick} opensDialog>Row</ListRow>);
     const row = screen.getByRole("button", { name: "Row" });
-    expect(row.className).toContain("min-h-11");
+    expect(row.className).toContain("min-h-10");
     expect(row).toHaveAttribute("aria-haspopup", "dialog");
     row.focus();
     await userEvent.keyboard("{Enter}");

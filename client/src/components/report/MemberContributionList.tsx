@@ -41,8 +41,8 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
   return (
     <section aria-labelledby="member-contributions-title" className={CARD}>
       <div className="border-b border-slate-200 px-4 py-4">
-        <h2 id="member-contributions-title" className="text-base font-semibold text-slate-900">Member contributions</h2>
-        <p className="mt-1 text-[0.8125rem] leading-normal text-slate-700">
+        <h2 id="member-contributions-title" className="text-lg font-semibold text-slate-900">Member contributions</h2>
+        <p className="mt-1 text-sm leading-normal text-slate-700">
           Select a member for details. The vertical marker on each bar shows the equal share ({equalPct.toFixed(1)}% each).
         </p>
       </div>
@@ -61,7 +61,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                 ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? m.flags.join(", ") : "no flags"}. Open details`}
               >
                 <span className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto_minmax(8rem,auto)]">
-                  <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-[0.8125rem] font-semibold text-indigo-900">
+                  <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900">
                     {initials(m.studentName)}
                   </span>
                   <span className="flex min-w-0 flex-col gap-1">
@@ -80,7 +80,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                   <span className="text-right text-sm font-semibold tabular-nums text-slate-900">{formatPct(m.contributionShare)}</span>
                   <span className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
                     {m.flags.length === 0 ? (
-                      <span className="text-[0.8125rem] text-slate-700">No flags</span>
+                      <span className="text-sm text-slate-700">No flags</span>
                     ) : (
                       m.flags.map((f) => (
                         <span key={f} className="inline-flex flex-wrap items-center gap-1">

@@ -120,7 +120,7 @@ function ResolveModal({
         </div>
 
         <div className="px-6 pt-5">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Student's note</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Student's note</p>
           <p className="text-base text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
             {dispute.reason}
           </p>
@@ -128,7 +128,7 @@ function ResolveModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Resolution</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Resolution</p>
             <div className="flex gap-3">
               {(["RESOLVED", "DISMISSED"] as const).map((opt) => (
                 <label key={opt} className="flex items-center gap-2 cursor-pointer">
@@ -143,7 +143,7 @@ function ResolveModal({
           </div>
 
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Your response</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Your response</p>
             <textarea ref={textareaRef} value={response} onChange={(e) => setResponse(e.target.value)}
               placeholder="Provide context or a decision for the student…" rows={4} maxLength={2000}
               className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400" />
@@ -227,9 +227,9 @@ export function DisputesPage() {
               Back to Dashboard
             </button>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900">Disputes</h1>
+              <h1 className="text-xl font-semibold text-slate-900">Disputes</h1>
               {openCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
                   {openCount} open
                 </span>
               )}
@@ -325,7 +325,7 @@ export function DisputesPage() {
                       <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-800">{d.memberName}</span>
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_STYLE[d.status]}`}>
+                          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_STYLE[d.status]}`}>
                             {d.status}
                           </span>
                           <span className="text-xs text-slate-400">{timeAgo(d.createdAt)}</span>

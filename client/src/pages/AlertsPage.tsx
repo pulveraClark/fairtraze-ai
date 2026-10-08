@@ -87,9 +87,9 @@ export function AlertsPage() {
               ]}
             />
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900">Notifications</h1>
+              <h1 className="text-xl font-semibold text-slate-900">Notifications</h1>
               {unreadCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[10px] font-semibold">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
                   {unreadCount} unread
                 </span>
               )}
@@ -168,7 +168,7 @@ export function AlertsPage() {
                       <span className={`mt-[9px] w-2 h-2 rounded-full shrink-0 ${!alert.read ? "bg-indigo-500" : "bg-transparent border border-slate-300"}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.light}`}>
+                          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.light}`}>
                             {typeMeta.label}
                           </span>
                           <span className="text-xs text-slate-400">{timeAgo(alert.createdAt)}</span>

@@ -27,7 +27,7 @@ export function TipList({ items }: { items: [string, string][] }) {
 export function WeightList({ header, items }: { header: string; items: [string, string][] }) {
   return (
     <div>
-      <p style={{ margin: 0, marginBottom: 6, fontWeight: 700, color: "#f8fafc", fontSize: 11 }}>
+      <p style={{ margin: 0, marginBottom: 6, fontWeight: 700, color: "#f8fafc", fontSize: 12 }}>
         {header}
       </p>
       <div style={{ borderTop: "1px solid #334155", marginBottom: 6 }} />
@@ -171,7 +171,7 @@ export function InfoTooltip({ content, label, width = 252 }: Props) {
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-        className="ml-1 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-[10px] text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+        className="ml-1 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-xs text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
         style={{ textTransform: "none" }}
       >
         ℹ
@@ -191,7 +191,7 @@ export function InfoTooltip({ content, label, width = 252 }: Props) {
             maxWidth: "calc(100vw - 20px)",
             backgroundColor: "#1e293b",
             color: "#e2e8f0",
-            fontSize: 11,
+            fontSize: 12,
             lineHeight: 1.5,
             borderRadius: 8,
             padding: "9px 12px",

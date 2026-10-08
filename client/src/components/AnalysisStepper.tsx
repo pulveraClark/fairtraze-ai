@@ -169,7 +169,7 @@ export function AnalysisStepper({ progress = INITIAL_PROGRESS, done, loadingRepo
             <div className="mt-0.5 shrink-0 flex flex-col items-center">
               {/* The collection step shows per-source icons inside its cards instead. */}
               {step.key === "collect" ? (
-                <span className="h-5 w-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-[10px] font-semibold text-slate-500">
+                <span className="h-5 w-5 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-xs font-semibold text-slate-500">
                   {i + 1}
                 </span>
               ) : step.status === "pending" ? (

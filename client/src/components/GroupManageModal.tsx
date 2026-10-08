@@ -73,7 +73,7 @@ function Initials({ name, leader }: { name: string; leader: boolean }) {
   const ini = name.split(" ").map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
   return (
     <span
-      className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold select-none ${
+      className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold select-none ${
         leader
           ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
           : "bg-slate-100 text-slate-600 border border-slate-200"
@@ -409,7 +409,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         <div className="mb-5">
           <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
             <h3 className="text-xs font-semibold text-slate-700">Members</h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-400">
               {group.members.length}
               {group.maxGroupSize ? ` / ${group.maxGroupSize}` : ""} members
               {group.repoUrl && (
@@ -442,7 +442,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                       <span className="text-xs font-semibold text-slate-800 truncate">
                         {m.name}{isSelf && <span className="text-slate-400 font-normal"> (you)</span>}
                       </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                         isThisLeader
                           ? "text-indigo-700 bg-indigo-50 border-indigo-200"
                           : "text-slate-500 bg-white border-slate-200"
@@ -451,7 +451,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                       </span>
                     </div>
                     {m.githubUsername && (
-                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
                     )}
 
                     {/* Functional role chips — filtered by sourceType (Fix 1); at least one always required (Fix 3) */}
@@ -464,7 +464,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         if (!canEditRoles) {
                           if (!active) return null;
                           return (
-                            <span key={role} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
+                            <span key={role} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
                               {meta.label}
                             </span>
                           );
@@ -475,7 +475,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                             <span
                               key={role}
                               title="Required for this project's source type — cannot be removed"
-                              className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}
+                              className={`text-xs px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}
                             >
                               ✓ {meta.label}
                             </span>
@@ -497,7 +497,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                               void handleSetRoles(m.userId, next);
                             }}
                             title={isLastRemaining ? "At least one role must be assigned." : undefined}
-                            className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
+                            className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
                               active ? meta.activeClass : meta.inactiveClass
                             }`}
                           >
@@ -561,7 +561,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
           {canManage && nonLeaderMembers.length === 0 && amLeader && (
             <div className="mt-5 pt-4 border-t border-slate-100">
-              <p className="text-[11px] text-slate-400 mb-2">
+              <p className="text-xs text-slate-400 mb-2">
                 You are the only member of this group.
               </p>
               <button
@@ -580,18 +580,18 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             <div className="flex items-center gap-2 mb-2.5">
               <h3 className="text-xs font-semibold text-slate-700">Pending Join Requests</h3>
               {requests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold px-1 leading-none">
+                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-xs font-bold px-1 leading-none">
                   {requests.length}
                 </span>
               )}
             </div>
 
             {requestsLoading ? (
-              <p className="text-[11px] text-slate-400">Loading requests…</p>
+              <p className="text-xs text-slate-400">Loading requests…</p>
             ) : requestsErr ? (
-              <p className="text-[11px] text-red-500">{requestsErr}</p>
+              <p className="text-xs text-red-500">{requestsErr}</p>
             ) : requests.length === 0 ? (
-              <p className="text-[11px] text-slate-400 italic">No pending requests.</p>
+              <p className="text-xs text-slate-400 italic">No pending requests.</p>
             ) : (
               <ul className="space-y-2">
                 {requests.map((r) => (
@@ -603,7 +603,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-slate-800 truncate">{r.student.name}</p>
                       {r.student.githubUsername && (
-                        <p className="text-[11px] text-slate-400 font-mono">@{r.student.githubUsername}</p>
+                        <p className="text-xs text-slate-400 font-mono">@{r.student.githubUsername}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -635,18 +635,18 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             <div className="flex items-center gap-2 mb-2.5">
               <h3 className="text-xs font-semibold text-slate-700">Pending Role Suggestions</h3>
               {roleSuggestions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-teal-600 text-white text-[9px] font-bold px-1 leading-none">
+                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-teal-600 text-white text-xs font-bold px-1 leading-none">
                   {roleSuggestions.length}
                 </span>
               )}
             </div>
 
             {roleSuggestionsLoading ? (
-              <p className="text-[11px] text-slate-400">Loading suggestions…</p>
+              <p className="text-xs text-slate-400">Loading suggestions…</p>
             ) : roleSuggestionsErr ? (
-              <p className="text-[11px] text-red-500">{roleSuggestionsErr}</p>
+              <p className="text-xs text-red-500">{roleSuggestionsErr}</p>
             ) : roleSuggestions.length === 0 ? (
-              <p className="text-[11px] text-slate-400 italic">No pending role suggestions.</p>
+              <p className="text-xs text-slate-400 italic">No pending role suggestions.</p>
             ) : (
               <ul className="space-y-2">
                 {roleSuggestions.map((s) => (
@@ -657,7 +657,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                     <Initials name={s.user.name} leader={false} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-slate-800 truncate">{s.user.name}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Suggests:{" "}
                         {s.suggestedRoles.map((r) => ROLE_META[r]?.label ?? r).join(" + ")}
                       </p>
@@ -725,7 +725,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 {m.userId === currentUserId && <span className="text-slate-400"> (you)</span>}
               </span>
               {m.githubUsername && (
-                <span className="text-[11px] text-slate-400 font-mono ml-auto">@{m.githubUsername}</span>
+                <span className="text-xs text-slate-400 font-mono ml-auto">@{m.githubUsername}</span>
               )}
             </label>
           ))}
@@ -775,7 +775,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
         )}
 
-        <p className="text-[11px] text-slate-400 mb-5">
+        <p className="text-xs text-slate-400 mb-5">
           Leadership is administrative only and grants no contribution credit. Scores are based on actual work.
         </p>
 

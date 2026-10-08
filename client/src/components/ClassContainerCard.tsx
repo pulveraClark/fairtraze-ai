@@ -96,25 +96,25 @@ export function ClassContainerCard({
           {/* Risk roll-up */}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {rollup.highRisk > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />
                 {rollup.highRisk} High Risk
               </span>
             )}
             {rollup.moderate > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />
                 {rollup.moderate} Moderate Risk
               </span>
             )}
             {rollup.healthy > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
                 {rollup.healthy} Healthy
               </span>
             )}
             {rollup.unanalyzed > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-slate-300 inline-block" />
                 {rollup.unanalyzed} Not analyzed
               </span>
@@ -125,7 +125,7 @@ export function ClassContainerCard({
         {/* Right side: attention badge + chevron */}
         <div className="flex items-center gap-3 shrink-0 pt-0.5">
           {hasAtRisk && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700 whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-xs font-semibold text-red-700 whitespace-nowrap">
               ⚠ {rollup.needsAttention} need{rollup.needsAttention !== 1 ? "" : "s"} attention
             </span>
           )}

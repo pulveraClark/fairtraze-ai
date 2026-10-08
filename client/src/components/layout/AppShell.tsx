@@ -24,7 +24,7 @@ function MobileTopBar({ open, onOpen, buttonRef }: { open: boolean; onOpen: () =
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Open navigation menu${unreadCount > 0 ? `, ${unreadCount} unread notifications` : ""}`}
-        className={`relative flex h-11 w-11 items-center justify-center rounded-lg text-slate-100 hover:bg-white/10 ${FOCUS_RING}`}
+        className={`relative flex h-10 w-10 items-center justify-center rounded-lg text-slate-100 hover:bg-white/10 ${FOCUS_RING}`}
       >
         <MenuIcon />
         {unreadCount > 0 && (
@@ -141,7 +141,7 @@ function AuthedFrame({ userId, children }: { userId: number; children: ReactNode
 /** Logged-out visitors on shared pages (/join, /overview): a compact bar instead of a sidebar. */
 function PublicFrame({ children }: { children: ReactNode }) {
   const { navigate } = useRouter();
-  const linkClass = `inline-flex min-h-11 items-center rounded-lg px-4 text-sm font-medium ${FOCUS_RING}`;
+  const linkClass = `inline-flex min-h-10 items-center rounded-lg px-4 text-sm font-medium ${FOCUS_RING}`;
   return (
     <div className="ft-app-content ft-app-content--public flex min-h-screen flex-col">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#020617] px-4 print:hidden">
@@ -149,7 +149,7 @@ function PublicFrame({ children }: { children: ReactNode }) {
           href="/"
           onClick={(e) => { e.preventDefault(); navigate("/"); }}
           aria-label="FAIR TRAZE AI home"
-          className={`flex min-h-11 items-center gap-2.5 rounded-lg ${FOCUS_RING}`}
+          className={`flex min-h-10 items-center gap-2.5 rounded-lg ${FOCUS_RING}`}
         >
           <span className="rounded-lg bg-white/90 px-1.5 py-1 shadow-sm"><img src={logoUrl} alt="" className="block h-7 w-auto" /></span>
           <span className="font-display text-base font-bold leading-none tracking-tight text-white">

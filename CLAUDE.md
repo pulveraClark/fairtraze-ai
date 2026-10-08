@@ -159,14 +159,18 @@ Instructor accounts are gated on admin sign-off. Students and admins are unaffec
 - There is no instructor-to-department link on `User` (departments attach only through `ClassSection`), so approval does not assign a department.
 
 ## Readability rules
-Follow these for all new UI (`client/src/components/ui/styles.ts` implements most of them):
-- Font sizes in rem. Body 14px (0.875rem), secondary 13px, smallest 12px (nothing below), card titles 16px, page titles 24px, tile numbers 24px.
+Follow these for all new UI (`client/src/components/ui/styles.ts` implements most of them). The scale is applied by remapping Tailwind's theme tokens in `client/src/index.css` (`text-sm`/`text-base` = 13px, `text-lg` = 14px, `text-xl`/`text-2xl` = 20px; `text-xs` = 12px), so prefer the standard `text-*` utilities over arbitrary `text-[Npx]` values.
+- Font: Geist, self-hosted via `@fontsource-variable/geist` (imported in `main.tsx`; no Google Fonts request), with a `system-ui` fallback. Use tabular numbers (`tabular-nums`; tables get it globally) for numbers in tiles, tables, shares and Gini values.
+- Font sizes in rem. Body text, names and list numbers 13px (0.8125rem); secondary text, meta, chips, pills and axis labels 12px (0.75rem) — nothing below 12px; card titles 14px semibold; page titles 20px semibold; tile numbers 20px semibold.
 - Sentence-case labels, not all caps.
 - Text contrast at least 4.5:1. No pale grey text.
-- Buttons 36-40px tall; clickable rows and nav items at least 44px.
+- Buttons 32-36px tall (`min-h-9`); clickable rows and nav items at least 40px (`min-h-10`).
+- Card padding 16px, gaps between cards 16px, corner radius 12px, subtle 1px borders, minimal shadows.
+- Cards in the same grid row must be equal height (`items-stretch`, cards `h-full`, content top-aligned).
 - Visible focus outline on every interactive element.
-- Never color alone: statuses always include text.
+- Never color alone: statuses and pills always include text.
 - No horizontal scroll at 375px width or 200% zoom.
+- Exceptions to the compact scale, pinned explicitly so the token remap does not touch them: the FairTraze Docs writing area (`.ft-doc-content`, ~16px body), print/PDF output (`PrintableReport`, `@media print`), and the public landing page (wrapped in `.ft-legacy-scale`).
 
 ## Setup-responsibilities workflow (IMPLEMENTED)
 Setup is distributed so an instructor with many sections and many groups per section is not a data-entry bottleneck. This is real, working flow — not a proposed design:

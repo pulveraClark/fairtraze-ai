@@ -252,7 +252,7 @@ export function AdminPage() {
         {/* Page heading */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Admin Panel</h1>
+            <h1 className="text-xl font-semibold text-slate-800">Admin Panel</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               User management and institution overview.
             </p>
@@ -351,12 +351,12 @@ export function AdminPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Name / Email</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Role</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Joined</th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Actions</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Name / Email</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Role</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Status</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Joined</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -377,7 +377,7 @@ export function AdminPage() {
 
                         {/* Role */}
                         <td className="px-5 py-3.5">
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ROLE_BADGE[u.systemRole]}`}>
+                          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ROLE_BADGE[u.systemRole]}`}>
                             {u.systemRole}
                           </span>
                         </td>
@@ -392,7 +392,7 @@ export function AdminPage() {
                         {/* Status */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                               u.active
                                 ? "text-emerald-700 bg-emerald-50 border-emerald-200"
                                 : "text-slate-500 bg-slate-100 border-slate-200"
@@ -401,7 +401,7 @@ export function AdminPage() {
                             </span>
                             {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
                               <span
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
+                                className="text-xs font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
                                 title="Too many failed login attempts — auto-unlocks after a cooldown, or unlock now below"
                               >
                                 Locked
@@ -605,7 +605,7 @@ export function AdminPage() {
                       )}
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
                       {cls.department && (
-                        <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
+                        <span className="text-xs text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
                       )}
                       <span className="text-xs text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
                     </div>
@@ -640,7 +640,7 @@ export function AdminPage() {
                 <p className="text-xs font-semibold text-slate-600">Departments</p>
                 <button
                   onClick={() => setShowDeptForm((v) => !v)}
-                  className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
                 >
                   {showDeptForm ? "Cancel" : "+ New"}
                 </button>
@@ -673,15 +673,15 @@ export function AdminPage() {
                 </form>
               )}
 
-              {departmentsLoading && <p className="text-[11px] text-slate-400">Loading…</p>}
-              {!departmentsLoading && departmentsError && <p className="text-[11px] text-red-600">{departmentsError}</p>}
+              {departmentsLoading && <p className="text-xs text-slate-400">Loading…</p>}
+              {!departmentsLoading && departmentsError && <p className="text-xs text-red-600">{departmentsError}</p>}
               {!departmentsLoading && !departmentsError && departments.length === 0 && (
-                <p className="text-[11px] text-slate-400">No departments yet.</p>
+                <p className="text-xs text-slate-400">No departments yet.</p>
               )}
               {!departmentsLoading && !departmentsError && departments.length > 0 && (
                 <ul className="space-y-1 max-h-32 overflow-y-auto">
                   {departments.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between text-[11px]">
+                    <li key={d.id} className="flex items-center justify-between text-xs">
                       <span className="text-slate-700 truncate">{d.name}</span>
                       <span className="text-slate-400 font-mono ml-2 shrink-0">{d.code}</span>
                     </li>

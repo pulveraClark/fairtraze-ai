@@ -445,7 +445,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
-                    <h1 className="text-xl font-bold text-slate-900 truncate">{project.groupName}</h1>
+                    <h1 className="text-xl font-semibold text-slate-900 truncate">{project.groupName}</h1>
                     {membership.role === "LEADER" && (
                       <button
                         onClick={startEditGroupName}
@@ -460,10 +460,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     )}
                   </div>
                 )}
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                   {SOURCE_LABEL[assignment.sourceType] ?? assignment.sourceType}
                 </span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                   membership.role === "LEADER"
                     ? "text-indigo-700 bg-indigo-50 border-indigo-200"
                     : "text-slate-500 bg-white border-slate-200"
@@ -472,7 +472,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 </span>
               </div>
               {editingGroupName && groupNameErr && (
-                <p className="text-[11px] text-red-600 mt-1">{groupNameErr}</p>
+                <p className="text-xs text-red-600 mt-1">{groupNameErr}</p>
               )}
               <p className="text-sm text-slate-400 mt-0.5">
                 {classSection.subjectName}
@@ -502,7 +502,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               Manage Group
             </button>
             {report?.teamHealth && (
-              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
                 {report.teamHealth}
               </span>
             )}
@@ -537,13 +537,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <div className="flex items-center justify-between gap-3 mb-2">
               <h2 className="text-xs font-semibold text-slate-700">
                 Your tasks
-                <span className="ml-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 rounded-full px-1.5 py-0.5">
+                <span className="ml-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-full px-1.5 py-0.5">
                   {myTasks.length}
                 </span>
               </h2>
               <button
                 onClick={() => setShowTasksModal(true)}
-                className="text-[11px] text-indigo-600 hover:underline font-medium shrink-0"
+                className="text-xs text-indigo-600 hover:underline font-medium shrink-0"
               >
                 Manage tasks
               </button>
@@ -569,7 +569,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
               {/* Current applied role (always shown, read-only) */}
               <div className="mb-3">
-                <p className="text-[11px] text-slate-400 mb-1.5">
+                <p className="text-xs text-slate-400 mb-1.5">
                   {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
                 </p>
                 <div className="flex items-center flex-wrap gap-2">
@@ -591,7 +591,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
               {/* Leader: informational note */}
               {membership.role === "LEADER" && (
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-400 leading-relaxed">
                   Assign roles for all members, including yourself, through Manage Group. Roles are context only — they never affect contribution scores.
                 </p>
               )}
@@ -604,7 +604,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   {mySuggestion?.status === "PENDING" ? (
                     /* Pending — awaiting leader action */
                     <div className="flex items-start gap-2">
-                      <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-0.5">
+                      <span className="shrink-0 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-0.5">
                         PENDING
                       </span>
                       <p className="text-xs text-slate-600 leading-relaxed">
@@ -627,7 +627,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         <p className="text-xs text-red-600 mb-2">Your last suggestion was declined. You can suggest again.</p>
                       )}
 
-                      <p className="text-[11px] text-slate-500 mb-2">
+                      <p className="text-xs text-slate-500 mb-2">
                         Suggest a role to your leader for approval:
                       </p>
 
@@ -677,7 +677,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         ) : "Submit suggestion →"}
                       </button>
 
-                      <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                      <p className="text-xs text-slate-400 mt-2 leading-relaxed">
                         Roles are context only — they never change contribution scores.
                       </p>
                     </>
@@ -740,7 +740,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                           style={{ left: `${equalShare * 100}%` }}
                         />
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-1.5">
+                      <p className="text-xs text-slate-400 mt-1.5">
                         Equal share for {report.memberCount} members = {equalSharePct}%
                         {(myShare ?? 0) >= equalShare
                           ? " · Your share is at or above the equal share."
@@ -756,8 +756,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {getContributionStatsCards(report.myContribution, sourceType).map(({ label, value }) => (
                       <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
-                        <p className="text-2xl font-bold text-slate-800">{value}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
+                        <p className="text-xl font-semibold tabular-nums text-slate-800">{value}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{label}</p>
                       </div>
                     ))}
                   </div>
@@ -768,30 +768,30 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
                   <div className="flex items-start gap-6 flex-wrap">
                     <div>
-                      <p className="text-[11px] text-slate-400 mb-1.5">Team Health</p>
-                      <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
+                      <p className="text-xs text-slate-400 mb-1.5">Team Health</p>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
                         {report.teamHealth}
                       </span>
                     </div>
                     <div>
-                      <p className="text-[11px] text-slate-400 mb-1.5">Contribution Gini</p>
+                      <p className="text-xs text-slate-400 mb-1.5">Contribution Gini</p>
                       <div className="flex items-center gap-1.5">
                         <span className="text-base font-bold text-slate-700">{report.gini.toFixed(2)}</span>
                         {giniLabel && (
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[giniLabel]}`}>
+                          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[giniLabel]}`}>
                             {giniLabel}
                           </span>
                         )}
                       </div>
                     </div>
                     <div>
-                      <p className="text-[11px] text-slate-400 mb-1.5">Last Analyzed</p>
+                      <p className="text-xs text-slate-400 mb-1.5">Last Analyzed</p>
                       <p className="text-sm font-medium text-slate-700">
                         {new Date(report.analyzedAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
+                  <p className="text-xs text-slate-400 mt-4 leading-relaxed">
                     The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. The Gini coefficient and team health label are aggregate measures computed from all members' activity — individual teammates' scores are not shared with you.
                   </p>
                 </div>
@@ -822,13 +822,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                     if (!outcome) return null;
                                     if (outcome === "RESOLVED") {
                                       return (
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-50 border-emerald-200">
+                                        <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-50 border-emerald-200">
                                           Reviewed — Accepted
                                         </span>
                                       );
                                     }
                                     return (
-                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-slate-50 border-slate-200">
+                                      <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-slate-50 border-slate-200">
                                         Reviewed — Upheld
                                       </span>
                                     );
@@ -852,15 +852,15 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                   {dispute && (
                                     <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-wide">Dispute status:</span>
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${DISPUTE_STATUS_STYLE[dispute.status]}`}>
+                                        <span className="text-xs font-bold uppercase tracking-wide">Dispute status:</span>
+                                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${DISPUTE_STATUS_STYLE[dispute.status]}`}>
                                           {dispute.status}
                                         </span>
                                       </div>
                                       <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{dispute.reason}</p>
                                       {dispute.instructorResponse && (
                                         <div className="pt-1.5 border-t border-slate-200">
-                                          <p className="text-[10px] font-semibold text-slate-500 mb-0.5">Instructor response:</p>
+                                          <p className="text-xs font-semibold text-slate-500 mb-0.5">Instructor response:</p>
                                           <p className="text-xs text-slate-700 leading-relaxed">{dispute.instructorResponse}</p>
                                         </div>
                                       )}
@@ -869,7 +869,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
                                   {/* Submit button — only if no OPEN dispute exists */}
                                   {dispute?.status === "OPEN" ? (
-                                    <p className="text-[11px] text-amber-600">
+                                    <p className="text-xs text-amber-600">
                                       Your dispute is open and awaiting instructor review.
                                     </p>
                                   ) : (
@@ -902,7 +902,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">FairTraze Docs</h2>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
+              <span className="text-xs text-slate-400 hidden sm:inline">
                 {viewingHistory ? "Past versions of this document, captured at each analysis run" : "Collaborative editor — shared document for this group"}
               </span>
               <button

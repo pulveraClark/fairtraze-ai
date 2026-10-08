@@ -81,7 +81,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
   return (
     <section ref={sectionRef} id="instructor-approvals" aria-labelledby="instructor-approvals-title" className="scroll-mt-4">
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h3 id="instructor-approvals-title" className="text-base font-semibold text-slate-900">Instructor approvals</h3>
+        <h3 id="instructor-approvals-title" className="text-lg font-semibold text-slate-900">Instructor approvals</h3>
         <span
           className="inline-flex min-w-6 items-center justify-center rounded-full bg-indigo-700 px-2 py-0.5 text-xs font-semibold text-white"
           aria-label={`${pendingCount} waiting for approval`}
@@ -89,7 +89,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
           {pendingCount}
         </span>
       </div>
-      <p className="mb-4 text-[0.8125rem] leading-normal text-slate-700">
+      <p className="mb-4 text-sm leading-normal text-slate-700">
         New instructor sign-ups can log in but cannot use instructor features until you approve them.
       </p>
 
@@ -112,7 +112,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
             <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
               <div className="min-w-0 flex-1 basis-56">
                 <p className="break-words text-sm font-semibold text-slate-900">{p.name}</p>
-                <p className="break-all text-[0.8125rem] text-slate-700">{p.email}</p>
+                <p className="break-all text-sm text-slate-700">{p.email}</p>
                 <p className="text-xs text-slate-700">Signed up {fmtDate(p.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">

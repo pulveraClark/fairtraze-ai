@@ -35,7 +35,7 @@ export function ForgotPasswordPage() {
 
         <div className="text-center mb-8">
           <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
-          <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Forgot your password?</h1>
+          <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Forgot your password?</h1>
           <p className="text-slate-500 text-sm">
             Enter your email and we'll send you a link to reset it.
           </p>

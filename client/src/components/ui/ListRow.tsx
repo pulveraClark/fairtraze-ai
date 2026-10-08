@@ -12,7 +12,7 @@ interface Props {
   ref?: Ref<HTMLButtonElement>;
 }
 
-/** Full-width clickable row, at least 44px tall, with a visible focus outline. */
+/** Full-width clickable row, at least 40px tall, with a visible focus outline. */
 export function ListRow({ children, onClick, ariaLabel, opensDialog, className = "", ref }: Props) {
   return (
     <button
@@ -21,7 +21,7 @@ export function ListRow({ children, onClick, ariaLabel, opensDialog, className =
       aria-label={ariaLabel}
       aria-haspopup={opensDialog ? "dialog" : undefined}
       onClick={(e) => onClick(e.currentTarget)}
-      className={`block min-h-11 w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 ${FOCUS_LIGHT} focus-visible:-outline-offset-2 ${className}`}
+      className={`block min-h-10 w-full px-4 py-2.5 text-left transition-colors hover:bg-slate-50 ${FOCUS_LIGHT} focus-visible:-outline-offset-2 ${className}`}
     >
       {children}
     </button>

@@ -332,7 +332,7 @@ function FormatMenu({ editor }: { editor: Editor }) {
                     title="Clear"
                     aria-label="Clear text color"
                     onClick={() => editor.chain().focus().unsetColor().run()}
-                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-[8px] shrink-0"
+                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-xs shrink-0"
                   >
                     ✕
                   </button>
@@ -360,7 +360,7 @@ function FormatMenu({ editor }: { editor: Editor }) {
                     title="Clear"
                     aria-label="Clear highlight"
                     onClick={() => editor.chain().focus().unsetHighlight().run()}
-                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-[8px] shrink-0"
+                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-xs shrink-0"
                   >
                     ✕
                   </button>
@@ -391,7 +391,7 @@ function FormatMenu({ editor }: { editor: Editor }) {
                     if (!value) editor.chain().focus().unsetFontFamily().run();
                     else editor.chain().focus().setFontFamily(value).run();
                   }}
-                  className="h-6 text-[11px] text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
+                  className="h-6 text-xs text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
                 >
                   {FONT_FAMILIES.map((f) => (
                     <option key={f.label} value={f.value ?? ""}>
@@ -412,7 +412,7 @@ function FormatMenu({ editor }: { editor: Editor }) {
                     if (!value) editor.chain().focus().unsetFontSize().run();
                     else editor.chain().focus().setFontSize(value).run();
                   }}
-                  className="h-6 text-[11px] text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
+                  className="h-6 text-xs text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
                 >
                   {FONT_SIZES.map((s) => (
                     <option key={s.label} value={s.value ?? ""}>
@@ -433,7 +433,7 @@ function FormatMenu({ editor }: { editor: Editor }) {
                     if (!value) editor.chain().focus().unsetLineHeight().run();
                     else editor.chain().focus().setLineHeight(value).run();
                   }}
-                  className="h-6 text-[11px] text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
+                  className="h-6 text-xs text-slate-600 border border-slate-200 rounded bg-white px-1 flex-1 min-w-0"
                 >
                   {LINE_HEIGHTS.map((s) => (
                     <option key={s.label} value={s.value ?? ""}>
@@ -514,7 +514,7 @@ export function PresenceChip({ user }: { user: PresentUser }) {
   return (
     <span
       title={user.name}
-      className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 ring-2 ring-white"
+      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ring-2 ring-white"
       style={{ backgroundColor: user.color }}
     >
       {initial}
@@ -527,7 +527,7 @@ export function AuthorshipLegend({ users, memberIds }: { users: AuthorshipUser[]
   return (
     <div className="flex items-center gap-3 px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 flex-wrap">
       {users.map((u) => (
-        <span key={u.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+        <span key={u.id} className="flex items-center gap-1.5 text-xs text-slate-600">
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getUserColor(u.id, memberIds) }} />
           {u.name}
         </span>
@@ -721,7 +721,7 @@ export function Toolbar({
       )}
       {!editable && (
         <>
-          <span className="text-[11px] text-slate-400 font-medium">Viewing (read-only)</span>
+          <span className="text-xs text-slate-400 font-medium">Viewing (read-only)</span>
           <span className="w-px h-4 bg-slate-200 mx-1.5" />
         </>
       )}
@@ -789,7 +789,7 @@ export function Toolbar({
               type="button"
               title={size === "short" ? "Short — 8.5×11in" : "Long — 8.5×13in"}
               onClick={() => onChangePageSize(size)}
-              className={`px-2 h-7 text-[11px] font-semibold capitalize transition-colors ${
+              className={`px-2 h-7 text-xs font-semibold capitalize transition-colors ${
                 pageSize === size
                   ? "bg-indigo-100 text-indigo-700"
                   : "bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
@@ -809,7 +809,7 @@ export function Toolbar({
               type="button"
               title={`${Math.round(level * 100)}%`}
               onClick={() => onChangeZoom(level)}
-              className={`px-2 h-7 text-[11px] font-semibold transition-colors ${
+              className={`px-2 h-7 text-xs font-semibold transition-colors ${
                 zoom === level
                   ? "bg-indigo-100 text-indigo-700"
                   : "bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
@@ -821,13 +821,13 @@ export function Toolbar({
         </div>
       )}
 
-      <span className="text-[11px] text-slate-400 whitespace-nowrap pl-1">
+      <span className="text-xs text-slate-400 whitespace-nowrap pl-1">
         {wordCount} word{wordCount === 1 ? "" : "s"} · {charCount} char{charCount === 1 ? "" : "s"}
       </span>
 
       <div className="ml-auto flex items-center gap-2 pl-2 shrink-0">
         {statusLabel && (
-          <span className={`text-[11px] ${connStatus === "connecting" ? "text-slate-400" : "text-amber-500"}`}>
+          <span className={`text-xs ${connStatus === "connecting" ? "text-slate-400" : "text-amber-500"}`}>
             {statusLabel}
           </span>
         )}

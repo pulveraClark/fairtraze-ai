@@ -84,7 +84,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel, showFooter
     <div
       className="hidden print:block"
       style={{
-        fontFamily: "'Outfit', system-ui, -apple-system, sans-serif",
+        fontFamily: "'Geist Variable', system-ui, -apple-system, sans-serif",
         color: "#0f172a",
         background: "#fff",
         WebkitPrintColorAdjust: "exact",

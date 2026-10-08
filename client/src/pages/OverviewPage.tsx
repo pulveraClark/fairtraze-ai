@@ -22,7 +22,7 @@ export function OverviewPage() {
             </svg>
             Back to {backLabel}
           </button>
-          <h1 className="text-xl font-bold text-slate-900">System Overview</h1>
+          <h1 className="text-xl font-semibold text-slate-900">System Overview</h1>
           <p className="text-sm text-slate-400 mt-0.5">
             What FAIR TRAZE AI does and how the system works
           </p>

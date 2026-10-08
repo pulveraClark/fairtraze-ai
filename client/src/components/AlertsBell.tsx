@@ -72,7 +72,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
           <>
             <span className="flex-1 truncate">Notifications</span>
             {unreadCount > 0 && (
-              <span aria-hidden="true" className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[0.8125rem] font-bold leading-none text-white">
+              <span aria-hidden="true" className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-sm font-bold leading-none text-white">
                 {countText}
               </span>
             )}
@@ -96,7 +96,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
             <div className="flex items-center gap-2">
               <span className="text-base font-semibold text-white">Notifications</span>
               {unreadCount > 0 && (
-                <span className="rounded-full border border-red-500/40 bg-red-500/20 px-2 py-0.5 text-[0.8125rem] font-bold text-red-300">
+                <span className="rounded-full border border-red-500/40 bg-red-500/20 px-2 py-0.5 text-sm font-bold text-red-300">
                   {unreadCount} unread
                 </span>
               )}
@@ -105,7 +105,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
               <button
                 type="button"
                 onClick={markAllRead}
-                className={`min-h-11 rounded-md px-2 text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
+                className={`min-h-10 rounded-md px-2 text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
               >
                 Mark all as read
               </button>
@@ -134,7 +134,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
                       key={alert.id}
                       type="button"
                       onClick={() => handleAlertClick(alert)}
-                      className={`min-h-11 w-full px-4 py-3 text-left hover:bg-white/5 ${FOCUS_RING} ${!alert.read ? "bg-indigo-500/10" : ""}`}
+                      className={`min-h-10 w-full px-4 py-3 text-left hover:bg-white/5 ${FOCUS_RING} ${!alert.read ? "bg-indigo-500/10" : ""}`}
                     >
                       <div className="flex items-start gap-2.5">
                         <span
@@ -142,14 +142,14 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
                           className={`mt-2 h-2 w-2 shrink-0 rounded-full ${!alert.read ? "bg-indigo-300" : "bg-transparent"}`}
                         />
                         <div className="min-w-0 flex-1">
-                          <span className={`mb-1 inline-block rounded border px-1.5 py-0.5 text-[0.8125rem] font-semibold ${meta.color}`}>
+                          <span className={`mb-1 inline-block rounded border px-1.5 py-0.5 text-sm font-semibold ${meta.color}`}>
                             {meta.label}
                           </span>
                           {!alert.read && <span className="sr-only"> (unread)</span>}
                           <p className={`break-words text-sm leading-snug ${!alert.read ? "font-semibold text-slate-100" : "text-slate-300"}`}>
                             {alert.message}
                           </p>
-                          <p className="mt-1 text-[0.8125rem] text-slate-400">{timeAgo(alert.createdAt)}</p>
+                          <p className="mt-1 text-sm text-slate-400">{timeAgo(alert.createdAt)}</p>
                         </div>
                       </div>
                     </button>
@@ -161,7 +161,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
                 <button
                   type="button"
                   onClick={() => { navigate("/alerts"); setOpen(false); }}
-                  className={`min-h-11 w-full rounded-md text-center text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
+                  className={`min-h-10 w-full rounded-md text-center text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
                 >
                   {hasMore ? `View all ${alerts.length} notifications →` : "View all notifications →"}
                 </button>

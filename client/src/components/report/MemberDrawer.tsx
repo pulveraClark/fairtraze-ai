@@ -73,7 +73,7 @@ export function MemberDrawer({
   return (
     <Drawer open={open} onClose={onClose} title={member.studentName} restoreFocusTo={restoreFocusTo} subtitle={<RoleChips info={info} />}>
       <Section title="Contribution share">
-        <p className="text-2xl font-bold leading-tight text-slate-900">{formatPct(member.contributionShare)}</p>
+        <p className="text-xl font-semibold tabular-nums leading-tight text-slate-900">{formatPct(member.contributionShare)}</p>
         <p className="mt-1 text-sm leading-normal text-slate-800">
           {Math.abs(diff).toFixed(1)} percentage points {diff >= 0 ? "above" : "below"} the equal share ({equalPct.toFixed(1)}% each).
         </p>
@@ -106,7 +106,7 @@ export function MemberDrawer({
                     {outcome === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
                   </div>
                   {rule && (
-                    <p className="mt-1 text-[0.8125rem] leading-normal text-slate-700">
+                    <p className="mt-1 text-sm leading-normal text-slate-700">
                       <span className="font-semibold">How this flag is defined: </span>{rule}
                     </p>
                   )}
@@ -122,7 +122,7 @@ export function MemberDrawer({
           </div>
         )}
         {(notes.length > 0 || (tasks && tasks.total > 0)) && (
-          <div className="mt-3 space-y-1 text-[0.8125rem] leading-normal text-slate-800">
+          <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
             {tasks && tasks.total > 0 && <p><span className="font-semibold">Tasks: </span>{tasks.completed} of {tasks.total} completed</p>}
           </div>
@@ -161,7 +161,7 @@ export function MemberDrawer({
               ]}
             />
             {(importedChars > 0 || docs.insertedImageCount > 0) && (
-              <div className="mt-2 space-y-1 text-[0.8125rem] leading-normal text-slate-800">
+              <div className="mt-2 space-y-1 text-sm leading-normal text-slate-800">
                 {importedChars > 0 && <p><span className="font-semibold">Import: </span>{n(importedChars)} characters imported from .docx (session credit includes an estimate).</p>}
                 {docs.insertedImageCount > 0 && <p><span className="font-semibold">Images: </span>{docs.insertedImageCount} inserted (disclosed only, never scored).</p>}
               </div>
