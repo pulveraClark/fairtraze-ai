@@ -43,8 +43,8 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
     ...(roleParsed.success ? { systemRole: roleParsed.data } : {}),
     ...(search ? {
       OR: [
-        { name:  { contains: search } },
-        { email: { contains: search } },
+        { name:  { contains: search, mode: "insensitive" as const } },
+        { email: { contains: search, mode: "insensitive" as const } },
       ],
     } : {}),
   };
@@ -53,7 +53,7 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
     prisma.user.findMany({
       where,
       select:  USER_SELECT,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip:    (page - 1) * pageSize,
       take:    pageSize,
     }),

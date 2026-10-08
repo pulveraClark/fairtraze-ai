@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
@@ -84,11 +84,25 @@ export function AdminPage() {
   const { navigate }     = useRouter();
 
   // ── User management state ──────────────────────────────────────────────────
+  const [searchInput,    setSearchInput]    = useState("");
   const [search,         setSearch]         = useState("");
-  const [roleFilter,     setRoleFilter]     = useState("");
+  const [roleFilter,    setRoleFilter]     = useState("");
   const [usersPage,      setUsersPage]      = useState(1);
   const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce the search box; the query only sees the settled value, and the
+  // page resets to 1 only when that settled value actually changes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch((prev) => {
+        if (prev === searchInput) return prev;
+        setUsersPage(1);
+        return searchInput;
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   function showToast(type: "success" | "error", msg: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -286,8 +300,8 @@ export function AdminPage() {
               <input
                 type="search"
                 placeholder="Search name or email…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setUsersPage(1); }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-52"
               />
               <select
