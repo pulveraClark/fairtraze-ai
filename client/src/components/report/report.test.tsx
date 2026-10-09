@@ -161,6 +161,12 @@ describe("MemberDrawer", () => {
     expect(screen.queryByText(/total from GitHub's contributor statistics/)).not.toBeInTheDocument();
   });
 
+  it("notes that merge commits are excluded from Commit impact", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    expect(screen.getByText("Merge commits are excluded because they repeat teammates' work.")).toBeInTheDocument();
+  });
+
   it("labels the two sections differently", () => {
     render(<MemberDrawer {...baseProps} member={ghMixed} />);
     expect(screen.getByText("File types changed and how much each counts")).toBeInTheDocument();

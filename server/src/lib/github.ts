@@ -63,6 +63,7 @@ interface GitHubContributorStat {
 
 interface GitHubCommitListItem {
   sha: string;
+  parents?: Array<{ sha: string }>;
   commit: {
     author: { date?: string } | null;
     committer: { date?: string } | null;
@@ -109,7 +110,13 @@ async function fetchContributorStats(
   );
 }
 
-// Returns commit dates AND SHAs (most-recent-first, all pages).
+// Returns commit dates AND SHAs (most-recent-first, all pages), excluding merge commits
+// (more than one parent). A merge's diff is taken against its first parent, so it repeats the
+// merged branch's work (already credited to whoever wrote it) and would be double-counted.
+// Single-parent squash/rebase merges are real authored commits and are kept. `parents` is part
+// of the list response, so this costs no extra API calls; filtering here means callers slice
+// their diff sample from real commits only. Manual conflict-resolution work inside a merge is
+// therefore not counted (documented limitation).
 async function fetchCommitShasAndDates(
   octokit: Octokit,
   owner: string,
@@ -128,6 +135,7 @@ async function fetchCommitShasAndDates(
 
     const commits = response.data as unknown as GitHubCommitListItem[];
     for (const commit of commits) {
+      if ((commit.parents?.length ?? 0) > 1) continue;
       const date =
         commit.commit?.committer?.date ?? commit.commit?.author?.date;
       if (date) dates.push(date);

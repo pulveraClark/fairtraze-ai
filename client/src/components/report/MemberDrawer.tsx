@@ -268,6 +268,7 @@ function DrawerBody({
                 <dl className="mt-3 border-t border-slate-200 pt-2">
                   <Row label="Self-churn" value={formatPct(gh.selfChurnRatio)} />
                 </dl>
+                <Note>Merge commits are excluded because they repeat teammates' work.</Note>
                 <Note>
                   Based on up to 100 commits per member. Commit counts are log-scaled, so many tiny commits don't outweigh a few large ones.
                   Self-churn applies up to a 50% penalty to lines the member later deleted themselves.

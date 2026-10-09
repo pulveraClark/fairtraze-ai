@@ -346,6 +346,13 @@ Each commit is classified by `classifyCommit(stats)` and its weighted additions 
 ### Log-scale commit diminishing returns
 Raw commit counts are passed through `Math.log(commits + 1)` before normalisation. This neutralises commit-padding — a member who makes 100 tiny commits gains far less advantage over a peer with 50 substantive commits than the raw ratio would imply.
 
+### Merge commits are excluded (approved change to scoring *inputs*)
+`fetchCommitShasAndDates` (`server/src/lib/github.ts`) reads `parents` from the commit-list response (no extra API calls) and drops any commit with more than one parent **before** the `COMMIT_DIFF_SAMPLE_CAP` slice, so the 100-commit sample is filled with real authored commits. Excluded merges contribute nothing to added lines, `fileTypeBreakdown`, `commitImpactBreakdown`, `weightedAdditions`, `commitDates`/active days, or the required-login fallback's commit count. Single-parent squash/rebase merges are real authored commits and are kept.
+
+**Why:** the commit endpoint diffs a merge against its first parent, so it carries everything the merged branch brought in. A leader merging teammates' branches was credited with their lines (and a 1.5× `structural` multiplier), double-counting work already credited to its authors; it also made the commit count (stats API, which excludes merges) inconsistent with the line/impact basis. Like the authorship fix, this changes scoring *inputs* only — the formulas in `shared/` are untouched. Reports generated before this change may include merge diffs until re-analyzed. The member drawer's Commit impact section states the exclusion.
+
+**Known limitation:** manual conflict-resolution work done inside a merge commit is not counted.
+
 ### Self-churn penalty
 `effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)`
 
