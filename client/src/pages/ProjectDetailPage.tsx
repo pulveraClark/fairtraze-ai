@@ -685,6 +685,7 @@ export function ProjectDetailPage({ projectId }: Props) {
           disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
           onOpenDisputes={() => { setSelectedMember(null); navigate("/disputes"); }}
+          onOpenScoringSettings={() => { setSelectedMember(null); setShowScoringModal(true); }}
         />
       )}
 
