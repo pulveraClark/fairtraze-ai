@@ -6,8 +6,8 @@ import { PILL_TONES } from "../ui/StatusPill";
 import { useAuthOptional } from "../../context/AuthContext";
 import { DisclosureSection, HoverTip, Note, Row } from "./DrawerParts";
 import {
-  EDIT_LABEL, EDIT_MULTIPLIER, EDIT_ORDER, PREDATES_MESSAGE, fileTypeRows, impactRows, readSectionOpen,
-  scoreDriverSummary, writeSectionOpen,
+  EDIT_LABEL, EDIT_MULTIPLIER, EDIT_ORDER, EDIT_TIP, IMPACT_TIP, PREDATES_MESSAGE, fileTypeRows, impactRows, impactTotal,
+  readSectionOpen, scoreDriverSummary, writeSectionOpen,
 } from "../../lib/memberBreakdown";
 import { RoleChips } from "./MemberContributionList";
 import { Avatar } from "../Avatar";
@@ -90,6 +90,7 @@ function DrawerBody({
   const showGithub = source !== "document";
   const typeRows = fileTypeRows(gh);
   const impacts = impactRows(gh);
+  const analyzedCommits = impactTotal(gh);
   const maxImpact = impacts ? Math.max(1, ...impacts.map((r) => r.count)) : 1;
   // Final-third share is the unified-timeline value for Combined members; Docs-only members show it in their Docs section.
   const finalThird = formatPct(member.lastPhaseRatio);
@@ -184,7 +185,7 @@ function DrawerBody({
         <>
           <DisclosureSection
             title="Where the work went"
-            subtitle="File types and how much each counts"
+            subtitle="File types changed and how much each counts"
             open={whereOpen}
             onToggle={(next) => { setWhereOpen(next); writeSectionOpen(userId, "where", next); }}
           >
@@ -243,13 +244,19 @@ function DrawerBody({
             )}
           </DisclosureSection>
 
-          <DisclosureSection title="Commit impact" subtitle="How meaningful each commit was" open={impactOpen} onToggle={setImpactOpen}>
+          <DisclosureSection title="Commit impact" subtitle="How meaningful each commit was, regardless of file type" open={impactOpen} onToggle={setImpactOpen}>
             {impacts && gh ? (
               <>
+                <p className="mb-2 text-sm leading-normal text-slate-800">
+                  <span className="font-semibold tabular-nums text-slate-900">{analyzedCommits}</span> commit{analyzedCommits === 1 ? "" : "s"} analyzed
+                </p>
                 <ul className="space-y-1.5">
                   {impacts.map((r) => (
-                    <li key={r.key} className="grid grid-cols-[5.5rem_minmax(0,1fr)_2rem_2.5rem] items-center gap-2 text-sm leading-normal">
-                      <span className="text-slate-900">{r.label}</span>
+                    <li key={r.key} className="grid grid-cols-[8rem_minmax(0,1fr)_2rem_2.5rem] items-center gap-2 text-sm leading-normal">
+                      <span className="inline-flex items-center gap-1 text-slate-900">
+                        {r.label}
+                        <HoverTip label={`About ${r.label} commits`}>{IMPACT_TIP[r.key]}</HoverTip>
+                      </span>
                       <span aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-slate-200">
                         <span className="block h-full rounded-full bg-indigo-600" style={{ width: `${(r.count / maxImpact) * 100}%` }} />
                       </span>
@@ -288,6 +295,12 @@ function DrawerBody({
                   <Row label="Active days" value={n(gh.activeDays)} />
                   <Row label="Share of activity in the final third" value={finalThird} />
                 </dl>
+                {analyzedCommits > 0 && analyzedCommits !== gh.commits && (
+                  <Note>
+                    Commits is the total from GitHub's contributor statistics, which is what scoring uses. Commit impact counts the {analyzedCommits} commits
+                    that were analyzed (up to 100), which can differ from that total.
+                  </Note>
+                )}
                 <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2.5 text-xs leading-normal text-amber-900">
                   <WarnIcon />
                   <p>Raw lines are GitHub's totals and include generated files such as lock files, which are not counted in the weighted score.</p>
@@ -324,7 +337,12 @@ function DrawerBody({
                   <h4 className="mb-1 mt-3 text-sm font-semibold text-slate-900">Edit significance</h4>
                   <dl>
                     {EDIT_ORDER.map((k) => (
-                      <Row key={k} label={`${EDIT_LABEL[k]} (${EDIT_MULTIPLIER[k].toFixed(1)}×)`} value={docs.editTypeBreakdown[k]} />
+                      <Row
+                        key={k}
+                        label={`${EDIT_LABEL[k]} (${EDIT_MULTIPLIER[k].toFixed(1)}×)`}
+                        tip={<HoverTip label={`About ${EDIT_LABEL[k]} edits`}>{EDIT_TIP[k]}</HoverTip>}
+                        value={docs.editTypeBreakdown[k]}
+                      />
                     ))}
                   </dl>
                 </>

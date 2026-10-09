@@ -45,7 +45,7 @@ describe("MemberDrawer", () => {
     expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
     expect(screen.getByText(/More than 60%/)).toBeInTheDocument();
     expect(screen.getByText("Mostly source code")).toBeInTheDocument();
-    expect(screen.getByText(/83% of added lines.*4 commits, 1 structural/)).toBeInTheDocument();
+    expect(screen.getByText(/83% of added lines.*4 commits analyzed, 1 structural/)).toBeInTheDocument();
     expect(screen.queryByText(/Activity over time/)).not.toBeInTheDocument();
   });
 
@@ -143,6 +143,49 @@ describe("MemberDrawer", () => {
     expect(screen.getByText(/Commit counts are log-scaled/)).toBeInTheDocument();
   });
 
+  it("uses the analyzed-commit basis in the summary and explains a differing Raw commits total", async () => {
+    const mismatch: ScoredMember = {
+      ...ghMixed, commits: 4, commitImpactBreakdown: { structural: 6, functional: 1, cosmetic: 0, trivial: 0 },
+    };
+    render(<MemberDrawer {...baseProps} member={mismatch} />);
+    expect(screen.getByText(/7 commits analyzed, 6 structural/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    expect(screen.getByText(/commits? analyzed$/, { selector: "p" })).toHaveTextContent("7 commits analyzed");
+    await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
+    expect(screen.getByText(/total from GitHub's contributor statistics/)).toBeInTheDocument();
+  });
+
+  it("does not show the commit-total note when the totals agree", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
+    expect(screen.queryByText(/total from GitHub's contributor statistics/)).not.toBeInTheDocument();
+  });
+
+  it("labels the two sections differently", () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    expect(screen.getByText("File types changed and how much each counts")).toBeInTheDocument();
+    expect(screen.getByText("How meaningful each commit was, regardless of file type")).toBeInTheDocument();
+  });
+
+  it("explains each commit-impact category from the classifier rules, and Escape closes only the tip", async () => {
+    const onClose = vi.fn();
+    render(<MemberDrawer {...baseProps} onClose={onClose} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    const expected: Array<[string, RegExp]> = [
+      ["Structural", /2 or more new files, or touches 5 or more files.*1\.5×/],
+      ["Functional", /source or test files.*1\.0×/],
+      ["Cosmetic", /under 20 lines.*0\.5×/],
+      ["Trivial", /5 lines or fewer.*0\.2×/],
+    ];
+    for (const [label, re] of expected) {
+      await userEvent.click(screen.getByRole("button", { name: `About ${label} commits` }));
+      expect(screen.getByRole("tooltip")).toHaveTextContent(re);
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    }
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("shows raw next to weighted lines with the generated-files note", async () => {
     render(<MemberDrawer {...baseProps} member={ghMixed} />);
     await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
@@ -181,6 +224,23 @@ describe("MemberDrawer", () => {
     expect(screen.getByText("Trivial (0.1×)")).toBeInTheDocument();
     expect(screen.getByText("Share of activity in the final third")).toBeInTheDocument();
     expect(screen.getByText("No flags")).toBeInTheDocument();
+  });
+
+  it("explains each Docs edit-significance category from the editor classifier rules", async () => {
+    render(<MemberDrawer {...baseProps} source="document" member={doc} />);
+    await userEvent.click(screen.getByRole("button", { name: /FairTraze Docs activity/ }));
+    const expected: Array<[string, RegExp]> = [
+      ["Substantive", /30\+ characters.*1\.0×/],
+      ["Revision", /under 30 characters.*0\.7×/],
+      ["Formatting", /0\.5–1\.5× the length.*0\.3×/],
+      ["Trivial", /4 characters or fewer.*0\.1×/],
+    ];
+    for (const [label, re] of expected) {
+      await userEvent.click(screen.getByRole("button", { name: `About ${label} edits` }));
+      expect(screen.getByRole("tooltip")).toHaveTextContent(re);
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    }
   });
 
   it("handles a combined member with a missing Docs side", async () => {

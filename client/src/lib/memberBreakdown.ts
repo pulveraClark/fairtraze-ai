@@ -2,7 +2,11 @@
 // (plus the read-only weight constants from shared/); nothing recomputes scores, shares or flags.
 import type { AnyScoredMember, DocumentScoredMember, ScoredMember } from "@shared/types";
 import { FILE_WEIGHTS } from "@shared/fileWeights";
-import { COMMIT_IMPACT } from "@shared/commitClassifier";
+import {
+  COMMIT_IMPACT, COSMETIC_MAX_TOTAL_LINES, STRUCTURAL_FILES_TOUCHED_THRESHOLD, STRUCTURAL_NEW_FILES_THRESHOLD,
+  TRIVIAL_MAX_TOTAL_LINES,
+} from "@shared/commitClassifier";
+import { EDIT_TYPE_WEIGHT, REPLACE_RATIO_MAX, REPLACE_RATIO_MIN, SUBSTANTIVE_MIN_CHARS, TRIVIAL_MAX_CHARS } from "@shared/editClassifier";
 import { docsStatsOf, githubStatsOf } from "./memberView";
 
 export type WeightLabel = "High" | "Medium" | "Low" | "Very low";
@@ -68,11 +72,33 @@ export function impactRows(gh: ScoredMember | null): Array<{ key: ImpactKey; lab
   return IMPACT_ORDER.map((key) => ({ key, label: IMPACT_LABEL[key], count: b[key] ?? 0, multiplier: COMMIT_IMPACT[key] }));
 }
 
+/** Number of commits the impact breakdown covers (0 when missing). */
+export function impactTotal(gh: ScoredMember | null): number {
+  const b = gh?.commitImpactBreakdown;
+  return b ? IMPACT_ORDER.reduce((s, k) => s + (b[k] ?? 0), 0) : 0;
+}
+
 export type EditKey = "substantive" | "revision" | "formatting" | "trivial";
 export const EDIT_ORDER: EditKey[] = ["substantive", "revision", "formatting", "trivial"];
 export const EDIT_MULTIPLIER: Record<EditKey, number> = { substantive: 1.0, revision: 0.7, formatting: 0.3, trivial: 0.1 };
 export const EDIT_LABEL: Record<EditKey, string> = {
   substantive: "Substantive", revision: "Revision", formatting: "Formatting", trivial: "Trivial",
+};
+
+/** One or two plain sentences per commit-impact category, built from the classifier's own constants. */
+export const IMPACT_TIP: Record<ImpactKey, string> = {
+  structural: `Creates ${STRUCTURAL_NEW_FILES_THRESHOLD} or more new files, or touches ${STRUCTURAL_FILES_TOUCHED_THRESHOLD} or more files in one commit. Counted at ${COMMIT_IMPACT.structural.toFixed(1)}×.`,
+  functional: `A substantive change to source or test files that isn't structural or cosmetic. Counted at ${COMMIT_IMPACT.functional.toFixed(1)}×.`,
+  cosmetic: `Touches no source or test files, or is a small edit (under ${COSMETIC_MAX_TOTAL_LINES} lines) with roughly equal lines added and removed. Counted at ${COMMIT_IMPACT.cosmetic.toFixed(1)}×.`,
+  trivial: `Changes ${TRIVIAL_MAX_TOTAL_LINES} lines or fewer and touches no source or test files. Counted at ${COMMIT_IMPACT.trivial.toFixed(1)}×.`,
+};
+
+/** Same for Docs edit-significance categories, from editClassifier.ts. */
+export const EDIT_TIP: Record<EditKey, string> = {
+  substantive: `New text of ${SUBSTANTIVE_MIN_CHARS}+ characters with nothing removed, or a larger rewrite that isn't similar in size to the text it replaced. Counted at ${EDIT_TYPE_WEIGHT.substantive.toFixed(1)}×.`,
+  revision: `A shorter addition (under ${SUBSTANTIVE_MIN_CHARS} characters) or a rewrite that noticeably changes the size of the text. Counted at ${EDIT_TYPE_WEIGHT.revision.toFixed(1)}×.`,
+  formatting: `Replaces text with a similar amount (new text ${REPLACE_RATIO_MIN}–${REPLACE_RATIO_MAX}× the length of what was removed), such as reordering or spacing touch-ups. Counted at ${EDIT_TYPE_WEIGHT.formatting.toFixed(1)}×.`,
+  trivial: `An edit of ${TRIVIAL_MAX_CHARS} characters or fewer in total, such as punctuation or a single-character fix. Counted at ${EDIT_TYPE_WEIGHT.trivial.toFixed(1)}×.`,
 };
 
 export const PREDATES_MESSAGE = "this report predates detailed breakdowns. Re-analyze to see them.";
@@ -85,8 +111,12 @@ function githubSummary(gh: ScoredMember): string | null {
     const phrase = top.pct >= 50 ? `Mostly ${top.name.toLowerCase()}` : `Mainly ${top.name.toLowerCase()}`;
     parts.push(`${phrase} (${Math.round(top.pct)}% of added lines)`);
   }
-  const commits = `${gh.commits} commit${gh.commits === 1 ? "" : "s"}`;
+  // Same basis as the Commit impact section: the commits actually analyzed, so the numbers can't contradict.
+  const analyzed = impactTotal(gh);
   const structural = gh.commitImpactBreakdown?.structural ?? 0;
+  const commits = analyzed > 0
+    ? `${analyzed} commit${analyzed === 1 ? "" : "s"} analyzed`
+    : `${gh.commits} commit${gh.commits === 1 ? "" : "s"}`;
   parts.push(structural > 0 ? `${commits}, ${structural} structural` : commits);
   return parts.join(" · ");
 }
