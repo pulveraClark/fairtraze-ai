@@ -48,7 +48,12 @@ describe("SystemOverview", () => {
     expect(t).not.toMatch(/per assignment in Scoring Settings/i);
     expect(t).not.toMatch(/per group in Scoring Settings/i);
     expect(t).not.toMatch(/per group/i);
-    expect((t.match(/per project \(applies to GitHub and Combined projects\) in Scoring Settings/gi) ?? []).length).toBe(4);
+    expect((t.match(/\(applies to GitHub and Combined projects\)/g) ?? []).length).toBe(1);
+    expect(t).toMatch(/the GitHub weights, the flag thresholds and the GitHub\/Docs blend/);
+    expect(t).toMatch(/Editor formula weights are fixed/);
+    expect(t).not.toMatch(/assignment/i);
+    expect(t).not.toMatch(/join requests/i);
+    expect(t).not.toMatch(/create, edit, promote/i);
     expect(t).not.toMatch(/Documentation Lead/);
   });
 

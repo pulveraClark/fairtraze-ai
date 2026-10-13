@@ -85,8 +85,8 @@ function WhatItIs() {
 /* ------------------------------------------------------------------ */
 function HowItWorks() {
   const steps = [
-    { n: 1, title: "Set up", body: "The instructor creates a class section and an assignment (with an optional project brief) and shares the join code. Students form groups with it." },
-    { n: 2, title: "Collect", body: "Activity is gathered from GitHub, the FairTraze Collaborative Editor, or both, depending on the assignment." },
+    { n: 1, title: "Set up", body: "The instructor creates a class section and a project (with an optional project brief) and shares the join code. Students form groups with it." },
+    { n: 2, title: "Collect", body: "Activity is gathered from GitHub, the FairTraze Collaborative Editor, or both, depending on the project." },
     { n: 3, title: "Score", body: "Fixed formulas turn the activity into contribution shares, flags, a Gini coefficient and a team-health label." },
     { n: 4, title: "Explain and review", body: "Gemini explains the numbers in plain language. The instructor reviews the evidence and decides." },
   ];
@@ -119,7 +119,7 @@ function DataSources() {
   return (
     <Section
       title="Two data sources"
-      intro="GitHub captures code. The FairTraze Collaborative Editor captures writing and documentation. An assignment can be analyzed on either source alone or on both combined, which matters most for teams where some members mainly write or research and would otherwise be invisible in GitHub data."
+      intro="GitHub captures code. The FairTraze Collaborative Editor captures writing and documentation. A project can be analyzed on either source alone or on both combined, which matters most for teams where some members mainly write or research and would otherwise be invisible in GitHub data."
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
         <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-4 flex flex-col gap-2 h-full">
@@ -157,7 +157,7 @@ function DataSources() {
           combinedShare = w<sub>GitHub</sub> × githubShare + w<sub>Docs</sub> × editorShare
         </p>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Default blend 50 / 50; the instructor can adjust it per project (applies to GitHub and Combined projects) in Scoring Settings. Each
+          Default blend 50 / 50; the instructor can adjust it per project in Scoring Settings. Each
           source is normalized on its own before blending, and flags use one merged timeline from
           both sources. The math stays deterministic; the AI only explains the result.
         </p>
@@ -175,13 +175,13 @@ function ScoringSection() {
   const flags = [
     {
       name: "Inactive",
-      desc: "No activity recorded in the assignment's source: no commits (GitHub), no editing sessions (Editor), or neither (Combined).",
+      desc: "No activity recorded in the project's source: no commits (GitHub), no editing sessions (Editor), or neither (Combined).",
     },
     { name: "Free-rider", desc: `Contribution share below ${num(FREE_RIDER_THRESHOLD)}× an equal split.` },
     { name: "Overload", desc: `Contribution share above ${num(OVERLOAD_THRESHOLD)}× an equal split.` },
     {
       name: "Deadline-driven",
-      desc: `More than ${pct(DEADLINE_DRIVEN_THRESHOLD)} of activity in the final third of the window. The window runs to the assignment deadline when one is set, otherwise to the observed activity span.`,
+      desc: `More than ${pct(DEADLINE_DRIVEN_THRESHOLD)} of activity in the final third of the window. The window runs to the project deadline when one is set, otherwise to the observed activity span.`,
     },
   ];
   const bands = [
@@ -237,9 +237,11 @@ function ScoringSection() {
       </div>
 
       <p className="text-xs text-slate-600 leading-relaxed">
-        These are defaults and starting points, not empirically validated cut-offs. The instructor
-        can change the weights and thresholds per project (applies to GitHub and Combined projects) in Scoring Settings, and the report shows
-        the formulas and per-member breakdowns behind every number.
+        These are defaults and starting points, not empirically validated cut-offs. For each project
+        (applies to GitHub and Combined projects), the instructor can adjust the GitHub weights,
+        the flag thresholds and the GitHub/Docs blend in Scoring Settings. The Editor formula
+        weights are fixed. The report shows the formulas and per-member breakdowns behind every
+        number.
       </p>
     </Section>
   );
@@ -320,11 +322,11 @@ function SystemRoles() {
       card: "bg-indigo-50 border-indigo-200",
       dot: "bg-indigo-500",
       items: [
-        "Creates class sections and assignments, and shares join codes",
+        "Creates class sections and projects, and shares join codes",
         "Writes the project brief: a description, up to 5 images and one PDF",
         "Runs analysis, watches live progress, and reviews the full report with per-member breakdowns",
-        "Adjusts weights and thresholds per project (applies to GitHub and Combined projects) in Scoring Settings",
-        "Receives notifications about team-health risk, flagged members, disputes and join requests",
+        "Adjusts the GitHub weights, flag thresholds and GitHub/Docs blend per project in Scoring Settings",
+        "Receives notifications about team-health risk, flagged members and disputes",
         "Reviews student disputes and resolves them with a written outcome",
         "Can reassign group leaders. Reports are evidence, not grades. New instructor sign-ups are reviewed by an admin before access is granted",
       ],
@@ -347,7 +349,7 @@ function SystemRoles() {
       card: "bg-violet-50 border-violet-200",
       dot: "bg-violet-500",
       items: [
-        "Manages user accounts: create, edit, promote, deactivate",
+        "Manages user accounts: change roles, activate or deactivate, unlock locked accounts, delete",
         "Assigns system roles (Admin, Instructor, Student)",
         "Approves or rejects new instructor sign-ups",
         "Manages departments",
@@ -393,7 +395,7 @@ function PrivacySection() {
     },
     {
       title: "Configurable, transparent weights",
-      body: "Weights and flag thresholds are documented defaults, not hidden numbers. Instructors can view and adjust them per project (applies to GitHub and Combined projects) in Scoring Settings.",
+      body: "The GitHub weights, flag thresholds and GitHub/Docs blend are documented defaults, not hidden numbers. Instructors can view and adjust them per project in Scoring Settings. The Editor formula weights are fixed.",
     },
     {
       title: "Dispute path",
@@ -439,7 +441,7 @@ function WhereToGoNext() {
   }
 
   let heading = "Sign in to get started";
-  let body = "Create an account or sign in to enroll in a class, join a group, or manage assignments.";
+  let body = "Create an account or sign in to enroll in a class, join a group, or manage projects.";
   let primaryLabel = "Sign in";
   let primaryTarget = "/login";
   let secondary: { label: string; target: string } | null = { label: "Register", target: "/register" };
@@ -452,7 +454,7 @@ function WhereToGoNext() {
     secondary = null;
   } else if (user?.systemRole === "INSTRUCTOR") {
     heading = "Go to your dashboard";
-    body = "Manage class sections and assignments, run analyses, and review fairness reports.";
+    body = "Manage class sections and projects, run analyses, and review fairness reports.";
     primaryLabel = "Go to dashboard";
     primaryTarget = "/dashboard";
     secondary = null;
