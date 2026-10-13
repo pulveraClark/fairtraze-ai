@@ -145,6 +145,27 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
         </div>
       )}
 
+      {/* Scored with older project settings */}
+      {item.settingsOutdated && !stale && (
+        <div
+          className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-xs text-amber-800 font-medium leading-snug">
+            Scored with older settings — re-analyze to apply
+          </p>
+          {onAnalyze && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAnalyze(item.projectId); }}
+              disabled={analyzing}
+              className="shrink-0 min-h-9 px-3 text-xs font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+            >
+              {analyzing ? "Analyzing…" : "Re-analyze"}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Stale membership prompt */}
       {stale && (
         <div

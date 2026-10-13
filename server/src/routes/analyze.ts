@@ -11,6 +11,7 @@ import { generateFairnessNarrative } from "../lib/gemini.js";
 import { generateAlertsForProject } from "../lib/alerts.js";
 import { notify } from "../lib/notify.js";
 import { countByDay } from "../lib/dayCounts.js";
+import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig } from "../lib/scoringConfig.js";
 import type { Request, Response } from "express";
 import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
@@ -270,7 +271,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     where: { id: projectId },
     include: {
       members: true,
-      assignment: { select: { sourceType: true, deadline: true, classSection: { select: { instructorId: true } } } },
+      assignment: { select: { sourceType: true, deadline: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
       document: { select: { id: true } },
       groupMemberships: { include: { user: { select: { id: true, name: true, githubUsername: true } } } },
     },
@@ -399,22 +400,8 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
 
     const { rawMembers: githubRaw, unmatchedLogins } = buildRawMembers(project.members, rawData.contributors);
 
-    const scoringConfig: ProjectScoringConfig = {
-      weights: {
-        commits:    project.weightCommits,
-        lines:      project.weightLines,
-        activeDays: project.weightActiveDays,
-      },
-      thresholds: {
-        freeRider:      project.freeRiderThreshold,
-        overload:       project.overloadThreshold,
-        deadlineDriven: project.deadlineDrivenThreshold,
-      },
-      blend: {
-        wGitHub: project.weightGithub,
-        wDocs:   project.weightDocs,
-      },
-    };
+    // Settings come from the group's project (Assignment); the value used is snapshotted into the report.
+    const scoringConfig: ProjectScoringConfig = assignmentScoringConfig(project.assignment);
 
     emitZeroCommitMembers(progress, githubRaw, rawData.contributors);
     progress.emit("compute", {});
@@ -516,19 +503,9 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
   const { rawMembers, unmatchedLogins } = buildRawMembers(project.members, rawData.contributors);
   console.log(`[analyze] project ${projectId}: rawMembers built: ${rawMembers.length} — ${rawMembers.map((m) => `${m.githubUsername}(${m.commits})`).join(", ")}`);
 
-  // Build scoring config from stored project settings
-  const scoringConfig: ProjectScoringConfig = {
-    weights: {
-      commits:    project.weightCommits,
-      lines:      project.weightLines,
-      activeDays: project.weightActiveDays,
-    },
-    thresholds: {
-      freeRider:      project.freeRiderThreshold,
-      overload:       project.overloadThreshold,
-      deadlineDriven: project.deadlineDrivenThreshold,
-    },
-  };
+  // Settings come from the group's project (Assignment); the value used is snapshotted into the report.
+  // The GITHUB report carries no blend, as before.
+  const { blend: _blend, ...scoringConfig }: ProjectScoringConfig = assignmentScoringConfig(project.assignment);
 
   emitZeroCommitMembers(progress, rawMembers, rawData.contributors);
   progress.emit("compute", {});

@@ -59,6 +59,14 @@ erDiagram
         int maxGroupSize
         string sourceType "GITHUB | EDITOR | COMBINED"
         string joinCode UK
+        float weightCommits "project-level scoring config (see table)"
+        float weightLines
+        float weightActiveDays
+        float freeRiderThreshold
+        float overloadThreshold
+        float deadlineDrivenThreshold
+        float weightGithub
+        float weightDocs
         datetime createdAt
     }
 
@@ -70,12 +78,12 @@ erDiagram
         string assignmentLabel "display fallback label"
         int assignmentId FK "nullable"
         datetime membershipChangedAt "nullable"
-        float weightCommits
-        float weightLines
-        float weightActiveDays
-        float freeRiderThreshold
-        float overloadThreshold
-        float deadlineDrivenThreshold
+        float weightCommits "LEGACY - unused, see Assignment"
+        float weightLines "LEGACY"
+        float weightActiveDays "LEGACY"
+        float freeRiderThreshold "LEGACY"
+        float overloadThreshold "LEGACY"
+        float deadlineDrivenThreshold "LEGACY"
         datetime scoringConfigChangedAt "nullable"
         datetime createdAt
     }
@@ -253,6 +261,9 @@ An instructor-created assignment within a ClassSection. Students use the assignm
 | `maxGroupSize` | Int | Maximum members per group. Defaults to `5`. |
 | `sourceType` | Enum | `GITHUB`, `EDITOR`, or `COMBINED`. Determines what data sources the analysis uses. |
 | `joinCode` | String (unique) | Code students enter to create or join a group for this assignment. |
+| `weightCommits` / `weightLines` / `weightActiveDays` | Float | Scoring weights, set once per project and applied to every group in it. Default `0.4` / `0.4` / `0.2`; must sum to 1. |
+| `freeRiderThreshold` / `overloadThreshold` / `deadlineDrivenThreshold` | Float | Flag thresholds, per project. Default `0.5` / `1.75` / `0.6`. |
+| `weightGithub` / `weightDocs` | Float | COMBINED GitHub/Docs blend, per project. Default `0.5` / `0.5`; must sum to 1. |
 | `createdAt` | DateTime | When the assignment was created. |
 
 **Unique constraints:** `joinCode`
@@ -274,13 +285,13 @@ A student group/team working on a specific assignment. This is the central entit
 | `assignmentLabel` | String | Display fallback label (e.g., "CC-APPSDEV22 — Applications Development"). Used when a project pre-dates the Assignment model. Defaults to `""`. |
 | `assignmentId` | Int? (FK → Assignment) | Optional link to a formal Assignment. Null for legacy projects created before Phase B. |
 | `membershipChangedAt` | DateTime? | Updated whenever a member joins or leaves. Compared against the latest report's timestamp to detect staleness. |
-| `weightCommits` | Float | Scoring weight for commit count. Defaults to `0.4`. |
+| `weightCommits` | Float | **Legacy, no longer read or written** — scoring settings now live on `Assignment`. Scoring weight for commit count. Defaults to `0.4`. |
 | `weightLines` | Float | Scoring weight for meaningful lines. Defaults to `0.4`. |
 | `weightActiveDays` | Float | Scoring weight for active days. Defaults to `0.2`. |
 | `freeRiderThreshold` | Float | Below this share of equal share → free-rider flag. Defaults to `0.5`. |
 | `overloadThreshold` | Float | Above this multiple of equal share → overload flag. Defaults to `1.75`. |
 | `deadlineDrivenThreshold` | Float | Fraction of commits in final third → deadline-driven flag. Defaults to `0.6`. |
-| `scoringConfigChangedAt` | DateTime? | Set when scoring config is changed after the last analysis; cleared when re-analysis runs. Signals a stale report. |
+| `scoringConfigChangedAt` | DateTime? | Set on every group of a project when its (Assignment-level) scoring settings change after the last analysis; cleared when re-analysis runs. Signals a stale report. |
 | `createdAt` | DateTime | When the group was created. |
 
 ---

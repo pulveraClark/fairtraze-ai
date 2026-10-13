@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import type { ProjectSummaryItem, StoredReportResponse } from "@shared/types";
+import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
+import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { TaskManageModal } from "../components/TaskManageModal";
@@ -24,6 +25,7 @@ interface AssignmentMeta {
   createdAt: string;
   classSectionId: number;
   description: string | null;
+  scoringConfig: ProjectScoringConfig;
   attachments: BriefAttachment[];
 }
 
@@ -99,6 +101,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
   const [tasksGroupId, setTasksGroupId]       = useState<number | null>(null);
   const [editingBrief, setEditingBrief]       = useState(false);
+  const [showScoring, setShowScoring]         = useState(false);
 
   // ── Bulk selection / bulk analyze / bulk export ────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -294,6 +297,16 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         />
       )}
 
+      {showScoring && assignment && !isAdmin && (
+        <ScoringSettingsModal
+          assignmentId={assignment.id}
+          currentConfig={assignment.scoringConfig}
+          sourceType={assignment.sourceType}
+          onClose={() => setShowScoring(false)}
+          onSaved={() => { setShowScoring(false); void fetchData(); }}
+        />
+      )}
+
       {tasksGroupId !== null && (
         <TaskManageModal
           projectId={tasksGroupId}
@@ -346,6 +359,17 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
                 Admin view — read only
               </span>
+            )}
+            {/* Project-level scoring settings — owning instructor only; Docs-only projects have none */}
+            {!isAdmin && assignment && assignment.sourceType !== "EDITOR" && (
+              <button
+                type="button"
+                onClick={() => setShowScoring(true)}
+                title="Weights and flag thresholds for every group in this project"
+                className="inline-flex items-center min-h-9 px-3 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Scoring settings
+              </button>
             )}
             {atRiskCount > 0 && (
               <button

@@ -9,7 +9,8 @@ const DEFAULTS: ProjectScoringConfig = {
 };
 
 interface Props {
-  projectId: number;
+  /** The project (Assignment) whose settings are edited; they apply to every group in it. */
+  assignmentId: number;
   currentConfig: ProjectScoringConfig;
   // "COMBINED" reveals the Source Blend section (wGitHub/wDocs); hidden for GITHUB/EDITOR-only.
   sourceType: string | null;
@@ -21,7 +22,7 @@ function pct(v: number) {
   return `${Math.round(v * 100)}%`;
 }
 
-export function ScoringSettingsModal({ projectId, currentConfig, sourceType, onClose, onSaved }: Props) {
+export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, onClose, onSaved }: Props) {
   const { showSuccessToast } = useToast();
   const [commits,        setCommits]        = useState(currentConfig.weights.commits);
   const [lines,          setLines]          = useState(currentConfig.weights.lines);
@@ -69,7 +70,7 @@ export function ScoringSettingsModal({ projectId, currentConfig, sourceType, onC
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/config`, {
+      const res = await fetch(`/api/assignments/${assignmentId}/scoring-config`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -104,8 +105,10 @@ export function ScoringSettingsModal({ projectId, currentConfig, sourceType, onC
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Scoring Settings</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Adjust weights and thresholds for this group. The math stays the same — only the
-              inputs change.
+              Adjust weights and thresholds. The math stays the same — only the inputs change.
+            </p>
+            <p className="text-xs font-medium text-slate-600 mt-1">
+              Applies to all groups in this project. Re-analyze groups to apply new settings.
             </p>
           </div>
           <button
@@ -264,7 +267,7 @@ export function ScoringSettingsModal({ projectId, currentConfig, sourceType, onC
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
           <p className="text-xs text-slate-400 max-w-xs">
-            Saving new settings marks the existing report stale. Re-analyze to apply them.
+            Saving changed settings marks every group's report as outdated. Re-analyze each group to apply them.
           </p>
           <div className="flex gap-2 shrink-0">
             <button

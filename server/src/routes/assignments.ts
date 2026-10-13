@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { assignmentScoringConfig, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertOwnsClass, assertOwnsAssignment } from "../lib/ownership.js";
@@ -167,6 +168,7 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
       createdAt:     assignment.createdAt,
       classSectionId: assignment.classSectionId,
       description:   assignment.description,
+      scoringConfig: assignmentScoringConfig(assignment),
       attachments,
     },
     groups: projects.map((p) => ({
@@ -178,4 +180,30 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
       isAnalyzed:      p.reports.length > 0,
     })),
   });
+});
+
+// PATCH /api/assignments/:id/scoring-config — project-level scoring settings, applied to every group.
+// Owning instructor only (ADMIN may read via GET but not edit). Saving unchanged values is a no-op
+// and does not mark any group stale.
+assignmentsRouter.patch("/api/assignments/:id/scoring-config", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid assignment id" });
+    return;
+  }
+  const parsed = scoringConfigBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid config", details: parsed.error.flatten() });
+    return;
+  }
+  const sumError = validateConfigSums(parsed.data);
+  if (sumError) {
+    res.status(400).json({ error: sumError });
+    return;
+  }
+  const assignment = await assertOwnsAssignment(req, res, idResult.data);
+  if (!assignment) return;
+
+  const config = await saveAssignmentScoringConfig(prisma, assignment, parsed.data);
+  res.json({ config });
 });

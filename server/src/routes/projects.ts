@@ -3,40 +3,10 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireRole } from "../middleware/auth.js";
+import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
 
 export const projectsRouter = Router();
-
-// Helper: build a ProjectScoringConfig from project row fields
-function projectConfig(p: {
-  weightCommits: number;
-  weightLines: number;
-  weightActiveDays: number;
-  freeRiderThreshold: number;
-  overloadThreshold: number;
-  deadlineDrivenThreshold: number;
-  weightGithub: number;
-  weightDocs: number;
-}): ProjectScoringConfig {
-  return {
-    weights: {
-      commits:    p.weightCommits,
-      lines:      p.weightLines,
-      activeDays: p.weightActiveDays,
-    },
-    thresholds: {
-      freeRider:      p.freeRiderThreshold,
-      overload:       p.overloadThreshold,
-      deadlineDriven: p.deadlineDrivenThreshold,
-    },
-    // Always populated on currentConfig regardless of sourceType — only meaningful/shown for
-    // COMBINED projects (see client/src/components/ScoringSettingsModal.tsx).
-    blend: {
-      wGitHub: p.weightGithub,
-      wDocs:   p.weightDocs,
-    },
-  };
-}
 
 // Mismatch-note helpers: AnyScoredMember is a union of ScoredMember (flat `commits`),
 // DocumentScoredMember (flat `sessionCount`), and CombinedScoredMember (no flat commits/
@@ -122,7 +92,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     include: {
       members: true,
       reports: { orderBy: { generatedAt: "desc" }, take: 1 },
-      assignment: { select: { id: true, classSectionId: true, sourceType: true } },
+      assignment: { select: { id: true, classSectionId: true, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT } },
     },
     orderBy: { id: "asc" },
   });
@@ -130,7 +100,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
   const summary: ProjectSummaryItem[] = projects.map((p) => {
     const latestReport = p.reports[0] ?? null;
     const stored = latestReport?.content
-      ? (JSON.parse(latestReport.content) as { report?: TeamReport; narrative?: string })
+      ? (JSON.parse(latestReport.content) as { report?: TeamReport; narrative?: string; scoringConfig?: ProjectScoringConfig | null })
       : null;
     const report = stored?.report ?? null;
 
@@ -143,6 +113,11 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     const flagsPresent: Flag[] = report
       ? ([...new Set(report.members.flatMap((m) => m.flags))] as Flag[])
       : [];
+
+    // Outdated = the stored snapshot differs from the project's current settings. Reports without a
+    // snapshot (EDITOR, legacy) can't be compared and never show as outdated. blend only matters for COMBINED.
+    const settingsOutdated = !!(stored?.scoringConfig && p.assignment
+      && !configsEqual(stored.scoringConfig, assignmentScoringConfig(p.assignment), p.assignment.sourceType === "COMBINED"));
 
     return {
       projectId:    p.id,
@@ -160,6 +135,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
       isAnalyzed:             !!latestReport,
       membershipChangedAt:    p.membershipChangedAt?.toISOString() ?? null,
       scoringConfigChangedAt: p.scoringConfigChangedAt?.toISOString() ?? null,
+      settingsOutdated,
     };
   });
 
@@ -222,7 +198,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      assignment: { select: { sourceType: true, classSection: { select: { instructorId: true } } } },
+      assignment: { select: { id: true, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
       groupMemberships: {
         include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
         orderBy: { joinedAt: "asc" },
@@ -267,7 +243,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     return;
   }
 
-  const currentCfg = projectConfig(project);
+  const currentCfg = assignmentScoringConfig(project.assignment);
 
   // Build memberRoles — context-only; never affects scores, flags, Gini, or team health.
   // Mismatch note: Developer assigned but member has 0 commits in the stored report.
@@ -295,6 +271,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
 
   const response: StoredReportResponse = {
     projectId,
+    assignmentId: project.assignment?.id ?? null,
     groupName: project.groupName || `Group ${projectId}`,
     repoUrl: project.repoUrl,
     analyzedAt: latestReport.generatedAt.toISOString(),
@@ -314,92 +291,43 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   res.json(response);
 });
 
-// PATCH /api/projects/:id/config — update per-project scoring weights and thresholds
-// requireRole(INSTRUCTOR) + ownership check through assignment chain
+// PATCH /api/projects/:id/config — legacy alias. Scoring settings are per project (Assignment), so this
+// resolves the group's assignment and writes there (owning instructor only; applies to every group in it).
 projectsRouter.patch("/api/projects/:id/config", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid project id" });
     return;
   }
-  const projectId = idResult.data;
-
-  const bodySchema = z.object({
-    weights: z.object({
-      commits:    z.number().min(0).max(1),
-      lines:      z.number().min(0).max(1),
-      activeDays: z.number().min(0).max(1),
-    }),
-    thresholds: z.object({
-      freeRider:      z.number().min(0).max(1),
-      overload:       z.number().min(1),
-      deadlineDriven: z.number().min(0).max(1),
-    }),
-    blend: z.object({
-      wGitHub: z.number().min(0).max(1),
-      wDocs:   z.number().min(0).max(1),
-    }),
-  });
-
-  const parsed = bodySchema.safeParse(req.body);
+  const parsed = scoringConfigBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid config", details: parsed.error.flatten() });
     return;
   }
-
-  const { weights, thresholds, blend } = parsed.data;
-
-  // Validate weights sum to 1.0 (tolerance ±0.001 for floating-point rounding)
-  const weightSum = weights.commits + weights.lines + weights.activeDays;
-  if (Math.abs(weightSum - 1.0) > 0.001) {
-    res.status(400).json({
-      error: `Weights must sum to 1.0 (got ${weightSum.toFixed(3)}). Adjust the three values so they add up to exactly 1.`,
-    });
-    return;
-  }
-
-  // Validate the GitHub/Docs blend sums to 1.0 (only meaningful for COMBINED projects, but
-  // always validated — same pattern as weights above)
-  const blendSum = blend.wGitHub + blend.wDocs;
-  if (Math.abs(blendSum - 1.0) > 0.001) {
-    res.status(400).json({
-      error: `Blend weights must sum to 1.0 (got ${blendSum.toFixed(3)}). Adjust wGitHub/wDocs so they add up to exactly 1.`,
-    });
+  const sumError = validateConfigSums(parsed.data);
+  if (sumError) {
+    res.status(400).json({ error: sumError });
     return;
   }
 
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: { id: idResult.data },
     include: { assignment: { include: { classSection: true } } },
   });
   if (!project) {
     res.status(404).json({ error: "Project not found" });
     return;
   }
-
-  // Ownership: if the project belongs to an assignment, the instructor must own that class
-  if (project.assignment) {
-    if (project.assignment.classSection.instructorId !== req.user!.sub) {
-      res.status(403).json({ error: "You do not have access to this project" });
-      return;
-    }
+  // Assignment-less groups have no project-level settings to edit.
+  if (!project.assignment) {
+    res.status(400).json({ error: "This group is not part of a project, so it has no scoring settings." });
+    return;
+  }
+  if (project.assignment.classSection.instructorId !== req.user!.sub) {
+    res.status(403).json({ error: "You do not have access to this project" });
+    return;
   }
 
-  const updated = await prisma.project.update({
-    where: { id: projectId },
-    data: {
-      weightCommits:           weights.commits,
-      weightLines:             weights.lines,
-      weightActiveDays:        weights.activeDays,
-      freeRiderThreshold:      thresholds.freeRider,
-      overloadThreshold:       thresholds.overload,
-      deadlineDrivenThreshold: thresholds.deadlineDriven,
-      weightGithub:            blend.wGitHub,
-      weightDocs:              blend.wDocs,
-      scoringConfigChangedAt:  new Date(),
-    },
-  });
-
-  const config: ProjectScoringConfig = projectConfig(updated);
+  const config = await saveAssignmentScoringConfig(prisma, project.assignment, parsed.data);
   res.json({ config });
 });

@@ -54,7 +54,7 @@ Each source produces its own per-member contribution share, normalised independe
 combinedShare = wGitHub × githubShare + wDocs × editorShare
 ```
 
-Default blend: 50/50 (`weightGithub = 0.5`, `weightDocs = 0.5` on `Project`). Instructor-configurable per Project via Scoring Settings. The blending is deterministic; the AI only writes the plain-language narrative. The math-scores-AI-explains principle is fully preserved. `flags` (including `deadline-driven`) are computed from a **unified timeline** merging both sources' timestamps, not from either source alone — see `combinedScoring.test.ts`.
+Default blend: 50/50 (`weightGithub = 0.5`, `weightDocs = 0.5` on `Assignment`). Instructor-configurable **per project** (the `Assignment` model — "project" in the UI; a "group" is the `Project` model) via Scoring Settings; applies to GitHub and Combined projects and to every group in the project. The blending is deterministic; the AI only writes the plain-language narrative. The math-scores-AI-explains principle is fully preserved. `flags` (including `deadline-driven`) are computed from a **unified timeline** merging both sources' timestamps, not from either source alone — see `combinedScoring.test.ts`.
 
 ### Identity
 Editor activity is tied to the logged-in `User` account — stronger than GitHub's self-registered usernames (a user cannot mis-attribute their own edits). The same identity unifies activity across both sources; there is no per-group re-registration of editor credentials.
@@ -284,7 +284,7 @@ In `TaskManageModal`, leaders and instructors see each member's open (not done) 
 
 ## Data model (Prisma)
 The full schema (`server/prisma/schema.prisma`) is substantially larger than the original prototype — `User`, `ClassSection`, `ClassEnrollment`, `Assignment`, `GroupMembership`, `GroupJoinRequest`, `RoleSuggestion`, `Alert`, `Dispute`, `AuditLog`, `Document`, `EditEvent`, `EditSession`, and `Comment` are all real models, not just `Project`/`Member`/`Report`. The three below are the original core and remain central to the GitHub-side pipeline:
-- `Project { id, groupName, name, repoUrl, assignmentLabel, assignmentId, weightCommits/weightLines/weightActiveDays, freeRiderThreshold/overloadThreshold/deadlineDrivenThreshold, weightGithub/weightDocs, createdAt }` — the "Group" in the target Institutional Hierarchy below; per-project scoring config now lives on this row.
+- `Project { id, groupName, name, repoUrl, assignmentLabel, assignmentId, scoringConfigChangedAt, createdAt }` — the "Group" in the target Institutional Hierarchy below. It still carries the **legacy** `weightCommits/weightLines/weightActiveDays, freeRiderThreshold/overloadThreshold/deadlineDrivenThreshold, weightGithub/weightDocs` columns, but they are no longer read or written: scoring settings now live on `Assignment` (same column names). `scoringConfigChangedAt` stays on the group as the stale marker.
 - `Member { id, projectId, studentName, githubUsername }` — legacy per-group GitHub identity row, kept in sync with `GroupMembership`/`User.githubUsername`.
 - `Report { id, projectId, generatedAt, gini, teamHealth, content }`
 
@@ -450,7 +450,7 @@ The `deadline-driven` flag's "last third" window is anchored to the real `Assign
 When an assignment has no deadline set, scoring falls back to the previous behavior unchanged — a 2/3 split of the observed activity span (min→max timestamp). Each `TeamReport` discloses which basis produced it via `deadlineWindowBasis: "assignment-deadline" | "activity-span"`, surfaced in `GET /api/projects/:id/report` and `GET /api/student/group/:projectId`, and shown as a small note next to the deadline-driven flag on both the instructor and student views.
 
 ### Configurable thresholds — IMPLEMENTED
-Scoring weights and flag thresholds are per-`Project` columns (`weightCommits`, `weightLines`, `weightActiveDays`, `freeRiderThreshold`, `overloadThreshold`, `deadlineDrivenThreshold`, `weightGithub`, `weightDocs`) and are editable by the instructor via `ScoringSettingsModal.tsx` → `PATCH /api/projects/:id/config`. The values below are the defaults, **not empirically validated**.
+Scoring weights and flag thresholds are configured **per project (applies to GitHub and Combined projects)**: they are `Assignment` columns (`weightCommits`, `weightLines`, `weightActiveDays`, `freeRiderThreshold`, `overloadThreshold`, `deadlineDrivenThreshold`, `weightGithub`, `weightDocs`) and apply to every group in that project. Only the owning instructor can edit them (admins can read, not edit) via `ScoringSettingsModal.tsx` → `PATCH /api/assignments/:id/scoring-config` (opened from the project page and from a group report; `PATCH /api/projects/:id/config` remains as a thin alias that writes the group's assignment). Editor-only projects have no settings. Analysis reads the settings from the group's assignment and snapshots the value used into each report's `scoringConfig`, so old reports keep the settings they were scored with; saving changed values marks every group's report stale (`Project.scoringConfigChangedAt`) and `/api/projects/summary` reports `settingsOutdated` per group by comparing the stored snapshot to the current settings. The values below are the defaults, **not empirically validated**.
 
 | Parameter | Default | Meaning |
 |---|---|---|

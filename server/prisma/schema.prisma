@@ -220,6 +220,17 @@ model Assignment {
   joinCode       String       @unique
   // Instructor-written project brief (plain text, max 5000 chars). Context only — never read by scoring.
   description    String?
+  // Scoring configuration, set once per project (Assignment) and applied to every group in it.
+  // Defaults mirror shared/src/scoring.ts constants. The same-named columns on Project are legacy:
+  // kept for now, no longer read or written.
+  weightCommits            Float @default(0.4)
+  weightLines              Float @default(0.4)
+  weightActiveDays         Float @default(0.2)
+  freeRiderThreshold       Float @default(0.5)
+  overloadThreshold        Float @default(1.75)
+  deadlineDrivenThreshold  Float @default(0.6)
+  weightGithub             Float @default(0.5)
+  weightDocs               Float @default(0.5)
   createdAt      DateTime     @default(now())
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   projects       Project[]
@@ -267,7 +278,8 @@ model Project {
   assignmentLabel          String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
   assignmentId             Int?
   membershipChangedAt      DateTime?                         // updated when members join or leave; used to detect stale reports
-  // Per-project scoring configuration (defaults mirror shared/src/scoring.ts constants)
+  // LEGACY per-group scoring configuration: superseded by the same fields on Assignment and no
+  // longer read or written. Kept (not dropped) for now. scoringConfigChangedAt below is still live.
   weightCommits            Float             @default(0.4)
   weightLines              Float             @default(0.4)
   weightActiveDays         Float             @default(0.2)

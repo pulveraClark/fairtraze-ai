@@ -271,12 +271,16 @@ export interface ProjectSummaryItem {
   isAnalyzed: boolean;
   membershipChangedAt: string | null; // set when members are added/removed; compare to lastAnalyzedAt to detect stale reports
   scoringConfigChangedAt: string | null; // set when scoring config changes after last analyze
+  // True when the latest report's stored scoringConfig differs from the project's (assignment's)
+  // current settings. Always false for reports without a stored config (EDITOR, legacy).
+  settingsOutdated: boolean;
 }
 
 // Stored report — returned by GET /api/projects/:id/report.
 // Reads the latest persisted analysis; no GitHub fetch.
 export interface StoredReportResponse {
   projectId: number;
+  assignmentId: number | null; // the project (Assignment) whose scoring settings apply to this group
   groupName: string;  // student team name — the group's single name
   repoUrl: string;
   analyzedAt: string;
