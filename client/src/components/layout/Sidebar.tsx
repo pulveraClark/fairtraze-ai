@@ -104,11 +104,11 @@ function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; act
 
 // ── Class → project → group tree ────────────────────────────────────────────────────────
 
-const treeLinkClass = (active: boolean, size: "base" | "sm") =>
+// Child rows: 13px (text-sm) vs. 14px main items, a step dimmer than main items (slate-400 is ~7:1 on the sidebar).
+const treeLinkClass = (active: boolean) =>
   [
-    "flex min-h-10 min-w-0 flex-1 items-center rounded-lg px-3",
-    size === "base" ? "text-sm" : "text-sm",
-    active ? "bg-white/10 font-semibold text-white" : "font-medium text-slate-300 hover:bg-white/5 hover:text-white",
+    "flex min-h-10 min-w-0 flex-1 items-center rounded-lg px-3 text-sm",
+    active ? "bg-white/10 font-semibold text-white" : "font-medium text-slate-400 hover:bg-white/5 hover:text-white",
     FOCUS_RING,
   ].join(" ");
 
@@ -153,14 +153,14 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
   }
 
   return (
-    <ul className="space-y-0.5">
+    <ul className="ml-[22px] min-w-0 space-y-0.5 border-l border-white/20 pl-[9px]">
       {tree.classes.map((c) => {
         const expanded = overrides[c.id] ?? c.id === activeClassId;
         const listId = `nav-class-${c.id}`;
         return (
           <li key={c.id}>
-            <div className="flex items-stretch">
-              <SidebarLink href={c.href} active={c.active} title={c.title} onNavigate={onNavigate} className={treeLinkClass(c.active, "base")}>
+            <div className="flex min-w-0 items-stretch">
+              <SidebarLink href={c.href} active={c.active} title={c.title} onNavigate={onNavigate} className={treeLinkClass(c.active)}>
                 <span className="truncate">{c.label}</span>
               </SidebarLink>
               <button
@@ -175,7 +175,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
               </button>
             </div>
             {expanded && (
-              <ul id={listId} className="ml-4 space-y-0.5 border-l border-white/10 pl-2">
+              <ul id={listId} className="ml-3 space-y-0.5 border-l border-white/20 pl-2">
                 {c.projects.length === 0 && (
                   <li>
                     {isInstructor ? (
@@ -188,15 +188,15 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
                 {c.projects.map((p) => (
                   <li key={p.id}>
                     <div className="flex">
-                      <SidebarLink href={p.href} active={p.active} title={p.label} onNavigate={onNavigate} className={treeLinkClass(p.active, "sm")}>
+                      <SidebarLink href={p.href} active={p.active} title={p.label} onNavigate={onNavigate} className={treeLinkClass(p.active)}>
                         <span className="truncate">{p.label}</span>
                       </SidebarLink>
                     </div>
                     {(p.groups.length > 0 || p.hiddenGroupCount > 0) && (
-                      <ul className="ml-4 space-y-0.5 border-l border-white/10 pl-2">
+                      <ul className="ml-3 space-y-0.5 border-l border-white/20 pl-2">
                         {p.groups.map((g) => (
                           <li key={g.id} className="flex">
-                            <SidebarLink href={g.href} active={g.active} onNavigate={onNavigate} className={treeLinkClass(g.active, "sm")}>
+                            <SidebarLink href={g.href} active={g.active} title={g.label} onNavigate={onNavigate} className={treeLinkClass(g.active)}>
                               <span className="truncate">{g.label}</span>
                             </SidebarLink>
                           </li>
