@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 import type { AuthorshipUser } from "../lib/authorshipHighlight";
 import { getUserColor } from "../lib/collabColors";
 import { DocsDataApproximateNotice } from "./DocsDataApproximateNotice";
+import { PAGE_SIZES, PAGE_SIZE_KEYS, type PageSizeKey } from "@shared/pageSizes";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
@@ -473,6 +474,9 @@ function FileMenu({
   exporting,
   onExportDocx,
   onExportPdf,
+  exportingPdf,
+  pageSize,
+  onChangePageSize,
 }: {
   editable: boolean;
   importing: boolean;
@@ -480,6 +484,9 @@ function FileMenu({
   exporting: boolean;
   onExportDocx: () => void;
   onExportPdf: () => void;
+  exportingPdf: boolean;
+  pageSize: PageSizeKey;
+  onChangePageSize: (size: PageSizeKey) => void;
 }) {
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
   const close = () => setOpen(false);
@@ -508,17 +515,43 @@ function FileMenu({
             }}
           />
           <MenuItemButton
-            label="Export PDF"
+            label={exportingPdf ? "Preparing PDF…" : "Export PDF"}
+            disabled={exportingPdf}
             icon={
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
               </svg>
             }
             onClick={() => {
-              onExportPdf();
               close();
+              onExportPdf();
             }}
           />
+          {/* Page size is shared by every collaborator; only members change it. The instructor's
+              read-only view just states it. Margins are fixed at 1 inch (full Page setup is later). */}
+          <div role="group" aria-label="Page size" className="mt-1 pt-1 border-t border-slate-100">
+            <div className="px-1.5 py-1 text-xs font-semibold text-slate-600">Page size</div>
+            {editable ? (
+              PAGE_SIZE_KEYS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={pageSize === key}
+                  onClick={() => {
+                    close();
+                    if (key !== pageSize) onChangePageSize(key);
+                  }}
+                  className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+                >
+                  <span className="w-4 shrink-0 text-indigo-700" aria-hidden="true">{pageSize === key ? "✓" : ""}</span>
+                  {PAGE_SIZES[key].label}
+                </button>
+              ))
+            ) : (
+              <div className="px-1.5 py-1.5 text-slate-700">{PAGE_SIZES[pageSize].label}</div>
+            )}
+          </div>
         </DropdownPanel>
       )}
     </>
@@ -632,6 +665,7 @@ export function Toolbar({
   onToggleFocusMode,
   pageSize,
   onChangePageSize,
+  exportingPdf,
   zoom,
   onChangeZoom,
 }: {
@@ -655,8 +689,9 @@ export function Toolbar({
   hasSelection: boolean;
   focusMode: boolean;
   onToggleFocusMode: () => void;
-  pageSize: "short" | "long";
-  onChangePageSize: (size: "short" | "long") => void;
+  pageSize: PageSizeKey;
+  onChangePageSize: (size: PageSizeKey) => void;
+  exportingPdf: boolean;
   zoom: number;
   onChangeZoom: (zoom: number) => void;
 }) {
@@ -842,6 +877,9 @@ export function Toolbar({
         exporting={exporting}
         onExportDocx={onExportDocx}
         onExportPdf={onExportPdf}
+        exportingPdf={exportingPdf}
+        pageSize={pageSize}
+        onChangePageSize={onChangePageSize}
       />
 
       {editable ? (
@@ -896,22 +934,6 @@ export function Toolbar({
         {!ov.view && (
           <>
             {viewButtons}
-            {focusMode &&
-              segmented(
-                "Paper size",
-                (["short", "long"] as const).map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    title={size === "short" ? "Short — 8.5×11in" : "Long — 8.5×13in"}
-                    aria-label={size === "short" ? "Short paper — 8.5×11in" : "Long paper — 8.5×13in"}
-                    onClick={() => onChangePageSize(size)}
-                    className={`${segBtn(pageSize === size)} capitalize`}
-                  >
-                    {size}
-                  </button>
-                ))
-              )}
             {focusMode &&
               segmented(
                 "Zoom",

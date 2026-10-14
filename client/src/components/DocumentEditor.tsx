@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
@@ -32,6 +32,10 @@ import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighl
 import type { CommentDecorationRange } from "../lib/commentHighlight";
 import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
 import { insertImageFile } from "../lib/imageInsert";
+import { PAGE_SIZES, DEFAULT_PAGE_SIZE, isPageSizeKey } from "@shared/pageSizes";
+import type { PageSizeKey } from "@shared/pageSizes";
+import { paginationExtension, paginationSize, SCREEN_PAGE_GAP_PX } from "../lib/pageLayout";
+import { printDocument } from "../lib/printDocument";
 import { CommentPanel } from "./CommentPanel";
 import type { CommentRecord } from "./CommentPanel";
 import { TocPanel } from "./TocPanel";
@@ -85,12 +89,58 @@ const MAX_DOCX_BYTES = 5 * 1024 * 1024; // 5MB — must match server/src/routes/
 // almost immediately.
 const AWAIT_INITIAL_CONTENT_TIMEOUT_MS = 5000;
 
+// The gray "desk" the paper sits on. The paper is a fixed-width sheet (the real paper width in CSS
+// px); on narrow screens it scales down to fit instead of scrolling sideways. Scaling is a CSS
+// transform on the paper plus an outer box sized to the scaled footprint — verified (spike) that
+// click/caret placement, drag selection and typing stay exact under transform at scale < 1.
+// `zoom` is the user's optional zoom on top of the fit-to-width scale.
+function PaperStage({ pageWidth, zoom, children }: { pageWidth: number; zoom: number; children: React.ReactNode }) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const paperRef = useRef<HTMLDivElement>(null);
+  const [avail, setAvail] = useState(pageWidth);
+  const [paperHeight, setPaperHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const paper = paperRef.current;
+    if (!stage || !paper) return;
+    const measure = () => {
+      const cs = getComputedStyle(stage);
+      setAvail(stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+      setPaperHeight(paper.offsetHeight);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(stage);
+    ro.observe(paper);
+    return () => ro.disconnect();
+  }, []);
+
+  const scale = Math.min(1, avail / pageWidth) * zoom;
+  return (
+    <div ref={stageRef} className="ft-paper-stage bg-slate-300 px-3 sm:px-6 py-6 overflow-x-auto">
+      <div style={{ width: pageWidth * scale, height: paperHeight * scale, margin: "0 auto" }}>
+        <div
+          ref={paperRef}
+          className="ft-paper"
+          style={{
+            width: pageWidth,
+            transform: scale !== 1 ? `scale(${scale})` : undefined,
+            transformOrigin: "top left",
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Props) {
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const printContentRef = useRef<HTMLDivElement | null>(null);
   const [connStatus, setConnStatus] = useState<ConnStatus>("connecting");
   const [presentUsers, setPresentUsers] = useState<PresentUser[]>([]);
   const [awaitingInitialContent, setAwaitingInitialContent] = useState(awaitInitialNodeCount !== undefined);
@@ -117,23 +167,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // binds one DOM node per editor instance, so mounting it twice at once would be a real bug, not
   // just a cosmetic one.
   const [focusMode, setFocusMode] = useState(false);
-  // Cosmetic only — a min-height silhouette on the full-screen "paper" container (see the
-  // focusMode render branch below). Width is identical for both sizes (8.5in = 816px); Long
-  // (Philippine long bond, 8.5x13in — distinct from US Legal's 8.5x14in) is taller than Short
-  // (8.5x11in). No pagination exists, so content can still overflow past this height. Local UI
-  // preference only, not persisted.
-  const [pageSize, setPageSize] = useState<"short" | "long">("short");
-  // Full-screen only, same as pageSize — a CSS transform: scale() on the paper container.
-  // Transforms don't affect layout box size, only paint, so the container's reserved space in
-  // its scrolling ancestor stays at 100% regardless of zoom; verified in the browser that this
-  // doesn't clip content or break click/selection/cursor positioning before treating this as done
-  // (a real risk with CSS transforms on contentEditable content, not just a hypothetical one).
+  // Paper size of the page view and PDF export: Short (8.5x11in) | Long (8.5x13in) | A4. Shared by
+  // every collaborator — stored on Document.pageSize (a plain REST column, NOT in the Yjs doc, so
+  // it can never touch authorship capture) and polled, see the effects below.
+  const [pageSize, setPageSize] = useState<PageSizeKey>(DEFAULT_PAGE_SIZE);
+  const pageSizeRef = useRef<PageSizeKey>(DEFAULT_PAGE_SIZE);
+  pageSizeRef.current = pageSize;
+  const pageSizeSavingRef = useRef(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  // Optional zoom on top of fit-to-width (0.75 / 1 / 1.25), a CSS transform scale on the paper.
   const [zoom, setZoom] = useState(1);
-  // Advisory, visual-only page-break overlay (full-screen only) — see the ResizeObserver effect
-  // below. Purely a DOM-height measurement; never reads or writes editor/Yjs state, so it cannot
-  // race with local or remote edits the way a synced page-break model would.
-  const paperRef = useRef<HTMLDivElement>(null);
-  const [pageBreaks, setPageBreaks] = useState<number[]>([]);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -293,6 +336,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             Superscript,
             Subscript,
             CharacterCount,
+            // Page view: sheets, margins, gaps are ProseMirror decoration widgets only — never
+            // document content, so layout adds 0 characters to anyone's authorship count.
+            paginationExtension(pageSizeRef.current, SCREEN_PAGE_GAP_PX),
           ]
         : [StarterKit],
       editable: effectiveEditable,
@@ -307,7 +353,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       shouldRerenderOnTransaction: true,
       editorProps: {
         attributes: {
-          class: "ft-doc-content px-8 py-6 text-slate-700 min-h-[20rem]",
+          class: collab ? "ft-doc-content text-slate-700" : "ft-doc-content px-8 py-6 text-slate-700 min-h-[20rem]",
         },
         // Reuses the exact same size-cap/content-sniff validation and setImage() write path as
         // the toolbar's file-picker insert (see insertImageFile in lib/imageInsert.ts) — this is
@@ -337,49 +383,109 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     editor?.setEditable(effectiveEditable);
   }, [editor, effectiveEditable]);
 
+  // TipTap v3 throws on editor.view until EditorContent has mounted it — track that explicitly.
+  const [viewReady, setViewReady] = useState(false);
+  useEffect(() => {
+    setViewReady(false);
+    if (!editor) return;
+    if (editor.isInitialized) {
+      setViewReady(true);
+      return;
+    }
+    const onCreate = () => setViewReady(true);
+    editor.on("create", onCreate);
+    return () => {
+      editor.off("create", onCreate);
+    };
+  }, [editor]);
+
+  // Apply the shared paper size to the live editor (layout only — no document transaction).
+  useEffect(() => {
+    if (!editor || !collab || !viewReady) return;
+    editor.chain().updatePageSize(paginationSize(pageSize)).run();
+  }, [editor, collab, viewReady, pageSize]);
+
+  // The pagination plugin sizes its page widgets from the DOM as it was before each transaction,
+  // so a freshly synced/loaded document (or an image finishing load) can leave it one step behind.
+  // Re-run it with an EMPTY transaction whenever the editor's rendered height changes — no steps,
+  // so nothing reaches Yjs; it converges as soon as the page count stops changing.
+  useEffect(() => {
+    if (!editor || !collab || !viewReady) return;
+    const dom = editor.view.dom;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const nudge = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr);
+      }, 120);
+    };
+    nudge();
+    const ro = new ResizeObserver(nudge);
+    ro.observe(dom);
+    return () => {
+      ro.disconnect();
+      if (timer) clearTimeout(timer);
+    };
+  }, [editor, collab, viewReady]);
+
+  // Pick up the shared paper size, and changes other collaborators make: once on mount, on window
+  // focus, and on a light 15s poll (the collab sockets are deliberately not used for this).
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const pull = async () => {
+      if (pageSizeSavingRef.current) return;
+      try {
+        const res = await fetch(`/api/groups/${groupId}/document/page-size`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const data = (await res.json()) as { pageSize?: unknown };
+        if (!cancelled && !pageSizeSavingRef.current && isPageSizeKey(data.pageSize)) setPageSize(data.pageSize);
+      } catch {
+        /* transient — keep the current size */
+      }
+    };
+    void pull();
+    const timer = setInterval(pull, 15000);
+    window.addEventListener("focus", pull);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener("focus", pull);
+    };
+  }, [groupId, token]);
+
+  const handleChangePageSize = useCallback(
+    async (size: PageSizeKey) => {
+      if (!token) return;
+      const previous = pageSizeRef.current;
+      setPageSize(size);
+      pageSizeSavingRef.current = true;
+      try {
+        const res = await fetch(`/api/groups/${groupId}/document/page-size`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ pageSize: size }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          setPageSize(previous);
+          setImportMessage({ kind: "error", text: data?.error ?? "Could not change the page size." });
+        }
+      } catch {
+        setPageSize(previous);
+        setImportMessage({ kind: "error", text: "Could not change the page size — check your connection and try again." });
+      } finally {
+        pageSizeSavingRef.current = false;
+      }
+    },
+    [groupId, token]
+  );
+
   // Seed the table of contents once the editor (and its initial/synced content) is available —
   // onUpdate above only fires on subsequent changes, not for content already present at mount.
   useEffect(() => {
     if (editor) setTocHeadings(computeHeadings(editor));
   }, [editor]);
-
-  // Advisory page-break overlay (full-screen only). ResizeObserver watches the paper container's
-  // actual rendered height directly — it fires on ANY cause of a height change (local typing, a
-  // remote Yjs update landing, an image finishing load), so this needs no coupling at all to
-  // editor.on("update") or the Yjs doc, and therefore can't race with local/remote edits the way
-  // a synced page-break model would. Debounced (not per-keystroke) — see the debounce-timer-leak
-  // bug fixed earlier this session; this is deliberately not treated as a solved problem here.
-  useEffect(() => {
-    if (!focusMode || !paperRef.current) {
-      setPageBreaks([]);
-      return;
-    }
-    const el = paperRef.current;
-    const perPage = pageSize === "long" ? 1248 : 1056;
-    let pending: ReturnType<typeof setTimeout> | null = null;
-
-    const recompute = () => {
-      const breaks: number[] = [];
-      for (let y = perPage; y < el.scrollHeight; y += perPage) breaks.push(y);
-      setPageBreaks(breaks);
-    };
-
-    // ResizeObserver alone won't fire when only `pageSize` changes while content already exceeds
-    // both page heights (no actual resize occurs) — so also recompute immediately on mount/dep
-    // change, not just on observed resize events.
-    recompute();
-
-    const observer = new ResizeObserver(() => {
-      if (pending) clearTimeout(pending);
-      pending = setTimeout(recompute, 400);
-    });
-    observer.observe(el);
-
-    return () => {
-      observer.disconnect();
-      if (pending) clearTimeout(pending);
-    };
-  }, [focusMode, pageSize]);
 
   // Kept in sync with memberIds state (assigned during render, not in an effect, so it's always
   // current) so the authorship-apply effect below can read the latest roster without needing
@@ -685,26 +791,22 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     }
   };
 
-  // PDF export reuses the exact print-driven pattern already proven for the fairness report
-  // (PrintableReport.tsx: a hidden print:block view + window.print(), no new library). Because
-  // this button lives inside the live editor, the document's already-synced TipTap content is
-  // already in the DOM — editor.getHTML() hands that same content to the printable portal
-  // verbatim, so this is purely a read of already-rendered content, never a write.
-  //
-  // Populated imperatively here (not via a JSX dangerouslySetInnerHTML computed at render time):
-  // Yjs content updates land straight in ProseMirror's view state and never trigger a React
-  // re-render of this component, so a JSX-computed snapshot would silently go stale (observed:
-  // it stayed empty forever after the very first, pre-sync render). Reading editor.getHTML()
-  // right here guarantees it reflects whatever's on screen at the moment of the click.
-  const handleExportPdf = () => {
-    if (printContentRef.current) printContentRef.current.innerHTML = editor?.getHTML() ?? "";
-    document.body.classList.add("ft-printing-document");
-    const cleanup = () => {
-      document.body.classList.remove("ft-printing-document");
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-    window.print();
+  // Clean PDF: a separate read-only TipTap instance in a hidden iframe is loaded with a snapshot of
+  // the document and printed as bond-paper pages only (see lib/printDocument.ts) — no app chrome,
+  // no comments/authorship/cursors, no header/footer/page numbers. Read-only: this never writes to
+  // the live editor or Yjs. The browser's print dialog is the delivery ("Save as PDF").
+  const handleExportPdf = async () => {
+    if (!editor || exportingPdf) return;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setExportingPdf(true);
+    try {
+      await printDocument(editor.getJSON(), pageSizeRef.current);
+    } catch (err) {
+      console.error("[pdf export] failed", err);
+      setImportMessage({ kind: "error", text: "PDF export failed — try again." });
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   if (!editor) return null;
@@ -741,7 +843,8 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       focusMode={focusMode}
       onToggleFocusMode={() => setFocusMode((v) => !v)}
       pageSize={pageSize}
-      onChangePageSize={setPageSize}
+      onChangePageSize={handleChangePageSize}
+      exportingPdf={exportingPdf}
       zoom={zoom}
       onChangeZoom={setZoom}
     />
@@ -799,8 +902,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           fixedAt={authorshipFixedAt}
         />
       )}
-      <div className="flex items-stretch">
+      <div className="flex flex-col md:flex-row items-stretch">
         <div className="flex-1 min-w-0">
+          <PaperStage pageWidth={PAGE_SIZES[pageSize].widthPx} zoom={zoom}>
           <DragHandle
             editor={editor}
             onNodeChange={({ node }) => setDragHandleOnImage(node?.type.name === "image")}
@@ -814,6 +918,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             </div>
           </DragHandle>
           <EditorContent editor={editor} />
+          </PaperStage>
         </div>
         {showComments && (
           <CommentPanel
@@ -836,81 +941,25 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     </>
   );
 
-  const printPortal = createPortal(
-    <div className="hidden print:block px-8 py-6">
-      <div className="ft-doc-content" ref={printContentRef} />
-      {rootComments.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-bold mb-3">Comments</h2>
-          {rootComments.map((c) => (
-            <div key={c.id} className="mb-3">
-              <p className="text-sm font-semibold text-slate-700">
-                {c.author.name} — {new Date(c.createdAt).toLocaleString()} {c.resolvedAt ? "(resolved)" : "(open)"}
-              </p>
-              <p className="text-sm text-slate-700">{c.text}</p>
-              {(repliesByParent.get(c.id) ?? []).map((r) => (
-                <p key={r.id} className="text-sm text-slate-600 ml-4 mt-1">
-                  ↳ {r.author.name}: {r.text}
-                </p>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>,
-    document.body
-  );
-
   if (focusMode) {
-    return (
-      <>
-        {createPortal(
-          // Light "paper" backdrop (not the dark bg-black/40 modal-scrim convention used by
-          // ScoringSettingsModal.tsx/GroupManageModal.tsx — this isn't a dialog, it's an
-          // immersive canvas) with the toolbar's own bg-slate-50 pinned at the top and the page
-          // scrolling beneath it.
-          <div className="ft-focus-scroll fixed inset-0 z-50 bg-slate-300 overflow-y-auto flex flex-col">
-            <div className="bg-white border-b border-slate-200 shadow-sm shrink-0">{toolbar}</div>
-            <div className="flex-1 flex justify-center px-4 py-10">
-              <div
-                ref={paperRef}
-                className="relative w-full max-w-[816px] h-fit bg-white shadow-xl rounded-sm"
-                style={{
-                  minHeight: pageSize === "long" ? 1248 : 1056,
-                  transform: zoom !== 1 ? `scale(${zoom})` : undefined,
-                  transformOrigin: "top center",
-                }}
-              >
-                <div className="px-8 py-10">{editorContentArea}</div>
-                {/* Advisory only — approximate, debounced, never touches the Y.Doc/schema. Not a
-                    WYSIWYG guarantee; print/export pagination (index.css's @page rule) is a
-                    separate, already-existing mechanism and stays fully decoupled from this. */}
-                {pageBreaks.map((y, i) => (
-                  <div
-                    key={y}
-                    className="absolute inset-x-0 pointer-events-none border-t border-dashed border-slate-300"
-                    style={{ top: y }}
-                  >
-                    <span className="absolute right-2 top-1 text-xs text-slate-400 bg-white px-1">
-                      Page {i + 2}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-        {printPortal}
-      </>
+    return createPortal(
+      // Full-viewport immersive view: the toolbar stays pinned above the scrolling gray desk and
+      // is never part of the page. (Light gray, not the dark modal-scrim convention — this is a
+      // canvas, not a dialog.)
+      <div className="ft-focus-scroll fixed inset-0 z-50 bg-slate-300 overflow-y-auto flex flex-col">
+        <div className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm shrink-0">{toolbar}</div>
+        <div className="flex-1">{editorContentArea}</div>
+      </div>,
+      document.body
     );
   }
 
+  // Inline: the toolbar sticks above the paper while scrolling, never inside the sheet. (No
+  // overflow-hidden on the card — it would break position: sticky.)
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      {toolbar}
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
+      <div className="sticky top-[var(--ft-header-h,0px)] z-30 bg-slate-50 rounded-t-xl overflow-hidden">{toolbar}</div>
       {editorContentArea}
-      {printPortal}
     </div>
   );
 }

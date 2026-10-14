@@ -513,6 +513,9 @@ model Document {
   content   String   @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
   // Raw Yjs update state (Y.encodeStateAsUpdate). Source of truth for live collaborative content.
   yjsState  Bytes?
+  // Paper size for the page view / PDF export, shared by all collaborators: SHORT | LONG | A4
+  // (shared/src/pageSizes.ts). Layout only — never read by scoring, never part of the Yjs doc.
+  pageSize  String   @default("SHORT")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [groupId], references: [id], onDelete: Cascade)

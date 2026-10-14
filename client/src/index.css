@@ -183,15 +183,6 @@ body {
     print-color-adjust: exact !important;
   }
 
-  /* DocumentEditor's PDF export: its printable content is portaled to a direct sibling of #root
-     (see DocumentEditor.tsx's handleExportPdf), so hiding the app shell here — rather than
-     relying on every page that embeds DocumentEditor to mark its own chrome print:hidden, the
-     way ProjectDetailPage.tsx/AssignmentPage.tsx do for PrintableReport — keeps this export
-     self-contained to DocumentEditor.tsx alone. */
-  body.ft-printing-document #root {
-    display: none !important;
-  }
-
   /* Prevent orphaned table rows */
   tr {
     break-inside: avoid;
@@ -390,3 +381,22 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ft-flow-dot { animation: none; display: none; }
 }
+
+/* ── Page view (tiptap-pagination-plus) ──────────────────────────────────────────────────────
+   The extension's spacer widgets sit inside the editor, so they inherit .ft-doc-content's
+   line-height (1.625). Its inline-level pieces then create a ~26px strut per sheet, making every
+   sheet 26px taller than the declared paper (and the PDF drift by 26px per page). The widgets
+   only hold empty boxes, so zero the strut — sheet pitch becomes exactly pageHeight + gap. */
+.ft-doc-content .rm-pages-wrapper,
+.ft-doc-content .rm-pages-wrapper * {
+  line-height: 0;
+  font-size: 0;
+}
+/* The extension draws a 1px inline border on the editor, shrinking the text column by 2px on screen
+   only; drop it so the screen and the print instance wrap text identically. Sheet edges come from
+   the white page vs. the gray stage instead. */
+.ft-doc-content.rm-with-pagination { border: 0 !important; background: #fff; }
+
+/* A short document still shows one full sheet; the paper casts a soft shadow on the gray desk. */
+.ft-doc-content.rm-with-pagination { min-height: var(--rm-page-height, 1056px); }
+.ft-paper { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25), 0 4px 12px rgba(15, 23, 42, 0.12); background: #fff; }

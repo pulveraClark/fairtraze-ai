@@ -13,7 +13,8 @@
     "./lineClassifier": "./src/lineClassifier.ts",
     "./fileWeights": "./src/fileWeights.ts",
     "./commitClassifier": "./src/commitClassifier.ts",
-    "./editClassifier": "./src/editClassifier.ts"
+    "./editClassifier": "./src/editClassifier.ts",
+    "./pageSizes": "./src/pageSizes.ts"
   },
   "scripts": {
     "test": "vitest run"

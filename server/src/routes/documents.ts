@@ -11,6 +11,7 @@ import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } 
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
 import { cancelPendingPersist } from "../collab/persistence.js";
 import { findDocumentTemplate } from "@shared/documentTemplates.js";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_KEYS, isPageSizeKey } from "@shared/pageSizes.js";
 
 export const documentsRouter = Router();
 
@@ -59,7 +60,77 @@ documentsRouter.get("/api/groups/:id/document", requireAuth, async (req: Request
   res.json({
     content:   JSON.parse(doc.content) as unknown,
     updatedAt: doc.updatedAt.toISOString(),
+    pageSize:  isPageSizeKey(doc.pageSize) ? doc.pageSize : DEFAULT_PAGE_SIZE,
   });
+});
+
+// GET /api/groups/:id/document/page-size — just the paper size, for cheap polling so a size change
+// made by one collaborator reaches the others without touching the collab sockets. Read-only and
+// never creates a Document row (no row yet = the default).
+documentsRouter.get("/api/groups/:id/document/page-size", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+  const doc = await prisma.document.findUnique({ where: { groupId: idResult.data }, select: { pageSize: true } });
+  res.json({ pageSize: doc && isPageSizeKey(doc.pageSize) ? doc.pageSize : DEFAULT_PAGE_SIZE });
+});
+
+const pageSizeBody = z.object({ pageSize: z.enum(PAGE_SIZE_KEYS) });
+
+// PATCH /api/groups/:id/document/page-size — set the document's paper size. Any GROUP MEMBER may
+// change it (the setting is shared by all collaborators); the instructor's view is read-only.
+// Deliberately a plain column write on Document: no Yjs/getYDoc() access, no EditEvent/EditSession,
+// no Alert, and no Project.membershipChangedAt/scoringConfigChangedAt bump — page layout can never
+// mark an analysis outdated or touch authorship.
+documentsRouter.patch("/api/groups/:id/document/page-size", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  const body = pageSizeBody.safeParse(req.body);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: "pageSize must be one of: " + PAGE_SIZE_KEYS.join(", ") });
+    return;
+  }
+  const projectId = idResult.data;
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project)) {
+    res.status(403).json({ error: "Only group members can change the page size." });
+    return;
+  }
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Page size is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+  // Never create the row here: a Document row existing is what makes the client skip the template
+  // picker (GET /document/status), so only the editor's own flow may bring it into existence.
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } });
+  if (!existing) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+  const doc = await prisma.document.update({
+    where:  { id: existing.id },
+    data:   { pageSize: body.data.pageSize },
+    select: { pageSize: true },
+  });
+  res.json({ pageSize: doc.pageSize });
 });
 
 // A document is safely resettable (the leader can pick a different starting template) only when

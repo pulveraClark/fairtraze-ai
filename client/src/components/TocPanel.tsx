@@ -13,7 +13,7 @@ interface Props {
 // Mirrors CommentPanel.tsx's sidebar shell so both panels feel like the same UI surface.
 export function TocPanel({ headings, onSelect }: Props) {
   return (
-    <div className="w-72 shrink-0 border-l border-slate-100 bg-slate-50/40 flex flex-col max-h-[32rem]">
+    <div className="w-full md:w-72 shrink-0 border-t md:border-t-0 md:border-l border-slate-100 bg-slate-50/40 flex flex-col max-h-[32rem]">
       <div className="px-3 py-2 border-b border-slate-100">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contents</h4>
       </div>
