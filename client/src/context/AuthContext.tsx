@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "../lib/apiBase";
 import { clearAvatarCache } from "../components/Avatar";
+import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
 
 export interface AuthUser {
   id: number;
@@ -16,13 +17,17 @@ export interface AuthUser {
   instructorStatus?: "PENDING" | "APPROVED" | "REJECTED";
   /** Version of the optional profile photo; null/absent = initials fallback. */
   avatarUpdatedAt?: string | null;
+  /** Privacy Notice version the user accepted (null = never). */
+  consentVersion?: string | null;
+  /** True until the user accepts the current Privacy Notice version. */
+  consentRequired?: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  register: (email: string, password: string, name: string, role?: string) => Promise<AuthUser & { emailVerificationRequired: boolean }>;
+  register: (email: string, password: string, name: string, role?: string, privacyAccepted?: boolean) => Promise<AuthUser & { emailVerificationRequired: boolean }>;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   refreshUser: () => Promise<AuthUser | null>;
@@ -158,12 +163,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser);
   }
 
-  async function register(email: string, password: string, name: string, role?: string): Promise<AuthUser & { emailVerificationRequired: boolean }> {
+  async function register(email: string, password: string, name: string, role?: string, privacyAccepted = false): Promise<AuthUser & { emailVerificationRequired: boolean }> {
     const res = await fetch("/api/auth/register", {
       method:      "POST",
       headers:     { "Content-Type": "application/json" },
       credentials: "include",
-      body:        JSON.stringify({ email, password, name, ...(role ? { role } : {}) }),
+      body:        JSON.stringify({
+        email, password, name,
+        ...(role ? { role } : {}),
+        ...(privacyAccepted ? { acceptPrivacy: true, privacyVersion: PRIVACY_NOTICE_VERSION } : {}),
+      }),
     });
     const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Registration failed (${res.status})`);

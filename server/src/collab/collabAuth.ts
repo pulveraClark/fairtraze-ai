@@ -1,6 +1,7 @@
 import type { IncomingMessage } from "http";
 import { verifyToken } from "../lib/jwt.js";
 import { loadGroup } from "../routes/groups.js";
+import { prisma } from "../lib/prisma.js";
 
 export interface CollabAuthOk {
   ok: true;
@@ -58,6 +59,15 @@ export async function resolveCollabAuth(
   try {
     payload = verifyToken(token);
   } catch {
+    return { ok: false, status: 401 };
+  }
+
+  // Deactivated or erased accounts lose collab access immediately, not when their JWT expires.
+  const account = await prisma.user.findUnique({
+    where:  { id: payload.sub },
+    select: { active: true, deletedAt: true },
+  });
+  if (!account || !account.active || account.deletedAt) {
     return { ok: false, status: 401 };
   }
 

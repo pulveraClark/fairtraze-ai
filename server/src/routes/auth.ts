@@ -11,6 +11,7 @@ import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
 import { notify, activeAdminIds } from "../lib/notify.js";
+import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice.js";
 
 export const authRouter = Router();
 
@@ -54,7 +55,18 @@ const registerSchema = z.object({
   password: z.string().min(8),
   name:     z.string().min(1),
   role:     z.enum(SELF_REGISTRABLE_ROLES).optional(),
+  // Privacy consent (RA 10173) is required to create an account.
+  acceptPrivacy: z.literal(true),
+  privacyVersion: z.string().min(1),
 });
+
+// The user fields the client needs to decide whether to show the blocking consent screen.
+function consentFields(u: { consentVersion: string | null; consentAcceptedAt: Date | null }) {
+  return {
+    consentVersion:  u.consentVersion,
+    consentRequired: u.consentVersion !== PRIVACY_NOTICE_VERSION,
+  };
+}
 
 const loginSchema = z.object({
   email:    z.string().email(),
@@ -82,7 +94,15 @@ authRouter.post("/api/auth/register", async (req, res) => {
     return;
   }
 
-  const { email, password, name, role } = result.data;
+  const { email, password, name, role, privacyVersion } = result.data;
+
+  if (privacyVersion !== PRIVACY_NOTICE_VERSION) {
+    res.status(409).json({
+      error: "The Privacy Notice was updated. Reload the page and review the latest version.",
+      code:  "NOTICE_VERSION_MISMATCH",
+    });
+    return;
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -98,6 +118,8 @@ authRouter.post("/api/auth/register", async (req, res) => {
       name,
       systemRole: (role ?? "STUDENT") as SystemRole,
       emailVerified: false,
+      consentVersion:    PRIVACY_NOTICE_VERSION,
+      consentAcceptedAt: new Date(),
       // Instructor sign-ups need admin approval before any instructor feature works.
       ...(role === "INSTRUCTOR" ? { instructorStatus: "PENDING" as const } : {}),
     },
@@ -132,7 +154,7 @@ authRouter.post("/api/auth/register", async (req, res) => {
 
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus, ...consentFields(user) },
     emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
@@ -209,7 +231,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus, ...consentFields(user) },
     emailVerificationRequired: isEmailVerificationRequired(),
   });
 });
@@ -342,7 +364,8 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
     githubUsername:            user.githubUsername,
     emailVerified:             user.emailVerified,
     instructorStatus:          user.instructorStatus,
-    avatarUpdatedAt:           user.avatarUpdatedAt ? user.avatarUpdatedAt.toISOString() : null,
+    ...consentFields(user),
+    avatarUpdatedAt:          user.avatarUpdatedAt ? user.avatarUpdatedAt.toISOString() : null,
     createdAt:                 user.createdAt,
     emailVerificationRequired: isEmailVerificationRequired(),
   });

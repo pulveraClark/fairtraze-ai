@@ -8,6 +8,7 @@ import {
   createAssignment,
   createProject,
   createMembership,
+  CONSENT,
 } from "./factories.js";
 
 // Notification tests make many login calls in one file; the IP-keyed authLimiter
@@ -635,7 +636,7 @@ describe("department-created notifications", () => {
 
 describe("instructor-registration notifications", () => {
   const register = (role?: string) =>
-    request(app).post("/api/auth/register").send({
+    request(app).post("/api/auth/register").send({ ...CONSENT,
       email: `reg-${role ?? "none"}@example.com`,
       password: "password123",
       name: "Newcomer",

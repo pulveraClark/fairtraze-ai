@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { Avatar } from "../components/Avatar";
 import { ProfilePhotoControls } from "../components/ProfilePhotoControls";
+import { PrivacySettingsCard } from "../components/PrivacySettingsCard";
 
 function roleHome(role?: string): string {
   if (role === "STUDENT") return "/student";
@@ -500,6 +501,9 @@ export function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* ── Privacy and data (RA 10173) ──────────────────────────────────── */}
+        <PrivacySettingsCard />
 
         {/* ── Read-only note ────────────────────────────────────────────────── */}
         <p className="text-xs text-slate-400 px-1">

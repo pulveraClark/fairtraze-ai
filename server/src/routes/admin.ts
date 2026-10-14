@@ -3,7 +3,8 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
-import { notify, activeAdminIds } from "../lib/notify.js";
+import { notify, activeAdminIds, resolveNotifications } from "../lib/notify.js";
+import { anonymizeUser } from "../lib/anonymizeUser.js";
 
 export const adminRouter = Router();
 
@@ -204,34 +205,95 @@ adminRouter.delete("/api/admin/users/:id", ...requireRole("ADMIN"), async (req, 
   }
 
   const [target, actorName] = await Promise.all([
-    prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, email: true } }),
+    prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true } }),
     getActorName(req.user!.sub),
   ]);
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
 
-  // Manual cascade in the correct FK order so no RESTRICT constraint fires.
-  // AuditLog entries where this user is the actor have actorId nulled (onDelete: SetNull on schema),
-  // but we do it explicitly here to be safe with SQLite FK enforcement.
-  await prisma.$transaction(async (tx) => {
-    await tx.auditLog.create({
-      data: {
-        actorId:    req.user!.sub,
-        actorName,
-        action:     "USER_DELETED",
-        targetType: "USER",
-        targetId:   String(targetId),
-        details:    `${target.name} (${target.email})`,
-      },
-    });
-    await tx.auditLog.updateMany({ where: { actorId: targetId }, data: { actorId: null } });
-    await tx.dispute.deleteMany({ where: { studentUserId: targetId } });
-    await tx.alert.deleteMany({ where: { instructorId: targetId } });
-    await tx.groupMembership.deleteMany({ where: { userId: targetId } });
-    await tx.classSection.deleteMany({ where: { instructorId: targetId } });
-    await tx.user.delete({ where: { id: targetId } });
-  });
+  // Deletion is anonymization (lib/anonymizeUser.ts): the account is scrubbed and kept as a
+  // "Former member" tombstone so FK-linked rows and teammates' stored reports stay intact.
+  const result = await anonymizeUser(targetId, { actorId: req.user!.sub, actorName, action: "USER_DELETED" });
+  if (!result.ok) {
+    res.status(result.code === "NOT_FOUND" ? 404 : 409).json({ error: result.message, code: result.code });
+    return;
+  }
 
   res.json({ message: `User "${target.name}" deleted.` });
+});
+
+// ── Account deletion requests (RA 10173 erasure) ──────────────────────────────
+// Users file these from Settings > Privacy (routes/privacy.ts). Approval anonymizes the account.
+
+adminRouter.get("/api/admin/deletion-requests", ...requireRole("ADMIN"), async (_req, res) => {
+  const select = {
+    id: true, status: true, reason: true, createdAt: true, reviewedAt: true, reviewNote: true,
+    user: { select: { id: true, name: true, email: true, systemRole: true } },
+  } as const;
+  const [pending, recent] = await Promise.all([
+    prisma.deletionRequest.findMany({ where: { status: "PENDING" }, select, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
+    prisma.deletionRequest.findMany({ where: { status: { in: ["APPROVED", "REJECTED"] } }, select, orderBy: { reviewedAt: "desc" }, take: 10 }),
+  ]);
+  res.json({ pendingCount: pending.length, pending, recent });
+});
+
+adminRouter.post("/api/admin/deletion-requests/:id/approve", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+
+  const request = await prisma.deletionRequest.findUnique({ where: { id: idResult.data }, select: { id: true, userId: true, status: true } });
+  if (!request) { res.status(404).json({ error: "Request not found" }); return; }
+  if (request.status !== "PENDING") { res.status(409).json({ error: `This request is already ${request.status.toLowerCase()}.` }); return; }
+  if (request.userId === req.user!.sub) { res.status(403).json({ error: "You cannot approve your own deletion." }); return; }
+
+  const actorName = await getActorName(req.user!.sub);
+  const result = await anonymizeUser(request.userId, { actorId: req.user!.sub, actorName, action: "ACCOUNT_ERASURE_APPROVED" });
+  if (!result.ok) {
+    res.status(result.code === "NOT_FOUND" ? 404 : 409).json({ error: result.message, code: result.code });
+    return;
+  }
+
+  await prisma.deletionRequest.update({
+    where: { id: request.id },
+    data:  { status: "APPROVED", reviewedAt: new Date(), reviewedById: req.user!.sub },
+  });
+  await resolveNotifications({ type: "DELETION_REQUESTED", refType: "DELETION_REQUEST", refId: request.id });
+
+  res.json({ id: request.id, status: "APPROVED" });
+});
+
+adminRouter.post("/api/admin/deletion-requests/:id/reject", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+  const note = z.object({ note: z.string().trim().max(500).optional() }).safeParse(req.body ?? {});
+
+  const request = await prisma.deletionRequest.findUnique({ where: { id: idResult.data }, select: { id: true, userId: true } });
+  if (!request) { res.status(404).json({ error: "Request not found" }); return; }
+
+  const updated = await prisma.deletionRequest.updateMany({
+    where: { id: request.id, status: "PENDING" },
+    data:  { status: "REJECTED", reviewedAt: new Date(), reviewedById: req.user!.sub, reviewNote: note.success ? (note.data.note || null) : null },
+  });
+  if (updated.count === 0) { res.status(409).json({ error: "This request is no longer pending." }); return; }
+
+  const actorName = await getActorName(req.user!.sub);
+  await prisma.auditLog.create({
+    data: {
+      actorId: req.user!.sub, actorName, action: "ACCOUNT_ERASURE_REJECTED",
+      targetType: "USER", targetId: String(request.userId), details: `Deletion request #${request.id} rejected`,
+    },
+  });
+  await resolveNotifications({ type: "DELETION_REQUESTED", refType: "DELETION_REQUEST", refId: request.id });
+  await notify({
+    recipientIds: request.userId,
+    actorId:      req.user!.sub,
+    type:         "DELETION_REJECTED",
+    message:      "Your account deletion request was not approved. Contact your administrator for details.",
+    link:         "/settings",
+    refType:      "DELETION_REQUEST",
+    refId:        request.id,
+  });
+
+  res.json({ id: request.id, status: "REJECTED" });
 });
 
 // ── GET /api/admin/overview ───────────────────────────────────────────────────

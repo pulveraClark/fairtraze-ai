@@ -24,6 +24,8 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ de
 const AlertsPage = lazy(() => import("./pages/AlertsPage").then((m) => ({ default: m.AlertsPage })));
 const DisputesPage = lazy(() => import("./pages/DisputesPage").then((m) => ({ default: m.DisputesPage })));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage").then((m) => ({ default: m.PendingApprovalPage })));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
+const ConsentGatePage = lazy(() => import("./pages/ConsentGatePage").then((m) => ({ default: m.ConsentGatePage })));
 const JoinPage = lazy(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })));
 
 function RouteFallback() {
@@ -41,7 +43,7 @@ function routeElement(pathname: string) {
 
 /** Signed-in app routes get the sidebar; landing and auth pages never had the app chrome. */
 function usesShell(pathname: string): boolean {
-  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"].includes(pathname);
+  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy"].includes(pathname);
 }
 
 function pageElement(pathname: string) {
@@ -85,6 +87,7 @@ function pageElement(pathname: string) {
   if (pathname === "/reset-password")  return <ResetPasswordPage />;
   if (pathname === "/verify-email")    return <VerifyEmailPage />;
   if (pathname === "/overview")  return <OverviewPage />;
+  if (pathname === "/privacy")   return <PrivacyPage />;
 
   if (pathname === "/dashboard") return (
     <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
@@ -155,6 +158,10 @@ export default function App() {
   const { pathname } = useRouter();
   const { user, loading } = useAuth();
 
+  // Everyone must accept the current Privacy Notice first (RA 10173). The public notice itself
+  // (/privacy) never uses the shell, so it stays readable from the consent screen.
+  const consentGated = !loading && !!user && user.consentRequired === true && usesShell(pathname);
+
   // An instructor an admin has not approved yet sees only the approval notice, never the app
   // shell or any instructor page. The server enforces the same rule on every instructor API.
   const gated =
@@ -163,7 +170,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<RouteFallback />}>
-      {gated ? <PendingApprovalPage /> : routeElement(pathname)}
+      {consentGated ? <ConsentGatePage /> : gated ? <PendingApprovalPage /> : routeElement(pathname)}
     </Suspense>
   );
 }

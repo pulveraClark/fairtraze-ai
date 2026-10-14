@@ -36,7 +36,14 @@ export function OverviewPage() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="px-4 sm:px-8 py-3 text-xs text-slate-600 text-center">
           Outputs are evidence to support instructor judgment — they do not constitute grades or
-          final assessments.
+          final assessments.{" "}
+          <button
+            type="button"
+            onClick={() => navigate("/privacy")}
+            className="font-medium text-indigo-700 underline underline-offset-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            Privacy Notice
+          </button>
         </div>
       </footer>
     </div>

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import type { TeamReport, AnyScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types.js";
+import { buildPseudonymEntries, pseudonymizeReport, scrubFreeText, restoreNames } from "./geminiPseudonyms.js";
 
 function isCombinedMember(m: AnyScoredMember): m is CombinedScoredMember {
   return "githubContributionShare" in m;
@@ -89,7 +90,7 @@ export function formatPrompt(
 
       if (isCombinedMember(m)) {
         return [
-          `Member: ${m.studentName} (GitHub: ${m.githubUsername})`,
+          `Member: ${m.studentName}${m.githubUsername ? ` (GitHub: ${m.githubUsername})` : ""}`,
           shareLine,
           `  GitHub share: ${(m.githubContributionShare * 100).toFixed(1)}% (weight ${Math.round(m.wGitHub * 100)}%) | Docs share: ${(m.documentContributionShare * 100).toFixed(1)}% (weight ${Math.round(m.wDocs * 100)}%)`,
           `  Commits: ${m.github?.commits ?? 0} | Docs sessions: ${m.document?.sessionCount ?? 0}`,
@@ -106,7 +107,7 @@ export function formatPrompt(
       }
       const churn = m.additions + m.deletions;
       return [
-        `Member: ${m.studentName} (GitHub: ${m.githubUsername})`,
+        `Member: ${m.studentName}${m.githubUsername ? ` (GitHub: ${m.githubUsername})` : ""}`,
         shareLine,
         `  Commits: ${m.commits} | Active days: ${m.activeDays} | Churn: ${churn.toLocaleString()} lines`,
         `  Flags: ${flagsText}`,
@@ -141,12 +142,18 @@ async function callOnce(
 }
 
 export async function generateFairnessNarrative(
-  projectName: string,
-  teamReport: TeamReport<AnyScoredMember>,
-  briefDescription?: string | null
+  realProjectName: string,
+  realTeamReport: TeamReport<AnyScoredMember>,
+  realBriefDescription?: string | null
 ): Promise<string> {
+  // Only pseudonyms leave the server; real names are restored in the returned text.
+  const entries = buildPseudonymEntries(realTeamReport.members);
+  const teamReport = pseudonymizeReport(realTeamReport, entries);
+  const projectName = scrubFreeText(realProjectName, entries);
+  const briefDescription = realBriefDescription == null ? realBriefDescription : scrubFreeText(realBriefDescription, entries);
+
   try {
-    return await callOnce(projectName, teamReport, briefDescription);
+    return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
     if (e.status === 429) {
@@ -155,7 +162,7 @@ export async function generateFairnessNarrative(
       const delayMs = match ? parseInt(match[1], 10) * 1000 : 5000;
       console.warn(`[Gemini] Rate-limited. Retrying in ${delayMs / 1000}s…`);
       await new Promise((r) => setTimeout(r, delayMs));
-      return callOnce(projectName, teamReport, briefDescription); // single retry, then propagate
+      return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries); // single retry, then propagate
     }
     throw err;
   }

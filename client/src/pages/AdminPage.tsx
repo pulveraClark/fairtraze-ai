@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { PaginationBar } from "../components/PaginationBar";
 import { InstructorApprovals } from "../components/InstructorApprovals";
+import { DeletionRequests } from "../components/DeletionRequests";
 import {
   useAdminUsersQuery,
   useAdminOverviewQuery,
@@ -175,7 +176,7 @@ export function AdminPage() {
 
   async function deleteUser(u: UserRecord) {
     if (!window.confirm(
-      `Permanently delete ${u.name} (${u.email})?\n\nThis will remove all their data — classes, groups, disputes, and alerts. This cannot be undone.`
+      `Delete ${u.name} (${u.email})?\n\nTheir profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates' reports are unchanged. A group leader or an instructor who owns classes must be handed over first. This cannot be undone.`
     )) return;
     try {
       const res  = await fetch(`/api/admin/users/${u.id}`, {
@@ -691,6 +692,9 @@ export function AdminPage() {
             </div>
             <div className="border border-slate-200 rounded-lg p-4 sm:col-span-1 lg:col-span-2">
               <InstructorApprovals onToast={showToast} />
+            </div>
+            <div className="border border-slate-200 rounded-lg p-4 sm:col-span-1 lg:col-span-2">
+              <DeletionRequests onToast={showToast} />
             </div>
           </div>
         </section>

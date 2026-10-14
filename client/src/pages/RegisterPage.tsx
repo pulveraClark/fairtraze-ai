@@ -68,6 +68,7 @@ export function RegisterPage() {
   const [password,      setPassword]      = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error,         setError]         = useState<string | null>(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [submitting,    setSubmitting]    = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
   const [verificationRequired, setVerificationRequired] = useState(true);
@@ -121,6 +122,11 @@ export function RegisterPage() {
     e.preventDefault();
     setError(null);
 
+    if (!privacyAccepted) {
+      setError("You must read and agree to the Privacy Notice to create an account.");
+      return;
+    }
+
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -133,7 +139,7 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const result = await register(email, password, name, role);
+      const result = await register(email, password, name, role, privacyAccepted);
       setVerificationRequired(result.emailVerificationRequired);
       setJustRegistered(true);
     } catch (err) {
@@ -306,6 +312,28 @@ export function RegisterPage() {
               />
             </div>
 
+            {/* Privacy consent (RA 10173) */}
+            <label className="flex min-h-10 items-start gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                checked={privacyAccepted}
+                onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              />
+              <span>
+                I have read and agree to the{" "}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-indigo-700 underline underline-offset-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  Privacy Notice
+                </a>
+                .
+              </span>
+            </label>
+
             {/* Error */}
             {error && (
               <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-3">
@@ -319,7 +347,7 @@ export function RegisterPage() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !name || !email || !password || !confirmPassword}
+              disabled={submitting || !name || !email || !password || !confirmPassword || !privacyAccepted}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
             >
               {submitting ? (

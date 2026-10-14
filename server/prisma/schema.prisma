@@ -57,6 +57,16 @@ enum AlertType {
   USER_REGISTERED
   INSTRUCTOR_APPROVED
   INSTRUCTOR_REJECTED
+  DELETION_REQUESTED
+  DELETION_APPROVED
+  DELETION_REJECTED
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 // Admin sign-off for self-registered instructors. Only meaningful when systemRole is
@@ -125,6 +135,14 @@ model User {
   avatarData       Bytes?
   avatarMime       String?
   avatarUpdatedAt  DateTime?
+  // Privacy consent (RA 10173): the notice version the user accepted and when. NULL = never
+  // accepted (every pre-existing account), which re-prompts on next login.
+  consentVersion    String?
+  consentAcceptedAt DateTime?
+  // Set when an erasure request is approved: the row becomes an anonymized tombstone so every
+  // FK (edit events, contributions, tasks, comments) and every stored report keeps resolving.
+  deletedAt         DateTime?
+  deletionRequests  DeletionRequest[]
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
   classEnrollments ClassEnrollment[]
@@ -144,6 +162,21 @@ model User {
   comments         Comment[]
   documentContributions DocumentContribution[]
   combinedContributions CombinedContribution[]
+}
+
+model DeletionRequest {
+  id           Int                   @id @default(autoincrement())
+  userId       Int
+  status       DeletionRequestStatus @default(PENDING)
+  reason       String?
+  createdAt    DateTime              @default(now())
+  reviewedAt   DateTime?
+  reviewedById Int?
+  reviewNote   String?
+  user         User                  @relation(fields: [userId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
 
 model RefreshToken {

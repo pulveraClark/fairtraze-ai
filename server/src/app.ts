@@ -5,6 +5,7 @@ import { analyzeRouter } from "./routes/analyze.js";
 import { projectsRouter } from "./routes/projects.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
+import { privacyRouter } from "./routes/privacy.js";
 import { classesRouter } from "./routes/classes.js";
 import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
@@ -23,6 +24,7 @@ import {
   helmetMiddleware,
   authLimiter,
   analysisLimiter,
+  exportLimiter,
   globalLimiter,
 } from "./middleware/security.js";
 
@@ -62,10 +64,13 @@ export function createApp() {
     analysisLimiter
   );
 
+  app.use("/api/privacy/export", authenticateToken, exportLimiter);
+
   app.use(projectsRouter);
   app.use(analyzeRouter);
   app.use(authRouter);
   app.use(usersRouter);
+  app.use(privacyRouter);
   app.use(avatarRouter);
   app.use(classesRouter);
   app.use(assignmentsRouter);

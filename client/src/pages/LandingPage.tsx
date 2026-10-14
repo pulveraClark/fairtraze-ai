@@ -624,12 +624,20 @@ export function LandingPage() {
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
 
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-indigo-600 transition-colors font-semibold shrink-0"
-          >
-            System Overview →
-          </button>
+          <div className="flex items-center gap-5 shrink-0">
+            <button
+              onClick={() => navigate("/privacy")}
+              className="min-h-9 text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              Privacy Notice
+            </button>
+            <button
+              onClick={() => navigate("/overview")}
+              className="min-h-9 text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              System Overview →
+            </button>
+          </div>
 
         </div>
       </footer>

@@ -329,6 +329,16 @@ function UserBlock({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?:
             <p className="truncate text-sm font-semibold text-white">{user.name}</p>
             <p className="mt-0.5">{badge}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => { navigate("/privacy"); setOpen(false); onNavigate?.(); }}
+            className={itemClass}
+          >
+            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" />
+            </svg>
+            Privacy Notice
+          </button>
           <button type="button" onClick={handleLogout} className={itemClass}>
             <SignOutIcon /> Sign out
           </button>

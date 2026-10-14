@@ -18,13 +18,25 @@ export function authenticateToken(req: Request, _res: Response, next: NextFuncti
   next();
 }
 
+// Besides verifying the JWT, reads the account's liveness from the DB (id/active/deletedAt only)
+// so deactivation or erasure takes effect on the very next request instead of after the 15-minute
+// access-token expiry.
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   authenticateToken(req, res, () => {
     if (!req.user) {
       res.status(401).json({ error: "Authentication required" });
       return;
     }
-    next();
+    prisma.user
+      .findUnique({ where: { id: req.user.sub }, select: { id: true, active: true, deletedAt: true } })
+      .then((row) => {
+        if (!row || !row.active || row.deletedAt) {
+          res.status(401).json({ error: "Account no longer available", code: "ACCOUNT_UNAVAILABLE" });
+          return;
+        }
+        next();
+      })
+      .catch(next);
   });
 }
 

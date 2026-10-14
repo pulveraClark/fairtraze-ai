@@ -2,6 +2,10 @@ import bcrypt from "bcryptjs";
 import type { InstructorStatus, SystemRole } from "@prisma/client";
 import { prisma } from "../src/lib/prisma.js";
 import { signToken } from "../src/lib/jwt.js";
+import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice.js";
+
+// Spread into register payloads: the sign-up consent a real client sends.
+export const CONSENT = { acceptPrivacy: true as const, privacyVersion: PRIVACY_NOTICE_VERSION };
 
 let emailCounter = 0;
 let joinCodeCounter = 0;
@@ -14,6 +18,7 @@ export async function createUser(overrides: {
   active?: boolean;
   emailVerified?: boolean;
   instructorStatus?: InstructorStatus;
+  consentVersion?: string | null;
 } = {}) {
   emailCounter += 1;
   const password = overrides.password ?? "password123";
@@ -25,6 +30,9 @@ export async function createUser(overrides: {
       name: overrides.name ?? `Test User ${emailCounter}`,
       systemRole: overrides.systemRole ?? "INSTRUCTOR",
       active: overrides.active ?? true,
+      // Existing-account fixtures count as already consented unless a test says otherwise.
+      consentVersion: "consentVersion" in overrides ? overrides.consentVersion : PRIVACY_NOTICE_VERSION,
+      consentAcceptedAt: overrides.consentVersion === null ? null : new Date(),
       ...(overrides.emailVerified !== undefined ? { emailVerified: overrides.emailVerified } : {}),
       ...(overrides.instructorStatus !== undefined ? { instructorStatus: overrides.instructorStatus } : {}),
     },

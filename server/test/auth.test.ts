@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
-import { createUser, authHeaderFor } from "./factories.js";
+import { createUser, authHeaderFor, CONSENT } from "./factories.js";
 
 // This file exercises auth-flow correctness (many login/register/forgot-password
 // calls per test file), not rate limiting — that's rateLimit.test.ts's job.
@@ -28,7 +28,7 @@ function extractRefreshCookie(res: request.Response): string {
 
 describe("POST /api/auth/register", () => {
   it("creates a user and returns a token + refresh cookie", async () => {
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await request(app).post("/api/auth/register").send({ ...CONSENT,
       email: "new@example.com",
       password: "password123",
       name: "New User",
@@ -41,7 +41,7 @@ describe("POST /api/auth/register", () => {
   });
 
   it("creates a newly-registered account as unverified (emailVerified: false)", async () => {
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await request(app).post("/api/auth/register").send({ ...CONSENT,
       email: "unverified@example.com",
       password: "password123",
       name: "Unverified User",
@@ -55,7 +55,7 @@ describe("POST /api/auth/register", () => {
   });
 
   it("rejects a self-registered ADMIN role with 400 and creates no account", async () => {
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await request(app).post("/api/auth/register").send({ ...CONSENT,
       email: "sneaky-admin@example.com",
       password: "password123",
       name: "Sneaky",
@@ -66,7 +66,7 @@ describe("POST /api/auth/register", () => {
   });
 
   it.each(["INSTRUCTOR", "STUDENT"] as const)("still allows self-registering as %s", async (role) => {
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await request(app).post("/api/auth/register").send({ ...CONSENT,
       email: `${role.toLowerCase()}@example.com`,
       password: "password123",
       name: "Allowed",
@@ -78,7 +78,7 @@ describe("POST /api/auth/register", () => {
 
   it("rejects a duplicate email with 409", async () => {
     await createUser({ email: "dup@example.com" });
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await request(app).post("/api/auth/register").send({ ...CONSENT,
       email: "dup@example.com",
       password: "password123",
       name: "Dup",
@@ -294,7 +294,7 @@ describe("email verification — grandfathering existing users", () => {
   });
 
   it("a user created through the register route reads false (explicit override at that call site)", async () => {
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await request(app).post("/api/auth/register").send({ ...CONSENT,
       email: "freshsignup@example.com",
       password: "password123",
       name: "Fresh Signup",

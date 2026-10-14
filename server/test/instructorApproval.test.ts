@@ -2,17 +2,17 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
-import { createUser, authHeaderFor } from "./factories.js";
+import { createUser, authHeaderFor, CONSENT } from "./factories.js";
 
 const app = createApp();
 
 describe("instructor approval", () => {
   it("registers an INSTRUCTOR as pending and a STUDENT as approved", async () => {
-    const inst = await request(app).post("/api/auth/register").send({ email: "i@example.com", password: "password123", name: "Ins", role: "INSTRUCTOR" });
+    const inst = await request(app).post("/api/auth/register").send({ ...CONSENT, email: "i@example.com", password: "password123", name: "Ins", role: "INSTRUCTOR" });
     expect(inst.status).toBe(201);
     expect(inst.body.user.instructorStatus).toBe("PENDING");
 
-    const stu = await request(app).post("/api/auth/register").send({ email: "s@example.com", password: "password123", name: "Stu", role: "STUDENT" });
+    const stu = await request(app).post("/api/auth/register").send({ ...CONSENT, email: "s@example.com", password: "password123", name: "Stu", role: "STUDENT" });
     expect(stu.status).toBe(201);
     expect(stu.body.user.instructorStatus).toBe("APPROVED");
   });

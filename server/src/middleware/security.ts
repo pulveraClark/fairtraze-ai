@@ -44,6 +44,15 @@ export const analysisLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Personal-data export (RA 10173 access/portability): a heavy, many-table read, so 5 per hour
+// per user. Needs authenticateToken to have run first (see app.ts) to key by user id.
+export const exportLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 export const globalLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 15 * 60 * 1000,
