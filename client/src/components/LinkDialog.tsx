@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { normalizeLinkUrl } from "@shared/linkUrl";
+import { useFocusTrap } from "../lib/useFocusTrap";
 
 interface Props {
   editor: Editor;
@@ -23,6 +24,8 @@ export function LinkDialog({ editor, onClose }: Props) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const urlRef = useRef<HTMLInputElement | null>(null);
+  // Tab stays inside; Esc closes; focus returns to the editor (see useFocusTrap).
+  const dialogRef = useFocusTrap<HTMLFormElement>(onClose, () => editor.commands.focus());
 
   useEffect(() => {
     urlRef.current?.focus();
@@ -60,12 +63,12 @@ export function LinkDialog({ editor, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/40 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <form
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ft-link-title"
         className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-lg"
         onSubmit={(e) => { e.preventDefault(); apply(); }}
-        onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } }}
       >
         <h2 id="ft-link-title" className="text-sm font-semibold text-slate-800">{existing ? "Edit link" : "Insert link"}</h2>
         <div className="mt-3 space-y-3">
