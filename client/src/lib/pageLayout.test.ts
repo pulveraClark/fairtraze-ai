@@ -9,6 +9,9 @@ import TableHeader from "@tiptap/extension-table-header";
 import * as Y from "yjs";
 import { PAGE_SIZES, PAGE_SIZE_KEYS, PAGE_MARGIN_PX } from "@shared/pageSizes";
 import { paginationExtension, paginationSize } from "./pageLayout";
+import { PageBreak } from "./pageBreak";
+import { applyPageSetup, DEFAULT_PAGE_SETUP } from "./pageSetup";
+import { MARGIN_PRESET_KEYS, PAGE_ORIENTATIONS } from "@shared/pageSizes";
 
 // Page layout must add 0 characters to anyone's authorship count. Layout is pure ProseMirror
 // decorations/widgets + meta-only transactions, so it can never reach the Yjs document. This builds
@@ -96,5 +99,58 @@ describe("page sizes and margins", () => {
   it("adds no header, footer or page number of its own", () => {
     const ext = paginationExtension("SHORT", 0);
     expect(ext.options).toMatchObject({ headerLeft: "", headerRight: "", footerLeft: "", footerRight: "", pageGap: 0 });
+  });
+});
+
+describe("page setup and header/footer are invisible to authorship", () => {
+  it("every paper x orientation x margin setting and any header/footer text writes 0 Yjs updates", () => {
+    const ydoc = new Y.Doc();
+    let updates = 0;
+    ydoc.on("update", () => updates++);
+    const ed = new Editor({
+      element: document.createElement("div"),
+      extensions: [
+        StarterKit.configure({ undoRedo: false }),
+        Collaboration.configure({ document: ydoc }),
+        PageBreak,
+        paginationExtension("SHORT", 24),
+      ],
+    });
+    ed.commands.insertContent("<p>some typed text</p>");
+    const baseline = updates;
+    const textBefore = textChars(ydoc);
+
+    for (const pageSize of PAGE_SIZE_KEYS) {
+      for (const orientation of PAGE_ORIENTATIONS) {
+        for (const marginPreset of MARGIN_PRESET_KEYS) {
+          applyPageSetup(ed, {
+            ...DEFAULT_PAGE_SETUP,
+            pageSize,
+            orientation,
+            marginPreset,
+            header: { left: "Group 4 <b>x</b>", center: "Title", right: "Page {page}" },
+            footer: { left: "", center: "{page}", right: "" },
+          });
+        }
+      }
+    }
+    applyPageSetup(ed, DEFAULT_PAGE_SETUP); // and clearing it again
+    expect(updates).toBe(baseline);
+    expect(textChars(ydoc)).toBe(textBefore);
+    ed.destroy();
+  });
+
+  it("a page break is a leaf block: it adds a node but 0 characters", () => {
+    const ydoc = new Y.Doc();
+    const ed = new Editor({
+      element: document.createElement("div"),
+      extensions: [StarterKit.configure({ undoRedo: false }), Collaboration.configure({ document: ydoc }), PageBreak],
+    });
+    ed.commands.insertContent("<p>hello</p>");
+    const before = textChars(ydoc);
+    ed.commands.setPageBreak();
+    expect(textChars(ydoc)).toBe(before);
+    expect(JSON.stringify(ed.getJSON())).toContain("pageBreak");
+    ed.destroy();
   });
 });

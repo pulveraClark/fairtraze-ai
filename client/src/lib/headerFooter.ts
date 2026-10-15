@@ -4,8 +4,9 @@
 // absolutely positioned span (see .ft-hf-* in index.css). Everything typed is HTML-escaped here;
 // {page} is the only token and becomes the plugin's CSS page counter.
 
-export const HF_SLOT_MAX_CHARS = 120;
-export const PAGE_TOKEN = "{page}";
+import { HF_SLOT_MAX_CHARS, PAGE_TOKEN } from "@shared/pageSizes";
+
+export { HF_SLOT_MAX_CHARS, PAGE_TOKEN };
 
 export interface HeaderFooterText {
   left: string;

@@ -50,12 +50,8 @@ export function createApp() {
   app.use("/api/assignments/:id/attachments", briefBodyErrors);
   app.use(express.json());
   app.use(cookieParser());
-  app.use(globalLimiter);
-
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-
+  // Registered BEFORE the global limiter on purpose: every open editor tab polls it once a minute, and
+  // it is a constant, cheap response - a classroom behind one IP must not spend its request budget on it.
   // Public: lets an open editor tab learn that a newer document schema has been deployed, so it can
   // ask the user to reload instead of syncing with a schema the server no longer accepts.
   app.get("/api/version", (_req, res) => {
@@ -63,6 +59,12 @@ export function createApp() {
       collabSchemaVersion: COLLAB_SCHEMA_VERSION,
       build: (process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? "dev").slice(0, 7),
     });
+  });
+
+  app.use(globalLimiter);
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   app.use(["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password"], authLimiter);

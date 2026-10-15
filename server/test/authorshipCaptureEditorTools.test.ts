@@ -27,6 +27,17 @@ async function waitForEvents(documentId: number, count: number, timeoutMs = 2500
   throw new Error(`timed out waiting for ${count} EditEvents on document ${documentId}`);
 }
 
+// Polls until `userId` has at least `count` events: the capture flush is debounced and the database
+// round trip varies (seconds on the remote test branch), so a fixed sleep is not reliable.
+async function waitForUserEvents(documentId: number, userId: number, count: number, timeoutMs = 30000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await prisma.editEvent.count({ where: { documentId, userId } })) >= count) return;
+    await sleep(250);
+  }
+  throw new Error(`timed out waiting for ${count} EditEvents by user ${userId}`);
+}
+
 const clients: HeadlessClient[] = [];
 afterEach(() => {
   while (clients.length) clients.pop()!.destroy();
@@ -208,7 +219,9 @@ describe("find and replace credit", () => {
     const mixed = replaceMatches(ed, "cat");
     expect(mixed).toEqual({ replaced: 1, skipped: 3 });
 
-    await sleep(FLUSH_WAIT_MS);
+    // Bob's events: INSERT "CAT", then DELETE + INSERT for the one real replacement.
+    await waitForUserEvents(doc.id, bob.id, 3);
+    await sleep(FLUSH_WAIT_MS); // and let any (wrong) extra event show up before asserting there are none
     const bobInserts = await prisma.editEvent.findMany({ where: { documentId: doc.id, userId: bob.id, eventType: "INSERT" } });
     // Bob typed "CAT" (3) then replaced it with "cat" (3): never any of Alice's text.
     expect(bobInserts.reduce((n, e) => n + e.length, 0)).toBe(6);

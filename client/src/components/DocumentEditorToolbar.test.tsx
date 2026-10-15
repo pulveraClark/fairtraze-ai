@@ -10,7 +10,8 @@ import Subscript from "@tiptap/extension-subscript";
 import CharacterCount from "@tiptap/extension-character-count";
 import { formattingExtensions, starterKitOptions } from "../lib/formattingExtensions";
 import { SearchReplace } from "../lib/searchReplace";
-import { Toolbar } from "./DocumentEditorToolbar";
+import { PageBreak } from "../lib/pageBreak";
+import { Toolbar, overflowFor } from "./DocumentEditorToolbar";
 
 const editors: Editor[] = [];
 afterEach(() => {
@@ -26,6 +27,7 @@ function makeEditor() {
       StarterKit.configure({ ...starterKitOptions, undoRedo: {} }),
       ...formattingExtensions,
       SearchReplace,
+      PageBreak,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TextStyle,
       Superscript,
@@ -64,8 +66,9 @@ function renderToolbar(editor: Editor, { editable = true, width }: { editable?: 
     hasSelection: false,
     focusMode: false,
     onToggleFocusMode: vi.fn(),
-    pageSize: "SHORT" as const,
-    onChangePageSize: vi.fn(),
+    pageSummary: "Short, portrait, normal margins",
+    onOpenPageSetup: vi.fn(),
+    onOpenHeaderFooter: vi.fn(),
     exportingPdf: false,
     zoom: 1,
     onChangeZoom: vi.fn(),
@@ -93,7 +96,7 @@ describe("editor toolbar", () => {
     expect(title("Undo")).toBe("Undo (Ctrl+Z)");
     // Tools with no keyboard shortcut still have a text tooltip and accessible name.
     expect(title("Clear formatting")).toBe("Clear formatting");
-    expect(title("Horizontal line")).toBe("Horizontal line");
+    expect(title("Insert image")).toBe("Insert image");
   });
 
   it("runs the formatting commands", async () => {
@@ -153,9 +156,97 @@ describe("editor toolbar", () => {
     expect(screen.getByRole("button", { name: "Justify" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Checklist" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Insert link" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Horizontal line" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Horizontal line/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Page break/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Headers and footers/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Page setup/ })).toBeInTheDocument();
     const panel = screen.getByRole("button", { name: "Strikethrough" }).closest("div[style*='fixed']") as HTMLElement;
     // Find and Find and replace both live under More when the Edit menu itself does not fit.
     expect(within(panel).getAllByRole("button", { name: /^Find/ })).toHaveLength(2);
+  });
+});
+
+describe("editor toolbar: insert and page setup", () => {
+  it("Insert menu: page break (with its shortcut), horizontal line, headers and footers", async () => {
+    const ed = makeEditor();
+    const { props } = renderToolbar(ed, { width: 1500 });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Insert$/ }));
+    expect(screen.getByRole("button", { name: /^Page break/ })).toHaveTextContent("Ctrl+Enter");
+    await user.click(screen.getByRole("button", { name: /^Page break/ }));
+    expect(JSON.stringify(ed.getJSON())).toContain('"pageBreak"');
+
+    await user.click(screen.getByRole("button", { name: /^Insert$/ }));
+    await user.click(screen.getByRole("button", { name: /^Horizontal line/ }));
+    expect(JSON.stringify(ed.getJSON())).toContain('"horizontalRule"');
+
+    await user.click(screen.getByRole("button", { name: /^Insert$/ }));
+    await user.click(screen.getByRole("button", { name: /^Headers and footers/ }));
+    expect(props.onOpenHeaderFooter).toHaveBeenCalledTimes(1);
+  });
+
+  it("Format > Page setup opens the dialog; File only states the current setup", async () => {
+    const { props } = renderToolbar(makeEditor(), { width: 1500 });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Format$/ }));
+    await user.click(screen.getByRole("button", { name: /^Page setup/ }));
+    expect(props.onOpenPageSetup).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: /^File$/ }));
+    expect(screen.getByText("Short, portrait, normal margins")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitemradio")).toBeNull(); // the old "Page size" radios are gone
+  });
+
+  it("read-only view: no Insert or Format menus, the page setup is still stated", async () => {
+    renderToolbar(makeEditor(), { editable: false, width: 1500 });
+    expect(screen.queryByRole("button", { name: /^Insert$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Format$/ })).toBeNull();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^File$/ }));
+    expect(screen.getByText("Short, portrait, normal margins")).toBeInTheDocument();
+  });
+});
+
+describe("toolbar overflow (widths measured in a real browser)", () => {
+  const collapsed = (w: number, opts = {}) => {
+    const o = overflowFor(w, opts);
+    return Object.entries(o).filter(([k, v]) => (k === "showCount" || k === "showPresence" ? !v : v)).map(([k]) => k);
+  };
+
+  it("shows everything inline when there is room (full screen)", () => {
+    expect(collapsed(1700, { focusMode: true })).toEqual([]);
+  });
+
+  it("at the normal editor width (960px) formatting stays inline; lower-priority groups go to More", () => {
+    const c = collapsed(960);
+    expect(c).not.toContain("formatting");
+    expect(c).not.toContain("history");
+    expect(c).toContain("paragraph");
+    expect(c).toContain("showCount");
+  });
+
+  it("collapses in a fixed order as the toolbar narrows, and never un-collapses at a smaller width", () => {
+    const order = ["showCount", "showPresence", "review", "insert", "paragraph", "formatting", "edit", "view", "history"];
+    let previous = new Set<string>();
+    for (let w = 1800; w >= 300; w -= 10) {
+      const now = new Set(collapsed(w, { presenceCount: 2 }));
+      for (const k of previous) expect(now.has(k), `${k} came back at ${w}px`).toBe(true);
+      // a group only collapses after every earlier one in the order has
+      let seenOpen = false;
+      for (const k of order) {
+        if (!now.has(k)) seenOpen = true;
+        else expect(seenOpen && k !== "showPresence" ? "open before " + k : "ok").toBe("ok");
+      }
+      previous = now;
+    }
+  });
+
+  it("at phone width (327px = 375px minus page padding) only File and Text style stay inline", () => {
+    const c = collapsed(327);
+    for (const k of ["review", "insert", "paragraph", "formatting", "edit", "view", "history"]) expect(c).toContain(k);
+  });
+
+  it("the read-only view needs no editing groups", () => {
+    expect(collapsed(700, { editable: false })).toEqual([]);
+    expect(collapsed(500, { editable: false })).toEqual(["showCount"]);
   });
 });

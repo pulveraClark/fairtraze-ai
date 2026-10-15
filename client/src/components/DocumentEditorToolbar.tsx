@@ -4,7 +4,6 @@ import type { Editor } from "@tiptap/react";
 import type { AuthorshipUser } from "../lib/authorshipHighlight";
 import { getUserColor } from "../lib/collabColors";
 import { DocsDataApproximateNotice } from "./DocsDataApproximateNotice";
-import { PAGE_SIZES, PAGE_SIZE_KEYS, type PageSizeKey } from "@shared/pageSizes";
 
 // Platform-aware modifier for tooltips: Cmd on Apple devices, Ctrl elsewhere.
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "\u2318" : "Ctrl";
@@ -382,7 +381,75 @@ function TableMenu({ editor, inline = false }: { editor: Editor; inline?: boolea
 
 // Text color/highlight/family/size/spacing — only ever shown when editable (read-only viewers
 // have nothing to format).
-function FormatMenu({ editor, inline = false }: { editor: Editor; inline?: boolean }) {
+// Insert: page break, horizontal line, headers and footers. All three are layout/structure only:
+// a leaf block or a per-document setting, never text, so none adds a character to anyone's count.
+function InsertMenu({
+  editor,
+  onOpenHeaderFooter,
+  inline = false,
+}: {
+  editor: Editor;
+  onOpenHeaderFooter: () => void;
+  inline?: boolean;
+}) {
+  const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
+  const close = () => setOpen(false);
+  const body = (
+    <>
+      <MenuItemButton
+        label="Page break"
+        hint={`${MOD}+Enter`}
+        icon={
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 4h14v6H5zM5 14h14v6H5zM3 12h2m4 0h2m4 0h2m4 0h2" />
+          </svg>
+        }
+        onClick={() => {
+          editor.chain().focus().setPageBreak().run();
+          close();
+        }}
+      />
+      <MenuItemButton
+        label="Horizontal line"
+        icon={
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" d="M4 12h16" />
+          </svg>
+        }
+        onClick={() => {
+          editor.chain().focus().setHorizontalRule().run();
+          close();
+        }}
+      />
+      <MenuItemButton
+        label="Headers and footers"
+        icon={
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" d="M4 5h16M4 19h16M8 10h8M8 14h5" />
+          </svg>
+        }
+        onClick={() => {
+          close();
+          onOpenHeaderFooter();
+        }}
+      />
+    </>
+  );
+  if (inline) return <div className="w-full">{body}</div>;
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="Insert" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
+          {body}
+        </DropdownPanel>
+      )}
+    </>
+  );
+}
+
+function FormatMenu({ editor, inline = false, onOpenPageSetup }: { editor: Editor; inline?: boolean; onOpenPageSetup: () => void }) {
+  const closeMenu = () => setOpen(false);
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
 
   const body = (
@@ -505,6 +572,19 @@ function FormatMenu({ editor, inline = false }: { editor: Editor; inline?: boole
                   ))}
                 </select>
               </div>
+          <div className="border-t border-slate-100 my-1" />
+          <MenuItemButton
+            label="Page setup"
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h7l5 5v13H7zM14 3v5h5" />
+              </svg>
+            }
+            onClick={() => {
+              closeMenu();
+              onOpenPageSetup();
+            }}
+          />
     </>
   );
   if (inline) return body;
@@ -531,8 +611,7 @@ function FileMenu({
   onExportDocx,
   onExportPdf,
   exportingPdf,
-  pageSize,
-  onChangePageSize,
+  pageSummary,
 }: {
   editable: boolean;
   importing: boolean;
@@ -541,8 +620,7 @@ function FileMenu({
   onExportDocx: () => void;
   onExportPdf: () => void;
   exportingPdf: boolean;
-  pageSize: PageSizeKey;
-  onChangePageSize: (size: PageSizeKey) => void;
+  pageSummary: string;
 }) {
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
   const close = () => setOpen(false);
@@ -583,31 +661,9 @@ function FileMenu({
               onExportPdf();
             }}
           />
-          {/* Page size is shared by every collaborator; only members change it. The instructor's
-              read-only view just states it. Margins are fixed at 1 inch (full Page setup is later). */}
-          <div role="group" aria-label="Page size" className="mt-1 pt-1 border-t border-slate-100">
-            <div className="px-1.5 py-1 text-xs font-semibold text-slate-600">Page size</div>
-            {editable ? (
-              PAGE_SIZE_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={pageSize === key}
-                  onClick={() => {
-                    close();
-                    if (key !== pageSize) onChangePageSize(key);
-                  }}
-                  className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
-                >
-                  <span className="w-4 shrink-0 text-indigo-700" aria-hidden="true">{pageSize === key ? "✓" : ""}</span>
-                  {PAGE_SIZES[key].label}
-                </button>
-              ))
-            ) : (
-              <div className="px-1.5 py-1.5 text-slate-700">{PAGE_SIZES[pageSize].label}</div>
-            )}
-          </div>
+          {/* Paper, orientation and margins are shared by every collaborator and changed from
+              Format > Page setup; File only states the current setup (also for the read-only view). */}
+          <div className="mt-1 pt-1 border-t border-slate-100 px-1.5 py-1.5 text-xs text-slate-600">{pageSummary}</div>
         </DropdownPanel>
       )}
     </>
@@ -660,19 +716,70 @@ const Icon = ({ d }: { d: string }) => (
   </svg>
 );
 
-// Container-width breakpoints (the toolbar's own width, not the viewport — the editor sits beside
-// panels). As the toolbar narrows, groups move into the "More" menu in this order: Review, Insert,
-// Paragraph, Formatting, then Edit and the View buttons. File, History and Text style always stay inline.
-function overflowFor(width: number) {
+// Which groups fit inline, from the toolbar's OWN width (not the viewport - the editor sits beside
+// panels). Widths below are measured in a real browser (client/e2e, 2px flex gap, 12px padding):
+// each includes its leading divider and the gaps. As the toolbar narrows, groups move into the "More"
+// menu in this order, until what is left fits: word count, collaborator chips, Review, Insert,
+// Paragraph, Formatting, Edit, View, History. File and Text style always stay inline.
+// (The first version of this used guessed breakpoints and hid most tools under "More" at ordinary
+// widths; it is computed from the real sizes now so nothing is hidden or clipped needlessly.)
+const TB = {
+  base: 24 + 55 + 137, // padding + File + (divider + Text style)
+  edit: 56,
+  history: 83,
+  formatting: 362,
+  paragraph: 321,
+  insert: 182,
+  review: 49,
+  more: 79,
+  view: 144,
+  viewZoom: 146, // zoom segment, shown only in full screen
+  count: 128,
+  status: 96, // connection label ("Reconnecting..." is the widest)
+  presence: (n: number) => (n > 0 ? 14 + 18 * n : 0),
+  safety: 8,
+};
+
+export function overflowFor(
+  width: number,
+  opts: { editable?: boolean; focusMode?: boolean; presenceCount?: number; showStatus?: boolean } = {}
+) {
+  const { editable = true, focusMode = false, presenceCount = 0, showStatus = false } = opts;
+  // true = collapsed into More (or hidden). Order = collapse order.
+  const c = { showCountOff: false, presenceOff: false, review: false, insert: false, paragraph: false, formatting: false, edit: false, view: false, history: false };
+  const needed = () => {
+    let n = TB.base + TB.safety;
+    if (!c.edit) n += TB.edit;
+    if (editable) {
+      if (!c.history) n += TB.history;
+      if (!c.formatting) n += TB.formatting;
+      if (!c.paragraph) n += TB.paragraph;
+      if (!c.insert) n += TB.insert;
+      if (!c.review) n += TB.review;
+    }
+    const collapsedSomething = c.edit || c.view || (editable && (c.history || c.formatting || c.paragraph || c.insert || c.review));
+    if (collapsedSomething) n += TB.more;
+    if (!c.view) n += TB.view + (focusMode ? TB.viewZoom : 0);
+    if (showStatus) n += TB.status; // "Connecting..." / "Reconnecting..." label
+    if (!c.showCountOff) n += TB.count;
+    if (!c.presenceOff) n += TB.presence(presenceCount);
+    return n;
+  };
+  const order: (keyof typeof c)[] = ["showCountOff", "presenceOff", "review", "insert", "paragraph", "formatting", "edit", "view", "history"];
+  for (const key of order) {
+    if (needed() <= width) break;
+    c[key] = true;
+  }
   return {
-    review: width < 1400,
-    insert: width < 1280,
-    paragraph: width < 1160,
-    formatting: width < 960,
-    view: width < 520,
-    edit: width < 560,
-    showCount: width >= 760,
-    showPresence: width >= 640,
+    review: c.review,
+    insert: c.insert,
+    paragraph: c.paragraph,
+    formatting: c.formatting,
+    edit: c.edit,
+    view: c.view,
+    history: c.history,
+    showCount: !c.showCountOff,
+    showPresence: !c.presenceOff,
   };
 }
 
@@ -720,8 +827,9 @@ export function Toolbar({
   hasSelection,
   focusMode,
   onToggleFocusMode,
-  pageSize,
-  onChangePageSize,
+  pageSummary,
+  onOpenPageSetup,
+  onOpenHeaderFooter,
   exportingPdf,
   zoom,
   onChangeZoom,
@@ -748,8 +856,9 @@ export function Toolbar({
   hasSelection: boolean;
   focusMode: boolean;
   onToggleFocusMode: () => void;
-  pageSize: PageSizeKey;
-  onChangePageSize: (size: PageSizeKey) => void;
+  pageSummary: string;
+  onOpenPageSetup: () => void;
+  onOpenHeaderFooter: () => void;
   exportingPdf: boolean;
   zoom: number;
   onChangeZoom: (zoom: number) => void;
@@ -772,7 +881,7 @@ export function Toolbar({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const ov = overflowFor(width);
+  const ov = overflowFor(width, { editable, focusMode, presenceCount: presentUsers.length, showStatus: !!statusLabel });
 
   const textStyleValue = editor.isActive("heading", { level: 1 })
     ? "h1"
@@ -882,9 +991,6 @@ export function Toolbar({
 
   const imageButton = (
     <>
-    <ToolbarButton label="Horizontal line" active={false} onClick={() => editor.chain().focus().setHorizontalRule().run()}>
-      <Icon d="M4 12h16" />
-    </ToolbarButton>
     <ToolbarButton label="Insert image" active={false} onClick={onInsertImageClick}>
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -941,12 +1047,13 @@ export function Toolbar({
     }`;
 
   const moreSections: React.ReactNode[] = [];
+  if (editable && ov.history) moreSections.push(<MoreSection key="hist" title="History">{history}</MoreSection>);
   if (editable) {
     if (ov.formatting) {
       moreSections.push(
         <MoreSection key="fmt" title="Formatting">
           {formattingButtons}
-          <div className="w-full pt-1"><FormatMenu editor={editor} inline /></div>
+          <div className="w-full pt-1"><FormatMenu editor={editor} inline onOpenPageSetup={onOpenPageSetup} /></div>
         </MoreSection>
       );
     }
@@ -955,6 +1062,7 @@ export function Toolbar({
       moreSections.push(
         <MoreSection key="ins" title="Insert">
           {imageButton}
+          <InsertMenu editor={editor} inline onOpenHeaderFooter={onOpenHeaderFooter} />
           <div className="w-full pt-1"><TableMenu editor={editor} inline /></div>
         </MoreSection>
       );
@@ -981,23 +1089,26 @@ export function Toolbar({
         onExportDocx={onExportDocx}
         onExportPdf={onExportPdf}
         exportingPdf={exportingPdf}
-        pageSize={pageSize}
-        onChangePageSize={onChangePageSize}
+        pageSummary={pageSummary}
       />
 
       {!ov.edit && <EditMenu editable={editable} onFind={() => onOpenFind(false)} onReplace={() => onOpenFind(true)} />}
 
       {editable ? (
         <>
-          <Divider />
-          {history}
+          {!ov.history && (
+            <>
+              <Divider />
+              {history}
+            </>
+          )}
           <Divider />
           {textStyle}
           {!ov.formatting && (
             <>
               <Divider />
               {formattingButtons}
-              <FormatMenu editor={editor} />
+              <FormatMenu editor={editor} onOpenPageSetup={onOpenPageSetup} />
             </>
           )}
           {!ov.paragraph && (
@@ -1009,6 +1120,7 @@ export function Toolbar({
           {!ov.insert && (
             <>
               <Divider />
+              <InsertMenu editor={editor} onOpenHeaderFooter={onOpenHeaderFooter} />
               <TableMenu editor={editor} />
               {imageButton}
             </>

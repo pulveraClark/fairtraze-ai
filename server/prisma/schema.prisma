@@ -516,6 +516,18 @@ model Document {
   // Paper size for the page view / PDF export, shared by all collaborators: SHORT | LONG | A4
   // (shared/src/pageSizes.ts). Layout only — never read by scoring, never part of the Yjs doc.
   pageSize  String   @default("SHORT")
+  // Page setup + header/footer text (migration 20261016100000_document_page_setup). Same rules as
+  // pageSize: shared by every collaborator, layout only, plain columns - never in the Yjs doc and
+  // never read by scoring. orientation: PORTRAIT | LANDSCAPE; marginPreset: NORMAL | NARROW | WIDE
+  // (shared/src/pageSizes.ts). Header/footer slots are plain text (max 120 chars; {page} = page number).
+  orientation  String @default("PORTRAIT")
+  marginPreset String @default("NORMAL")
+  headerLeft   String @default("")
+  headerCenter String @default("")
+  headerRight  String @default("")
+  footerLeft   String @default("")
+  footerCenter String @default("")
+  footerRight  String @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [groupId], references: [id], onDelete: Cascade)

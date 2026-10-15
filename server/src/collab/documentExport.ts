@@ -13,10 +13,19 @@ import {
   WidthType,
   BorderStyle,
   ExternalHyperlink,
+  Footer,
+  Header,
+  PageNumber,
+  PageOrientation as DocxPageOrientation,
+  Tab,
+  TabStopType,
 } from "docx";
+import type { IParagraphOptions } from "docx";
 import { Y } from "./yjsCjs.js";
 import { legacySchema } from "./persistence.js";
 import { isSafeLinkUrl } from "@shared/linkUrl.js";
+import { PAGE_SIZES, PAGE_TOKEN, resolvePageGeometry } from "@shared/pageSizes.js";
+import type { MarginPresetKey, PageOrientation, PageSizeKey } from "@shared/pageSizes.js";
 
 // Loaded the same CJS way persistence.ts loads it — see that file's comment for why (yjs must
 // stay a single module instance across every file that does `instanceof Y.XmlText` etc.).
@@ -42,6 +51,7 @@ export type DocBlock =
   | { kind: "listItem"; listType: "bulletList" | "orderedList"; blocks: DocBlock[] }
   | { kind: "taskItem"; checked: boolean; blocks: DocBlock[] }
   | { kind: "rule" }
+  | { kind: "pageBreak" }
   | { kind: "table"; rows: { cells: { header: boolean; blocks: DocBlock[] }[] }[] };
 
 export interface ExportComment {
@@ -122,6 +132,8 @@ function walkBlocks(fragment: YTypes.XmlFragment | YTypes.XmlElement): DocBlock[
       }
     } else if (name === "horizontalRule") {
       blocks.push({ kind: "rule" });
+    } else if (name === "pageBreak") {
+      blocks.push({ kind: "pageBreak" });
     } else if (name === "table") {
       const rows: { cells: { header: boolean; blocks: DocBlock[] }[] }[] = [];
       for (const row of child.toArray()) {
@@ -228,13 +240,24 @@ function indentProps(indent?: number) {
 
 const MAX_LIST_LEVEL = 5;
 
+// A page break is exported as `pageBreakBefore` on the paragraph that follows it (a lone break
+// character would leave an empty line at the top of the next page in Word, which the app does not
+// have). `pending` is set by a pageBreak block and consumed by the next paragraph built. The body is
+// built synchronously, so this module-level flag cannot interleave between exports.
+const pb = { pending: false };
+function P(options: IParagraphOptions): Paragraph {
+  const next = pb.pending ? { ...options, pageBreakBefore: true } : options;
+  pb.pending = false;
+  return new Paragraph(next);
+}
+
 function listItemToDocxChildren(item: Extract<DocBlock, { kind: "listItem" }>, level = 0): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [];
   const lvl = Math.min(level, MAX_LIST_LEVEL);
   for (const b of item.blocks) {
     if (b.kind === "paragraph" || b.kind === "heading") {
       out.push(
-        new Paragraph({
+        P({
           alignment: alignmentFor(b.align),
           children: docxRuns(b.runs),
           bullet: item.listType === "bulletList" ? { level: lvl } : undefined,
@@ -261,7 +284,7 @@ function taskItemToDocxChildren(item: Extract<DocBlock, { kind: "taskItem" }>, l
   for (const b of item.blocks) {
     if (b.kind === "paragraph" || b.kind === "heading") {
       out.push(
-        new Paragraph({
+        P({
           alignment: alignmentFor(b.align),
           indent: { left: (level + 1) * TWIPS_PER_INDENT_LEVEL / 2 },
           children: docxRuns(b.runs, first ? `${item.checked ? CHECKED_BOX : UNCHECKED_BOX} ` : ""),
@@ -283,7 +306,7 @@ function blockToDocxChildren(block: DocBlock): (Paragraph | Table)[] {
   switch (block.kind) {
     case "heading":
       return [
-        new Paragraph({
+        P({
           heading: HEADING_LEVELS[Math.min(Math.max(block.level - 1, 0), HEADING_LEVELS.length - 1)],
           alignment: alignmentFor(block.align),
           ...indentProps(block.indent),
@@ -292,21 +315,26 @@ function blockToDocxChildren(block: DocBlock): (Paragraph | Table)[] {
       ];
     case "paragraph":
       return [
-        new Paragraph({ alignment: alignmentFor(block.align), ...indentProps(block.indent), children: docxRuns(block.runs) }),
+        P({ alignment: alignmentFor(block.align), ...indentProps(block.indent), children: docxRuns(block.runs) }),
       ];
+    case "pageBreak":
+      return []; // handled by blocksToDocxChildren, which needs to see the next block
     case "listItem":
       return listItemToDocxChildren(block);
     case "taskItem":
       return taskItemToDocxChildren(block);
     case "rule":
       return [
-        new Paragraph({
+        P({
           border: { bottom: { style: BorderStyle.SINGLE, size: 6, space: 1, color: "94A3B8" } },
           children: [],
         }),
       ];
-    case "table":
+    case "table": {
+      // A table cannot carry pageBreakBefore, so a pending break gets its own empty paragraph.
+      const lead = pb.pending ? [P({ children: [] })] : [];
       return [
+        ...lead,
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: block.rows.map(
@@ -316,18 +344,75 @@ function blockToDocxChildren(block: DocBlock): (Paragraph | Table)[] {
                   (cell) =>
                     new TableCell({
                       shading: cell.header ? { fill: "F1F5F9" } : undefined,
-                      children: cell.blocks.length > 0 ? cell.blocks.flatMap(blockToDocxChildren) : [new Paragraph({})],
+                      children: cell.blocks.length > 0 ? cell.blocks.flatMap(blockToDocxChildren) : [P({})],
                     })
                 ),
               })
           ),
         }),
       ];
+    }
   }
 }
 
-export async function buildDocxBuffer(blocks: DocBlock[], comments: ExportComment[]): Promise<Buffer> {
-  const bodyChildren = blocks.flatMap(blockToDocxChildren);
+function blocksToDocxChildren(blocks: DocBlock[]): (Paragraph | Table)[] {
+  const out: (Paragraph | Table)[] = [];
+  for (const b of blocks) {
+    if (b.kind === "pageBreak") {
+      // Two breaks in a row leave a blank page between them, as in Word.
+      if (pb.pending) out.push(P({ children: [] }));
+      pb.pending = true;
+      continue;
+    }
+    out.push(...blockToDocxChildren(b));
+  }
+  if (pb.pending) out.push(P({ children: [] })); // a break at the very end still opens a new page
+  return out;
+}
+
+export interface DocLayout {
+  pageSize: PageSizeKey;
+  orientation: PageOrientation;
+  marginPreset: MarginPresetKey;
+  header: { left: string; center: string; right: string };
+  footer: { left: string; center: string; right: string };
+}
+
+const TWIPS_PER_PX = 15; // 1440 twips per inch / 96 px per inch
+
+/** Text with {page} tokens as runs: plain text pieces and Word PAGE fields. */
+function slotRuns(text: string): DocxTextRun[] {
+  const run = (children: (string | typeof PageNumber.CURRENT)[]) =>
+    new DocxTextRun({ children, size: 20, color: "475569" });
+  const parts = text.split(PAGE_TOKEN);
+  const out: DocxTextRun[] = [];
+  parts.forEach((part, i) => {
+    if (part) out.push(run([part]));
+    if (i < parts.length - 1) out.push(run([PageNumber.CURRENT]));
+  });
+  return out;
+}
+
+/** One line: left text, centre text at the middle tab, right text at the right tab. */
+function bandParagraph(t: { left: string; center: string; right: string }, textWidthTwips: number): Paragraph | null {
+  if (!t.left && !t.center && !t.right) return null;
+  const children: DocxTextRun[] = [...slotRuns(t.left)];
+  const tab = () => new DocxTextRun({ children: [new Tab()] });
+  if (t.center || t.right) children.push(tab(), ...slotRuns(t.center));
+  if (t.right) children.push(tab(), ...slotRuns(t.right));
+  return new Paragraph({
+    tabStops: [
+      { type: TabStopType.CENTER, position: Math.round(textWidthTwips / 2) },
+      { type: TabStopType.RIGHT, position: textWidthTwips },
+    ],
+    children,
+  });
+}
+
+export async function buildDocxBuffer(blocks: DocBlock[], comments: ExportComment[], layout?: DocLayout): Promise<Buffer> {
+  pb.pending = false;
+  const bodyChildren = blocksToDocxChildren(blocks);
+  pb.pending = false;
   if (bodyChildren.length === 0) bodyChildren.push(new Paragraph({}));
 
   const commentChildren: Paragraph[] = [];
@@ -349,6 +434,35 @@ export async function buildDocxBuffer(blocks: DocBlock[], comments: ExportCommen
     }
   }
 
+  // Page setup. docx takes the PORTRAIT width/height and swaps them itself for landscape.
+  let properties: NonNullable<ConstructorParameters<typeof Document>[0]["sections"]>[number]["properties"] | undefined;
+  let headers: { default: Header } | undefined;
+  let footers: { default: Footer } | undefined;
+  if (layout) {
+    const g = resolvePageGeometry(layout.pageSize, layout.orientation, layout.marginPreset);
+    const paper = PAGE_SIZES[layout.pageSize];
+    properties = {
+      page: {
+        size: {
+          width: paper.widthTwip,
+          height: paper.heightTwip,
+          orientation: g.landscape ? DocxPageOrientation.LANDSCAPE : DocxPageOrientation.PORTRAIT,
+        },
+        margin: {
+          top: g.marginTopPx * TWIPS_PER_PX,
+          bottom: g.marginBottomPx * TWIPS_PER_PX,
+          left: g.marginLeftPx * TWIPS_PER_PX,
+          right: g.marginRightPx * TWIPS_PER_PX,
+        },
+      },
+    };
+    const textWidth = g.widthTwip - (g.marginLeftPx + g.marginRightPx) * TWIPS_PER_PX;
+    const headerP = bandParagraph(layout.header, textWidth);
+    const footerP = bandParagraph(layout.footer, textWidth);
+    if (headerP) headers = { default: new Header({ children: [headerP] }) };
+    if (footerP) footers = { default: new Footer({ children: [footerP] }) };
+  }
+
   const document = new Document({
     numbering: {
       config: [
@@ -364,7 +478,7 @@ export async function buildDocxBuffer(blocks: DocBlock[], comments: ExportCommen
         },
       ],
     },
-    sections: [{ children: [...bodyChildren, ...commentChildren] }],
+    sections: [{ properties, headers, footers, children: [...bodyChildren, ...commentChildren] }],
   });
 
   return Packer.toBuffer(document);

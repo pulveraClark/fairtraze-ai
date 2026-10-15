@@ -302,8 +302,8 @@ export async function buildPrintFrame(json: JSONContent, size: PageSizeKey, layo
 }
 
 /** Build the frame, open the browser print dialog ("Save as PDF"), then tear everything down. */
-export async function printDocument(json: JSONContent, size: PageSizeKey): Promise<void> {
-  const frame = await buildPrintFrame(json, size);
+export async function printDocument(json: JSONContent, size: PageSizeKey, layout: PrintLayoutOptions = {}): Promise<void> {
+  const frame = await buildPrintFrame(json, size, layout);
   try {
     await frame.print();
   } finally {

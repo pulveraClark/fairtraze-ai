@@ -218,3 +218,184 @@ describe("documentExport — editor tools", () => {
     expect(xml).toContain('<w:ilvl w:val="1"/>'); // nested bullet one level deeper
   });
 });
+
+// ── Page break, page setup, headers and footers ───────────────────────────────────────────────────
+
+function buildBreakYjsState(): Uint8Array {
+  const ydoc = new Y.Doc();
+  const fragment = ydoc.getXmlFragment("default");
+  const para = (text: string) => {
+    const p = new Y.XmlElement("paragraph");
+    const t = new Y.XmlText();
+    t.insert(0, text);
+    p.insert(0, [t]);
+    return p;
+  };
+  const cellPara = para("cell");
+  const cell = new Y.XmlElement("tableCell");
+  cell.insert(0, [cellPara]);
+  const row = new Y.XmlElement("tableRow");
+  row.insert(0, [cell]);
+  const table = new Y.XmlElement("table");
+  table.insert(0, [row]);
+  ydoc.transact(() => {
+    fragment.insert(0, [
+      para("one"),
+      new Y.XmlElement("pageBreak"),
+      para("two"),
+      new Y.XmlElement("pageBreak"),
+      new Y.XmlElement("pageBreak"), // two in a row
+      para("three"),
+      new Y.XmlElement("pageBreak"),
+      table, // a break right before a table
+      new Y.XmlElement("pageBreak"), // and one at the very end
+    ]);
+  });
+  return Y.encodeStateAsUpdate(ydoc);
+}
+
+const baseLayout = {
+  pageSize: "SHORT" as const,
+  orientation: "PORTRAIT" as const,
+  marginPreset: "NORMAL" as const,
+  header: { left: "", center: "", right: "" },
+  footer: { left: "", center: "", right: "" },
+};
+
+async function unzip(buffer: Buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const text = async (name: string) => zip.file(name)!.async("string");
+  const names = Object.keys(zip.files);
+  return { zip, text, names };
+}
+
+describe("documentExport - page break", () => {
+  it("reads page breaks as blocks and adds no text", () => {
+    const blocks = readDocumentStructure({ content: "{}", yjsState: buildBreakYjsState() });
+    expect(blocks.filter((b) => b.kind === "pageBreak")).toHaveLength(5);
+    const text = blocks.flatMap((b) => (b.kind === "paragraph" ? b.runs.map((r) => r.text) : [])).join("");
+    expect(text).toBe("onetwothree");
+  });
+
+  it("exports a break as pageBreakBefore on the next paragraph - no stray empty line, a blank page for two in a row", async () => {
+    const blocks = readDocumentStructure({ content: "{}", yjsState: buildBreakYjsState() });
+    const { text } = await unzip(await buildDocxBuffer(blocks, []));
+    const xml = await text("word/document.xml");
+    const paragraphs = xml.match(/<w:p>.*?<\/w:p>|<w:p\/>/g) ?? [];
+    const withBreak = paragraphs.filter((p) => p.includes("<w:pageBreakBefore"));
+    // "two" and "three" carry it themselves, plus: one extra for the 2nd of two breaks in a row,
+    // one lead paragraph before the table, and one for the trailing break.
+    expect(withBreak).toHaveLength(5);
+    expect(withBreak.some((p) => p.includes(">two<"))).toBe(true);
+    expect(withBreak.some((p) => p.includes(">three<"))).toBe(true);
+    // The very first paragraph does not break.
+    expect(paragraphs[0]).not.toContain("pageBreakBefore");
+    expect(xml).not.toContain("<w:br w:type=\"page\"/>"); // no lone break characters
+  });
+
+  it("a document without breaks has no pageBreakBefore", async () => {
+    const blocks = readDocumentStructure({ content: "{}", yjsState: buildSampleYjsState() });
+    const { text } = await unzip(await buildDocxBuffer(blocks, []));
+    expect(await text("word/document.xml")).not.toContain("pageBreakBefore");
+  });
+
+  it("does not leak a pending break from one export into the next", async () => {
+    const withTrailing = readDocumentStructure({ content: "{}", yjsState: buildBreakYjsState() });
+    await buildDocxBuffer(withTrailing, []);
+    const plain = readDocumentStructure({ content: "{}", yjsState: buildSampleYjsState() });
+    const { text } = await unzip(await buildDocxBuffer(plain, []));
+    expect(await text("word/document.xml")).not.toContain("pageBreakBefore");
+  });
+});
+
+describe("documentExport - page setup", () => {
+  const blocks = () => readDocumentStructure({ content: "{}", yjsState: buildSampleYjsState() });
+  const sect = async (layout: typeof baseLayout) => {
+    const { text } = await unzip(await buildDocxBuffer(blocks(), [], layout));
+    const xml = await text("word/document.xml");
+    const pg = /<w:pgSz w:w="(\d+)" w:h="(\d+)"(?: w:orient="(\w+)")?/.exec(xml)!;
+    const mar = /<w:pgMar w:top="(\d+)" w:right="(\d+)" w:bottom="(\d+)" w:left="(\d+)"/.exec(xml)!;
+    return { w: +pg[1]!, h: +pg[2]!, orient: pg[3], top: +mar[1]!, right: +mar[2]!, bottom: +mar[3]!, left: +mar[4]! };
+  };
+
+  it("sets the paper size for all three sizes, portrait", async () => {
+    expect(await sect({ ...baseLayout, pageSize: "SHORT" })).toMatchObject({ w: 12240, h: 15840 });
+    expect(await sect({ ...baseLayout, pageSize: "LONG" })).toMatchObject({ w: 12240, h: 18720 });
+    expect(await sect({ ...baseLayout, pageSize: "A4" })).toMatchObject({ w: 11906, h: 16838 });
+  });
+
+  it("landscape swaps width and height and says so", async () => {
+    for (const [size, w, h] of [["SHORT", 15840, 12240], ["LONG", 18720, 12240], ["A4", 16838, 11906]] as const) {
+      const s = await sect({ ...baseLayout, pageSize: size, orientation: "LANDSCAPE" });
+      expect(s, size).toMatchObject({ w, h, orient: "landscape" });
+      expect(s.w).toBeGreaterThan(s.h);
+    }
+  });
+
+  it("applies the three margin presets in twips", async () => {
+    expect(await sect({ ...baseLayout, marginPreset: "NORMAL" })).toMatchObject({ top: 1440, bottom: 1440, left: 1440, right: 1440 });
+    expect(await sect({ ...baseLayout, marginPreset: "NARROW" })).toMatchObject({ top: 720, bottom: 720, left: 720, right: 720 });
+    expect(await sect({ ...baseLayout, marginPreset: "WIDE" })).toMatchObject({ top: 1440, bottom: 1440, left: 2880, right: 2880 });
+  });
+
+  it("without a layout the export is unchanged (valid, no header or footer part)", async () => {
+    const { names } = await unzip(await buildDocxBuffer(blocks(), []));
+    expect(names.some((n) => /word\/(header|footer)\d+\.xml/.test(n))).toBe(false);
+  });
+});
+
+describe("documentExport - headers and footers", () => {
+  const blocks = () => readDocumentStructure({ content: "{}", yjsState: buildSampleYjsState() });
+  const parts = async (layout: typeof baseLayout) => {
+    const { text, names } = await unzip(await buildDocxBuffer(blocks(), [], layout));
+    const header = names.find((n) => /^word\/header\d+\.xml$/.test(n));
+    const footer = names.find((n) => /^word\/footer\d+\.xml$/.test(n));
+    return { header: header ? await text(header) : null, footer: footer ? await text(footer) : null };
+  };
+
+  it("adds no header or footer when every slot is empty", async () => {
+    expect(await parts(baseLayout)).toEqual({ header: null, footer: null });
+  });
+
+  it("writes left, centre and right text with centre and right tab stops, and a PAGE field for {page}", async () => {
+    const { header, footer } = await parts({
+      ...baseLayout,
+      header: { left: "Group 4", center: "Capstone", right: "Page {page}" },
+      footer: { left: "", center: "{page}", right: "" },
+    });
+    expect(header).toContain("Group 4");
+    expect(header).toContain("Capstone");
+    expect(header).toContain("Page ");
+    expect(header).toContain("PAGE"); // the page-number field
+    expect(header).toContain('w:val="center"');
+    expect(header).toContain('w:val="right"');
+    // Text width = 8.5in - 2in margins = 6.5in = 9360 twips: centre at 4680, right at 9360.
+    expect(header).toContain('w:pos="4680"');
+    expect(header).toContain('w:pos="9360"');
+    expect(footer).toContain("PAGE");
+  });
+
+  it("is plain text: markup typed into a slot stays literal text", async () => {
+    const { header } = await parts({ ...baseLayout, header: { left: "<b>x</b> & y", center: "", right: "" } });
+    expect(header).toContain("&lt;b&gt;x&lt;/b&gt; &amp; y");
+    expect(header).not.toContain("<b>x</b>");
+  });
+
+  it("tab stops follow the page: landscape and wide margins", async () => {
+    const { header } = await parts({
+      ...baseLayout,
+      orientation: "LANDSCAPE",
+      marginPreset: "WIDE",
+      header: { left: "L", center: "C", right: "R" },
+    });
+    // 11in - 4in = 7in = 10080 twips.
+    expect(header).toContain('w:pos="5040"');
+    expect(header).toContain('w:pos="10080"');
+  });
+
+  it("only-centre text still gets its tab (no left text before it)", async () => {
+    const { header } = await parts({ ...baseLayout, header: { left: "", center: "Only", right: "" } });
+    expect(header).toContain("Only");
+    expect(header).toContain("<w:tab/>");
+  });
+});

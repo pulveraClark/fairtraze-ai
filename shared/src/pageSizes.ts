@@ -102,3 +102,19 @@ export function resolvePageGeometry(
     landscape,
   };
 }
+
+// ── Header / footer text ────────────────────────────────────────────────────────────────────────
+/** Plain text per slot (left / centre / right) of the header and of the footer. */
+export const HF_SLOT_MAX_CHARS = 120;
+/** The one token: replaced by the page number wherever it appears. */
+export const PAGE_TOKEN = "{page}";
+
+/** Removes control characters (and so line breaks); length is validated separately, never truncated. */
+export function sanitizeHeaderFooterText(value: string): string {
+  let out = "";
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if (c >= 0x20 && c !== 0x7f && !(c >= 0x80 && c <= 0x9f) && c !== 0x2028 && c !== 0x2029) out += value[i];
+  }
+  return out;
+}

@@ -11,7 +11,21 @@ import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } 
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
 import { cancelPendingPersist } from "../collab/persistence.js";
 import { findDocumentTemplate } from "@shared/documentTemplates.js";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_KEYS, isPageSizeKey } from "@shared/pageSizes.js";
+import {
+  DEFAULT_MARGIN_PRESET,
+  DEFAULT_PAGE_ORIENTATION,
+  DEFAULT_PAGE_SIZE,
+  HF_SLOT_MAX_CHARS,
+  MARGIN_PRESET_KEYS,
+  PAGE_ORIENTATIONS,
+  PAGE_SIZE_KEYS,
+  isMarginPreset,
+  isPageOrientation,
+  isPageSizeKey,
+  sanitizeHeaderFooterText,
+} from "@shared/pageSizes.js";
+import type { Document as DocumentRow } from "@prisma/client";
+import type { DocLayout } from "../collab/documentExport.js";
 
 export const documentsRouter = Router();
 
@@ -22,6 +36,29 @@ const idParam = z.coerce.number().int().positive();
 const contentBody = z.object({
   content: z.object({ type: z.literal("doc") }).passthrough(),
 });
+
+type PageSetupRow = Pick<
+  DocumentRow,
+  | "pageSize" | "orientation" | "marginPreset"
+  | "headerLeft" | "headerCenter" | "headerRight"
+  | "footerLeft" | "footerCenter" | "footerRight"
+>;
+const PAGE_SETUP_SELECT = {
+  pageSize: true, orientation: true, marginPreset: true,
+  headerLeft: true, headerCenter: true, headerRight: true,
+  footerLeft: true, footerCenter: true, footerRight: true,
+} as const;
+
+/** The document's page setup as the API returns it; stored values are re-validated on the way out. */
+export function pageSetupOf(row: PageSetupRow | null): DocLayout {
+  return {
+    pageSize: row && isPageSizeKey(row.pageSize) ? row.pageSize : DEFAULT_PAGE_SIZE,
+    orientation: row && isPageOrientation(row.orientation) ? row.orientation : DEFAULT_PAGE_ORIENTATION,
+    marginPreset: row && isMarginPreset(row.marginPreset) ? row.marginPreset : DEFAULT_MARGIN_PRESET,
+    header: { left: row?.headerLeft ?? "", center: row?.headerCenter ?? "", right: row?.headerRight ?? "" },
+    footer: { left: row?.footerLeft ?? "", center: row?.footerCenter ?? "", right: row?.footerRight ?? "" },
+  };
+}
 
 export function isMemberOf(
   req: Request,
@@ -61,6 +98,7 @@ documentsRouter.get("/api/groups/:id/document", requireAuth, async (req: Request
     content:   JSON.parse(doc.content) as unknown,
     updatedAt: doc.updatedAt.toISOString(),
     pageSize:  isPageSizeKey(doc.pageSize) ? doc.pageSize : DEFAULT_PAGE_SIZE,
+    pageSetup: pageSetupOf(doc),
   });
 });
 
@@ -131,6 +169,102 @@ documentsRouter.patch("/api/groups/:id/document/page-size", requireAuth, async (
     select: { pageSize: true },
   });
   res.json({ pageSize: doc.pageSize });
+});
+
+// GET /api/groups/:id/document/page-setup — the whole page setup (paper, orientation, margins and the
+// header/footer text) in one cheap read, for polling so a change by one collaborator reaches the
+// others without touching the collab sockets. Read-only for everyone allowed to see the document and
+// never creates a Document row (no row yet = the defaults).
+documentsRouter.get("/api/groups/:id/document/page-setup", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+  const row = await prisma.document.findUnique({ where: { groupId: idResult.data }, select: PAGE_SETUP_SELECT });
+  res.json(pageSetupOf(row));
+});
+
+// Control characters are stripped first, then the length is checked (never silently truncated).
+const hfSlot = z
+  .string()
+  .transform(sanitizeHeaderFooterText)
+  .pipe(z.string().max(HF_SLOT_MAX_CHARS, `Each header/footer box holds at most ${HF_SLOT_MAX_CHARS} characters.`));
+const hfBand = z.object({ left: hfSlot.optional(), center: hfSlot.optional(), right: hfSlot.optional() }).strict();
+
+const pageSetupBody = z
+  .object({
+    pageSize: z.enum(PAGE_SIZE_KEYS).optional(),
+    orientation: z.enum(PAGE_ORIENTATIONS).optional(),
+    marginPreset: z.enum(MARGIN_PRESET_KEYS).optional(),
+    header: hfBand.optional(),
+    footer: hfBand.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: "Send at least one setting to change." });
+
+// PATCH /api/groups/:id/document/page-setup — change any subset of the page setup (a header/footer
+// object may name any subset of left/center/right; the rest is kept). Same rules as page-size: any
+// GROUP MEMBER may change it, the instructor's view is read-only, EDITOR/COMBINED assignments only,
+// and the Document row is never created here. A plain column write: no Yjs/getYDoc() access, no
+// EditEvent/EditSession, no Alert, no membershipChangedAt/scoringConfigChangedAt bump - page layout
+// can never mark an analysis outdated or touch authorship.
+documentsRouter.patch("/api/groups/:id/document/page-setup", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const body = pageSetupBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.issues[0]?.message ?? "Invalid page setup." });
+    return;
+  }
+  const projectId = idResult.data;
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project)) {
+    res.status(403).json({ error: "Only group members can change the page setup." });
+    return;
+  }
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Page setup is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } });
+  if (!existing) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+  const b = body.data;
+  const doc = await prisma.document.update({
+    where: { id: existing.id },
+    data: {
+      ...(b.pageSize !== undefined ? { pageSize: b.pageSize } : {}),
+      ...(b.orientation !== undefined ? { orientation: b.orientation } : {}),
+      ...(b.marginPreset !== undefined ? { marginPreset: b.marginPreset } : {}),
+      ...(b.header?.left !== undefined ? { headerLeft: b.header.left } : {}),
+      ...(b.header?.center !== undefined ? { headerCenter: b.header.center } : {}),
+      ...(b.header?.right !== undefined ? { headerRight: b.header.right } : {}),
+      ...(b.footer?.left !== undefined ? { footerLeft: b.footer.left } : {}),
+      ...(b.footer?.center !== undefined ? { footerCenter: b.footer.center } : {}),
+      ...(b.footer?.right !== undefined ? { footerRight: b.footer.right } : {}),
+    },
+    select: PAGE_SETUP_SELECT,
+  });
+  res.json(pageSetupOf(doc));
 });
 
 // A document is safely resettable (the leader can pick a different starting template) only when
@@ -458,7 +592,7 @@ documentsRouter.get("/api/groups/:id/document/export", requireAuth, async (req: 
   let buffer: Buffer;
   try {
     const blocks = readDocumentStructure({ content: doc.content, yjsState: doc.yjsState });
-    buffer = await buildDocxBuffer(blocks, comments);
+    buffer = await buildDocxBuffer(blocks, comments, pageSetupOf(doc));
   } catch (err) {
     console.error(`[documents] export failed for group ${projectId}`, err);
     res.status(500).json({ error: "Export failed unexpectedly." });

@@ -37,9 +37,13 @@ import type { EditorShortcutHandlers } from "../lib/formattingExtensions";
 import { SearchReplace } from "../lib/searchReplace";
 import { useCollabVersionGuard } from "../lib/useCollabVersionGuard";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion";
-import { PAGE_SIZES, DEFAULT_PAGE_SIZE, isPageSizeKey } from "@shared/pageSizes";
-import type { PageSizeKey } from "@shared/pageSizes";
-import { paginationExtension, paginationSize, SCREEN_PAGE_GAP_PX } from "../lib/pageLayout";
+import { PAGE_SIZES, MARGIN_PRESETS, resolvePageGeometry } from "@shared/pageSizes";
+import { DEFAULT_PAGE_SETUP, applyPageSetup, parsePageSetup, samePageSetup } from "../lib/pageSetup";
+import type { PageSetup } from "../lib/pageSetup";
+import { PageBreak } from "../lib/pageBreak";
+import { PageSetupDialog } from "./PageSetupDialog";
+import { HeaderFooterDialog } from "./HeaderFooterDialog";
+import { paginationExtension, SCREEN_PAGE_GAP_PX } from "../lib/pageLayout";
 import { printDocument } from "../lib/printDocument";
 import { CommentPanel } from "./CommentPanel";
 import type { CommentRecord } from "./CommentPanel";
@@ -174,13 +178,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // binds one DOM node per editor instance, so mounting it twice at once would be a real bug, not
   // just a cosmetic one.
   const [focusMode, setFocusMode] = useState(false);
-  // Paper size of the page view and PDF export: Short (8.5x11in) | Long (8.5x13in) | A4. Shared by
-  // every collaborator — stored on Document.pageSize (a plain REST column, NOT in the Yjs doc, so
-  // it can never touch authorship capture) and polled, see the effects below.
-  const [pageSize, setPageSize] = useState<PageSizeKey>(DEFAULT_PAGE_SIZE);
-  const pageSizeRef = useRef<PageSizeKey>(DEFAULT_PAGE_SIZE);
-  pageSizeRef.current = pageSize;
-  const pageSizeSavingRef = useRef(false);
+  // Page setup (paper size, orientation, margins, header/footer text) of the page view and PDF.
+  // Shared by every collaborator — plain Document columns, NOT in the Yjs doc, so it can never touch
+  // authorship capture — and polled, see the effects below.
+  const [pageSetup, setPageSetup] = useState<PageSetup>(DEFAULT_PAGE_SETUP);
+  const pageSetupRef = useRef<PageSetup>(DEFAULT_PAGE_SETUP);
+  pageSetupRef.current = pageSetup;
+  const pageSetupSavingRef = useRef(false);
+  const [pageSetupOpen, setPageSetupOpen] = useState(false);
+  const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
+  const pageSize = pageSetup.pageSize;
   const [exportingPdf, setExportingPdf] = useState(false);
   // Optional zoom on top of fit-to-width (0.75 / 1 / 1.25), a CSS transform scale on the paper.
   const [zoom, setZoom] = useState(1);
@@ -362,7 +369,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             CharacterCount,
             // Page view: sheets, margins, gaps are ProseMirror decoration widgets only — never
             // document content, so layout adds 0 characters to anyone's authorship count.
-            paginationExtension(pageSizeRef.current, SCREEN_PAGE_GAP_PX),
+            // Page break: a leaf block sized from the sheet bands (lib/pageBreak.ts). Heights are
+            // layout only; the empty transaction below makes the pagination plugin re-count sheets.
+            PageBreak.configure({ onLayoutChanged: (view) => view.dispatch(view.state.tr) }),
+            paginationExtension(pageSetupRef.current.pageSize, SCREEN_PAGE_GAP_PX, pageSetupRef.current.orientation, pageSetupRef.current.marginPreset),
           ]
         : [StarterKit],
       editable: effectiveEditable,
@@ -423,11 +433,11 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     };
   }, [editor]);
 
-  // Apply the shared paper size to the live editor (layout only — no document transaction).
+  // Apply the shared page setup to the live editor (layout only — no document transaction).
   useEffect(() => {
     if (!editor || !collab || !viewReady) return;
-    editor.chain().updatePageSize(paginationSize(pageSize)).run();
-  }, [editor, collab, viewReady, pageSize]);
+    applyPageSetup(editor, pageSetup);
+  }, [editor, collab, viewReady, pageSetup]);
 
   // The pagination plugin sizes its page widgets from the DOM as it was before each transaction,
   // so a freshly synced/loaded document (or an image finishing load) can leave it one step behind.
@@ -452,20 +462,20 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     };
   }, [editor, collab, viewReady]);
 
-  // Pick up the shared paper size, and changes other collaborators make: once on mount, on window
+  // Pick up the shared page setup, and changes other collaborators make: once on mount, on window
   // focus, and on a light 15s poll (the collab sockets are deliberately not used for this).
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     const pull = async () => {
-      if (pageSizeSavingRef.current) return;
+      if (pageSetupSavingRef.current) return;
       try {
-        const res = await fetch(`/api/groups/${groupId}/document/page-size`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`/api/groups/${groupId}/document/page-setup`, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return;
-        const data = (await res.json()) as { pageSize?: unknown };
-        if (!cancelled && !pageSizeSavingRef.current && isPageSizeKey(data.pageSize)) setPageSize(data.pageSize);
+        const next = parsePageSetup(await res.json());
+        if (!cancelled && !pageSetupSavingRef.current && next && !samePageSetup(next, pageSetupRef.current)) setPageSetup(next);
       } catch {
-        /* transient — keep the current size */
+        /* transient — keep the current setup */
       }
     };
     void pull();
@@ -478,28 +488,32 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     };
   }, [groupId, token]);
 
-  const handleChangePageSize = useCallback(
-    async (size: PageSizeKey) => {
+  // Optimistic update with rollback. `change` is any subset of the setup (the server merges it).
+  const handleChangePageSetup = useCallback(
+    async (change: Partial<PageSetup>) => {
       if (!token) return;
-      const previous = pageSizeRef.current;
-      setPageSize(size);
-      pageSizeSavingRef.current = true;
+      const previous = pageSetupRef.current;
+      setPageSetup({ ...previous, ...change });
+      pageSetupSavingRef.current = true;
       try {
-        const res = await fetch(`/api/groups/${groupId}/document/page-size`, {
+        const res = await fetch(`/api/groups/${groupId}/document/page-setup`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ pageSize: size }),
+          body: JSON.stringify(change),
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          setPageSize(previous);
-          setImportMessage({ kind: "error", text: data?.error ?? "Could not change the page size." });
+          setPageSetup(previous);
+          setImportMessage({ kind: "error", text: data?.error ?? "Could not change the page setup." });
+        } else {
+          const saved = parsePageSetup(await res.json().catch(() => null));
+          if (saved) setPageSetup(saved);
         }
       } catch {
-        setPageSize(previous);
-        setImportMessage({ kind: "error", text: "Could not change the page size — check your connection and try again." });
+        setPageSetup(previous);
+        setImportMessage({ kind: "error", text: "Could not change the page setup — check your connection and try again." });
       } finally {
-        pageSizeSavingRef.current = false;
+        pageSetupSavingRef.current = false;
       }
     },
     [groupId, token]
@@ -824,7 +838,13 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     (document.activeElement as HTMLElement | null)?.blur?.();
     setExportingPdf(true);
     try {
-      await printDocument(editor.getJSON(), pageSizeRef.current);
+      const ps = pageSetupRef.current;
+      await printDocument(editor.getJSON(), ps.pageSize, {
+        orientation: ps.orientation,
+        margins: ps.marginPreset,
+        header: ps.header,
+        footer: ps.footer,
+      });
     } catch (err) {
       console.error("[pdf export] failed", err);
       setImportMessage({ kind: "error", text: "PDF export failed — try again." });
@@ -843,6 +863,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     list.push(c);
     repliesByParent.set(c.parentId, list);
   }
+
+  const pageSummary = `${PAGE_SIZES[pageSetup.pageSize].label.split(" (")[0]}, ${
+    pageSetup.orientation === "LANDSCAPE" ? "landscape" : "portrait"
+  }, ${MARGIN_PRESETS[pageSetup.marginPreset].label.split(" (")[0].toLowerCase()} margins`;
 
   const toolbar = (
     <Toolbar
@@ -866,8 +890,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       hasSelection={hasSelection}
       focusMode={focusMode}
       onToggleFocusMode={() => setFocusMode((v) => !v)}
-      pageSize={pageSize}
-      onChangePageSize={handleChangePageSize}
+      pageSummary={pageSummary}
+      onOpenPageSetup={() => setPageSetupOpen(true)}
+      onOpenHeaderFooter={() => setHeaderFooterOpen(true)}
       exportingPdf={exportingPdf}
       zoom={zoom}
       onChangeZoom={setZoom}
@@ -942,6 +967,23 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         />
       )}
       {linkDialogOpen && effectiveEditable && <LinkDialog editor={editor} onClose={() => setLinkDialogOpen(false)} />}
+      {pageSetupOpen && effectiveEditable && (
+        <PageSetupDialog
+          editor={editor}
+          value={pageSetup}
+          onApply={(change) => void handleChangePageSetup(change)}
+          onClose={() => setPageSetupOpen(false)}
+        />
+      )}
+      {headerFooterOpen && effectiveEditable && (
+        <HeaderFooterDialog
+          editor={editor}
+          header={pageSetup.header}
+          footer={pageSetup.footer}
+          onApply={(change) => void handleChangePageSetup(change)}
+          onClose={() => setHeaderFooterOpen(false)}
+        />
+      )}
       {showAuthorship && (
         <AuthorshipLegend
           users={authorshipUsers}
@@ -962,7 +1004,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             }
           }}
         >
-          <PaperStage pageWidth={PAGE_SIZES[pageSize].widthPx} zoom={zoom}>
+          <PaperStage pageWidth={resolvePageGeometry(pageSetup.pageSize, pageSetup.orientation, pageSetup.marginPreset).widthPx} zoom={zoom}>
           <DragHandle
             editor={editor}
             onNodeChange={({ node }) => setDragHandleOnImage(node?.type.name === "image")}
