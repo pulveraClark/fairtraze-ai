@@ -1,5 +1,5 @@
 import { PaginationPlus } from "tiptap-pagination-plus";
-import { PAGE_SIZES, PAGE_MARGIN_PX, type PageSizeKey } from "@shared/pageSizes";
+import { resolvePageGeometry, type PageSizeKey, type PageOrientation, type MarginPresetKey } from "@shared/pageSizes";
 
 /** Gap between sheets on screen. The print instance uses 0 (everything else identical). */
 /**
@@ -35,15 +35,15 @@ export const SCREEN_PAGE_GAP_PX = 24;
 /** Gray stage color the gap is painted with, so sheets read as separate paper. */
 export const STAGE_BG = "#cbd5e1";
 
-export function paginationSize(size: PageSizeKey) {
-  const s = PAGE_SIZES[size];
+export function paginationSize(size: PageSizeKey, orientation: PageOrientation = "PORTRAIT", margins: MarginPresetKey = "NORMAL") {
+  const g = resolvePageGeometry(size, orientation, margins);
   return {
-    pageWidth: s.widthPx,
-    pageHeight: s.heightPx,
-    marginTop: PAGE_MARGIN_PX,
-    marginBottom: PAGE_MARGIN_PX,
-    marginLeft: PAGE_MARGIN_PX,
-    marginRight: PAGE_MARGIN_PX,
+    pageWidth: g.widthPx,
+    pageHeight: g.heightPx,
+    marginTop: g.marginTopPx,
+    marginBottom: g.marginBottomPx,
+    marginLeft: g.marginLeftPx,
+    marginRight: g.marginRightPx,
   };
 }
 
@@ -51,9 +51,14 @@ export function paginationSize(size: PageSizeKey) {
  * One configuration for both the live editor and the print instance. No header/footer/page
  * numbers (the app adds none of its own). Only `gap` differs between screen and print.
  */
-export function paginationExtension(size: PageSizeKey, gap: number) {
+export function paginationExtension(
+  size: PageSizeKey,
+  gap: number,
+  orientation: PageOrientation = "PORTRAIT",
+  margins: MarginPresetKey = "NORMAL"
+) {
   return PaginationPlusSafe.configure({
-    ...paginationSize(size),
+    ...paginationSize(size, orientation, margins),
     pageGap: gap,
     pageGapBorderSize: 0,
     pageBreakBackground: STAGE_BG,

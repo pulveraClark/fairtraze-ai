@@ -13,11 +13,13 @@ import FontFamily from "@tiptap/extension-font-family";
 import Superscript from "@tiptap/extension-superscript";
 import Subscript from "@tiptap/extension-subscript";
 import type { JSONContent } from "@tiptap/core";
-import { PAGE_SIZES, type PageSizeKey } from "@shared/pageSizes";
+import { resolvePageGeometry, type PageSizeKey, type PageOrientation, type MarginPresetKey } from "@shared/pageSizes";
 import { FontSize } from "./fontSize";
 import { LineHeight } from "./lineHeight";
 import { starterKitOptions, formattingExtensions } from "./formattingExtensions";
 import { paginationExtension } from "./pageLayout";
+import { PageBreak, layoutPageBreaks } from "./pageBreak";
+import { headerFooterHtml, EMPTY_HEADER_FOOTER, type HeaderFooterText } from "./headerFooter";
 
 // Clean PDF export. A SEPARATE, read-only TipTap instance is mounted inside a hidden iframe and
 // loaded with a snapshot of the document (editor.getJSON()). It has no Collaboration/Yjs, no
@@ -40,7 +42,15 @@ export interface PrintFrame {
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export function printExtensions(size: PageSizeKey, gap: number) {
+/** Page setup + header/footer text for the print copy. All optional; defaults are Normal portrait, no text. */
+export interface PrintLayoutOptions {
+  orientation?: PageOrientation;
+  margins?: MarginPresetKey;
+  header?: HeaderFooterText;
+  footer?: HeaderFooterText;
+}
+
+export function printExtensions(size: PageSizeKey, gap: number, layout: PrintLayoutOptions = {}) {
   return [
     StarterKit.configure(starterKitOptions),
     ...formattingExtensions,
@@ -58,7 +68,8 @@ export function printExtensions(size: PageSizeKey, gap: number) {
     LineHeight,
     Superscript,
     Subscript,
-    paginationExtension(size, gap),
+    PageBreak,
+    paginationExtension(size, gap, layout.orientation, layout.margins),
   ];
 }
 
@@ -100,6 +111,7 @@ function countSheets(root: HTMLElement): number {
 
 /** First visible text of each sheet, found by vertical position relative to sheet height. */
 export function collectFirstLines(root: HTMLElement, pageHeight: number): string[] {
+  // `pageHeight` is the distance between two sheet starts (page height + the screen gap, if any).
   const rootTop = root.getBoundingClientRect().top;
   const lines: string[] = [];
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -109,7 +121,8 @@ export function collectFirstLines(root: HTMLElement, pageHeight: number): string
     const text = n.textContent ?? "";
     if (!text.trim()) continue;
     const el = n.parentElement;
-    if (!el || el.closest(".rm-pages-wrapper")) continue;
+    // Header/footer bands and the screen-only page-break marker are not document text.
+    if (!el || el.closest(".rm-pages-wrapper, .rm-first-page-header, .ft-page-break")) continue;
     const range = root.ownerDocument.createRange();
     range.selectNodeContents(n);
     for (const rect of Array.from(range.getClientRects())) {
@@ -121,8 +134,8 @@ export function collectFirstLines(root: HTMLElement, pageHeight: number): string
   return lines;
 }
 
-export async function buildPrintFrame(json: JSONContent, size: PageSizeKey): Promise<PrintFrame> {
-  const def = PAGE_SIZES[size];
+export async function buildPrintFrame(json: JSONContent, size: PageSizeKey, layout: PrintLayoutOptions = {}): Promise<PrintFrame> {
+  const def = resolvePageGeometry(size, layout.orientation, layout.margins);
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.tabIndex = -1;
@@ -138,6 +151,8 @@ export async function buildPrintFrame(json: JSONContent, size: PageSizeKey): Pro
   const printCss = doc.createElement("style");
   printCss.textContent = `
     @page { size: ${def.cssWidth} ${def.cssHeight}; margin: 0; }
+    .ft-page-break { height: auto; border: 0 !important; background: none !important; }
+    .ft-page-break-label { display: none !important; }
     html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #print-root { width: ${def.widthPx}px; overflow: hidden; background: #fff; }
     #print-root .ProseMirror { outline: none; border: 0 !important; background: #fff; }
@@ -158,13 +173,18 @@ export async function buildPrintFrame(json: JSONContent, size: PageSizeKey): Pro
   const mount = () => {
     editor = new Editor({
       element: root,
-      extensions: printExtensions(size, 0),
+      extensions: printExtensions(size, 0, layout),
       content: json,
       editable: false,
       editorProps: { attributes: { class: "ft-doc-content text-slate-700" } },
     });
     // The extension injects its stylesheet into the MAIN document's head; mirror it into the frame.
     copyStyles(document, doc, true);
+    // Header/footer text set by the students (plain text; the app adds none of its own).
+    const [hl, hr] = headerFooterHtml(layout.header ?? EMPTY_HEADER_FOOTER, "header");
+    const [fl, fr] = headerFooterHtml(layout.footer ?? EMPTY_HEADER_FOOTER, "footer");
+    editor!.commands.updateHeaderContent(hl, hr);
+    editor!.commands.updateFooterContent(fl, fr);
   };
   const unmount = () => {
     try { editor?.destroy(); } catch { /* already gone */ }
@@ -211,8 +231,10 @@ export async function buildPrintFrame(json: JSONContent, size: PageSizeKey): Pro
     for (let i = 0; i < 60 && stable < 3; i++) {
       editor!.view.dispatch(editor!.state.tr);
       await nextFrame();
+      // Page breaks size themselves from the sheet bands, so they settle with the sheet count.
+      const breaksMoved = layoutPageBreaks(root.querySelector<HTMLElement>(".ProseMirror")!, def.heightPx);
       const m = measure();
-      if (m.widgets === m.needed && m.widgets === last) stable++;
+      if (!breaksMoved && m.widgets === m.needed && m.widgets === last) stable++;
       else stable = 0;
       last = m.widgets;
     }

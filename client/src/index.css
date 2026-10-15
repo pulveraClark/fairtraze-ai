@@ -455,3 +455,61 @@ body {
 /* A short document still shows one full sheet; the paper casts a soft shadow on the gray desk. */
 .ft-doc-content.rm-with-pagination { min-height: var(--rm-page-height, 1056px); }
 .ft-paper { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25), 0 4px 12px rgba(15, 23, 42, 0.12); background: #fff; }
+
+/* ── Page break and header/footer text (page view + PDF) ─────────────────────────────────────
+   The page-break block is layout only: its height is computed from the sheet bands
+   (lib/pageBreak.ts). The label is a screen-only marker and is hidden in the PDF copy. */
+.ft-doc-content .ft-page-break {
+  position: relative;
+  margin: 0;
+  user-select: none;
+}
+.ft-doc-content .ft-page-break .ft-page-break-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  border-top: 1px dashed #64748b;
+  padding-top: 2px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  color: #475569;
+}
+.ft-doc-content .ft-page-break.ProseMirror-selectednode .ft-page-break-label {
+  outline: 2px solid #4338ca;
+}
+/* The pagination wrapper zeroes font-size/line-height to kill a strut (rule above, specificity
+   0,2,0); header and footer text needs real type again, so these match its specificity and come
+   later. Plain text only (escaped in lib/headerFooter.ts). */
+.ft-doc-content .rm-page-header-content, .ft-doc-content .rm-page-footer-content {
+  position: relative;
+}
+.ft-doc-content .rm-page-header-content *, .ft-doc-content .rm-page-footer-content * {
+  font-size: 12px;
+  line-height: 16px;
+  color: #475569;
+  font-family: inherit;
+}
+/* Percent widths need a definite parent: cap the plugin's own left/right boxes, not the text. */
+.ft-doc-content .rm-page-header-left, .ft-doc-content .rm-page-header-right,
+.ft-doc-content .rm-page-footer-left, .ft-doc-content .rm-page-footer-right {
+  max-width: 30%;
+}
+.ft-doc-content .ft-hf-slot {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+.ft-doc-content .ft-hf-center {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 36%;
+  text-align: center;
+}

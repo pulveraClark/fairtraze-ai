@@ -112,6 +112,11 @@ describe("editor tools add 0 characters and 0 credit", () => {
     ed.commands.setHorizontalRule();
     expect(JSON.stringify(ed.getJSON())).toContain("horizontalRule");
 
+    // page break (a leaf block: no text)
+    ed.commands.setTextSelection(3);
+    ed.commands.setPageBreak();
+    expect(JSON.stringify(ed.getJSON())).toContain("pageBreak");
+
     // clear formatting after adding bold + colour + alignment + indent
     ed.commands.selectAll();
     ed.commands.toggleBold();

@@ -17,6 +17,7 @@ import { Y } from "../../src/collab/yjsCjs.js";
 import { wsUserId } from "../../src/collab/connectionRegistry.js";
 import { starterKitOptions, formattingExtensions } from "../../../client/src/lib/formattingExtensions.js";
 import { SearchReplace } from "../../../client/src/lib/searchReplace.js";
+import { PageBreak } from "../../../client/src/lib/pageBreak.js";
 
 // A real TipTap editor (the same extensions the browser uses for formatting tools) running headless
 // in jsdom, wired to the SERVER's Y.Doc exactly like a browser + y-websocket is: the editor lives on
@@ -91,6 +92,7 @@ export function connectClient(serverDoc: YTypes.Doc, userId: number): HeadlessCl
       StarterKit.configure(starterKitOptions),
       ...formattingExtensions,
       SearchReplace,
+      PageBreak,
       Collaboration.configure({ document: clientDoc }),
       Table,
       TableRow,

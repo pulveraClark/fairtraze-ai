@@ -10,6 +10,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import * as Y from "yjs";
 import { EditorShortcuts, formattingExtensions, starterKitOptions } from "./formattingExtensions";
 import { SearchReplace, findMatches, getSearchState, replaceMatches } from "./searchReplace";
+import { PageBreak } from "./pageBreak";
 
 const editors: Editor[] = [];
 afterEach(() => {
@@ -281,5 +282,29 @@ describe("keyboard shortcuts", () => {
     key(ed, "h", 72);
     expect(handlers.onLink).not.toHaveBeenCalled();
     expect(handlers.onReplace).not.toHaveBeenCalled();
+  });
+});
+
+describe("page break (spike)", () => {
+  it("Ctrl+Enter inserts a page break, not a hard break", () => {
+    const ed = makeEditor("<p>hello world</p>", {
+      extensions: [StarterKit.configure(starterKitOptions), ...formattingExtensions, PageBreak],
+    });
+    ed.commands.setTextSelection(3);
+    const e = press(ed, "Enter", { ctrlKey: true, keyCode: 13 } as KeyboardEventInit);
+    expect(e.defaultPrevented).toBe(true);
+    const json = JSON.stringify(ed.getJSON());
+    expect(json).toContain('"pageBreak"');
+    expect(json).not.toContain('"hardBreak"');
+  });
+
+  it("a page break holds no text, so it cannot add characters", () => {
+    const ed = makeEditor("<p>hello world</p>", {
+      extensions: [StarterKit.configure(starterKitOptions), ...formattingExtensions, PageBreak],
+    });
+    const before = ed.state.doc.textContent;
+    ed.commands.setPageBreak();
+    expect(ed.state.doc.textContent).toBe(before);
+    expect(JSON.stringify(ed.getJSON())).toContain('"pageBreak"');
   });
 });
