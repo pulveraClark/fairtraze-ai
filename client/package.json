@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:e2e": "node e2e/pageParity.mjs"
+    "test:e2e": "node e2e/pageParity.mjs && node e2e/schemaMismatch.mjs"
   },
   "dependencies": {
     "@fairtraze/shared": "*",

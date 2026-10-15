@@ -1,5 +1,9 @@
 import "../src/index.css";
 import { Editor } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
+import * as Y from "yjs";
+import { PageBreak } from "../src/lib/pageBreak";
 import type { JSONContent } from "@tiptap/core";
 import { resolvePageGeometry } from "@shared/pageSizes";
 import type { PageSizeKey, PageOrientation, MarginPresetKey } from "@shared/pageSizes";
@@ -162,4 +166,69 @@ async function run(c: Case) {
   return result;
 }
 
-(window as unknown as { __harness: { run: typeof run; show: typeof show } }).__harness = { run, show };
+/**
+ * Old-client risk: a tab opened BEFORE a deploy has a schema without `pageBreak`. When a new client
+ * inserts one, does the old client's y-prosemirror delete the unknown element from the SHARED
+ * document (and sync that deletion to everyone)? Two real editors on two Y.Docs, wired together the
+ * way y-websocket wires clients through the server (every update forwarded, origin-tagged).
+ */
+async function schemaMismatch() {
+  const newDoc = new Y.Doc();
+  const oldDoc = new Y.Doc();
+  const log = { oldSent: 0, newSent: 0 };
+  const REMOTE = Symbol("remote");
+  newDoc.on("update", (u: Uint8Array, origin: unknown) => {
+    if (origin === REMOTE) return;
+    log.newSent++;
+    Y.applyUpdate(oldDoc, u, REMOTE);
+  });
+  oldDoc.on("update", (u: Uint8Array, origin: unknown) => {
+    if (origin === REMOTE) return;
+    log.oldSent++;
+    Y.applyUpdate(newDoc, u, REMOTE);
+  });
+  const mk = (doc: Y.Doc, withBreak: boolean) => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    return new Editor({
+      element: el,
+      extensions: [StarterKit.configure({ undoRedo: false }), Collaboration.configure({ document: doc }), ...(withBreak ? [PageBreak] : [])],
+    });
+  };
+  const newEd = mk(newDoc, true);
+  const oldEd = mk(oldDoc, false);
+  await nextFrame();
+  newEd.commands.insertContent("<p>before</p>");
+  newEd.commands.setPageBreak();
+  newEd.commands.insertContent("<p>after</p>");
+  for (let i = 0; i < 10; i++) await nextFrame();
+  const count = (d: Y.Doc) => {
+    let n = 0;
+    const walk = (x: Y.XmlFragment | Y.XmlElement) =>
+      x.toArray().forEach((c) => {
+        if (c instanceof Y.XmlElement) {
+          if (c.nodeName === "pageBreak") n++;
+          walk(c);
+        }
+      });
+    walk(d.getXmlFragment("default"));
+    return n;
+  };
+  const result = {
+    pageBreaksInNewDoc: count(newDoc),
+    pageBreaksInOldDoc: count(oldDoc),
+    updatesSentByOldClient: log.oldSent,
+    oldEditorShowsPageBreak: JSON.stringify(oldEd.getJSON()).includes("pageBreak"),
+    oldEditorText: oldEd.state.doc.textContent,
+    newEditorText: newEd.state.doc.textContent,
+  };
+  newEd.destroy();
+  oldEd.destroy();
+  return result;
+}
+
+(window as unknown as { __harness: { run: typeof run; show: typeof show; schemaMismatch: typeof schemaMismatch } }).__harness = {
+  run,
+  show,
+  schemaMismatch,
+};

@@ -35,6 +35,8 @@ import { insertImageFile } from "../lib/imageInsert";
 import { starterKitOptions, formattingExtensions, EditorShortcuts } from "../lib/formattingExtensions";
 import type { EditorShortcutHandlers } from "../lib/formattingExtensions";
 import { SearchReplace } from "../lib/searchReplace";
+import { useCollabVersionGuard } from "../lib/useCollabVersionGuard";
+import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion";
 import { PAGE_SIZES, DEFAULT_PAGE_SIZE, isPageSizeKey } from "@shared/pageSizes";
 import type { PageSizeKey } from "@shared/pageSizes";
 import { paginationExtension, paginationSize, SCREEN_PAGE_GAP_PX } from "../lib/pageLayout";
@@ -217,7 +219,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
 
     const ydoc = new Y.Doc();
     const provider = new WebsocketProvider(wsUrl("/collab"), `group-doc-${groupId}`, ydoc, {
-      params: { token },
+      // `v` = document schema version. The server refuses a mismatched client (an old tab would
+      // delete content it does not understand and sync that deletion) - see collabVersion.ts.
+      params: { token, v: String(COLLAB_SCHEMA_VERSION) },
     });
     collabRef.current = { groupId, ydoc, provider };
   }
@@ -317,7 +321,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     };
   }, [collab, awaitInitialNodeCount]);
 
-  const effectiveEditable = editable && !awaitingInitialContent;
+  // Out-of-date client: stop sending updates and go read-only until the user reloads.
+  const { mismatch: versionMismatch } = useCollabVersionGuard(collab?.provider ?? null);
+  const effectiveEditable = editable && !awaitingInitialContent && !versionMismatch;
 
   const editor = useEditor(
     {
@@ -876,6 +882,18 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // EditorContent binds the same `editor` instance to one DOM node.
   const editorContentArea = (
     <>
+      {versionMismatch && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-b border-amber-300 bg-amber-50 text-sm text-amber-900">
+          <span>A new version is available - reload to keep editing.</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="min-h-9 rounded border border-amber-700 bg-amber-700 px-3 text-sm font-semibold text-white hover:bg-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+          >
+            Reload
+          </button>
+        </div>
+      )}
       {awaitingInitialContent && (
         <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-400 font-medium">
           Loading document…

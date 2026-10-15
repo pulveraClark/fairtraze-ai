@@ -27,6 +27,7 @@ import {
   exportLimiter,
   globalLimiter,
 } from "./middleware/security.js";
+import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
 
 // Builds the Express app without binding a port or attaching the collab
 // WebSocket servers — split out from index.ts so tests (supertest) and the
@@ -53,6 +54,15 @@ export function createApp() {
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // Public: lets an open editor tab learn that a newer document schema has been deployed, so it can
+  // ask the user to reload instead of syncing with a schema the server no longer accepts.
+  app.get("/api/version", (_req, res) => {
+    res.json({
+      collabSchemaVersion: COLLAB_SCHEMA_VERSION,
+      build: (process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? "dev").slice(0, 7),
+    });
   });
 
   app.use(["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password"], authLimiter);
