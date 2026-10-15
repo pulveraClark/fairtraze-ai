@@ -14,7 +14,8 @@
     "./fileWeights": "./src/fileWeights.ts",
     "./commitClassifier": "./src/commitClassifier.ts",
     "./editClassifier": "./src/editClassifier.ts",
-    "./pageSizes": "./src/pageSizes.ts"
+    "./pageSizes": "./src/pageSizes.ts",
+    "./linkUrl": "./src/linkUrl.ts"
   },
   "scripts": {
     "test": "vitest run"

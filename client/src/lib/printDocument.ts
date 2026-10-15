@@ -16,6 +16,7 @@ import type { JSONContent } from "@tiptap/core";
 import { PAGE_SIZES, type PageSizeKey } from "@shared/pageSizes";
 import { FontSize } from "./fontSize";
 import { LineHeight } from "./lineHeight";
+import { starterKitOptions, formattingExtensions } from "./formattingExtensions";
 import { paginationExtension } from "./pageLayout";
 
 // Clean PDF export. A SEPARATE, read-only TipTap instance is mounted inside a hidden iframe and
@@ -41,7 +42,8 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export function printExtensions(size: PageSizeKey, gap: number) {
   return [
-    StarterKit.configure({ undoRedo: false }),
+    StarterKit.configure(starterKitOptions),
+    ...formattingExtensions,
     Table,
     TableRow,
     TableHeader,

@@ -32,6 +32,9 @@ import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighl
 import type { CommentDecorationRange } from "../lib/commentHighlight";
 import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
 import { insertImageFile } from "../lib/imageInsert";
+import { starterKitOptions, formattingExtensions, EditorShortcuts } from "../lib/formattingExtensions";
+import type { EditorShortcutHandlers } from "../lib/formattingExtensions";
+import { SearchReplace } from "../lib/searchReplace";
 import { PAGE_SIZES, DEFAULT_PAGE_SIZE, isPageSizeKey } from "@shared/pageSizes";
 import type { PageSizeKey } from "@shared/pageSizes";
 import { paginationExtension, paginationSize, SCREEN_PAGE_GAP_PX } from "../lib/pageLayout";
@@ -39,6 +42,8 @@ import { printDocument } from "../lib/printDocument";
 import { CommentPanel } from "./CommentPanel";
 import type { CommentRecord } from "./CommentPanel";
 import { TocPanel } from "./TocPanel";
+import { FindReplaceBar } from "./FindReplaceBar";
+import { LinkDialog } from "./LinkDialog";
 import type { TocHeading } from "./TocPanel";
 import { Toolbar, AuthorshipLegend } from "./DocumentEditorToolbar";
 import type { ConnStatus, PresentUser } from "./DocumentEditorToolbar";
@@ -187,6 +192,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // Extension options are captured at construction time by TipTap and don't hot-update, so the
   // click handler goes through a ref instead — kept current every render, called from inside the
   // (effectively static) CommentHighlight extension instance.
+  // Find/replace bar and link dialog (editor tools). Opened from the toolbar, the Edit menu or the
+  // Ctrl+F / Ctrl+H / Ctrl+K shortcuts; they never write anything except ordinary editor commands.
+  const [findBar, setFindBar] = useState<{ open: boolean; replace: boolean }>({ open: false, replace: false });
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const shortcutHandlersRef = useRef<EditorShortcutHandlers>({ onLink: () => {}, onFind: () => {}, onReplace: () => {} });
+  shortcutHandlersRef.current = {
+    onLink: () => setLinkDialogOpen(true),
+    onFind: () => setFindBar((b) => ({ open: true, replace: b.replace })),
+    onReplace: () => setFindBar({ open: true, replace: true }),
+  };
   const onCommentClickRef = useRef<(commentId: number) => void>(() => {});
   onCommentClickRef.current = (commentId: number) => {
     setActiveThreadId(commentId);
@@ -308,7 +323,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     {
       extensions: collab
         ? [
-            StarterKit.configure({ undoRedo: false }),
+            StarterKit.configure(starterKitOptions),
+            ...formattingExtensions,
+            SearchReplace,
+            EditorShortcuts.configure({ handlers: () => shortcutHandlersRef.current }),
             Collaboration.configure({ document: collab.ydoc }),
             CollaborationCursor.configure({
               provider: collab.provider,
@@ -847,6 +865,8 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       exportingPdf={exportingPdf}
       zoom={zoom}
       onChangeZoom={setZoom}
+      onOpenFind={(replace) => setFindBar({ open: true, replace })}
+      onOpenLink={() => setLinkDialogOpen(true)}
     />
   );
 
@@ -894,6 +914,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           </button>
         </div>
       )}
+      {findBar.open && (
+        <FindReplaceBar
+          editor={editor}
+          editable={effectiveEditable}
+          showReplace={findBar.replace}
+          onToggleReplace={() => setFindBar((b) => ({ ...b, replace: !b.replace }))}
+          onClose={() => setFindBar({ open: false, replace: false })}
+        />
+      )}
+      {linkDialogOpen && effectiveEditable && <LinkDialog editor={editor} onClose={() => setLinkDialogOpen(false)} />}
       {showAuthorship && (
         <AuthorshipLegend
           users={authorshipUsers}
@@ -903,7 +933,17 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
         />
       )}
       <div className="flex flex-col md:flex-row items-stretch">
-        <div className="flex-1 min-w-0">
+        <div
+          className="flex-1 min-w-0 outline-none"
+          tabIndex={effectiveEditable ? undefined : -1}
+          onKeyDown={(e) => {
+            if (effectiveEditable) return; // the editor's own keymap handles it while editing
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+              e.preventDefault();
+              setFindBar((b) => ({ open: true, replace: b.replace }));
+            }
+          }}
+        >
           <PaperStage pageWidth={PAGE_SIZES[pageSize].widthPx} zoom={zoom}>
           <DragHandle
             editor={editor}

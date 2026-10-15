@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import JSZip from "jszip";
 import { Y } from "../src/collab/yjsCjs.js";
 import { readDocumentStructure, buildDocxBuffer } from "../src/collab/documentExport.js";
 
@@ -126,5 +127,94 @@ describe("documentExport — buildDocxBuffer", () => {
     const buffer = await buildDocxBuffer([], []);
     expect(buffer.length).toBeGreaterThan(0);
     expect(buffer.subarray(0, 2).toString("ascii")).toBe("PK");
+  });
+});
+
+// ── Editor tools (strike, justify, indent, checklist, horizontal line, links, nested lists) ──────
+
+function buildToolsYjsState(): Uint8Array {
+  const ydoc = new Y.Doc();
+  const fragment = ydoc.getXmlFragment("default");
+  const para = (text: string, attrs: Record<string, unknown> = {}, formats: Array<[number, number, Record<string, unknown>]> = []) => {
+    const p = new Y.XmlElement("paragraph");
+    for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v as string);
+    const t = new Y.XmlText();
+    t.insert(0, text);
+    for (const [from, len, attrs2] of formats) t.format(from, len, attrs2);
+    p.insert(0, [t]);
+    return p;
+  };
+
+  ydoc.transact(() => {
+    const justified = para("Justified text", { textAlign: "justify" });
+    const indented = para("Indented twice", { indent: 2 });
+    const struck = para("Struck out", {}, [[0, 6, { strike: true }]]);
+    const linked = para("Safe link and bad link", {}, [
+      [0, 9, { link: { href: "https://example.com/page" } }],
+      [14, 8, { link: { href: "javascript:alert(1)" } }],
+    ]);
+
+    const taskList = new Y.XmlElement("taskList");
+    const done = new Y.XmlElement("taskItem");
+    done.setAttribute("checked", true as unknown as string);
+    done.insert(0, [para("Done item")]);
+    const open = new Y.XmlElement("taskItem");
+    open.setAttribute("checked", false as unknown as string);
+    open.insert(0, [para("Open item")]);
+    taskList.insert(0, [done, open]);
+
+    const rule = new Y.XmlElement("horizontalRule");
+
+    // bulletList > listItem(outer) > [paragraph, bulletList > listItem(inner) > paragraph]
+    const inner = new Y.XmlElement("listItem");
+    inner.insert(0, [para("Inner point")]);
+    const innerList = new Y.XmlElement("bulletList");
+    innerList.insert(0, [inner]);
+    const outer = new Y.XmlElement("listItem");
+    outer.insert(0, [para("Outer point"), innerList]);
+    const outerList = new Y.XmlElement("bulletList");
+    outerList.insert(0, [outer]);
+
+    fragment.insert(0, [justified, indented, struck, linked, taskList, rule, outerList]);
+  });
+  return Y.encodeStateAsUpdate(ydoc);
+}
+
+describe("documentExport — editor tools", () => {
+  it("reads justify, indent, strike, task items, horizontal line and only safe links", () => {
+    const blocks = readDocumentStructure({ content: "{}", yjsState: buildToolsYjsState() });
+    expect(blocks[0]).toMatchObject({ kind: "paragraph", align: "justify" });
+    expect(blocks[1]).toMatchObject({ kind: "paragraph", indent: 2 });
+    expect(blocks[2].kind === "paragraph" && blocks[2].runs.some((r) => r.strike && r.text === "Struck")).toBe(true);
+    if (blocks[3].kind === "paragraph") {
+      const links = blocks[3].runs.map((r) => r.link).filter(Boolean);
+      expect(links).toEqual(["https://example.com/page"]); // the javascript: href is dropped
+    }
+    expect(blocks[4]).toMatchObject({ kind: "taskItem", checked: true });
+    expect(blocks[5]).toMatchObject({ kind: "taskItem", checked: false });
+    expect(blocks[6]).toEqual({ kind: "rule" });
+    expect(blocks[7]).toMatchObject({ kind: "listItem", listType: "bulletList" });
+  });
+
+  it("writes them into the .docx: justify, strike, indent, hyperlink, checkboxes, rule, nested list level", async () => {
+    const blocks = readDocumentStructure({ content: "{}", yjsState: buildToolsYjsState() });
+    const buffer = await buildDocxBuffer(blocks, []);
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+    const rels = await zip.file("word/_rels/document.xml.rels")!.async("string");
+
+    expect(xml).toContain('<w:jc w:val="both"');
+    expect(xml).toContain("<w:strike");
+    expect(xml).toMatch(/<w:ind w:left="1440"/); // indent 2 x 720 twips
+    expect(xml).toContain("<w:hyperlink");
+    expect(rels).toContain("https://example.com/page");
+    expect(xml + rels).not.toContain("javascript:");
+    // The ballot box is its own run, immediately followed by the item text.
+    expect(xml).toContain(`>${String.fromCharCode(0x2611)} </w:t></w:r>`);
+    expect(xml).toContain(`>${String.fromCharCode(0x2610)} </w:t></w:r>`);
+    expect(xml).toContain("Done item");
+    expect(xml).toContain("Open item");
+    expect(xml).toContain("<w:pBdr>"); // horizontal line as a bottom border
+    expect(xml).toContain('<w:ilvl w:val="1"/>'); // nested bullet one level deeper
   });
 });

@@ -6,6 +6,9 @@ import { getUserColor } from "../lib/collabColors";
 import { DocsDataApproximateNotice } from "./DocsDataApproximateNotice";
 import { PAGE_SIZES, PAGE_SIZE_KEYS, type PageSizeKey } from "@shared/pageSizes";
 
+// Platform-aware modifier for tooltips: Cmd on Apple devices, Ctrl elsewhere.
+const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "\u2318" : "Ctrl";
+
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
 export interface PresentUser {
@@ -16,15 +19,15 @@ export interface PresentUser {
 
 export const ToolbarButton = forwardRef<
   HTMLButtonElement,
-  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean }
->(function ToolbarButton({ onClick, active, label, children, disabled }, ref) {
+  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean; shortcut?: string }
+>(function ToolbarButton({ onClick, active, label, children, disabled, shortcut }, ref) {
   return (
     <button
       ref={ref}
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
+      title={shortcut ? `${label} (${shortcut})` : label}
       aria-label={label}
       className={`w-8 h-8 shrink-0 rounded flex items-center justify-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed ${
         active
@@ -197,11 +200,13 @@ function MenuItemButton({
   label,
   onClick,
   disabled,
+  hint,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <button
@@ -215,7 +220,58 @@ function MenuItemButton({
     >
       {icon}
       {label}
+      {hint && <span className="ml-auto pl-2 text-xs text-slate-600 tabular-nums">{hint}</span>}
     </button>
+  );
+}
+
+// Edit menu: find (everyone, including the read-only instructor view) and replace (members only).
+function EditMenu({
+  editable,
+  onFind,
+  onReplace,
+  inline = false,
+}: {
+  editable: boolean;
+  onFind: () => void;
+  onReplace: () => void;
+  inline?: boolean;
+}) {
+  const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
+  const close = () => setOpen(false);
+  const searchIcon = (
+    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path strokeLinecap="round" d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+  const body = (
+    <>
+      <MenuItemButton label="Find" hint={`${MOD}+F`} icon={searchIcon} onClick={() => { onFind(); close(); }} />
+      {editable && (
+        <MenuItemButton
+          label="Find and replace"
+          hint={`${MOD}+H`}
+          icon={
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h12m0 0l-3-3m3 3l-3 3M20 17H8m0 0l3-3m-3 3l3 3" />
+            </svg>
+          }
+          onClick={() => { onReplace(); close(); }}
+        />
+      )}
+    </>
+  );
+  if (inline) return <div className="w-full">{body}</div>;
+  return (
+    <>
+      <MenuTriggerButton ref={btnRef} label="Edit" active={open} onClick={() => setOpen((v) => !v)} />
+      {open && pos && (
+        <DropdownPanel pos={pos} menuRef={menuRef}>
+          {body}
+        </DropdownPanel>
+      )}
+    </>
   );
 }
 
@@ -606,14 +662,15 @@ const Icon = ({ d }: { d: string }) => (
 
 // Container-width breakpoints (the toolbar's own width, not the viewport — the editor sits beside
 // panels). As the toolbar narrows, groups move into the "More" menu in this order: Review, Insert,
-// Paragraph, Formatting, then the View buttons. File, History and Text style always stay inline.
+// Paragraph, Formatting, then Edit and the View buttons. File, History and Text style always stay inline.
 function overflowFor(width: number) {
   return {
-    review: width < 1180,
-    insert: width < 1060,
-    paragraph: width < 940,
-    formatting: width < 820,
+    review: width < 1400,
+    insert: width < 1280,
+    paragraph: width < 1160,
+    formatting: width < 960,
     view: width < 520,
+    edit: width < 560,
     showCount: width >= 760,
     showPresence: width >= 640,
   };
@@ -668,6 +725,8 @@ export function Toolbar({
   exportingPdf,
   zoom,
   onChangeZoom,
+  onOpenFind,
+  onOpenLink,
 }: {
   editor: Editor;
   editable: boolean;
@@ -694,6 +753,8 @@ export function Toolbar({
   exportingPdf: boolean;
   zoom: number;
   onChangeZoom: (zoom: number) => void;
+  onOpenFind: (replace: boolean) => void;
+  onOpenLink: () => void;
 }) {
   const statusLabel = connStatus === "connected" ? "" : connStatus === "connecting" ? "Connecting…" : "Reconnecting…";
   const wordCount = editor.storage.characterCount?.words?.() ?? 0;
@@ -719,13 +780,22 @@ export function Toolbar({
       ? "h2"
       : "p";
 
+  // Marks (bold, color, size, link, ...), alignment and indent come off; a heading becomes normal
+  // text. Lists and tables are left alone. None of this changes any character, so it is invisible
+  // to authorship capture.
+  const clearFormatting = () => {
+    const chain = editor.chain().focus().unsetAllMarks().unsetTextAlign().clearIndent();
+    if (editor.isActive("heading")) chain.setParagraph();
+    chain.run();
+  };
+
   // ── Groups. Each is a plain JSX value so the identical buttons render inline or inside "More". ──
   const history = (
     <>
-      <ToolbarButton label="Undo" active={false} disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
+      <ToolbarButton label="Undo" shortcut={`${MOD}+Z`} active={false} disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
         <Icon d="M3 10h10a5 5 0 010 10H9M3 10l4-4m-4 4l4 4" />
       </ToolbarButton>
-      <ToolbarButton label="Redo" active={false} disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
+      <ToolbarButton label="Redo" shortcut={`${MOD}+Shift+Z`} active={false} disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
         <Icon d="M21 10H11a5 5 0 000 10h4m6-10l-4-4m4 4l-4 4" />
       </ToolbarButton>
     </>
@@ -751,45 +821,70 @@ export function Toolbar({
 
   const formattingButtons = (
     <>
-      <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+      <ToolbarButton label="Bold" shortcut={`${MOD}+B`} active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
         B
       </ToolbarButton>
-      <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+      <ToolbarButton label="Italic" shortcut={`${MOD}+I`} active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
         <span className="italic">I</span>
       </ToolbarButton>
-      <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+      <ToolbarButton label="Underline" shortcut={`${MOD}+U`} active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
         <span className="underline">U</span>
       </ToolbarButton>
-      <ToolbarButton label="Superscript" active={editor.isActive("superscript")} onClick={() => editor.chain().focus().toggleSuperscript().run()}>
+      <ToolbarButton label="Strikethrough" shortcut={`${MOD}+Shift+X`} active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
+        <span className="line-through">S</span>
+      </ToolbarButton>
+      <ToolbarButton label="Superscript" shortcut={`${MOD}+.`} active={editor.isActive("superscript")} onClick={() => editor.chain().focus().toggleSuperscript().run()}>
         <span className="text-xs">x<sup>2</sup></span>
       </ToolbarButton>
-      <ToolbarButton label="Subscript" active={editor.isActive("subscript")} onClick={() => editor.chain().focus().toggleSubscript().run()}>
+      <ToolbarButton label="Subscript" shortcut={`${MOD}+,`} active={editor.isActive("subscript")} onClick={() => editor.chain().focus().toggleSubscript().run()}>
         <span className="text-xs">x<sub>2</sub></span>
+      </ToolbarButton>
+      <ToolbarButton label="Insert link" shortcut={`${MOD}+K`} active={editor.isActive("link")} onClick={onOpenLink}>
+        <Icon d="M10 14a4 4 0 005.66 0l3-3a4 4 0 00-5.66-5.66l-1 1M14 10a4 4 0 00-5.66 0l-3 3a4 4 0 005.66 5.66l1-1" />
+      </ToolbarButton>
+      <ToolbarButton label="Clear formatting" active={false} onClick={clearFormatting}>
+        <Icon d="M6 5h12M10 5l-2 14m8-14l-3 8M4 4l16 16" />
       </ToolbarButton>
     </>
   );
 
   const paragraph = (
     <>
-      <ToolbarButton label="Align left" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
+      <ToolbarButton label="Align left" shortcut={`${MOD}+Shift+L`} active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
         <Icon d="M4 6h16M4 12h10M4 18h13" />
       </ToolbarButton>
-      <ToolbarButton label="Align center" active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
+      <ToolbarButton label="Align center" shortcut={`${MOD}+Shift+E`} active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
         <Icon d="M4 6h16M7 12h10M5.5 18h13" />
       </ToolbarButton>
-      <ToolbarButton label="Align right" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
+      <ToolbarButton label="Align right" shortcut={`${MOD}+Shift+R`} active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
         <Icon d="M4 6h16M10 12h10M7 18h13" />
       </ToolbarButton>
-      <ToolbarButton label="Bulleted list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+      <ToolbarButton label="Justify" shortcut={`${MOD}+Shift+J`} active={editor.isActive({ textAlign: "justify" })} onClick={() => editor.chain().focus().setTextAlign("justify").run()}>
+        <Icon d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+      </ToolbarButton>
+      <ToolbarButton label="Bulleted list" shortcut={`${MOD}+Shift+8`} active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
         <Icon d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
       </ToolbarButton>
-      <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+      <ToolbarButton label="Numbered list" shortcut={`${MOD}+Shift+7`} active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
         <Icon d="M8 6h13M8 12h13M8 18h13M4 6h1v2M4 10h2l-2 2h2M4 18h2M4 16h2" />
+      </ToolbarButton>
+      <ToolbarButton label="Checklist" shortcut={`${MOD}+Shift+9`} active={editor.isActive("taskList")} onClick={() => editor.chain().focus().toggleTaskList().run()}>
+        <Icon d="M9 6h12M9 12h12M9 18h12M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17" />
+      </ToolbarButton>
+      <ToolbarButton label="Decrease indent" shortcut="Shift+Tab" active={false} onClick={() => editor.chain().focus().outdent().run()}>
+        <Icon d="M11 6h10M11 12h10M11 18h10M7 9l-3 3 3 3" />
+      </ToolbarButton>
+      <ToolbarButton label="Increase indent" shortcut="Tab" active={false} onClick={() => editor.chain().focus().indent().run()}>
+        <Icon d="M11 6h10M11 12h10M11 18h10M3 9l3 3-3 3" />
       </ToolbarButton>
     </>
   );
 
   const imageButton = (
+    <>
+    <ToolbarButton label="Horizontal line" active={false} onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+      <Icon d="M4 12h16" />
+    </ToolbarButton>
     <ToolbarButton label="Insert image" active={false} onClick={onInsertImageClick}>
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -797,6 +892,7 @@ export function Toolbar({
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
       </svg>
     </ToolbarButton>
+    </>
   );
 
   // Bubble-with-plus, deliberately distinct from the plain-bubble "Comments" panel toggle.
@@ -865,6 +961,13 @@ export function Toolbar({
     }
     if (ov.review) moreSections.push(<MoreSection key="rev" title="Review">{commentButton}</MoreSection>);
   }
+  if (ov.edit) {
+    moreSections.push(
+      <MoreSection key="edit" title="Edit">
+        <EditMenu inline editable={editable} onFind={() => onOpenFind(false)} onReplace={() => onOpenFind(true)} />
+      </MoreSection>
+    );
+  }
   if (ov.view) moreSections.push(<MoreSection key="view" title="View">{viewButtons}</MoreSection>);
 
   return (
@@ -881,6 +984,8 @@ export function Toolbar({
         pageSize={pageSize}
         onChangePageSize={onChangePageSize}
       />
+
+      {!ov.edit && <EditMenu editable={editable} onFind={() => onOpenFind(false)} onReplace={() => onOpenFind(true)} />}
 
       {editable ? (
         <>
