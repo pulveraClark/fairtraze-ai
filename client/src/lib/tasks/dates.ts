@@ -51,3 +51,44 @@ export function dueBucket(dueDate: string | null, status: string, today: string 
   if (dueDate > end) return "later";
   return null;
 }
+
+// ── Calendar helpers. Everything is done on "YYYY-MM-DD" strings with UTC arithmetic, never on
+// local-time Dates, so no browser time zone can move a day (the Manila-midnight off-by-one). ──
+
+/** "2026-11" for a date string. */
+export function monthOf(date: string): string {
+  return date.slice(0, 7);
+}
+
+/** The month key ("YYYY-MM") moved by `delta` months. */
+export function addMonths(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
+}
+
+/**
+ * The 6 Sunday-to-Saturday weeks (42 days) that cover a month, including the leading and trailing
+ * days of the neighbouring months.
+ */
+export function monthGrid(month: string): string[][] {
+  const first = `${month}-01`;
+  const start = addDays(first, -parse(first).getUTCDay());
+  return Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, d) => addDays(start, w * 7 + d)));
+}
+
+/** "November 2026". */
+export function formatMonth(month: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(parse(`${month}-01`));
+}
+
+/** "Saturday, November 14, 2026" for screen readers. */
+export function formatLongDate(date: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC", weekday: "long", month: "long", day: "numeric", year: "numeric",
+  }).format(parse(date));
+}
+
+/** The school day (Asia/Manila) an instant falls on, e.g. the project deadline. */
+export function manilaDateOf(iso: string): string {
+  return todayManila(new Date(iso));
+}

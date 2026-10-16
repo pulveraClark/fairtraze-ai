@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { BoardResponse, TaskPriority } from "@shared/taskTypes";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@shared/taskTypes";
 import { Avatar } from "../Avatar";
@@ -5,7 +6,9 @@ import { usePopover } from "../../hooks/usePopover";
 import { menuFilterCount, hasAnyFilter, NO_FILTERS, statusLine, type TaskFilters } from "../../lib/tasks/filters";
 import type { DueBucket } from "../../lib/tasks/dates";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
+import type { TaskView } from "../../lib/tasks/view";
 import { ChevronDownIcon, FilterIcon, PlusIcon, SearchIcon } from "./icons";
+import { ViewSwitch } from "./ViewSwitch";
 
 interface Props {
   board: BoardResponse;
@@ -14,6 +17,10 @@ interface Props {
   shown: number;
   total: number;
   onNewTask: () => void;
+  view: TaskView;
+  onViewChange: (view: TaskView) => void;
+  /** So the "/" shortcut can focus the search box. */
+  searchRef?: RefObject<HTMLInputElement | null>;
 }
 
 const DUE_OPTIONS: { value: DueBucket; label: string }[] = [
@@ -26,7 +33,7 @@ function toggle<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 }
 
-export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask }: Props) {
+export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask, view, onViewChange, searchRef }: Props) {
   const menu = usePopover();
   const activeMenuFilters = menuFilterCount(filters);
   const line = statusLine(filters, board.members, shown, total);
@@ -36,9 +43,11 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
+        <ViewSwitch view={view} onChange={onViewChange} />
         <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
           <input
+            ref={searchRef}
             type="text"
             value={filters.search}
             onChange={(e) => set({ search: e.target.value })}

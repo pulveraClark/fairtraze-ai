@@ -41,6 +41,7 @@ export function TaskCardView({ task, board, today, onOpen, handle, overlay }: Vi
         <button
           type="button"
           onClick={() => onOpen(task.id)}
+          data-task-open={task.id}
           className={`min-w-0 flex-1 rounded text-left ${FOCUS_LIGHT}`}
         >
           <span className="block text-xs font-semibold tabular-nums text-slate-700">{task.key}</span>

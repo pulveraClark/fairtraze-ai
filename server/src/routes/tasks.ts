@@ -19,7 +19,7 @@ import {
   parseDateOnly, serializeTask, statusFields, type TaskRow,
 } from "../lib/taskBoard.js";
 import { computePosition, rebalanced } from "../lib/taskPosition.js";
-import { deriveTaskKey } from "../lib/taskKey.js";
+import { deriveTaskKey, effectiveTaskKey } from "../lib/taskKey.js";
 
 // The group Tasks board. Planning data only: nothing here is read by scoring, the analysis or the
 // AI narrative, and tasks never change a contribution score, flag, Gini value or team health.
@@ -535,12 +535,25 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
   }
 
   const newlyAssigned: { taskId: number; title: string; userId: number }[] = [];
+  // Tasks the actor may not change, or that cannot take the change, are skipped and reported
+  // (the rest still apply). Bad ids in the request itself still fail the whole call above.
+  const skipped: { taskId: number; key: string; reason: string }[] = [];
+  const skip = (task: { id: number; number: number }, reason: string) =>
+    skipped.push({ taskId: task.id, key: `${effectiveTaskKey(project)}-${task.number}`, reason });
   try {
     await prisma.$transaction(async (tx) => {
       // Process in the order the caller listed them so a column keeps that order.
       for (const id of taskIds) {
         const task = rows.find((r) => r.id === id)!;
         const bump = { version: { increment: 1 } };
+        if (action.type === "status") {
+          const decision = canMoveTask(actor, task, action.status);
+          if (!decision.ok) { skip(task, decision.message); continue; }
+        } else if (action.type === "assign") {
+          if (!canAssignTask(actor)) { skip(task, "Only the group leader can assign tasks."); continue; }
+        } else if (!canEditTask(actor, task)) {
+          skip(task, "You cannot edit this task."); continue;
+        }
         switch (action.type) {
           case "status": {
             if (task.status === action.status) break;
@@ -575,7 +588,8 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
             const remove = new Set(action.remove ?? []);
             const after = [...new Set([...before.filter((l) => !remove.has(l)), ...(action.add ?? [])])].sort((a, b) => a - b);
             if (after.length > TASK_LIMITS.labelsPerTask) {
-              throw new BadRequest(`A task can have at most ${TASK_LIMITS.labelsPerTask} labels.`);
+              skip(task, `A task can have at most ${TASK_LIMITS.labelsPerTask} labels.`);
+              break;
             }
             if ([...before].sort((a, b) => a - b).join() === after.join()) break;
             await tx.taskLabelLink.deleteMany({ where: { taskId: id } });
@@ -594,7 +608,7 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
 
   if (newlyAssigned.length) await notifyAssigned(project, actor.userId, newlyAssigned);
   const updated = await prisma.task.findMany({ where: { id: { in: taskIds } }, include: { labelLinks: true } });
-  res.json({ tasks: updated.map((t) => serializeTask(t, { project, actor })) });
+  res.json({ tasks: updated.map((t) => serializeTask(t, { project, actor })), skipped });
 });
 
 // ── Milestones (leader only) ──────────────────────────────────────────────────

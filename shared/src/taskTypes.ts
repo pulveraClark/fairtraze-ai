@@ -103,6 +103,25 @@ export interface BoardMember {
   functionalRoles: string[];
 }
 
+/** A task a bulk edit left unchanged, and why. */
+export interface BulkSkipped {
+  taskId: number;
+  key: string;
+  reason: string;
+}
+
+export interface BulkEditResponse {
+  tasks: BoardTask[];
+  skipped: BulkSkipped[];
+}
+
+export type BulkAction =
+  | { type: "status"; status: TaskStatus }
+  | { type: "assign"; userId: number | null }
+  | { type: "priority"; priority: TaskPriority }
+  | { type: "labels"; add?: number[]; remove?: number[] }
+  | { type: "milestone"; milestoneId: number | null };
+
 export interface BoardResponse {
   group: {
     id: number;

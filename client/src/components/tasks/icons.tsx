@@ -132,3 +132,35 @@ export function PriorityIcon({ priority, className = "h-4 w-4" }: IconProps & { 
     </svg>
   );
 }
+
+export function StarIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z" />
+    </svg>
+  );
+}
+
+export function ChevronUpIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg className={className} {...base}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 15l6-6 6 6" />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg className={className} {...base}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+export function ChevronRightIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg className={className} {...base}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}

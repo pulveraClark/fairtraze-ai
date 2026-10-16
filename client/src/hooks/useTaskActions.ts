@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BoardResponse, BoardTask, TaskStatus } from "@shared/taskTypes";
+import type { BoardResponse, BoardTask, BulkAction, BulkEditResponse, TaskStatus } from "@shared/taskTypes";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
 import { groupKeys } from "./useGroupQueries";
@@ -100,6 +100,21 @@ export function useTaskActions(projectId: number) {
     }
   }, [token, projectId, setBoard, showToast]);
 
+  /**
+   * Leader-only bulk edit. Not optimistic: the server decides per task what it can apply, so the board
+   * is updated from its answer. Returns the result (with the tasks it skipped), or null on failure.
+   */
+  const bulkEdit = useCallback(async (taskIds: number[], action: BulkAction): Promise<BulkEditResponse | null> => {
+    try {
+      const res = await taskApi.bulk(token, projectId, taskIds, action);
+      setBoard((b) => res.tasks.reduce(replaceTaskIn, b));
+      return res;
+    } catch (err) {
+      handleFailure(err);
+      return null;
+    }
+  }, [token, projectId, setBoard, handleFailure]);
+
   const deleteTask = useCallback(async (task: BoardTask): Promise<void> => {
     await taskApi.remove(token, projectId, task.id);
     setBoard((b) => removeTaskFrom(b, task.id));
@@ -118,7 +133,7 @@ export function useTaskActions(projectId: number) {
     return created;
   }, [token, projectId, refresh]);
 
-  return { moveTask, moveToStatus, createTask, updateTask, deleteTask, createMilestone, createLabel, refresh, showError: (message: string) => showToast({ tone: "error", message }) };
+  return { moveTask, moveToStatus, createTask, updateTask, bulkEdit, deleteTask, createMilestone, createLabel, refresh, showError: (message: string) => showToast({ tone: "error", message }) };
 }
 
 export type TaskActions = ReturnType<typeof useTaskActions>;

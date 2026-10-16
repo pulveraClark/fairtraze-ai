@@ -1,4 +1,6 @@
-import type { BoardTask, TaskPriority, TaskStatus, BoardLabel, TaskLabelColor } from "@shared/taskTypes";
+import type {
+  BoardTask, TaskPriority, TaskStatus, BoardLabel, TaskLabelColor, BulkAction, BulkEditResponse,
+} from "@shared/taskTypes";
 import type { Placement } from "./placement";
 
 // Thin fetch helpers for the Tasks routes. Every mutation sends the version it last saw;
@@ -70,6 +72,9 @@ export const taskApi = {
 
   update: (token: string | null, projectId: number, task: { id: number; version: number }, input: UpdateTaskInput) =>
     call<TaskResult>(token, "PATCH", `${base(projectId)}/tasks/${task.id}`, { ...input, expectedVersion: task.version }),
+
+  bulk: (token: string | null, projectId: number, taskIds: number[], action: BulkAction) =>
+    call<BulkEditResponse>(token, "POST", `${base(projectId)}/tasks/bulk`, { taskIds, action }),
 
   remove: (token: string | null, projectId: number, taskId: number) =>
     call<{ message: string }>(token, "DELETE", `${base(projectId)}/tasks/${taskId}`),

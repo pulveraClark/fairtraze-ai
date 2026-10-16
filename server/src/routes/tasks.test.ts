@@ -546,6 +546,32 @@ describe("bulk edit (leader only)", () => {
     expect(l.body.tasks.every((t: BoardTask) => t.labelIds.includes(lb.body.id))).toBe(true);
   });
 
+  it("skips a task that would exceed the label limit, applies the rest, and reports it", async () => {
+    const g = await setupGroup();
+    const colors = ["teal", "teal", "teal", "teal", "teal", "teal"];
+    const labelIds: number[] = [];
+    for (const [i, color] of colors.entries()) {
+      const r = await request(app).post(`/api/groups/${g.project.id}/labels`).set("Authorization", as(g.leader)).send({ name: `L${i}`, color });
+      labelIds.push(r.body.id);
+    }
+    const full = await createTask(g.leader, g.project.id, { title: "Full", labelIds: labelIds.slice(0, 5) });
+    const free = await createTask(g.leader, g.project.id, { title: "Free" });
+    const res = await bulk(g.leader, g.project.id, { taskIds: [full.id, free.id], action: { type: "labels", add: [labelIds[5]] } });
+    expect(res.status).toBe(200);
+    expect(res.body.skipped).toEqual([{ taskId: full.id, key: full.key, reason: expect.stringContaining("at most 5 labels") }]);
+    const byId = new Map((res.body.tasks as BoardTask[]).map((t) => [t.id, t]));
+    expect(byId.get(free.id)!.labelIds).toEqual([labelIds[5]]);
+    expect(byId.get(full.id)!.labelIds).toHaveLength(5);
+    expect(await prisma.taskActivity.count({ where: { taskId: full.id, type: "labels_changed" } })).toBe(0);
+  });
+
+  it("reports an empty skipped list when everything applied", async () => {
+    const g = await setupGroup();
+    const a = await createTask(g.leader, g.project.id, { title: "A" });
+    const res = await bulk(g.leader, g.project.id, { taskIds: [a.id], action: { type: "priority", priority: "HIGH" } });
+    expect(res.body.skipped).toEqual([]);
+  });
+
   it("is leader only and refuses tasks from another group", async () => {
     const g = await setupGroup();
     const other = await setupGroup();
