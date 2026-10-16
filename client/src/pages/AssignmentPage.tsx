@@ -3,7 +3,6 @@ import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } f
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupManageModal } from "../components/GroupManageModal";
-import { TaskManageModal } from "../components/TaskManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
 import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
@@ -99,7 +98,6 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [search, setSearch]         = useState("");
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
-  const [tasksGroupId, setTasksGroupId]       = useState<number | null>(null);
   const [editingBrief, setEditingBrief]       = useState(false);
   const [showScoring, setShowScoring]         = useState(false);
 
@@ -304,15 +302,6 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
           sourceType={assignment.sourceType}
           onClose={() => setShowScoring(false)}
           onSaved={() => { setShowScoring(false); void fetchData(); }}
-        />
-      )}
-
-      {tasksGroupId !== null && (
-        <TaskManageModal
-          projectId={tasksGroupId}
-          isInstructor={true}
-          onClose={() => setTasksGroupId(null)}
-          onChanged={() => void fetchData()}
         />
       )}
 
@@ -521,7 +510,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 onAnalyze={isAdmin ? undefined : handleReanalyze}
                 analyzing={analyzing.has(item.projectId)}
                 onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
-                onTasks={isAdmin ? undefined : (id) => setTasksGroupId(id)}
+                onTasks={(id) => navigate(`/project/${id}?tab=tasks`)}
                 selectable={!isAdmin}
                 selected={selectedIds.has(item.projectId)}
                 onToggleSelect={toggleSelect}

@@ -14,6 +14,7 @@ import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
+import { TasksTab } from "../components/tasks/TasksTab";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
@@ -27,7 +28,7 @@ const SOURCE_LABEL: Record<string, string> = {
   COMBINED: "Combined",
 };
 
-type Tab = "report" | "document";
+type Tab = "report" | "document" | "tasks";
 
 interface Props {
   projectId: number;
@@ -58,9 +59,22 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [resolvedFlagOutcomes, setResolvedFlagOutcomes] = useState<Map<string, Map<string, "RESOLVED" | "DISMISSED">>>(new Map());
   // A "comment reply" notification links here with ?tab=document. effectiveTab falls back to
   // "report" when the Document tab isn't available for this project.
-  const [activeTab, setActiveTab]               = useState<Tab>(() =>
-    new URLSearchParams(window.location.search).get("tab") === "document" ? "document" : "report"
-  );
+  const [activeTab, setActiveTab]               = useState<Tab>(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    return tab === "document" || tab === "tasks" ? tab : "report";
+  });
+  // ?tab=tasks&task=<id> opens a task's panel (read-only here: instructors and admins only view tasks).
+  const initialTaskId = (() => {
+    const n = Number(new URLSearchParams(window.location.search).get("task"));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  })();
+  function selectTab(tab: Tab, taskId: number | null = null) {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "report") url.searchParams.delete("tab"); else url.searchParams.set("tab", tab);
+    if (tab === "tasks" && taskId !== null) url.searchParams.set("task", String(taskId)); else url.searchParams.delete("task");
+    window.history.replaceState(window.history.state, "", url);
+  }
   const [viewingHistory, setViewingHistory]     = useState(false);
 
   // Summary used for breadcrumb + group switcher — shared with the dashboard/class pages
@@ -228,8 +242,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   const flagSource: FlagSource = showCombined ? "combined" : sourceType === "EDITOR" ? "document" : "github";
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["document", "report"]
-      : ["report"]; // GITHUB or legacy
+      ? ["document", "report", "tasks"]
+      : ["report", "tasks"]; // GITHUB or legacy
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
   // ── Breadcrumb derivation ──────────────────────────────────────────────────
@@ -400,28 +414,28 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* Tab bar — only shown when Document tab is also available */}
         {visibleTabs.length > 1 && (
-          <div role="tablist" aria-label="Report sections" className="max-w-6xl mx-auto px-4 sm:px-8 flex border-t border-slate-200">
+          <div role="tablist" aria-label="Report sections" className={`${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 sm:px-8 flex border-t border-slate-200`}>
             {visibleTabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
                 role="tab"
                 aria-selected={effectiveTab === tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => selectTab(tab)}
                 className={`min-h-10 px-4 text-base font-semibold transition-colors border-b-2 -mb-px ${FOCUS_LIGHT} focus-visible:-outline-offset-2 ${
                   effectiveTab === tab
                     ? "border-indigo-700 text-indigo-800"
                     : "border-transparent text-slate-700 hover:text-slate-900"
                 }`}
               >
-                {tab === "report" ? "Report" : "FairTraze Docs"}
+                {tab === "report" ? "Report" : tab === "tasks" ? "Tasks" : "FairTraze Docs"}
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-4 space-y-4">
+      <main className={`print:hidden flex-1 ${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-6xl"} w-full mx-auto px-4 sm:px-8 py-4 space-y-4 min-w-0`}>
 
         {/* Analysis panel: live while running, completed state while the report reloads */}
         {(reanalyzing || loadingReport) && (
@@ -637,6 +651,15 @@ export function ProjectDetailPage({ projectId }: Props) {
           </>
         )}
           </>
+        )}
+
+        {/* ── Tasks tab (read-only for instructors and admins; the server enforces it) ── */}
+        {effectiveTab === "tasks" && (
+          <TasksTab
+            projectId={projectId}
+            initialTaskId={initialTaskId}
+            onOpenTaskChange={(id) => selectTab("tasks", id)}
+          />
         )}
 
         {/* ── Document tab ─────────────────────────────────────────────────────── */}

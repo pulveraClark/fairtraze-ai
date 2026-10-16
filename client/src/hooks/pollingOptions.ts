@@ -15,5 +15,7 @@ function pollEvery(ms: number) {
   } as const;
 }
 
+// The Tasks board: others' moves should show up within ~10 s. The board GET answers 304 when nothing changed.
+export const POLL_10S = pollEvery(10_000);
 export const POLL_30S = pollEvery(30_000);
 export const POLL_60S = pollEvery(60_000);

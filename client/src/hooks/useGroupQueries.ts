@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
-import { POLL_60S } from "./pollingOptions";
+import type { BoardResponse, BoardTask } from "@shared/taskTypes";
+import { POLL_10S } from "./pollingOptions";
 
 /**
  * Query keys for the student/group surfaces. userId is the second element of every key so a
@@ -13,7 +14,7 @@ export const groupKeys = {
   manage:          (uid: number | null, pid: number) => ["group", uid, "manage", pid] as const,
   requests:        (uid: number | null, pid: number) => ["group", uid, "requests", pid] as const,
   roleSuggestions: (uid: number | null, pid: number) => ["group", uid, "role-suggestions", pid] as const,
-  tasks:           (uid: number | null, pid: number) => ["group", uid, "tasks", pid] as const,
+  tasks:           (uid: number | null, pid: number) => ["group", uid, "tasks", pid] as const, // the whole Tasks board payload
 };
 export const disputeKeys = {
   all:  (uid: number | null) => ["disputes", uid] as const,
@@ -54,16 +55,28 @@ export function useStudentGroupQuery<T>(projectId: number) {
   });
 }
 
-/** Group tasks. Polls every 60 s (foreground only) while any consumer is mounted. */
-export function useGroupTasksQuery<TTask>(projectId: number) {
+/**
+ * The group's Tasks board (tasks, milestones, labels, members, viewer permissions) in one payload.
+ * Polls every 10 s while mounted (foreground only). The server answers 304 when nothing changed, and
+ * the browser's HTTP cache turns that into the cached body, so unchanged polls cost no JSON and
+ * React Query's structural sharing keeps the same object (no re-render).
+ */
+export function useTaskBoardQuery(projectId: number) {
   const { token, user } = useAuth();
   const uid = user?.id ?? null;
   return useQuery({
     queryKey: groupKeys.tasks(uid, projectId),
-    queryFn:  async () => (await getJson<{ tasks?: TTask[] }>(`/api/groups/${projectId}/tasks`, token, "Could not load tasks.")).tasks ?? [],
+    queryFn:  () => getJson<BoardResponse>(`/api/groups/${projectId}/tasks`, token, "Could not load tasks."),
     enabled:  !!token && uid !== null,
-    ...POLL_60S,
+    retry: false,
+    ...POLL_10S,
   });
+}
+
+/** Just the tasks (for small widgets such as "Your tasks"); shares the board query's cache. */
+export function useGroupTasksQuery(projectId: number) {
+  const board = useTaskBoardQuery(projectId);
+  return { ...board, data: board.data?.tasks as BoardTask[] | undefined };
 }
 
 export function useMyDisputesQuery<T>() {
@@ -76,7 +89,7 @@ export function useMyDisputesQuery<T>() {
   });
 }
 
-/** GET /api/groups/:id — shared by GroupManageModal and TaskManageModal. Always revalidates on open. */
+/** GET /api/groups/:id — used by GroupManageModal. Always revalidates on open. */
 export function useGroupManageQuery<T>(projectId: number) {
   const { token, user } = useAuth();
   const uid = user?.id ?? null;

@@ -12,7 +12,7 @@ import { useRouter } from "../router";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
-import { TaskManageModal, type GroupTask } from "../components/TaskManageModal";
+import { TasksTab } from "../components/tasks/TasksTab";
 import { FlagTag } from "../components/FlagTag";
 import { BriefCard } from "../components/BriefCard";
 import type { BriefAttachment } from "../lib/briefAttachments";
@@ -67,7 +67,7 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   "overload":        "Your contribution share significantly exceeds the equal share, suggesting an uneven workload distribution.",
 };
 
-type Tab = "report" | "document";
+type Tab = "report" | "document" | "tasks";
 
 // ── Dispute types ─────────────────────────────────────────────────────────────
 interface DisputeRecord {
@@ -195,7 +195,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   // Server state lives in React Query. The group page itself reads the stored report only.
   const groupQuery    = useStudentGroupQuery<GroupDetail>(projectId);
-  const tasksQuery    = useGroupTasksQuery<GroupTask>(projectId);
+  const tasksQuery    = useGroupTasksQuery(projectId);
   const disputesQuery = useMyDisputesQuery<DisputeRecord>();
   // A notification (join accepted, role response, task assigned, report ready, dispute response…)
   // changes the unread count → refresh this user's group data and own disputes.
@@ -213,14 +213,29 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("tab") === "document" ? "document" : "report";
+    const tab = params.get("tab");
+    return tab === "document" || tab === "tasks" ? tab : "report";
   });
+  // A task notification links here with ?tab=tasks&task=<id> to open that task's panel.
+  const initialTaskId = useMemo(() => {
+    const raw = new URLSearchParams(window.location.search).get("task");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }, []);
+
+  /** Switch tab and keep ?tab= (and ?task=) in the address bar, so a reload or shared link lands here. */
+  function selectTab(tab: Tab, taskId: number | null = null) {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "report") url.searchParams.delete("tab"); else url.searchParams.set("tab", tab);
+    if (tab === "tasks" && taskId !== null) url.searchParams.set("task", String(taskId)); else url.searchParams.delete("task");
+    window.history.replaceState(window.history.state, "", url);
+  }
   const [viewingHistory, setViewingHistory]     = useState(false);
   // A "join request" notification links here with ?manage=1 to open the manage modal.
   const [showManageModal, setShowManageModal]   = useState(
     () => new URLSearchParams(window.location.search).get("manage") === "1"
   );
-  const [showTasksModal, setShowTasksModal]     = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   // Functional role suggestion state
   const myRoles      = data?.membership?.functionalRoles ?? [];
@@ -241,9 +256,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [groupNameDraft, setGroupNameDraft]     = useState("");
   const [groupNameBusy, setGroupNameBusy]       = useState(false);
   const [groupNameErr, setGroupNameErr]         = useState("");
-  // My open tasks (read-only preview — full management lives in the Tasks modal)
+  // My open tasks (read-only preview — the board lives on the Tasks tab)
   const myTasks = useMemo(
-    () => (tasksQuery.data ?? []).filter((t) => t.assignedToUserId === user?.id && !t.done),
+    () => (tasksQuery.data ?? []).filter((t) => t.assignedToUserId === user?.id && t.status !== "DONE"),
     [tasksQuery.data, user?.id]
   );
 
@@ -361,8 +376,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] =
     sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["document", "report"]
-      : ["report"]; // GITHUB (default)
+      ? ["document", "report", "tasks"]
+      : ["report", "tasks"]; // GITHUB (default)
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
   const equalShare   = report ? 1 / report.memberCount : 0;
@@ -385,16 +400,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             void queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
             void queryClient.invalidateQueries({ queryKey: classKeys.all(uid) });
           }}
-        />
-      )}
-
-      {showTasksModal && (
-        <TaskManageModal
-          projectId={projectId}
-          isInstructor={false}
-          shares={Object.fromEntries((report?.team ?? []).map((m) => [m.userId, m.contributionShare]))}
-          onClose={() => setShowTasksModal(false)}
-          onChanged={() => void queryClient.invalidateQueries({ queryKey: groupKeys.tasks(uid, projectId) })}
         />
       )}
 
@@ -493,7 +498,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setShowTasksModal(true)}
+              onClick={() => selectTab("tasks")}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -518,27 +523,30 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           </div>
         </div>
 
-        {/* Tab bar — only rendered when more than one source applies */}
+        {/* Tab bar */}
         {visibleTabs.length > 1 && (
-          <div className="max-w-5xl mx-auto px-6 sm:px-8 flex border-t border-slate-100">
+          <div role="tablist" aria-label="Group sections" className={`${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} mx-auto px-6 sm:px-8 flex border-t border-slate-100`}>
             {visibleTabs.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                type="button"
+                role="tab"
+                aria-selected={effectiveTab === tab}
+                onClick={() => selectTab(tab)}
                 className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
                   effectiveTab === tab
                     ? "border-indigo-500 text-indigo-600"
                     : "border-transparent text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {tab === "report" ? "Report" : "FairTraze Docs"}
+                {tab === "report" ? "Report" : tab === "tasks" ? "Tasks" : "FairTraze Docs"}
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
+      <main className={`flex-1 ${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} w-full mx-auto px-6 sm:px-8 py-8 min-w-0`}>
 
         {/* Project brief — read-only context from the instructor; open the first time it is seen */}
         {(assignment.description || assignment.attachments.length > 0) && (
@@ -553,7 +561,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         )}
 
         {/* ── Your tasks widget ───────────────────────────────────────────────── */}
-        {myTasks.length > 0 && (
+        {myTasks.length > 0 && effectiveTab !== "tasks" && (
           <div className="mb-6 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
             <div className="flex items-center justify-between gap-3 mb-2">
               <h2 className="text-xs font-semibold text-slate-700">
@@ -563,21 +571,30 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 </span>
               </h2>
               <button
-                onClick={() => setShowTasksModal(true)}
+                onClick={() => selectTab("tasks")}
                 className="text-xs text-indigo-600 hover:underline font-medium shrink-0"
               >
-                Manage tasks
+                Open Tasks tab
               </button>
             </div>
             <ul className="space-y-1">
               {myTasks.map((t) => (
                 <li key={t.id} className="flex items-center gap-2 text-xs text-slate-600">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                  <span className="truncate">{t.title}</span>
+                  <span className="truncate"><span className="font-semibold tabular-nums">{t.key}</span> {t.title}</span>
                 </li>
               ))}
             </ul>
           </div>
+        )}
+
+        {/* ── Tasks tab ────────────────────────────────────────────────────────── */}
+        {effectiveTab === "tasks" && (
+          <TasksTab
+            projectId={projectId}
+            initialTaskId={initialTaskId}
+            onOpenTaskChange={(id) => selectTab("tasks", id)}
+          />
         )}
 
         {/* ── Report tab ───────────────────────────────────────────────────────── */}
