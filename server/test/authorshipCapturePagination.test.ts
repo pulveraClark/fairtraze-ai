@@ -57,7 +57,7 @@ describe("authorship capture is unaffected by page size changes", () => {
     await attachPromise;
     await new Promise((r) => setTimeout(r, 2000)); // flush debounce
     // The Document row exists now; switch page size through the real route, several times.
-    for (const size of ["A4", "LONG", "SHORT"]) {
+    for (const size of ["A4", "LEGAL", "LETTER"]) {
       await request(app)
         .patch(`/api/groups/${project.id}/document/page-size`)
         .set("Authorization", authHeaderFor(user))
@@ -69,7 +69,7 @@ describe("authorship capture is unaffected by page size changes", () => {
     await new Promise((r) => setTimeout(r, 2000));
 
     const doc = await prisma.document.findUniqueOrThrow({ where: { groupId: project.id } });
-    expect(doc.pageSize).toBe("SHORT");
+    expect(doc.pageSize).toBe("LETTER");
     const events = await prisma.editEvent.findMany({ where: { documentId: doc.id } });
     expect(events.every((e) => e.userId === user.id && e.eventType === "INSERT")).toBe(true);
     const inserted = events.reduce((sum, e) => sum + e.length, 0);

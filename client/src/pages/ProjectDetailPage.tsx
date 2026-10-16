@@ -657,7 +657,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             {viewingHistory ? (
               <DocumentHistoryPanel groupId={projectId} />
             ) : (
-              <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} />
+              <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} title={groupName} />
             )}
           </div>
         )}

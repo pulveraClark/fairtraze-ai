@@ -255,9 +255,10 @@ function buildBreakYjsState(): Uint8Array {
 }
 
 const baseLayout = {
-  pageSize: "SHORT" as const,
+  pageSize: "LETTER" as const,
   orientation: "PORTRAIT" as const,
   marginPreset: "NORMAL" as const,
+  margins: { top: 1, bottom: 1, left: 1, right: 1 },
   header: { left: "", center: "", right: "" },
   footer: { left: "", center: "", right: "" },
 };
@@ -319,13 +320,13 @@ describe("documentExport - page setup", () => {
   };
 
   it("sets the paper size for all three sizes, portrait", async () => {
-    expect(await sect({ ...baseLayout, pageSize: "SHORT" })).toMatchObject({ w: 12240, h: 15840 });
-    expect(await sect({ ...baseLayout, pageSize: "LONG" })).toMatchObject({ w: 12240, h: 18720 });
+    expect(await sect({ ...baseLayout, pageSize: "LETTER" })).toMatchObject({ w: 12240, h: 15840 });
+    expect(await sect({ ...baseLayout, pageSize: "LEGAL" })).toMatchObject({ w: 12240, h: 20160 });
     expect(await sect({ ...baseLayout, pageSize: "A4" })).toMatchObject({ w: 11906, h: 16838 });
   });
 
   it("landscape swaps width and height and says so", async () => {
-    for (const [size, w, h] of [["SHORT", 15840, 12240], ["LONG", 18720, 12240], ["A4", 16838, 11906]] as const) {
+    for (const [size, w, h] of [["LETTER", 15840, 12240], ["LEGAL", 20160, 12240], ["A4", 16838, 11906]] as const) {
       const s = await sect({ ...baseLayout, pageSize: size, orientation: "LANDSCAPE" });
       expect(s, size).toMatchObject({ w, h, orient: "landscape" });
       expect(s.w).toBeGreaterThan(s.h);
@@ -336,6 +337,13 @@ describe("documentExport - page setup", () => {
     expect(await sect({ ...baseLayout, marginPreset: "NORMAL" })).toMatchObject({ top: 1440, bottom: 1440, left: 1440, right: 1440 });
     expect(await sect({ ...baseLayout, marginPreset: "NARROW" })).toMatchObject({ top: 720, bottom: 720, left: 720, right: 720 });
     expect(await sect({ ...baseLayout, marginPreset: "WIDE" })).toMatchObject({ top: 1440, bottom: 1440, left: 2880, right: 2880 });
+  });
+
+  it("applies custom margins (inches) in twips, per side", async () => {
+    const custom = await sect({ ...baseLayout, marginPreset: "CUSTOM", margins: { top: 1, bottom: 1, left: 0.5, right: 1 } });
+    expect(custom).toMatchObject({ top: 1440, bottom: 1440, left: 720, right: 1440 });
+    const odd = await sect({ ...baseLayout, marginPreset: "CUSTOM", margins: { top: 0.3, bottom: 2.5, left: 0, right: 3 } });
+    expect(odd).toMatchObject({ top: 432, bottom: 3600, left: 0, right: 4320 });
   });
 
   it("without a layout the export is unchanged (valid, no header or footer part)", async () => {

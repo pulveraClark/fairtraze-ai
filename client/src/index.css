@@ -80,6 +80,60 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   font-family: "Geist Variable", system-ui, sans-serif;
 }
 
+/* ── Writing-area fonts ─────────────────────────────────────────────────────────────────────────
+   Self-hosted WOFF (src/assets/fonts, licenses in LICENSES.md). The SAME files are embedded in the
+   PDF export (lib/pdf/fontRegistry.ts), so screen and PDF cannot differ. Each face is split into
+   latin / latin-ext parts by unicode-range: a part is only downloaded when text that needs it is on
+   the page (font-display: swap). The family names are private ("FT …") and only ever applied inside
+   .ft-doc-content, so the app UI is unaffected. */
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Comic"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/comic-neue-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Comic"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/comic-neue-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Comic"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/comic-neue-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Comic"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/comic-neue-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+/* The document text uses the bundled default face. The editor's font menu stores these CSS stacks
+   (kept as they are, so existing documents and the .docx export are unchanged); inside the writing
+   area they resolve to the bundled look-alikes: Arial -> Arimo, Georgia -> Gelasio,
+   Courier New -> Cousine, Comic Sans -> Comic Neue. Every stack falls back to the default face
+   for glyphs its own font lacks (the PDF export uses the same chain). !important beats the inline style. */
+.ft-doc-content { font-family: "FT Geist", "Geist Variable", system-ui, sans-serif; }
+.ft-doc-content [style*="Arial"] { font-family: "FT Sans", "FT Geist", Arial, Helvetica, sans-serif !important; }
+.ft-doc-content [style*="Georgia"] { font-family: "FT Serif", "FT Geist", Georgia, "Times New Roman", serif !important; }
+.ft-doc-content [style*="Courier New"], .ft-doc-content code, .ft-doc-content pre { font-family: "FT Mono", "FT Geist", "Courier New", monospace !important; }
+.ft-doc-content [style*="Comic Sans"] { font-family: "FT Comic", "FT Geist", "Comic Sans MS", cursive !important; }
+
 body {
   font-family: "Geist Variable", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -343,14 +397,19 @@ body {
   list-style: none;
   padding-left: 0.25rem;
 }
+/* A checklist item is a plain block with the checkbox taken out of the flow (it used to be a flex
+   row). A flex item box is a block formatting context, which next to the page extension's float
+   spacers shrinks to a sliver at a page boundary (the text stacked one letter per line, in the page
+   view and so in the PDF). A normal block's lines simply flow past the floats. Same geometry:
+   0.25rem list padding + 1rem box + 0.5rem gap = 1.5rem item padding. */
 .ft-doc-content ul[data-type="taskList"] li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
+  position: relative;
+  padding-left: 1.5rem;
 }
 .ft-doc-content ul[data-type="taskList"] li > label {
-  flex: 0 0 auto;
-  margin-top: 0.2rem;
+  position: absolute;
+  left: 0;
+  top: 0.2rem;
   user-select: none;
 }
 .ft-doc-content ul[data-type="taskList"] li > label input[type="checkbox"] {
@@ -359,7 +418,7 @@ body {
   accent-color: #4338ca;
   cursor: pointer;
 }
-.ft-doc-content ul[data-type="taskList"] li > div { flex: 1 1 auto; min-width: 0; }
+.ft-doc-content ul[data-type="taskList"] li > div { min-width: 0; }
 .ft-doc-content ul[data-type="taskList"] li[data-checked="true"] > div {
   text-decoration: line-through;
   color: #475569;

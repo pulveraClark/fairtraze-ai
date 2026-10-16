@@ -124,6 +124,9 @@ async function mountScreen(c: Case) {
   await nextFrame();
   await document.fonts.ready;
   await settle(editor, paper, g.heightPx, SCREEN_PAGE_GAP_PX, c.scale ?? 1);
+  // Fonts are fetched lazily when text first uses them: measure again once they have swapped in.
+  await document.fonts.ready;
+  await settle(editor, paper, g.heightPx, SCREEN_PAGE_GAP_PX, c.scale ?? 1);
   return { stage, g, layout, paper, editor };
 }
 

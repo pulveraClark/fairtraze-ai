@@ -943,7 +943,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             {viewingHistory ? (
               <DocumentHistoryPanel groupId={projectId} />
             ) : (
-              <DocumentGate groupId={projectId} editable={true} canChooseTemplate={membership.role === "LEADER"} />
+              <DocumentGate groupId={projectId} editable={true} canChooseTemplate={membership.role === "LEADER"} title={project.groupName} />
             )}
           </div>
         )}

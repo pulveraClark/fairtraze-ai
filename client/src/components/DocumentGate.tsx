@@ -11,13 +11,15 @@ interface Props {
   // see server/src/routes/documents.ts POST /document/init). Non-choosers just wait or,
   // for the read-only instructor view, see an empty state.
   canChooseTemplate: boolean;
+  /** The document's title (the group's name): the PDF's file name and title metadata. */
+  title?: string;
 }
 
 // Gates DocumentEditor behind a one-time "start your document" step: before any Document row
 // exists for the group, the leader (or instructor) picks a template or starts blank. Once a
 // document exists, this renders DocumentEditor exactly as before — no behavior change for
 // already-started documents.
-export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
+export function DocumentGate({ groupId, editable, canChooseTemplate, title }: Props) {
   const { token } = useAuth();
   const [exists, setExists] = useState<boolean | null>(null);
   // Whether the document is still safe to reset (no real typed/imported content, no image
@@ -141,6 +143,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
         )}
         <DocumentEditor
           groupId={groupId}
+          title={title}
           editable={editable}
           awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
         />

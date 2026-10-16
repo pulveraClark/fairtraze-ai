@@ -25,7 +25,7 @@ export function LinkDialog({ editor, onClose }: Props) {
   const [error, setError] = useState("");
   const urlRef = useRef<HTMLInputElement | null>(null);
   // Tab stays inside; Esc closes; focus returns to the editor (see useFocusTrap).
-  const dialogRef = useFocusTrap<HTMLFormElement>(onClose, () => editor.commands.focus());
+  const dialogRef = useFocusTrap<HTMLFormElement>(onClose, () => { if (!editor.isDestroyed) editor.commands.focus(); });
 
   useEffect(() => {
     urlRef.current?.focus();

@@ -1,5 +1,5 @@
 import { PaginationPlus } from "tiptap-pagination-plus";
-import { resolvePageGeometry, type PageSizeKey, type PageOrientation, type MarginPresetKey } from "@shared/pageSizes";
+import { resolvePageGeometry, type PageSizeKey, type PageOrientation, type MarginPresetKey, type MarginsIn } from "@shared/pageSizes";
 
 /** Gap between sheets on screen. The print instance uses 0 (everything else identical). */
 /**
@@ -35,8 +35,8 @@ export const SCREEN_PAGE_GAP_PX = 24;
 /** Gray stage color the gap is painted with, so sheets read as separate paper. */
 export const STAGE_BG = "#cbd5e1";
 
-export function paginationSize(size: PageSizeKey, orientation: PageOrientation = "PORTRAIT", margins: MarginPresetKey = "NORMAL") {
-  const g = resolvePageGeometry(size, orientation, margins);
+export function paginationSize(size: PageSizeKey, orientation: PageOrientation = "PORTRAIT", margins: MarginPresetKey = "NORMAL", custom?: MarginsIn | null) {
+  const g = resolvePageGeometry(size, orientation, margins, custom);
   return {
     pageWidth: g.widthPx,
     pageHeight: g.heightPx,
@@ -55,10 +55,11 @@ export function paginationExtension(
   size: PageSizeKey,
   gap: number,
   orientation: PageOrientation = "PORTRAIT",
-  margins: MarginPresetKey = "NORMAL"
+  margins: MarginPresetKey = "NORMAL",
+  custom?: MarginsIn | null
 ) {
   return PaginationPlusSafe.configure({
-    ...paginationSize(size, orientation, margins),
+    ...paginationSize(size, orientation, margins, custom),
     pageGap: gap,
     pageGapBorderSize: 0,
     pageBreakBackground: STAGE_BG,

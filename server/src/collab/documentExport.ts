@@ -25,7 +25,7 @@ import { Y } from "./yjsCjs.js";
 import { legacySchema } from "./persistence.js";
 import { isSafeLinkUrl } from "@shared/linkUrl.js";
 import { PAGE_SIZES, PAGE_TOKEN, resolvePageGeometry } from "@shared/pageSizes.js";
-import type { MarginPresetKey, PageOrientation, PageSizeKey } from "@shared/pageSizes.js";
+import type { MarginPresetKey, MarginsIn, PageOrientation, PageSizeKey } from "@shared/pageSizes.js";
 
 // Loaded the same CJS way persistence.ts loads it — see that file's comment for why (yjs must
 // stay a single module instance across every file that does `instanceof Y.XmlText` etc.).
@@ -374,6 +374,8 @@ export interface DocLayout {
   pageSize: PageSizeKey;
   orientation: PageOrientation;
   marginPreset: MarginPresetKey;
+  /** The four effective margins in inches (equal to the preset for named presets). */
+  margins: MarginsIn;
   header: { left: string; center: string; right: string };
   footer: { left: string; center: string; right: string };
 }
@@ -439,7 +441,7 @@ export async function buildDocxBuffer(blocks: DocBlock[], comments: ExportCommen
   let headers: { default: Header } | undefined;
   let footers: { default: Footer } | undefined;
   if (layout) {
-    const g = resolvePageGeometry(layout.pageSize, layout.orientation, layout.marginPreset);
+    const g = resolvePageGeometry(layout.pageSize, layout.orientation, layout.marginPreset, layout.margins);
     const paper = PAGE_SIZES[layout.pageSize];
     properties = {
       page: {
@@ -449,14 +451,14 @@ export async function buildDocxBuffer(blocks: DocBlock[], comments: ExportCommen
           orientation: g.landscape ? DocxPageOrientation.LANDSCAPE : DocxPageOrientation.PORTRAIT,
         },
         margin: {
-          top: g.marginTopPx * TWIPS_PER_PX,
-          bottom: g.marginBottomPx * TWIPS_PER_PX,
-          left: g.marginLeftPx * TWIPS_PER_PX,
-          right: g.marginRightPx * TWIPS_PER_PX,
+          top: Math.round(g.marginTopPx * TWIPS_PER_PX),
+          bottom: Math.round(g.marginBottomPx * TWIPS_PER_PX),
+          left: Math.round(g.marginLeftPx * TWIPS_PER_PX),
+          right: Math.round(g.marginRightPx * TWIPS_PER_PX),
         },
       },
     };
-    const textWidth = g.widthTwip - (g.marginLeftPx + g.marginRightPx) * TWIPS_PER_PX;
+    const textWidth = g.widthTwip - Math.round((g.marginLeftPx + g.marginRightPx) * TWIPS_PER_PX);
     const headerP = bandParagraph(layout.header, textWidth);
     const footerP = bandParagraph(layout.footer, textWidth);
     if (headerP) headers = { default: new Header({ children: [headerP] }) };

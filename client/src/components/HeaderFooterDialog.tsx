@@ -64,7 +64,7 @@ function Band({
 export function HeaderFooterDialog({ editor, header, footer, onApply, onClose }: Props) {
   const [h, setH] = useState<HeaderFooterText>(header);
   const [f, setF] = useState<HeaderFooterText>(footer);
-  const dialogRef = useFocusTrap<HTMLFormElement>(onClose, () => editor.commands.focus());
+  const dialogRef = useFocusTrap<HTMLFormElement>(onClose, () => { if (!editor.isDestroyed) editor.commands.focus(); });
 
   return (
     <div

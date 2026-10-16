@@ -22,8 +22,11 @@ import {
   isMarginPreset,
   isPageOrientation,
   isPageSizeKey,
+  resolveMargins,
   sanitizeHeaderFooterText,
+  validateMargins,
 } from "@shared/pageSizes.js";
+import type { MarginPresetKey, MarginsIn, PageOrientation, PageSizeKey } from "@shared/pageSizes.js";
 import type { Document as DocumentRow } from "@prisma/client";
 import type { DocLayout } from "../collab/documentExport.js";
 
@@ -40,21 +43,30 @@ const contentBody = z.object({
 type PageSetupRow = Pick<
   DocumentRow,
   | "pageSize" | "orientation" | "marginPreset"
+  | "marginTop" | "marginBottom" | "marginLeft" | "marginRight"
   | "headerLeft" | "headerCenter" | "headerRight"
   | "footerLeft" | "footerCenter" | "footerRight"
 >;
 const PAGE_SETUP_SELECT = {
   pageSize: true, orientation: true, marginPreset: true,
+  marginTop: true, marginBottom: true, marginLeft: true, marginRight: true,
   headerLeft: true, headerCenter: true, headerRight: true,
   footerLeft: true, footerCenter: true, footerRight: true,
 } as const;
 
 /** The document's page setup as the API returns it; stored values are re-validated on the way out. */
 export function pageSetupOf(row: PageSetupRow | null): DocLayout {
+  const marginPreset: MarginPresetKey = row && isMarginPreset(row.marginPreset) ? row.marginPreset : DEFAULT_MARGIN_PRESET;
+  // The stored numbers are the effective margins (presets write their own); a preset's own values
+  // win if the row ever disagrees, so a stale column can never show a wrong "Normal".
+  const stored: MarginsIn | null = row
+    ? { top: row.marginTop, bottom: row.marginBottom, left: row.marginLeft, right: row.marginRight }
+    : null;
   return {
     pageSize: row && isPageSizeKey(row.pageSize) ? row.pageSize : DEFAULT_PAGE_SIZE,
     orientation: row && isPageOrientation(row.orientation) ? row.orientation : DEFAULT_PAGE_ORIENTATION,
-    marginPreset: row && isMarginPreset(row.marginPreset) ? row.marginPreset : DEFAULT_MARGIN_PRESET,
+    marginPreset,
+    margins: resolveMargins(marginPreset, stored),
     header: { left: row?.headerLeft ?? "", center: row?.headerCenter ?? "", right: row?.headerRight ?? "" },
     footer: { left: row?.footerLeft ?? "", center: row?.footerCenter ?? "", right: row?.footerRight ?? "" },
   };
@@ -126,6 +138,23 @@ documentsRouter.get("/api/groups/:id/document/page-size", requireAuth, async (re
 
 const pageSizeBody = z.object({ pageSize: z.enum(PAGE_SIZE_KEYS) });
 
+/** Validates the page setup as it WILL be after a change (same rules as the dialog). Null when fine. */
+function setupError(next: {
+  pageSize: PageSizeKey;
+  orientation: PageOrientation;
+  margins: MarginsIn;
+  header: { left: string; center: string; right: string };
+  footer: { left: string; center: string; right: string };
+}): string | null {
+  return validateMargins({
+    size: next.pageSize,
+    orientation: next.orientation,
+    margins: next.margins,
+    hasHeader: !!(next.header.left || next.header.center || next.header.right),
+    hasFooter: !!(next.footer.left || next.footer.center || next.footer.right),
+  });
+}
+
 // PATCH /api/groups/:id/document/page-size — set the document's paper size. Any GROUP MEMBER may
 // change it (the setting is shared by all collaborators); the instructor's view is read-only.
 // Deliberately a plain column write on Document: no Yjs/getYDoc() access, no EditEvent/EditSession,
@@ -158,9 +187,15 @@ documentsRouter.patch("/api/groups/:id/document/page-size", requireAuth, async (
   }
   // Never create the row here: a Document row existing is what makes the client skip the template
   // picker (GET /document/status), so only the editor's own flow may bring it into existence.
-  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } });
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true, ...PAGE_SETUP_SELECT } });
   if (!existing) {
     res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+  const current = pageSetupOf(existing);
+  const err = setupError({ ...current, pageSize: body.data.pageSize });
+  if (err) {
+    res.status(400).json({ error: err });
     return;
   }
   const doc = await prisma.document.update({
@@ -201,11 +236,19 @@ const hfSlot = z
   .pipe(z.string().max(HF_SLOT_MAX_CHARS, `Each header/footer box holds at most ${HF_SLOT_MAX_CHARS} characters.`));
 const hfBand = z.object({ left: hfSlot.optional(), center: hfSlot.optional(), right: hfSlot.optional() }).strict();
 
+// Margins are inches. Range and step are enforced by validateMargins (one source of truth shared
+// with the dialog) so the error message is the one the user already saw.
+const marginNum = z.number().finite();
+
 const pageSetupBody = z
   .object({
     pageSize: z.enum(PAGE_SIZE_KEYS).optional(),
     orientation: z.enum(PAGE_ORIENTATIONS).optional(),
     marginPreset: z.enum(MARGIN_PRESET_KEYS).optional(),
+    marginTop: marginNum.optional(),
+    marginBottom: marginNum.optional(),
+    marginLeft: marginNum.optional(),
+    marginRight: marginNum.optional(),
     header: hfBand.optional(),
     footer: hfBand.optional(),
   })
@@ -243,18 +286,55 @@ documentsRouter.patch("/api/groups/:id/document/page-setup", requireAuth, async 
     res.status(403).json({ error: "Page setup is only available for EDITOR or COMBINED assignments." });
     return;
   }
-  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } });
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true, ...PAGE_SETUP_SELECT } });
   if (!existing) {
     res.status(404).json({ error: "This group hasn't started their document yet." });
     return;
   }
   const b = body.data;
+
+  // Margins. A named preset writes its own four numbers (any numbers sent with it are ignored).
+  // CUSTOM, or numbers sent without a preset, mean CUSTOM: the numbers sent replace the stored ones
+  // one by one. Everything is validated as the final result, so a change that makes the page too
+  // small (orientation, header/footer, paper) is refused with the dialog's own message.
+  const current = pageSetupOf(existing);
+  const sentNumbers = [b.marginTop, b.marginBottom, b.marginLeft, b.marginRight].some((v) => v !== undefined);
+  let marginPreset: MarginPresetKey = current.marginPreset;
+  let margins: MarginsIn = current.margins;
+  if (b.marginPreset !== undefined && b.marginPreset !== "CUSTOM") {
+    marginPreset = b.marginPreset;
+    margins = resolveMargins(marginPreset);
+  } else if (b.marginPreset === "CUSTOM" || sentNumbers) {
+    marginPreset = "CUSTOM";
+    margins = {
+      top: b.marginTop ?? current.margins.top,
+      bottom: b.marginBottom ?? current.margins.bottom,
+      left: b.marginLeft ?? current.margins.left,
+      right: b.marginRight ?? current.margins.right,
+    };
+  }
+  const next = {
+    pageSize: b.pageSize ?? current.pageSize,
+    orientation: b.orientation ?? current.orientation,
+    margins,
+    header: { left: b.header?.left ?? current.header.left, center: b.header?.center ?? current.header.center, right: b.header?.right ?? current.header.right },
+    footer: { left: b.footer?.left ?? current.footer.left, center: b.footer?.center ?? current.footer.center, right: b.footer?.right ?? current.footer.right },
+  };
+  const err = setupError(next);
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+  const marginsChanged = b.marginPreset !== undefined || sentNumbers;
+
   const doc = await prisma.document.update({
     where: { id: existing.id },
     data: {
       ...(b.pageSize !== undefined ? { pageSize: b.pageSize } : {}),
       ...(b.orientation !== undefined ? { orientation: b.orientation } : {}),
-      ...(b.marginPreset !== undefined ? { marginPreset: b.marginPreset } : {}),
+      ...(marginsChanged
+        ? { marginPreset, marginTop: margins.top, marginBottom: margins.bottom, marginLeft: margins.left, marginRight: margins.right }
+        : {}),
       ...(b.header?.left !== undefined ? { headerLeft: b.header.left } : {}),
       ...(b.header?.center !== undefined ? { headerCenter: b.header.center } : {}),
       ...(b.header?.right !== undefined ? { headerRight: b.header.right } : {}),

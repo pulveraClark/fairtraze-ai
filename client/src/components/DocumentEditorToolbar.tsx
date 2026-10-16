@@ -609,8 +609,9 @@ function FileMenu({
   onImportClick,
   exporting,
   onExportDocx,
-  onExportPdf,
-  exportingPdf,
+  onDownloadPdf,
+  onPrint,
+  pdfBusy,
   pageSummary,
 }: {
   editable: boolean;
@@ -618,8 +619,9 @@ function FileMenu({
   onImportClick: () => void;
   exporting: boolean;
   onExportDocx: () => void;
-  onExportPdf: () => void;
-  exportingPdf: boolean;
+  onDownloadPdf: () => void;
+  onPrint: () => void;
+  pdfBusy: boolean;
   pageSummary: string;
 }) {
   const { open, setOpen, pos, btnRef, menuRef } = useToolbarDropdown();
@@ -649,8 +651,21 @@ function FileMenu({
             }}
           />
           <MenuItemButton
-            label={exportingPdf ? "Preparing PDF…" : "Export PDF"}
-            disabled={exportingPdf}
+            label={pdfBusy ? "Preparing PDF…" : "Download PDF"}
+            disabled={pdfBusy}
+            icon={
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+              </svg>
+            }
+            onClick={() => {
+              close();
+              onDownloadPdf();
+            }}
+          />
+          <MenuItemButton
+            label="Print"
+            disabled={pdfBusy}
             icon={
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h9l5 5v2M6 18H4a1 1 0 01-1-1v-5a1 1 0 011-1h16a1 1 0 011 1v5a1 1 0 01-1 1h-2M6 14h12M6 18v4h12v-4" />
@@ -658,7 +673,7 @@ function FileMenu({
             }
             onClick={() => {
               close();
-              onExportPdf();
+              onPrint();
             }}
           />
           {/* Paper, orientation and margins are shared by every collaborator and changed from
@@ -818,7 +833,8 @@ export function Toolbar({
   onInsertImageClick,
   onExportDocx,
   exporting,
-  onExportPdf,
+  onDownloadPdf,
+  onPrint,
   showComments,
   onToggleComments,
   onAddComment,
@@ -830,7 +846,7 @@ export function Toolbar({
   pageSummary,
   onOpenPageSetup,
   onOpenHeaderFooter,
-  exportingPdf,
+  pdfBusy,
   zoom,
   onChangeZoom,
   onOpenFind,
@@ -847,7 +863,8 @@ export function Toolbar({
   onInsertImageClick: () => void;
   onExportDocx: () => void;
   exporting: boolean;
-  onExportPdf: () => void;
+  onDownloadPdf: () => void;
+  onPrint: () => void;
   showComments: boolean;
   onToggleComments: () => void;
   onAddComment: () => void;
@@ -859,7 +876,7 @@ export function Toolbar({
   pageSummary: string;
   onOpenPageSetup: () => void;
   onOpenHeaderFooter: () => void;
-  exportingPdf: boolean;
+  pdfBusy: boolean;
   zoom: number;
   onChangeZoom: (zoom: number) => void;
   onOpenFind: (replace: boolean) => void;
@@ -1087,8 +1104,9 @@ export function Toolbar({
         onImportClick={onImportClick}
         exporting={exporting}
         onExportDocx={onExportDocx}
-        onExportPdf={onExportPdf}
-        exportingPdf={exportingPdf}
+        onDownloadPdf={onDownloadPdf}
+        onPrint={onPrint}
+        pdfBusy={pdfBusy}
         pageSummary={pageSummary}
       />
 

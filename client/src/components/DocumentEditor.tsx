@@ -37,11 +37,12 @@ import type { EditorShortcutHandlers } from "../lib/formattingExtensions";
 import { SearchReplace } from "../lib/searchReplace";
 import { useCollabVersionGuard } from "../lib/useCollabVersionGuard";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion";
-import { PAGE_SIZES, MARGIN_PRESETS, resolvePageGeometry } from "@shared/pageSizes";
-import { DEFAULT_PAGE_SETUP, applyPageSetup, parsePageSetup, samePageSetup } from "../lib/pageSetup";
-import type { PageSetup } from "../lib/pageSetup";
+import { PAGE_SIZES, MARGIN_PRESET_LABELS, resolvePageGeometry } from "@shared/pageSizes";
+import { DEFAULT_PAGE_SETUP, applyPageSetup, mergePageSetup, pageSetupPatchBody, parsePageSetup, samePageSetup } from "../lib/pageSetup";
+import type { PageSetup, PageSetupChange } from "../lib/pageSetup";
 import { PageBreak } from "../lib/pageBreak";
 import { PageSetupDialog } from "./PageSetupDialog";
+import { PdfProgressPanel } from "./PdfProgressPanel";
 import { HeaderFooterDialog } from "./HeaderFooterDialog";
 import { paginationExtension, SCREEN_PAGE_GAP_PX } from "../lib/pageLayout";
 import { printDocument } from "../lib/printDocument";
@@ -64,6 +65,8 @@ interface Props {
   // (see DocumentEditor.tsx's AWAIT_INITIAL_CONTENT_TIMEOUT_MS comment for why `provider.synced`
   // alone can't be used for this). Undefined (the normal reopen path) skips this entirely.
   awaitInitialNodeCount?: number;
+  /** The document's title (the group's name): the PDF's file name and title metadata. */
+  title?: string;
 }
 
 interface CollabHandle {
@@ -147,7 +150,7 @@ function PaperStage({ pageWidth, zoom, children }: { pageWidth: number; zoom: nu
   );
 }
 
-export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Props) {
+export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title }: Props) {
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -166,7 +169,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   // collision-free within the group, instead of by raw global User.id (see collabColors.ts).
   const [memberIds, setMemberIds] = useState<number[]>([]);
   const [importing, setImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string; action?: { label: string; run: () => void } } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [showComments, setShowComments] = useState(false);
@@ -188,7 +191,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const pageSize = pageSetup.pageSize;
-  const [exportingPdf, setExportingPdf] = useState(false);
+  // Download PDF / Print: build state for the progress panel (null when idle) and the abort handle.
+  const [pdfRun, setPdfRun] = useState<{ fraction: number; label: string; purpose: "download" | "print" } | null>(null);
+  const pdfAbortRef = useRef<AbortController | null>(null);
   // Optional zoom on top of fit-to-width (0.75 / 1 / 1.25), a CSS transform scale on the paper.
   const [zoom, setZoom] = useState(1);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
@@ -372,7 +377,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             // Page break: a leaf block sized from the sheet bands (lib/pageBreak.ts). Heights are
             // layout only; the empty transaction below makes the pagination plugin re-count sheets.
             PageBreak.configure({ onLayoutChanged: (view) => view.dispatch(view.state.tr) }),
-            paginationExtension(pageSetupRef.current.pageSize, SCREEN_PAGE_GAP_PX, pageSetupRef.current.orientation, pageSetupRef.current.marginPreset),
+            paginationExtension(pageSetupRef.current.pageSize, SCREEN_PAGE_GAP_PX, pageSetupRef.current.orientation, pageSetupRef.current.marginPreset, pageSetupRef.current.margins),
           ]
         : [StarterKit],
       editable: effectiveEditable,
@@ -490,16 +495,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
 
   // Optimistic update with rollback. `change` is any subset of the setup (the server merges it).
   const handleChangePageSetup = useCallback(
-    async (change: Partial<PageSetup>) => {
+    async (change: PageSetupChange) => {
       if (!token) return;
       const previous = pageSetupRef.current;
-      setPageSetup({ ...previous, ...change });
+      setPageSetup(mergePageSetup(previous, change));
       pageSetupSavingRef.current = true;
       try {
         const res = await fetch(`/api/groups/${groupId}/document/page-setup`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(change),
+          body: JSON.stringify(pageSetupPatchBody(change)),
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -829,27 +834,109 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
     }
   };
 
-  // Clean PDF: a separate read-only TipTap instance in a hidden iframe is loaded with a snapshot of
-  // the document and printed as bond-paper pages only (see lib/printDocument.ts) — no app chrome,
-  // no comments/authorship/cursors, no header/footer/page numbers. Read-only: this never writes to
-  // the live editor or Yjs. The browser's print dialog is the delivery ("Save as PDF").
-  const handleExportPdf = async () => {
-    if (!editor || exportingPdf) return;
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    setExportingPdf(true);
+  // PDF: a separate read-only TipTap copy is laid out offscreen exactly like the page view, the
+  // browser's own line positions are read, and a Web Worker writes a vector PDF from them (see
+  // lib/pdf/). One click, no print dialog. Read-only: nothing here writes to the live editor, Yjs
+  // or the server. pdf-lib is only loaded (dynamic import) when this runs.
+  const buildDocumentPdf = async (purpose: "download" | "print") => {
+    const ps = pageSetupRef.current;
+    const ac = new AbortController();
+    pdfAbortRef.current = ac;
+    setPdfRun({ fraction: 0, label: "Starting…", purpose });
+    const { buildPdf } = await import("../lib/pdf/pdfExport");
+    return buildPdf({
+      json: editor!.getJSON(),
+      size: ps.pageSize,
+      layout: { orientation: ps.orientation, margins: ps.marginPreset, customMargins: ps.margins, header: ps.header, footer: ps.footer },
+      title: title?.trim() || "Document",
+      signal: ac.signal,
+      onProgress: (p) => setPdfRun({ fraction: p.fraction, label: p.label, purpose }),
+    });
+  };
+  const missingNote = (missing: string[]) =>
+    missing.length ? ` Some characters (${missing.slice(0, 8).join(" ")}${missing.length > 8 ? " …" : ""}) are not in the document fonts and were left out.` : "";
+
+  // Browser print window of the old print copy: only the fallback when the PDF path cannot be used.
+  const printWithBrowser = async () => {
+    const ps = pageSetupRef.current;
     try {
-      const ps = pageSetupRef.current;
-      await printDocument(editor.getJSON(), ps.pageSize, {
-        orientation: ps.orientation,
-        margins: ps.marginPreset,
-        header: ps.header,
-        footer: ps.footer,
+      await printDocument(editor!.getJSON(), ps.pageSize, {
+        orientation: ps.orientation, margins: ps.marginPreset, customMargins: ps.margins, header: ps.header, footer: ps.footer,
       });
     } catch (err) {
-      console.error("[pdf export] failed", err);
-      setImportMessage({ kind: "error", text: "PDF export failed — try again." });
+      console.error("[print] failed", err);
+      setImportMessage({ kind: "error", text: "Printing failed — try again." });
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!editor || pdfRun) return;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setImportMessage(null);
+    try {
+      const result = await buildDocumentPdf("download");
+      const { downloadBlob } = await import("../lib/pdf/pdfExport");
+      const { pdfFileName } = await import("../lib/pdf/pdfFileName");
+      const name = pdfFileName(title);
+      downloadBlob(result.blob, name);
+      setImportMessage({ kind: "success", text: `PDF downloaded: ${name} (${result.pages} ${result.pages === 1 ? "page" : "pages"}).${missingNote(result.missing)}` });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setImportMessage({ kind: "success", text: "PDF export cancelled. Nothing was downloaded." });
+      } else {
+        console.error("[pdf export] failed", err);
+        setImportMessage({
+          kind: "error",
+          text: `The PDF could not be created${err instanceof Error && err.message ? ` (${err.message})` : ""}. You can print the document instead.`,
+          action: { label: "Use Print instead", run: () => void handlePrint() },
+        });
+      }
     } finally {
-      setExportingPdf(false);
+      pdfAbortRef.current = null;
+      setPdfRun(null);
+    }
+  };
+
+  // Print = the same PDF opened in the browser's PDF viewer (a new tab), which scales to the paper and
+  // margins the user picks there. The tab is opened right away, inside the click, so a pop-up blocker
+  // does not stop it; the PDF is put into it when it is ready.
+  const handlePrint = async () => {
+    if (!editor || pdfRun) return;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setImportMessage(null);
+    const tab = window.open("", "_blank");
+    if (!tab) {
+      // Pop-ups are blocked: use the browser's own print window instead.
+      await printWithBrowser();
+      return;
+    }
+    try {
+      tab.document.title = "Preparing PDF…";
+      tab.document.body.textContent = "Preparing the PDF…";
+    } catch {
+      /* the new tab may not be scriptable; it is only a placeholder */
+    }
+    try {
+      const result = await buildDocumentPdf("print");
+      const url = URL.createObjectURL(result.blob);
+      tab.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60_000);
+      setImportMessage({ kind: "success", text: `The PDF opened in a new tab: print it from there.${missingNote(result.missing)}` });
+    } catch (err) {
+      tab.close();
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setImportMessage({ kind: "success", text: "Print cancelled." });
+      } else {
+        console.error("[print] pdf failed", err);
+        setImportMessage({
+          kind: "error",
+          text: "The PDF could not be created for printing.",
+          action: { label: "Use the browser's print window", run: () => void printWithBrowser() },
+        });
+      }
+    } finally {
+      pdfAbortRef.current = null;
+      setPdfRun(null);
     }
   };
 
@@ -866,7 +953,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
 
   const pageSummary = `${PAGE_SIZES[pageSetup.pageSize].label.split(" (")[0]}, ${
     pageSetup.orientation === "LANDSCAPE" ? "landscape" : "portrait"
-  }, ${MARGIN_PRESETS[pageSetup.marginPreset].label.split(" (")[0].toLowerCase()} margins`;
+  }, ${MARGIN_PRESET_LABELS[pageSetup.marginPreset].split(" (")[0].toLowerCase()} margins`;
 
   const toolbar = (
     <Toolbar
@@ -881,7 +968,8 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       onInsertImageClick={handleInsertImageClick}
       onExportDocx={handleExportDocx}
       exporting={exporting}
-      onExportPdf={handleExportPdf}
+      onDownloadPdf={() => void handleDownloadPdf()}
+      onPrint={() => void handlePrint()}
       showComments={showComments}
       onToggleComments={() => setShowComments((v) => !v)}
       onAddComment={handleAddCommentClick}
@@ -893,7 +981,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       pageSummary={pageSummary}
       onOpenPageSetup={() => setPageSetupOpen(true)}
       onOpenHeaderFooter={() => setHeaderFooterOpen(true)}
-      exportingPdf={exportingPdf}
+      pdfBusy={!!pdfRun}
       zoom={zoom}
       onChangeZoom={setZoom}
       onOpenFind={(replace) => setFindBar({ open: true, replace })}
@@ -940,6 +1028,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
       />
       {importMessage && (
         <div
+          role={importMessage.kind === "error" ? "alert" : "status"}
           className={`flex items-center justify-between gap-3 px-3 py-1.5 border-b text-xs ${
             importMessage.kind === "success"
               ? "bg-emerald-50 border-emerald-100 text-emerald-700"
@@ -947,6 +1036,19 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
           }`}
         >
           <span>{importMessage.text}</span>
+          {importMessage.action && (
+            <button
+              type="button"
+              onClick={() => {
+                const run = importMessage.action!.run;
+                setImportMessage(null);
+                run();
+              }}
+              className="shrink-0 min-h-8 rounded border border-current px-2 font-semibold hover:bg-white/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+            >
+              {importMessage.action.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setImportMessage(null)}
@@ -956,6 +1058,14 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             ✕
           </button>
         </div>
+      )}
+      {pdfRun && (
+        <PdfProgressPanel
+          purpose={pdfRun.purpose}
+          fraction={pdfRun.fraction}
+          label={pdfRun.label}
+          onCancel={() => pdfAbortRef.current?.abort()}
+        />
       )}
       {findBar.open && (
         <FindReplaceBar
@@ -1004,7 +1114,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount }: Pro
             }
           }}
         >
-          <PaperStage pageWidth={resolvePageGeometry(pageSetup.pageSize, pageSetup.orientation, pageSetup.marginPreset).widthPx} zoom={zoom}>
+          <PaperStage pageWidth={resolvePageGeometry(pageSetup.pageSize, pageSetup.orientation, pageSetup.marginPreset, pageSetup.margins).widthPx} zoom={zoom}>
           <DragHandle
             editor={editor}
             onNodeChange={({ node }) => setDragHandleOnImage(node?.type.name === "image")}

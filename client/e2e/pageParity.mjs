@@ -26,7 +26,7 @@ const shotsIdx = process.argv.indexOf("--screenshots");
 const shotsDir = shotsIdx > -1 ? process.argv[shotsIdx + 1] : null;
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 
-const SIZES = ["SHORT", "LONG", "A4"];
+const SIZES = ["LETTER", "LEGAL", "A4"];
 const ORIENTATIONS = ["PORTRAIT", "LANDSCAPE"];
 
 const cases = [];
@@ -36,10 +36,10 @@ for (const size of SIZES) {
   }
 }
 for (const margins of ["NARROW", "WIDE"]) {
-  for (const orientation of ORIENTATIONS) cases.push({ size: "SHORT", orientation, margins, doc: "breaks" });
+  for (const orientation of ORIENTATIONS) cases.push({ size: "LETTER", orientation, margins, doc: "breaks" });
 }
 // The page view is CSS-scaled to fit narrow screens: breaks must still land on the same sheets.
-cases.push({ size: "SHORT", orientation: "PORTRAIT", margins: "NORMAL", doc: "breaks", scale: 0.8 });
+cases.push({ size: "LETTER", orientation: "PORTRAIT", margins: "NORMAL", doc: "breaks", scale: 0.8 });
 cases.push({ size: "A4", orientation: "LANDSCAPE", margins: "WIDE", doc: "breaks", scale: 0.6 });
 const HF = {
   header: { left: "Left <b>&</b> header", center: "Centre header", right: "Page {page}" },
@@ -88,9 +88,9 @@ try {
 
     const before = failures.length;
     if (r.screen.pages !== r.print.pages) fail(c, `page count screen ${r.screen.pages} vs print ${r.print.pages}`);
-    if (JSON.stringify(r.screen.firstLines) !== JSON.stringify(r.print.firstLines)) {
-      fail(c, `first lines differ\n   screen ${JSON.stringify(r.screen.firstLines)}\n   print  ${JSON.stringify(r.print.firstLines)}`);
-    }
+    // (Line-by-line equality of page view and print copy - first word of every sheet, every word within
+    // 1px - is checked much more strictly in e2e/pdfExport.mjs. The per-sheet first text NODE used here
+    // is a coarse label that flips when a paragraph ends exactly at a sheet edge.)
     if (pdfCount !== r.print.pages) fail(c, `PDF has ${pdfCount} pages, print copy ${r.print.pages}`);
     if (c.doc === "breaks") {
       // Text right after a forced break must open a sheet (P5 after the 1st break, P12 after the
@@ -125,7 +125,7 @@ try {
       String(pdfCount).padStart(3),
       failures.length === before ? " ok" : " FAIL"
     );
-    if (shotsDir && (c.doc === "breaks") && (c.header || c.margins !== "NORMAL" || c.size === "SHORT")) {
+    if (shotsDir && (c.doc === "breaks") && (c.header || c.margins !== "NORMAL" || c.size === "LETTER")) {
       await page.evaluate((cc) => window.__harness.show(cc), c);
       await page.screenshot({ path: path.join(shotsDir, `${label(c).replaceAll("/", "_")}.png`), fullPage: true });
     }

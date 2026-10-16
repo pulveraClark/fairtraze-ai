@@ -30,16 +30,16 @@ describe("document page size routes", () => {
     return { instructor, leader, member, project, doc };
   }
 
-  it("defaults to SHORT and returns it from GET /document and /document/page-size", async () => {
+  it("defaults to LETTER and returns it from GET /document and /document/page-size", async () => {
     const { member, project } = await setup();
     const auth = authHeaderFor(member);
-    expect((await request(app).get(`/api/groups/${project.id}/document`).set("Authorization", auth)).body.pageSize).toBe("SHORT");
-    expect((await request(app).get(`/api/groups/${project.id}/document/page-size`).set("Authorization", auth)).body.pageSize).toBe("SHORT");
+    expect((await request(app).get(`/api/groups/${project.id}/document`).set("Authorization", auth)).body.pageSize).toBe("LETTER");
+    expect((await request(app).get(`/api/groups/${project.id}/document/page-size`).set("Authorization", auth)).body.pageSize).toBe("LETTER");
   });
 
-  it("lets any group member set LONG / A4 / SHORT, shared with every collaborator", async () => {
+  it("lets any group member set LEGAL / A4 / LETTER, shared with every collaborator", async () => {
     const { leader, member, project } = await setup();
-    for (const size of ["LONG", "A4", "SHORT"] as const) {
+    for (const size of ["LEGAL", "A4", "LETTER"] as const) {
       const res = await request(app)
         .patch(`/api/groups/${project.id}/document/page-size`)
         .set("Authorization", authHeaderFor(member))
@@ -53,7 +53,7 @@ describe("document page size routes", () => {
 
   it("rejects invalid sizes with 400", async () => {
     const { member, project } = await setup();
-    for (const bad of ["LEGAL", "short", "", 7, null]) {
+    for (const bad of ["LONG", "SHORT", "short", "", 7, null]) {
       const res = await request(app)
         .patch(`/api/groups/${project.id}/document/page-size`)
         .set("Authorization", authHeaderFor(member))
@@ -96,7 +96,7 @@ describe("document page size routes", () => {
     expect(res.status).toBe(404);
     expect(await prisma.document.findUnique({ where: { groupId: project.id } })).toBeNull();
     const read = await request(app).get(`/api/groups/${project.id}/document/page-size`).set("Authorization", authHeaderFor(member));
-    expect(read.body.pageSize).toBe("SHORT");
+    expect(read.body.pageSize).toBe("LETTER");
     expect(await prisma.document.findUnique({ where: { groupId: project.id } })).toBeNull();
   });
 
@@ -108,7 +108,7 @@ describe("document page size routes", () => {
     await request(app)
       .patch(`/api/groups/${project.id}/document/page-size`)
       .set("Authorization", authHeaderFor(member))
-      .send({ pageSize: "LONG" })
+      .send({ pageSize: "LEGAL" })
       .expect(200);
 
     const after = await prisma.project.findUniqueOrThrow({ where: { id: project.id } });

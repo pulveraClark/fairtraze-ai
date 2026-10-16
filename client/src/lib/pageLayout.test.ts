@@ -11,7 +11,7 @@ import { PAGE_SIZES, PAGE_SIZE_KEYS, PAGE_MARGIN_PX } from "@shared/pageSizes";
 import { paginationExtension, paginationSize } from "./pageLayout";
 import { PageBreak } from "./pageBreak";
 import { applyPageSetup, DEFAULT_PAGE_SETUP } from "./pageSetup";
-import { MARGIN_PRESET_KEYS, PAGE_ORIENTATIONS } from "@shared/pageSizes";
+import { MARGIN_PRESET_KEYS, PAGE_ORIENTATIONS, resolveMargins } from "@shared/pageSizes";
 
 // Page layout must add 0 characters to anyone's authorship count. Layout is pure ProseMirror
 // decorations/widgets + meta-only transactions, so it can never reach the Yjs document. This builds
@@ -30,7 +30,7 @@ function makeEditor(ydoc: Y.Doc, withPagination: boolean) {
       TableRow,
       TableHeader,
       TableCell,
-      ...(withPagination ? [paginationExtension("SHORT", 24)] : []),
+      ...(withPagination ? [paginationExtension("LETTER", 24)] : []),
     ],
   });
 }
@@ -70,7 +70,7 @@ describe("page layout is invisible to authorship", () => {
       ed.commands.insertContent("<p>second paragraph</p>");
     }
     paged.chain().updatePageSize(paginationSize("A4")).run();
-    paged.chain().updatePageSize(paginationSize("LONG")).run();
+    paged.chain().updatePageSize(paginationSize("LEGAL")).run();
 
     expect(pagedUpdates).toBe(plainUpdates);
     expect(textChars(pagedDoc)).toBe(textChars(plainDoc));
@@ -83,9 +83,9 @@ describe("page layout is invisible to authorship", () => {
 });
 
 describe("page sizes and margins", () => {
-  it("defines Short, Long and A4 with a 1 inch default margin", () => {
-    expect(PAGE_SIZES.SHORT).toMatchObject({ widthPx: 816, heightPx: 1056, cssWidth: "8.5in", cssHeight: "11in" });
-    expect(PAGE_SIZES.LONG).toMatchObject({ widthPx: 816, heightPx: 1248, cssWidth: "8.5in", cssHeight: "13in" });
+  it("defines Letter, Legal and A4 with a 1 inch default margin", () => {
+    expect(PAGE_SIZES.LETTER).toMatchObject({ widthPx: 816, heightPx: 1056, cssWidth: "8.5in", cssHeight: "11in" });
+    expect(PAGE_SIZES.LEGAL).toMatchObject({ widthPx: 816, heightPx: 1344, cssWidth: "8.5in", cssHeight: "14in" });
     expect(PAGE_SIZES.A4).toMatchObject({ widthPx: 794, heightPx: 1123, cssWidth: "210mm", cssHeight: "297mm" });
     expect(PAGE_MARGIN_PX).toBe(96);
     for (const key of PAGE_SIZE_KEYS) {
@@ -97,7 +97,7 @@ describe("page sizes and margins", () => {
   });
 
   it("adds no header, footer or page number of its own", () => {
-    const ext = paginationExtension("SHORT", 0);
+    const ext = paginationExtension("LETTER", 0);
     expect(ext.options).toMatchObject({ headerLeft: "", headerRight: "", footerLeft: "", footerRight: "", pageGap: 0 });
   });
 });
@@ -113,7 +113,7 @@ describe("page setup and header/footer are invisible to authorship", () => {
         StarterKit.configure({ undoRedo: false }),
         Collaboration.configure({ document: ydoc }),
         PageBreak,
-        paginationExtension("SHORT", 24),
+        paginationExtension("LETTER", 24),
       ],
     });
     ed.commands.insertContent("<p>some typed text</p>");
@@ -128,6 +128,7 @@ describe("page setup and header/footer are invisible to authorship", () => {
             pageSize,
             orientation,
             marginPreset,
+            margins: resolveMargins(marginPreset, { top: 0.7, bottom: 1.3, left: 2.2, right: 0.4 }),
             header: { left: "Group 4 <b>x</b>", center: "Title", right: "Page {page}" },
             footer: { left: "", center: "{page}", right: "" },
           });

@@ -57,7 +57,8 @@ function renderToolbar(editor: Editor, { editable = true, width }: { editable?: 
     onInsertImageClick: vi.fn(),
     onExportDocx: vi.fn(),
     exporting: false,
-    onExportPdf: vi.fn(),
+    onDownloadPdf: vi.fn(),
+    onPrint: vi.fn(),
     showComments: false,
     onToggleComments: vi.fn(),
     onAddComment: vi.fn(),
@@ -69,7 +70,7 @@ function renderToolbar(editor: Editor, { editable = true, width }: { editable?: 
     pageSummary: "Short, portrait, normal margins",
     onOpenPageSetup: vi.fn(),
     onOpenHeaderFooter: vi.fn(),
-    exportingPdf: false,
+    pdfBusy: false,
     zoom: 1,
     onChangeZoom: vi.fn(),
     onOpenFind: vi.fn(),
@@ -118,6 +119,29 @@ describe("editor toolbar", () => {
     await user.click(screen.getByRole("button", { name: "Clear formatting" }));
     expect(ed.isActive("strike")).toBe(false);
     expect(ed.isActive({ textAlign: "justify" })).toBe(false);
+  });
+
+  it("File menu: Download PDF and Print are separate one-click items (no 'Export PDF')", async () => {
+    const { props } = renderToolbar(makeEditor(), { width: 1500 });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "File" }));
+    expect(screen.queryByText("Export PDF")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Download PDF" }));
+    expect(props.onDownloadPdf).toHaveBeenCalledTimes(1);
+    expect(props.onPrint).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "File" }));
+    await user.click(screen.getByRole("button", { name: "Print" }));
+    expect(props.onPrint).toHaveBeenCalledTimes(1);
+    expect(props.onDownloadPdf).toHaveBeenCalledTimes(1);
+  });
+
+  it("File menu: both items are disabled while a PDF is being prepared", async () => {
+    const { rerender, props } = renderToolbar(makeEditor(), { width: 1500 });
+    rerender(<Toolbar {...props} pdfBusy />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "File" }));
+    expect(screen.getByRole("button", { name: "Preparing PDF…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Print" })).toBeDisabled();
   });
 
   it("opens the link dialog and find from the toolbar", async () => {

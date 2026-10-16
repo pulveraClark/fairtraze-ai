@@ -36,16 +36,17 @@ describe("document page setup routes", () => {
     const res = await request(app).get(url(project.id)).set("Authorization", authHeaderFor(member));
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      pageSize: "SHORT",
+      pageSize: "LETTER",
       orientation: "PORTRAIT",
       marginPreset: "NORMAL",
+      margins: { top: 1, bottom: 1, left: 1, right: 1 },
       header: { left: "", center: "", right: "" },
       footer: { left: "", center: "", right: "" },
     });
     // GET /document carries it too.
     const doc = await request(app).get(`/api/groups/${project.id}/document`).set("Authorization", authHeaderFor(member));
     expect(doc.body.pageSetup).toEqual(res.body);
-    expect(doc.body.pageSize).toBe("SHORT");
+    expect(doc.body.pageSize).toBe("LETTER");
   });
 
   it("lets any member change any subset, shared with every collaborator", async () => {
@@ -99,7 +100,7 @@ describe("document page setup routes", () => {
     const auth = authHeaderFor(member);
     const bad: unknown[] = [
       {},
-      { pageSize: "LEGAL" },
+      { pageSize: "LONG" },
       { orientation: "DIAGONAL" },
       { marginPreset: "HUGE" },
       { orientation: "portrait" },
@@ -148,8 +149,8 @@ describe("document page setup routes", () => {
 
   it("the old page-size routes still work and see the same value", async () => {
     const { member, project } = await setup();
-    await request(app).patch(`/api/groups/${project.id}/document/page-size`).set("Authorization", authHeaderFor(member)).send({ pageSize: "LONG" }).expect(200);
-    expect((await request(app).get(url(project.id)).set("Authorization", authHeaderFor(member))).body.pageSize).toBe("LONG");
+    await request(app).patch(`/api/groups/${project.id}/document/page-size`).set("Authorization", authHeaderFor(member)).send({ pageSize: "LEGAL" }).expect(200);
+    expect((await request(app).get(url(project.id)).set("Authorization", authHeaderFor(member))).body.pageSize).toBe("LEGAL");
   });
 
   it("creates no EditEvent/EditSession/Alert, leaves the Yjs state alone and does not mark the analysis outdated", async () => {
@@ -162,7 +163,7 @@ describe("document page setup routes", () => {
       .patch(url(project.id))
       .set("Authorization", authHeaderFor(member))
       .send({
-        pageSize: "LONG",
+        pageSize: "LEGAL",
         orientation: "LANDSCAPE",
         marginPreset: "WIDE",
         header: { left: "L", center: "C", right: "R" },

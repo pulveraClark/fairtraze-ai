@@ -513,15 +513,21 @@ model Document {
   content   String   @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
   // Raw Yjs update state (Y.encodeStateAsUpdate). Source of truth for live collaborative content.
   yjsState  Bytes?
-  // Paper size for the page view / PDF export, shared by all collaborators: SHORT | LONG | A4
+  // Paper size for the page view / PDF export, shared by all collaborators: LETTER | LEGAL | A4
   // (shared/src/pageSizes.ts). Layout only — never read by scoring, never part of the Yjs doc.
-  pageSize  String   @default("SHORT")
+  pageSize  String   @default("LETTER")
   // Page setup + header/footer text (migration 20261016100000_document_page_setup). Same rules as
   // pageSize: shared by every collaborator, layout only, plain columns - never in the Yjs doc and
-  // never read by scoring. orientation: PORTRAIT | LANDSCAPE; marginPreset: NORMAL | NARROW | WIDE
+  // never read by scoring. orientation: PORTRAIT | LANDSCAPE; marginPreset: NORMAL | NARROW | WIDE | CUSTOM
   // (shared/src/pageSizes.ts). Header/footer slots are plain text (max 120 chars; {page} = page number).
   orientation  String @default("PORTRAIT")
   marginPreset String @default("NORMAL")
+  // The four margins in inches (migration 20261017100000_page_size_rename_custom_margins). Always the
+  // effective values: presets write their own numbers, CUSTOM stores the user's. 0 to 3 in, step 0.1.
+  marginTop    Float  @default(1)
+  marginBottom Float  @default(1)
+  marginLeft   Float  @default(1)
+  marginRight  Float  @default(1)
   headerLeft   String @default("")
   headerCenter String @default("")
   headerRight  String @default("")
