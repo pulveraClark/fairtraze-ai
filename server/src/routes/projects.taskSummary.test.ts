@@ -50,9 +50,9 @@ describe("GET /api/projects/:id/report — taskSummary joined per member", () =>
     // Alice: 2 tasks, 1 done. Bob: 1 task, 0 done.
     await prisma.task.createMany({
       data: [
-        { projectId: project.id, title: "A1", assignedToUserId: alice.id, createdByUserId: alice.id, done: true },
-        { projectId: project.id, title: "A2", assignedToUserId: alice.id, createdByUserId: alice.id, done: false },
-        { projectId: project.id, title: "B1", assignedToUserId: bob.id, createdByUserId: alice.id, done: false },
+        { projectId: project.id, number: 1, title: "A1", assignedToUserId: alice.id, createdByUserId: alice.id, done: true, status: "DONE" },
+        { projectId: project.id, number: 2, title: "A2", assignedToUserId: alice.id, createdByUserId: alice.id, done: false },
+        { projectId: project.id, number: 3, title: "B1", assignedToUserId: bob.id, createdByUserId: alice.id, done: false },
       ],
     });
 

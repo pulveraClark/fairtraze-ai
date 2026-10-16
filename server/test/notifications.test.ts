@@ -178,7 +178,8 @@ describe("task-assignment notifications", () => {
     expect(rows[0]).toMatchObject({
       recipientId: member.id,
       type: "TASK_ASSIGNED",
-      link: `/student/group/${project.id}`,
+      // Deep link: opens the Tasks tab with this task's panel.
+      link: `/student/group/${project.id}?tab=tasks&task=${res.body.id}`,
     });
   });
 

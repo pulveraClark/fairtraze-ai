@@ -16,7 +16,8 @@
     "./editClassifier": "./src/editClassifier.ts",
     "./pageSizes": "./src/pageSizes.ts",
     "./linkUrl": "./src/linkUrl.ts",
-    "./collabVersion": "./src/collabVersion.ts"
+    "./collabVersion": "./src/collabVersion.ts",
+    "./taskTypes": "./src/taskTypes.ts"
   },
   "scripts": {
     "test": "vitest run"

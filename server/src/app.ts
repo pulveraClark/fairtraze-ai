@@ -10,6 +10,7 @@ import { classesRouter } from "./routes/classes.js";
 import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
 import { groupsRouter } from "./routes/groups.js";
+import { tasksRouter } from "./routes/tasks.js";
 import { documentsRouter } from "./routes/documents.js";
 import { commentsRouter } from "./routes/comments.js";
 import { alertsRouter } from "./routes/alerts.js";
@@ -25,6 +26,7 @@ import {
   authLimiter,
   analysisLimiter,
   exportLimiter,
+  taskWriteLimiter,
   globalLimiter,
 } from "./middleware/security.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
@@ -77,6 +79,8 @@ export function createApp() {
   );
 
   app.use("/api/privacy/export", authenticateToken, exportLimiter);
+  // Task creation bursts (30/min per user). Comments and mentions join this limiter in a later phase.
+  app.post("/api/groups/:id/tasks", authenticateToken, taskWriteLimiter);
 
   app.use(projectsRouter);
   app.use(analyzeRouter);
@@ -89,6 +93,7 @@ export function createApp() {
   app.use(briefsRouter);
   app.use(joinRouter);
   app.use(groupsRouter);
+  app.use(tasksRouter);
   app.use(documentsRouter);
   app.use(commentsRouter);
   app.use(alertsRouter);

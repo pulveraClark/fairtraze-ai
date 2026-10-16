@@ -159,6 +159,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   tasksAssigned    Task[]            @relation("TaskAssignee")
   tasksCreated     Task[]            @relation("TaskCreator")
+  taskActivity     TaskActivity[]    @relation("TaskActivityActor")
   comments         Comment[]
   documentContributions DocumentContribution[]
   combinedContributions CombinedContribution[]
@@ -323,6 +324,11 @@ model Project {
   weightGithub             Float             @default(0.5)
   weightDocs               Float             @default(0.5)
   scoringConfigChangedAt   DateTime?                         // set when config changes after last analyze; cleared by re-analyze
+  // Tasks board: short key used in task ids ("FT-12"). NULL = not chosen yet; derived from groupName
+  // (lib/taskKey.ts) and persisted when the group's first task is created. nextTaskNumber is the
+  // per-group counter, allocated atomically. Neither is ever read by scoring.
+  taskKey                  String?
+  nextTaskNumber           Int               @default(1)
   createdAt                DateTime          @default(now())
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   members                  Member[]
@@ -334,6 +340,8 @@ model Project {
   roleSuggestions          RoleSuggestion[]
   document                 Document?
   tasks                    Task[]
+  taskMilestones           TaskMilestone[]
+  taskLabels               TaskLabel[]
 }
 
 // Leader/instructor-assigned sub-tasks for deliverables GitHub and the
@@ -343,18 +351,105 @@ model Project {
 // never fed into contributionShare/flags/Gini. See taskSummary on the
 // report for how it's surfaced instead (context only, like functionalRoles).
 model Task {
-  id               Int       @id @default(autoincrement())
+  id               Int          @id @default(autoincrement())
   projectId        Int
+  // Per-group number: the "12" in "FT-12". Unique within a group, never reused.
+  number           Int
   title            String
   description      String?
   assignedToUserId Int?
   createdByUserId  Int
-  done             Boolean   @default(false)
+  // Legacy completion flag, kept in sync with status (done = status DONE) by one writer
+  // (lib/taskBoard.ts#statusFields) until the final cleanup migration drops it.
+  done             Boolean      @default(false)
   completedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignedTo       User?     @relation("TaskAssignee", fields: [assignedToUserId], references: [id])
-  createdBy        User      @relation("TaskCreator", fields: [createdByUserId], references: [id])
+  status           TaskStatus   @default(TODO)
+  priority         TaskPriority @default(MEDIUM)
+  // Calendar date only (no time zone): the day the task is due.
+  dueDate          DateTime?    @db.Date
+  // Order within a column: a double that new cards place between two neighbours (midpoint);
+  // the column is renumbered when the gap gets too small. Ties break on id.
+  position         Float        @default(0)
+  // Bumped by every write; clients send the version they last saw and get 409 on a mismatch.
+  version          Int          @default(1)
+  milestoneId      Int?
+  // Text of a heading in the group's document this task is linked to (no Yjs involvement).
+  docHeading       String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @default(now()) @updatedAt
+  project          Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo       User?        @relation("TaskAssignee", fields: [assignedToUserId], references: [id])
+  createdBy        User         @relation("TaskCreator", fields: [createdByUserId], references: [id])
+  milestone        TaskMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  labelLinks       TaskLabelLink[]
+  activity         TaskActivity[]
+
+  @@unique([projectId, number])
+  @@index([projectId, status, position])
+  @@index([assignedToUserId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model TaskMilestone {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  name      String
+  dueDate   DateTime? @db.Date
+  position  Float    @default(0)
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([projectId, position])
+}
+
+model TaskLabel {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  name      String
+  color     String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  links     TaskLabelLink[]
+
+  @@index([projectId])
+}
+
+model TaskLabelLink {
+  taskId  Int
+  labelId Int
+  task    Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+// The History tab. Stores user ids and ids/values only (never display names), so account erasure
+// ("Former member") needs no rewrite. actorId is null for system entries (e.g. a linked commit).
+model TaskActivity {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  actorId   Int?
+  type      String
+  data      Json?
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor     User?    @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
 }
 
 model Member {

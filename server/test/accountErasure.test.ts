@@ -49,7 +49,7 @@ async function seedGroup() {
   await prisma.editEvent.create({ data: { documentId: doc.id, userId: juan.id, eventType: "INSERT", position: 0, length: 5, insertedText: "hello" } });
   await prisma.editSession.create({ data: { documentId: doc.id, userId: juan.id, characterCount: 5 } });
   await prisma.comment.create({ data: { documentId: doc.id, authorId: juan.id, text: "a comment", anchor: Buffer.from([1]) } });
-  await prisma.task.create({ data: { projectId: project.id, title: "Slides", createdByUserId: leader.id, assignedToUserId: juan.id } });
+  await prisma.task.create({ data: { projectId: project.id, number: 1, title: "Slides", createdByUserId: leader.id, assignedToUserId: juan.id } });
   await prisma.dispute.create({ data: { projectId: project.id, studentUserId: juan.id, memberName: NAME, reason: "please review" } });
 
   return { admin, instructor, leader, juan, password, project, report };

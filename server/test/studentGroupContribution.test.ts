@@ -204,8 +204,8 @@ describe("GET /api/student/group/:projectId — leader team view", () => {
         githubContributionShare: 0.2, documentContributionShare: 0.4 }),
     ]));
     await prisma.task.createMany({ data: [
-      { projectId: project.id, title: "t1", assignedToUserId: studentA.id, createdByUserId: studentB.id, done: true },
-      { projectId: project.id, title: "t2", assignedToUserId: studentA.id, createdByUserId: studentB.id, done: false },
+      { projectId: project.id, number: 1, title: "t1", assignedToUserId: studentA.id, createdByUserId: studentB.id, done: true, status: "DONE" },
+      { projectId: project.id, number: 2, title: "t2", assignedToUserId: studentA.id, createdByUserId: studentB.id, done: false },
     ] });
 
     const res = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));

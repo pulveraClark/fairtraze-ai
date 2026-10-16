@@ -41,8 +41,8 @@ describe("GET /api/privacy/export", () => {
         }),
       },
     });
-    await prisma.task.create({ data: { projectId: project.id, title: "My task", createdByUserId: me.id, assignedToUserId: me.id } });
-    await prisma.task.create({ data: { projectId: project.id, title: "Pedro private task", createdByUserId: other.id, assignedToUserId: other.id } });
+    await prisma.task.create({ data: { projectId: project.id, number: 1, title: "My task", createdByUserId: me.id, assignedToUserId: me.id } });
+    await prisma.task.create({ data: { projectId: project.id, number: 2, title: "Pedro private task", createdByUserId: other.id, assignedToUserId: other.id } });
     await prisma.dispute.create({ data: { projectId: project.id, studentUserId: other.id, memberName: "Pedro Reyes", reason: "Pedro dispute text" } });
 
     const res = await request(app).get("/api/privacy/export").set("Authorization", authHeaderFor(me));

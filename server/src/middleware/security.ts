@@ -53,6 +53,16 @@ export const exportLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Burst limit for task creation (and, later, comments and @mentions): 30 per minute per user.
+// Keyed by user id, so it needs authenticateToken to have run first (see app.ts).
+export const taskWriteLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "You're adding things too quickly. Please wait a minute and try again." },
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 export const globalLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 15 * 60 * 1000,
