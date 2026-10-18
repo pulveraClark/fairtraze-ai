@@ -63,6 +63,9 @@ enum AlertType {
   TASK_MENTIONED
   TASK_COMMENTED
   TASK_STATUS_CHANGED
+  TASK_IN_REVIEW
+  TASK_DUE_SOON
+  TASK_OVERDUE
 }
 
 enum DeletionRequestStatus {
@@ -166,6 +169,7 @@ model User {
   taskAttachments  TaskAttachment[]  @relation("TaskAttachmentCreator")
   taskComments     TaskComment[]     @relation("TaskCommentAuthor")
   taskWatching     TaskWatcher[]     @relation("TaskWatcherUser")
+  taskNotificationLog TaskNotificationLog[] @relation("TaskNotificationLogUser")
   comments         Comment[]
   documentContributions DocumentContribution[]
   combinedContributions CombinedContribution[]
@@ -398,6 +402,7 @@ model Task {
   comments         TaskComment[]
   watchers         TaskWatcher[]
   commitLinks      TaskCommitLink[]
+  notificationLog  TaskNotificationLog[]
 
   @@unique([projectId, number])
   @@index([projectId, status, position])
@@ -851,4 +856,21 @@ model TaskCommitLink {
 
   @@unique([taskId, sha])
   @@index([taskId, committedAt])
+}
+
+// Due-date reminders already sent (phase 6): one row per (task, person, kind, due date), so the hourly
+// sweep and the lazy sweep on board reads never send the same reminder twice. Planning data only.
+model TaskNotificationLog {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  userId    Int
+  // DUE_SOON | OVERDUE
+  kind      String
+  dueDate   DateTime @db.Date
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation("TaskNotificationLogUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId, kind, dueDate])
+  @@index([userId])
 }

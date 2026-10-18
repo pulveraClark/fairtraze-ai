@@ -21,6 +21,7 @@ import {
 import { computePosition, rebalanced } from "../lib/taskPosition.js";
 import { deriveTaskKey, effectiveTaskKey } from "../lib/taskKey.js";
 import { addWatchers, notifyMentions, notifyStatusChange, taskLink } from "../lib/taskWatchers.js";
+import { triggerLazyDueSweep } from "../lib/taskDueSweep.js";
 import { extractMentionIds } from "@shared/taskTypes.js";
 
 // The group Tasks board. Planning data only: nothing here is read by scoring, the analysis or the
@@ -132,6 +133,10 @@ tasksRouter.get("/api/groups/:id/tasks", requireAuth, async (req: Request, res: 
   res.set("Cache-Control", "private, no-cache");
   res.vary("Authorization");
   res.json(board);
+  // Due-tomorrow / overdue reminders for this group, at most every 10 minutes per process. Started after
+  // the answer is sent and never awaited, so it cannot slow or fail a board read (the host may sleep
+  // through the hourly sweep, which is why this exists).
+  triggerLazyDueSweep(ctx.groupId);
 });
 
 // ── Create ────────────────────────────────────────────────────────────────────

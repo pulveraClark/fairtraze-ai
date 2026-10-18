@@ -31,15 +31,38 @@ export async function currentWatcherIds(project: LoadedGroup, taskId: number): P
   return rows.map((r) => r.userId).filter((id) => members.has(id));
 }
 
-/** Status change: watchers only, never the actor, collapsed into one unread alert per task. */
+/** The group's leader, or null (a group always has one, but a removed leader must not crash a notification). */
+export function leaderUserId(project: LoadedGroup): number | null {
+  return project.groupMemberships.find((m) => m.role === "LEADER")?.userId ?? null;
+}
+
+/**
+ * Status change: watchers only, never the actor, collapsed into one unread alert per task. A move to In
+ * review also tells the group leader, always (watching or not), with its own alert type; the leader then
+ * gets that one instead of the plain status-change alert.
+ */
 export async function notifyStatusChange(
   project: LoadedGroup,
   actorId: number,
   task: { id: number; title: string },
   to: TaskStatus,
 ): Promise<void> {
+  const leaderId = to === "IN_REVIEW" ? leaderUserId(project) : null;
+  if (leaderId !== null) {
+    await notify({
+      recipientIds: leaderId,
+      actorId,
+      type: "TASK_IN_REVIEW",
+      message: `${memberName(project, actorId)} moved "${task.title}" to In review. It is ready for your review`,
+      link: taskLink(project.id, task.id),
+      projectId: project.id,
+      refType: "TASK",
+      refId: task.id,
+      collapse: true,
+    });
+  }
   await notify({
-    recipientIds: () => currentWatcherIds(project, task.id),
+    recipientIds: async () => (await currentWatcherIds(project, task.id)).filter((id) => id !== leaderId),
     actorId,
     type: "TASK_STATUS_CHANGED",
     message: `${memberName(project, actorId)} moved "${task.title}" to ${TASK_STATUS_LABELS[to]}`,
