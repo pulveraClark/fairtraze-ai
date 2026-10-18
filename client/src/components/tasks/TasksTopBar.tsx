@@ -21,6 +21,8 @@ interface Props {
   onViewChange: (view: TaskView) => void;
   /** So the "/" shortcut can focus the search box. */
   searchRef?: RefObject<HTMLInputElement | null>;
+  /** Opens the Workload panel (offered to the leader, the class instructor and admins). */
+  onWorkload?: () => void;
 }
 
 const DUE_OPTIONS: { value: DueBucket; label: string }[] = [
@@ -33,7 +35,7 @@ function toggle<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 }
 
-export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask, view, onViewChange, searchRef }: Props) {
+export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask, view, onViewChange, searchRef, onWorkload }: Props) {
   const menu = usePopover();
   const activeMenuFilters = menuFilterCount(filters);
   const line = statusLine(filters, board.members, shown, total);
@@ -208,8 +210,14 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
           )}
         </div>
 
+        {onWorkload && (board.viewer.isLeader || board.viewer.readOnly) && (
+          <button type="button" onClick={onWorkload} className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}>
+            Workload
+          </button>
+        )}
+
         {board.viewer.canCreate && (
-          <button type="button" onClick={onNewTask} className={`${BUTTON_PRIMARY_COMPACT} ml-auto`}>
+          <button type="button" onClick={onNewTask} className={`${BUTTON_PRIMARY_COMPACT} ${onWorkload && (board.viewer.isLeader || board.viewer.readOnly) ? "" : "ml-auto"}`}>
             <PlusIcon className="h-4 w-4" />
             New task
           </button>

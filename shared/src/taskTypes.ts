@@ -262,3 +262,44 @@ export function extractMentionIds(text: string | null | undefined): number[] {
   if (!text) return [];
   return [...new Set([...text.matchAll(MENTION_TOKEN)].map((m) => Number(m[1])))];
 }
+
+// ── Workload and class-page summaries (phase 7). Planning data only; never read by scoring. ────────────
+
+/** One member's open work in a group. */
+export interface WorkloadMember {
+  userId: number;
+  name: string;
+  /** Not Done. */
+  open: number;
+  /** Open and due before today (Manila). */
+  overdue: number;
+  /** Open and due today through the end of this week (Sunday to Saturday). */
+  dueThisWeek: number;
+  inReview: number;
+  done: number;
+}
+
+/** GET /api/groups/:id/tasks/workload (leader, owning instructor, admin). */
+export interface WorkloadResponse {
+  groupId: number;
+  /** Today in Manila, "YYYY-MM-DD". */
+  today: string;
+  members: WorkloadMember[];
+  unassigned: { open: number; overdue: number };
+}
+
+export interface GroupTaskSummary {
+  projectId: number;
+  groupName: string;
+  total: number;
+  done: number;
+  /** Not Done and due before today. */
+  overdue: number;
+  milestones: { id: number; name: string; dueDate: string | null; total: number; done: number }[];
+}
+
+/** GET /api/assignments/:id/task-summary (owning instructor, admin). */
+export interface AssignmentTaskSummary {
+  assignmentId: number;
+  groups: GroupTaskSummary[];
+}

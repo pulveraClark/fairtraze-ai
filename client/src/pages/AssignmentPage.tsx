@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
+import { GroupTaskCards } from "../components/GroupTaskCards";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
 import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
@@ -518,6 +519,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
             ))}
           </div>
         )}
+
+        {!loading && !loadError && processed.length > 0 && <GroupTaskCards assignmentId={assignmentId} />}
       </main>
 
       <footer className="print:hidden border-t border-slate-200 bg-white">

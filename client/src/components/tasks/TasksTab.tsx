@@ -25,6 +25,7 @@ import { NewTaskDialog } from "./NewTaskDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { TaskDetailsModal } from "./details/TaskDetailsModal";
 import { TasksTopBar } from "./TasksTopBar";
+import { WorkloadPanel } from "./WorkloadPanel";
 
 interface Props {
   projectId: number;
@@ -49,6 +50,8 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
   const [openId, setOpenId] = useState<number | null>(initialTaskId);
   const [newTask, setNewTask] = useState(false);
   const [help, setHelp] = useState(false);
+  // ?workload=1 (from the class page card) opens the Workload panel straight away.
+  const [workload, setWorkload] = useState(() => new URLSearchParams(window.location.search).get("workload") === "1");
   const [view, setView] = useState<TaskView>(() => initialView(user?.id ?? null));
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -203,6 +206,7 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
         view={view}
         onViewChange={changeView}
         searchRef={searchRef}
+        onWorkload={() => setWorkload(true)}
       />
 
       <MilestoneStrip
@@ -289,6 +293,8 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
           onCreated={() => setNewTask(false)}
         />
       )}
+
+      {workload && <WorkloadPanel projectId={projectId} onClose={() => setWorkload(false)} />}
 
       {help && <ShortcutsDialog canCreate={board.viewer.canCreate} onClose={() => setHelp(false)} />}
 

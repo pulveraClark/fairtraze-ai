@@ -11,6 +11,7 @@ import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
 import { groupsRouter } from "./routes/groups.js";
 import { taskCommitsRouter } from "./routes/taskCommits.js";
+import { taskOverviewRouter } from "./routes/taskOverview.js";
 import { taskDetailsRouter } from "./routes/taskDetails.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { documentsRouter } from "./routes/documents.js";
@@ -103,6 +104,7 @@ export function createApp() {
   app.use(tasksRouter);
   app.use(taskDetailsRouter);
   app.use(taskCommitsRouter);
+  app.use(taskOverviewRouter);
   app.use(documentsRouter);
   app.use(commentsRouter);
   app.use(alertsRouter);

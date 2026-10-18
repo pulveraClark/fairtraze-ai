@@ -1,6 +1,6 @@
 import type {
   BoardTask, TaskPriority, TaskStatus, BoardLabel, TaskLabelColor, BulkAction, BulkEditResponse,
-  TaskAttachmentMeta, TaskCommentView, TaskDetails, TaskSubtask,
+  TaskAttachmentMeta, TaskCommentView, TaskDetails, TaskSubtask, WorkloadResponse, AssignmentTaskSummary,
 } from "@shared/taskTypes";
 import type { Placement } from "./placement";
 
@@ -127,6 +127,14 @@ export const taskApi = {
 
   watch: (token: string | null, projectId: number, taskId: number, on: boolean) =>
     call<TaskDetails>(token, on ? "PUT" : "DELETE", `${taskBase(projectId, taskId)}/watch`),
+
+  /** Leader, class instructor, admin: open and overdue tasks per member (counts only). */
+  workload: (token: string | null, projectId: number) =>
+    call<WorkloadResponse>(token, "GET", `${base(projectId)}/tasks/workload`),
+
+  /** Instructor (class owner) and admin: per-group task progress for the class page. */
+  assignmentTaskSummary: (token: string | null, assignmentId: number) =>
+    call<AssignmentTaskSummary>(token, "GET", `/api/assignments/${assignmentId}/task-summary`),
 
   /** Leader only: read the repo's commit messages and link them to tasks (once per 5 minutes per group). */
   syncCommits: (token: string | null, projectId: number) =>
