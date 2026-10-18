@@ -35,6 +35,16 @@ export const TASK_LIMITS = {
   milestoneName: 60,
   labelName: 24,
   bulkTasks: 100,
+  subtasksPerTask: 30,
+  subtaskTitle: 200,
+  attachmentsPerTask: 5,
+  /** Total attachment bytes per group. */
+  storagePerGroupBytes: 50 * 1024 * 1024,
+  imageBytes: 1024 * 1024,
+  pdfBytes: 5 * 1024 * 1024,
+  comment: 2000,
+  /** History entries returned by the details endpoint. */
+  historyEntries: 100,
 } as const;
 
 export interface TaskPermissions {
@@ -47,6 +57,10 @@ export interface TaskPermissions {
   delete: boolean;
   /** The viewer may move this task at all (a grip is shown only when true). */
   move: boolean;
+  /** Comment on the task (any member). */
+  comment: boolean;
+  /** Watch / unwatch the task (any member). */
+  watch: boolean;
   /** Columns this viewer may drop this task into (includes the current column for reordering). */
   allowedStatuses: TaskStatus[];
 }
@@ -157,4 +171,68 @@ export type TaskActivityType =
   | "due_changed"
   | "milestone_changed"
   | "labels_changed"
-  | "doc_heading_changed";
+  | "doc_heading_changed"
+  | "subtask_added"
+  | "subtask_done"
+  | "subtask_reopened"
+  | "subtask_removed"
+  | "comment_added"
+  | "attachment_added"
+  | "attachment_removed";
+
+export interface TaskSubtask {
+  id: number;
+  title: string;
+  done: boolean;
+  position: number;
+}
+
+export interface TaskAttachmentMeta {
+  id: number;
+  kind: "IMAGE" | "PDF";
+  mime: string;
+  filename: string;
+  size: number;
+  createdByUserId: number | null;
+  createdAt: string;
+}
+
+export interface TaskCommentView {
+  id: number;
+  authorId: number | null;
+  /** Raw text with <@userId> mention tokens; the client renders names from the member list. */
+  body: string;
+  createdAt: string;
+  editedAt: string | null;
+}
+
+export interface TaskActivityEntry {
+  id: number;
+  actorId: number | null;
+  type: TaskActivityType;
+  /** Ids and values only (never display names). */
+  data: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+/** Everything the details window needs beyond the board payload. */
+export interface TaskDetails {
+  taskId: number;
+  subtasks: TaskSubtask[];
+  attachments: TaskAttachmentMeta[];
+  storage: { usedBytes: number; limitBytes: number };
+  comments: TaskCommentView[];
+  /** User ids of the people watching this task. */
+  watchers: number[];
+  watching: boolean;
+  /** Newest first. */
+  activity: TaskActivityEntry[];
+}
+
+/** <@123> mention tokens, as stored in comments and descriptions. */
+export const MENTION_TOKEN = /<@(\d+)>/g;
+
+export function extractMentionIds(text: string | null | undefined): number[] {
+  if (!text) return [];
+  return [...new Set([...text.matchAll(MENTION_TOKEN)].map((m) => Number(m[1])))];
+}

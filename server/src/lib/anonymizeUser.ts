@@ -153,7 +153,15 @@ export async function anonymizeUser(
         await tx.alert.update({ where: { id: a.id }, data: { message: scrubIdentity(a.message, id) } });
       }
 
+      // 3b. Task comments the user wrote keep their text (so threads still read) minus the identity.
+      const taskComments = await tx.taskComment.findMany({ where: { authorId: userId }, select: { id: true, body: true } });
+      for (const c of taskComments) {
+        const next = scrubIdentity(c.body, id);
+        if (next !== c.body) await tx.taskComment.update({ where: { id: c.id }, data: { body: next } });
+      }
+
       // 4. Personal rows that have no value once the account is gone.
+      await tx.taskWatcher.deleteMany({ where: { userId } });
       await tx.refreshToken.deleteMany({ where: { userId } });
       await tx.passwordResetToken.deleteMany({ where: { userId } });
       await tx.emailVerificationToken.deleteMany({ where: { userId } });

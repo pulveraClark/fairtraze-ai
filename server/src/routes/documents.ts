@@ -9,6 +9,7 @@ import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
+import { extractHeadings } from "../lib/documentHeadings.js";
 import { cancelPendingPersist } from "../collab/persistence.js";
 import { findDocumentTemplate } from "@shared/documentTemplates.js";
 import {
@@ -683,6 +684,41 @@ documentsRouter.get("/api/groups/:id/document/export", requireAuth, async (req: 
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   res.setHeader("Content-Disposition", `attachment; filename="${safeName}.docx"`);
   res.send(buffer);
+});
+
+// GET /api/groups/:id/document/headings — H1/H2 heading texts in order, for the Tasks "linked
+// heading" picker. Strictly read-only: decodes the persisted Document.yjsState into a scratch doc
+// (lib/documentHeadings.ts); never creates the Document row, never calls getYDoc(), writes nothing.
+// Readable by group members, the owning instructor and admins (like the document itself).
+documentsRouter.get("/api/groups/:id/document/headings", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project) && req.user!.role !== "ADMIN") {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+  const sourceType = project.assignment?.sourceType;
+  const doc = sourceType === "EDITOR" || sourceType === "COMBINED"
+    ? await prisma.document.findUnique({ where: { groupId: project.id }, select: { content: true, yjsState: true } })
+    : null;
+  let headings: ReturnType<typeof extractHeadings> = [];
+  if (doc) {
+    try {
+      headings = extractHeadings(doc);
+    } catch (err) {
+      console.error(`[documents] heading extraction failed for group ${project.id}`, err);
+    }
+  }
+  res.set("Cache-Control", "private, no-cache");
+  res.json({ headings });
 });
 
 // GET /api/groups/:id/document/snapshots — list the group's document revision history, newest

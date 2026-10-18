@@ -110,6 +110,13 @@ describe("permissionsFor (what the UI mirrors)", () => {
     expect(permissionsFor(instructor, mine)).toMatchObject({ move: false, edit: false, delete: false, assign: false });
     expect(permissionsFor(assignee, done).move).toBe(false);
   });
+  it("lets every member comment and watch, but never the instructor", () => {
+    for (const a of [leader, assignee, otherMember]) {
+      expect(permissionsFor(a, mine)).toMatchObject({ comment: true, watch: true });
+      expect(permissionsFor(a, done)).toMatchObject({ comment: true, watch: true });
+    }
+    expect(permissionsFor(instructor, mine)).toMatchObject({ comment: false, watch: false });
+  });
   it("explains a refusal in plain words that name the leader", () => {
     const d = canMoveTask(otherMember, mine, "IN_PROGRESS");
     expect(d.ok).toBe(false);

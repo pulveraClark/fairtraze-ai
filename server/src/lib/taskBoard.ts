@@ -77,6 +77,26 @@ export function serializeTask(
   };
 }
 
+/** Done/total subtasks per task id (one grouped query). */
+export async function subtaskCountsFor(taskIds: number[]): Promise<Map<number, { done: number; total: number }>> {
+  const map = new Map<number, { done: number; total: number }>();
+  if (!taskIds.length) return map;
+  const groups = await prisma.taskSubtask.groupBy({ by: ["taskId", "done"], where: { taskId: { in: taskIds } }, _count: { _all: true } });
+  for (const g of groups) {
+    const cur = map.get(g.taskId) ?? { done: 0, total: 0 };
+    cur.total += g._count._all;
+    if (g.done) cur.done += g._count._all;
+    map.set(g.taskId, cur);
+  }
+  return map;
+}
+
+/** serializeTask for one row, filling in its subtask progress. */
+export async function serializeTaskWithCounts(task: TaskRow, ctx: { project: LoadedGroup; actor: TaskActor }): Promise<BoardTask> {
+  const counts = await subtaskCountsFor([task.id]);
+  return serializeTask(task, { ...ctx, subtasks: counts.get(task.id) });
+}
+
 export async function loadTaskRow(taskId: number): Promise<TaskRow | null> {
   return prisma.task.findUnique({ where: { id: taskId }, include: { labelLinks: true } });
 }
@@ -92,7 +112,8 @@ export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise
     prisma.taskLabel.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" } }),
   ]);
 
-  const tasks = rows.map((t) => serializeTask(t, { project, actor }));
+  const counts = await subtaskCountsFor(rows.map((t) => t.id));
+  const tasks = rows.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id) }));
   const boardMilestones: BoardMilestone[] = milestones.map((m) => {
     const inMs = rows.filter((t) => t.milestoneId === m.id);
     return {

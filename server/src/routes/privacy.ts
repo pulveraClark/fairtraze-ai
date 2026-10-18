@@ -54,7 +54,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
 
   const [
     enrollments, memberships, joinRequests, roleSuggestions, tasks, disputes, alerts,
-    comments, sessions, events, auditEntries, deletionRequests,
+    comments, sessions, events, auditEntries, deletionRequests, taskComments, taskAttachments,
   ] = await Promise.all([
     prisma.classEnrollment.findMany({
       where: { userId },
@@ -112,6 +112,17 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
       where:  { userId },
       select: { status: true, reason: true, createdAt: true, reviewedAt: true },
     }),
+    prisma.taskComment.findMany({
+      where:  { authorId: userId },
+      select: { id: true, taskId: true, body: true, createdAt: true, editedAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    // Metadata only: the file bytes are not part of the export.
+    prisma.taskAttachment.findMany({
+      where:  { createdById: userId },
+      select: { id: true, taskId: true, projectId: true, kind: true, filename: true, size: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   // The caller's OWN entry from each group's latest stored report. Same matching rule as the
@@ -156,6 +167,8 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
       eventTotals: events.map((e) => ({ eventType: e.eventType, count: e._count._all, totalLength: e._sum.length ?? 0 })),
     },
     tasks,
+    taskComments,
+    taskAttachments,
     disputes,
     comments,
     alerts,

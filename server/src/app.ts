@@ -10,6 +10,7 @@ import { classesRouter } from "./routes/classes.js";
 import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
 import { groupsRouter } from "./routes/groups.js";
+import { taskDetailsRouter } from "./routes/taskDetails.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { documentsRouter } from "./routes/documents.js";
 import { commentsRouter } from "./routes/comments.js";
@@ -27,6 +28,7 @@ import {
   analysisLimiter,
   exportLimiter,
   taskWriteLimiter,
+  taskCommentLimiter,
   globalLimiter,
 } from "./middleware/security.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
@@ -50,6 +52,9 @@ export function createApp() {
   // Project brief attachments are raw image/PDF bodies; per-kind size limits are enforced in the route.
   app.post("/api/assignments/:id/attachments", express.raw({ type: BRIEF_RAW_TYPES, limit: BRIEF_RAW_LIMIT }));
   app.use("/api/assignments/:id/attachments", briefBodyErrors);
+  // Task attachments: same raw bodies and limits as the brief; per-kind sizes are enforced in the route.
+  app.post("/api/groups/:id/tasks/:taskId/attachments", express.raw({ type: BRIEF_RAW_TYPES, limit: BRIEF_RAW_LIMIT }));
+  app.use("/api/groups/:id/tasks/:taskId/attachments", briefBodyErrors);
   app.use(express.json());
   app.use(cookieParser());
   // Registered BEFORE the global limiter on purpose: every open editor tab polls it once a minute, and
@@ -79,8 +84,9 @@ export function createApp() {
   );
 
   app.use("/api/privacy/export", authenticateToken, exportLimiter);
-  // Task creation bursts (30/min per user). Comments and mentions join this limiter in a later phase.
+  // Task creation bursts (30/min per user); comments have their own 30/min bucket.
   app.post("/api/groups/:id/tasks", authenticateToken, taskWriteLimiter);
+  app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
 
   app.use(projectsRouter);
   app.use(analyzeRouter);
@@ -94,6 +100,7 @@ export function createApp() {
   app.use(joinRouter);
   app.use(groupsRouter);
   app.use(tasksRouter);
+  app.use(taskDetailsRouter);
   app.use(documentsRouter);
   app.use(commentsRouter);
   app.use(alertsRouter);

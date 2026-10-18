@@ -56,6 +56,9 @@ export function canEditTask(a: TaskActor, t: TaskLike): boolean {
 export const canSetDueDate = canEditTask;
 export const canAssignTask = (a: TaskActor) => a.isLeader;
 export const canDeleteTask = (a: TaskActor) => a.isLeader;
+/** Comments and watching are open to every member; instructors and admins are view-only. */
+export const canCommentOnTask = (a: TaskActor) => a.isMember;
+export const canWatchTask = (a: TaskActor) => a.isMember;
 
 /** May this actor put this task into column `to`? (to === current status means reordering.) */
 export function canMoveTask(a: TaskActor, t: TaskLike, to: TaskStatus): Decision {
@@ -84,6 +87,8 @@ export function permissionsFor(a: TaskActor, t: TaskLike): TaskPermissions {
     assign: canAssignTask(a),
     delete: canDeleteTask(a),
     move: allowedStatuses.length > 0,
+    comment: canCommentOnTask(a),
+    watch: canWatchTask(a),
     allowedStatuses: [...allowedStatuses],
   };
 }

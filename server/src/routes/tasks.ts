@@ -16,10 +16,12 @@ import {
 } from "../lib/taskPermissions.js";
 import {
   afterDeadlineWarning, formatDateOnly, loadBoard, loadTaskRow, logActivity, nextBottomPosition,
-  parseDateOnly, serializeTask, statusFields, type TaskRow,
+  parseDateOnly, serializeTaskWithCounts, statusFields, subtaskCountsFor, serializeTask, type TaskRow,
 } from "../lib/taskBoard.js";
 import { computePosition, rebalanced } from "../lib/taskPosition.js";
 import { deriveTaskKey, effectiveTaskKey } from "../lib/taskKey.js";
+import { addWatchers, notifyMentions, notifyStatusChange, taskLink } from "../lib/taskWatchers.js";
+import { extractMentionIds } from "@shared/taskTypes.js";
 
 // The group Tasks board. Planning data only: nothing here is read by scoring, the analysis or the
 // AI narrative, and tasks never change a contribution score, flag, Gini value or team health.
@@ -30,20 +32,20 @@ import { deriveTaskKey, effectiveTaskKey } from "../lib/taskKey.js";
 
 export const tasksRouter = Router();
 
-const idParam = z.coerce.number().int().positive();
+export const idParam = z.coerce.number().int().positive();
 const dateOnly = z.string().refine((v) => parseDateOnly(v) !== null, "Use a valid date (YYYY-MM-DD).");
 
-const VIEW_ONLY = "Instructors and admins have view-only access to tasks.";
+export const VIEW_ONLY = "Instructors and admins have view-only access to tasks.";
 
 class VersionConflict extends Error {}
 class BadRequest extends Error {
   constructor(message: string) { super(message); }
 }
 
-interface Ctx { project: LoadedGroup; actor: TaskActor; groupId: number }
+export interface Ctx { project: LoadedGroup; actor: TaskActor; groupId: number }
 
 /** Parses :id, loads the group and checks the caller may see it. Sends the error response itself. */
-async function openGroup(req: Request, res: Response, opts: { write?: boolean } = {}): Promise<Ctx | null> {
+export async function openGroup(req: Request, res: Response, opts: { write?: boolean } = {}): Promise<Ctx | null> {
   const id = idParam.safeParse(req.params.id);
   if (!id.success) { res.status(400).json({ error: "Invalid group id" }); return null; }
   const project = await loadGroup(id.data);
@@ -60,16 +62,12 @@ function leaderOnly(res: Response, actor: TaskActor, message: string): boolean {
   return false;
 }
 
-async function openTask(req: Request, res: Response, ctx: Ctx): Promise<TaskRow | null> {
+export async function openTask(req: Request, res: Response, ctx: Ctx): Promise<TaskRow | null> {
   const taskId = idParam.safeParse(req.params.taskId);
   if (!taskId.success) { res.status(400).json({ error: "Invalid task id" }); return null; }
   const task = await loadTaskRow(taskId.data);
   if (!task || task.projectId !== ctx.groupId) { res.status(404).json({ error: "Task not found." }); return null; }
   return task;
-}
-
-function taskLink(projectId: number, taskId: number): string {
-  return `/student/group/${projectId}?tab=tasks&task=${taskId}`;
 }
 
 async function notifyAssigned(project: LoadedGroup, actorId: number, assignments: { taskId: number; title: string; userId: number }[]) {
@@ -90,11 +88,11 @@ async function notifyAssigned(project: LoadedGroup, actorId: number, assignments
   }
 }
 
-function conflictBody(project: LoadedGroup, actor: TaskActor, current: TaskRow | null) {
+async function conflictBody(project: LoadedGroup, actor: TaskActor, current: TaskRow | null) {
   return {
     error: "This task was changed by someone else. The latest version has been loaded.",
     code: "VERSION_CONFLICT",
-    task: current ? serializeTask(current, { project, actor }) : null,
+    task: current ? await serializeTaskWithCounts(current, { project, actor }) : null,
   };
 }
 
@@ -103,8 +101,14 @@ function withWarnings<T extends object>(body: T, warnings: (string | null)[]): T
   return list.length ? { ...body, warnings: list } : body;
 }
 
-function isMemberOf(project: LoadedGroup, userId: number): boolean {
+export function isMemberOf(project: LoadedGroup, userId: number): boolean {
   return project.groupMemberships.some((m) => m.userId === userId);
+}
+
+/** Mention tokens must name members of this group. Returns an error message, or null when fine. */
+export function mentionError(project: LoadedGroup, text: string | null | undefined): string | null {
+  const bad = extractMentionIds(text).find((id) => !isMemberOf(project, id));
+  return bad === undefined ? null : "You can only mention members of this group.";
 }
 
 async function checkLabelIds(projectId: number, labelIds: number[]): Promise<boolean> {
@@ -175,6 +179,8 @@ tasksRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res:
     res.status(400).json({ error: "One of those labels does not belong to this group." });
     return;
   }
+  const badMention = mentionError(project, data.description);
+  if (badMention) { res.status(400).json({ error: badMention }); return; }
   if ((await prisma.task.count({ where: { projectId: project.id } })) >= TASK_LIMITS.tasksPerGroup) {
     res.status(400).json({ error: `A group can have at most ${TASK_LIMITS.tasksPerGroup} tasks.` });
     return;
@@ -209,6 +215,7 @@ tasksRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res:
       },
       include: { labelLinks: true },
     });
+    await addWatchers(tx, task.id, [actor.userId, task.assignedToUserId]);
     await logActivity(tx, [
       { taskId: task.id, actorId: actor.userId, type: "created" },
       ...(task.assignedToUserId != null
@@ -222,8 +229,10 @@ tasksRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res:
     await notifyAssigned(project, actor.userId, [{ taskId: created.id, title: created.title, userId: created.assignedToUserId }]);
   }
 
+  await notifyMentions(project, actor.userId, created, extractMentionIds(created.description), "description");
+
   res.status(201).json(withWarnings(
-    serializeTask(created, { project, actor }),
+    await serializeTaskWithCounts(created, { project, actor }),
     [afterDeadlineWarning(dueDate, project.assignment?.deadline)],
   ));
 });
@@ -297,13 +306,15 @@ async function handleUpdate(req: Request, res: Response, opts: { versionRequired
     res.status(400).json({ error: "One of those labels does not belong to this group." });
     return;
   }
+  const badMention = nextDescription !== undefined && nextDescription !== task.description ? mentionError(project, nextDescription) : null;
+  if (badMention) { res.status(400).json({ error: badMention }); return; }
 
   if (!editChanged && !dueChanged && !assignChanged && !milestoneChanged) {
     if (input.expectedVersion !== undefined && input.expectedVersion !== task.version) {
-      res.status(409).json(conflictBody(project, actor, task));
+      res.status(409).json(await conflictBody(project, actor, task));
       return;
     }
-    res.json(serializeTask(task, { project, actor }));
+    res.json(await serializeTaskWithCounts(task, { project, actor }));
     return;
   }
 
@@ -343,6 +354,7 @@ async function handleUpdate(req: Request, res: Response, opts: { versionRequired
     await prisma.$transaction(async (tx) => {
       const result = await tx.task.updateMany({ where: { id: task.id, version: expected }, data });
       if (result.count === 0) throw new VersionConflict();
+      if (assignChanged) await addWatchers(tx, task.id, [input.assignedToUserId]);
       if (labelsChanged) {
         await tx.taskLabelLink.deleteMany({ where: { taskId: task.id } });
         await tx.taskLabelLink.createMany({ data: nextLabelIds!.map((labelId) => ({ taskId: task.id, labelId })) });
@@ -351,18 +363,22 @@ async function handleUpdate(req: Request, res: Response, opts: { versionRequired
     });
   } catch (err) {
     if (err instanceof VersionConflict) {
-      res.status(409).json(conflictBody(project, actor, await loadTaskRow(task.id)));
+      res.status(409).json(await conflictBody(project, actor, await loadTaskRow(task.id)));
       return;
     }
     throw err;
   }
 
   const updated = (await loadTaskRow(task.id))!;
+  if (nextDescription !== undefined && nextDescription !== task.description) {
+    const before = new Set(extractMentionIds(task.description));
+    await notifyMentions(project, actor.userId, updated, extractMentionIds(nextDescription).filter((id) => !before.has(id)), "description");
+  }
   if (assignChanged && updated.assignedToUserId != null) {
     await notifyAssigned(project, actor.userId, [{ taskId: updated.id, title: updated.title, userId: updated.assignedToUserId }]);
   }
   res.json(withWarnings(
-    serializeTask(updated, { project, actor }),
+    await serializeTaskWithCounts(updated, { project, actor }),
     [dueChanged ? afterDeadlineWarning(nextDue ?? null, project.assignment?.deadline) : null],
   ));
 }
@@ -383,7 +399,7 @@ async function moveInTransaction(
   to: TaskStatus,
   placement: { afterId?: number | null; beforeId?: number | null },
   expectedVersion: number,
-) {
+): Promise<boolean> {
   const column = await tx.task.findMany({
     where: { projectId: task.projectId, status: to, NOT: { id: task.id } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
@@ -403,7 +419,9 @@ async function moveInTransaction(
   if (result.count === 0) throw new VersionConflict();
   if (to !== task.status) {
     await logActivity(tx, [{ taskId: task.id, actorId, type: "status_changed", data: { from: task.status, to } }]);
+    return true;
   }
+  return false;
 }
 
 // POST /api/groups/:id/tasks/:taskId/move
@@ -422,16 +440,17 @@ tasksRouter.post("/api/groups/:id/tasks/:taskId/move", requireAuth, async (req: 
   if (!decision.ok) { res.status(403).json({ error: decision.message }); return; }
 
   try {
-    await prisma.$transaction((tx) => moveInTransaction(tx, task, actor.userId, status, { afterId, beforeId }, expectedVersion));
+    const changed = await prisma.$transaction((tx) => moveInTransaction(tx, task, actor.userId, status, { afterId, beforeId }, expectedVersion));
+    if (changed) await notifyStatusChange(project, actor.userId, task, status);
   } catch (err) {
     if (err instanceof VersionConflict) {
-      res.status(409).json(conflictBody(project, actor, await loadTaskRow(task.id)));
+      res.status(409).json(await conflictBody(project, actor, await loadTaskRow(task.id)));
       return;
     }
     if (err instanceof BadRequest) { res.status(400).json({ error: err.message }); return; }
     throw err;
   }
-  res.json(serializeTask((await loadTaskRow(task.id))!, { project, actor }));
+  res.json(await serializeTaskWithCounts((await loadTaskRow(task.id))!, { project, actor }));
 });
 
 // ── Legacy completion toggle (temporary alias; removed in the final cleanup) ─
@@ -446,19 +465,20 @@ async function handleLegacyDone(req: Request, res: Response, done: boolean) {
   const { project, actor } = ctx;
   const to: TaskStatus = done ? "DONE" : task.status === "DONE" ? "TODO" : task.status;
 
-  if (to === task.status) { res.json(serializeTask(task, { project, actor })); return; }
+  if (to === task.status) { res.json(await serializeTaskWithCounts(task, { project, actor })); return; }
   const decision = canMoveTask(actor, task, to);
   if (!decision.ok) { res.status(403).json({ error: decision.message }); return; }
   try {
-    await prisma.$transaction((tx) => moveInTransaction(tx, task, actor.userId, to, {}, task.version));
+    const changed = await prisma.$transaction((tx) => moveInTransaction(tx, task, actor.userId, to, {}, task.version));
+    if (changed) await notifyStatusChange(project, actor.userId, task, to);
   } catch (err) {
     if (err instanceof VersionConflict) {
-      res.status(409).json(conflictBody(project, actor, await loadTaskRow(task.id)));
+      res.status(409).json(await conflictBody(project, actor, await loadTaskRow(task.id)));
       return;
     }
     throw err;
   }
-  res.json(serializeTask((await loadTaskRow(task.id))!, { project, actor }));
+  res.json(await serializeTaskWithCounts((await loadTaskRow(task.id))!, { project, actor }));
 }
 
 tasksRouter.patch("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
@@ -535,6 +555,7 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
   }
 
   const newlyAssigned: { taskId: number; title: string; userId: number }[] = [];
+  const statusMoved: { id: number; title: string }[] = [];
   // Tasks the actor may not change, or that cannot take the change, are skipped and reported
   // (the rest still apply). Bad ids in the request itself still fail the whole call above.
   const skipped: { taskId: number; key: string; reason: string }[] = [];
@@ -560,6 +581,7 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
             const position = await nextBottomPosition(tx, project.id, action.status);
             await tx.task.update({ where: { id }, data: { ...statusFields(action.status, task), position, ...bump } });
             await logActivity(tx, [{ taskId: id, actorId: actor.userId, type: "status_changed", data: { from: task.status, to: action.status } }]);
+            statusMoved.push({ id, title: task.title });
             break;
           }
           case "assign": {
@@ -568,6 +590,7 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
             await logActivity(tx, [action.userId != null
               ? { taskId: id, actorId: actor.userId, type: "assigned", data: { from: task.assignedToUserId, to: action.userId } }
               : { taskId: id, actorId: actor.userId, type: "unassigned", data: { from: task.assignedToUserId } }]);
+            if (action.userId != null) await addWatchers(tx, id, [action.userId]);
             if (action.userId != null) newlyAssigned.push({ taskId: id, title: task.title, userId: action.userId });
             break;
           }
@@ -607,8 +630,10 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
   }
 
   if (newlyAssigned.length) await notifyAssigned(project, actor.userId, newlyAssigned);
+  if (action.type === "status") for (const t of statusMoved) await notifyStatusChange(project, actor.userId, t, action.status);
   const updated = await prisma.task.findMany({ where: { id: { in: taskIds } }, include: { labelLinks: true } });
-  res.json({ tasks: updated.map((t) => serializeTask(t, { project, actor })), skipped });
+  const counts = await subtaskCountsFor(updated.map((t) => t.id));
+  res.json({ tasks: updated.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id) })), skipped });
 });
 
 // ── Milestones (leader only) ──────────────────────────────────────────────────

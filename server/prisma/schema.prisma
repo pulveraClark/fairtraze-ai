@@ -60,6 +60,9 @@ enum AlertType {
   DELETION_REQUESTED
   DELETION_APPROVED
   DELETION_REJECTED
+  TASK_MENTIONED
+  TASK_COMMENTED
+  TASK_STATUS_CHANGED
 }
 
 enum DeletionRequestStatus {
@@ -160,6 +163,9 @@ model User {
   tasksAssigned    Task[]            @relation("TaskAssignee")
   tasksCreated     Task[]            @relation("TaskCreator")
   taskActivity     TaskActivity[]    @relation("TaskActivityActor")
+  taskAttachments  TaskAttachment[]  @relation("TaskAttachmentCreator")
+  taskComments     TaskComment[]     @relation("TaskCommentAuthor")
+  taskWatching     TaskWatcher[]     @relation("TaskWatcherUser")
   comments         Comment[]
   documentContributions DocumentContribution[]
   combinedContributions CombinedContribution[]
@@ -383,6 +389,10 @@ model Task {
   milestone        TaskMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   labelLinks       TaskLabelLink[]
   activity         TaskActivity[]
+  subtasks         TaskSubtask[]
+  attachments      TaskAttachment[]
+  comments         TaskComment[]
+  watchers         TaskWatcher[]
 
   @@unique([projectId, number])
   @@index([projectId, status, position])
@@ -450,6 +460,64 @@ model TaskActivity {
   actor     User?    @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([taskId, createdAt])
+}
+
+// Task details (phase 4). Planning data only: nothing here is read by scoring.
+model TaskSubtask {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  title     String
+  done      Boolean  @default(false)
+  position  Float    @default(0)
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position])
+}
+
+// Stored in Postgres (Render's disk is ephemeral), same rules as the project brief attachments.
+model TaskAttachment {
+  id          Int            @id @default(autoincrement())
+  taskId      Int
+  // Denormalised so the 50 MB per-group total is one indexed sum.
+  projectId   Int
+  kind        AttachmentKind
+  mime        String
+  data        Bytes
+  size        Int
+  filename    String
+  createdById Int?
+  createdAt   DateTime       @default(now())
+  task        Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdBy   User?          @relation("TaskAttachmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([projectId])
+}
+
+// body holds <@userId> mention tokens; names are rendered by the client from the live member list.
+model TaskComment {
+  id        Int       @id @default(autoincrement())
+  taskId    Int
+  authorId  Int
+  body      String
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User      @relation("TaskCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([taskId, createdAt])
+}
+
+model TaskWatcher {
+  taskId    Int
+  userId    Int
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation("TaskWatcherUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
 }
 
 model Member {
