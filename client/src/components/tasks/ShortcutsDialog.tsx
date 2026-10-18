@@ -10,8 +10,8 @@ interface Props {
 const SHORTCUTS: { keys: string[]; what: string; needsCreate?: boolean }[] = [
   { keys: ["C"], what: "Create a task", needsCreate: true },
   { keys: ["/"], what: "Search tasks" },
-  { keys: ["J"], what: "Move to the next task" },
-  { keys: ["K"], what: "Move to the previous task" },
+  { keys: ["J"], what: "Move to the next task (also inside an open task)" },
+  { keys: ["K"], what: "Move to the previous task (also inside an open task)" },
   { keys: ["Enter"], what: "Open the task you are on" },
   { keys: ["Esc"], what: "Close a panel or dialog, or clear the selection" },
   { keys: ["?"], what: "Show this list" },

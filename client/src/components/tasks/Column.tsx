@@ -3,7 +3,6 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import type { BoardResponse, BoardTask, TaskStatus } from "@shared/taskTypes";
 import { TASK_STATUS_LABELS } from "@shared/taskTypes";
 import { SortableTaskCard } from "./TaskCard";
-import { QuickAdd } from "./QuickAdd";
 
 export type DropState = "allowed" | "denied" | null;
 
@@ -15,8 +14,6 @@ interface Props {
   board: BoardResponse;
   today: string;
   onOpen: (taskId: number) => void;
-  /** Quick add is offered when the viewer can create here; null hides it. */
-  onQuickAdd: ((title: string) => Promise<void>) | null;
   dropState: DropState;
   /** True while a card is being dragged and this column is not the one it started in. */
   showDropHint: boolean;
@@ -28,7 +25,7 @@ export function columnId(status: TaskStatus): string {
   return `col:${status}`;
 }
 
-export function Column({ status, ids, tasksById, board, today, onOpen, onQuickAdd, dropState, showDropHint, unfilteredCount }: Props) {
+export function Column({ status, ids, tasksById, board, today, onOpen, dropState, showDropHint, unfilteredCount }: Props) {
   const label = TASK_STATUS_LABELS[status];
   const { setNodeRef } = useDroppable({ id: columnId(status), data: { type: "column", status } });
 
@@ -77,8 +74,6 @@ export function Column({ status, ids, tasksById, board, today, onOpen, onQuickAd
           Not allowed for this task
         </div>
       )}
-
-      {onQuickAdd && <QuickAdd columnLabel={label} onAdd={onQuickAdd} />}
     </section>
   );
 }

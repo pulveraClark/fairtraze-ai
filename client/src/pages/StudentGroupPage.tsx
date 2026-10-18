@@ -13,6 +13,8 @@ import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { TasksTab } from "../components/tasks/TasksTab";
+import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
+import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
 import { BriefCard } from "../components/BriefCard";
 import type { BriefAttachment } from "../lib/briefAttachments";
@@ -232,6 +234,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     window.history.replaceState(window.history.state, "", url);
   }
   const [viewingHistory, setViewingHistory]     = useState(false);
+  // "Open in document" from a task: the editor scrolls to the task's linked heading.
+  const docFocus = useDocHeadingFocus(() => { setViewingHistory(false); selectTab("document"); });
   // A "join request" notification links here with ?manage=1 to open the manage modal.
   const [showManageModal, setShowManageModal]   = useState(
     () => new URLSearchParams(window.location.search).get("manage") === "1"
@@ -594,6 +598,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             projectId={projectId}
             initialTaskId={initialTaskId}
             onOpenTaskChange={(id) => selectTab("tasks", id)}
+            onOpenDocument={visibleTabs.includes("document") ? docFocus.openAt : undefined}
           />
         )}
 
@@ -960,7 +965,19 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             {viewingHistory ? (
               <DocumentHistoryPanel groupId={projectId} />
             ) : (
-              <DocumentGate groupId={projectId} editable={true} canChooseTemplate={membership.role === "LEADER"} title={project.groupName} />
+              <>
+                {docFocus.focus?.missing && (
+                  <LinkedHeadingNotice projectId={projectId} focus={docFocus.focus} onRelink={docFocus.onRelink} onDismiss={docFocus.clear} />
+                )}
+                <DocumentGate
+                  groupId={projectId}
+                  editable={true}
+                  canChooseTemplate={membership.role === "LEADER"}
+                  title={project.groupName}
+                  scrollToHeading={docFocus.focus?.heading}
+                  onHeadingResolved={docFocus.onResolved}
+                />
+              </>
             )}
           </div>
         )}

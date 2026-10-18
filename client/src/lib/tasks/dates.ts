@@ -92,3 +92,13 @@ export function formatLongDate(date: string): string {
 export function manilaDateOf(iso: string): string {
   return todayManila(new Date(iso));
 }
+
+/** True when a calendar date falls after the project deadline (compared as Manila calendar days). */
+export function isAfterDeadline(date: string | null, deadlineIso: string | null): boolean {
+  return !!(date && deadlineIso && date > todayManila(new Date(deadlineIso)));
+}
+
+/** "Nov 14" for the project deadline, in the school's time zone. */
+export function formatDeadline(deadlineIso: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric" }).format(new Date(deadlineIso));
+}

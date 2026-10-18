@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TASK_STATUSES, type BoardTask, type BulkAction, type BulkSkipped, type TaskStatus } from "@shared/taskTypes";
+import { TASK_STATUSES, type BoardTask, type BulkAction, type BulkSkipped } from "@shared/taskTypes";
 import { useTaskBoardQuery } from "../../hooks/useGroupQueries";
 import { useTaskActions } from "../../hooks/useTaskActions";
 import { useTaskShortcuts } from "../../hooks/useTaskShortcuts";
@@ -22,7 +22,7 @@ import { ListView } from "./ListView";
 import { MilestoneStrip } from "./MilestoneStrip";
 import { NewTaskDialog } from "./NewTaskDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
-import { TaskPanel } from "./TaskPanel";
+import { TaskDetailsModal } from "./details/TaskDetailsModal";
 import { TasksTopBar } from "./TasksTopBar";
 
 interface Props {
@@ -31,10 +31,15 @@ interface Props {
   initialTaskId?: number | null;
   /** Called when the open task changes, so the page can keep ?task= in the URL. */
   onOpenTaskChange?: (taskId: number | null) => void;
+  /**
+   * Opens the group's Document tab at the heading a task is linked to. Only passed when the group has
+   * a Document tab; without it the details window offers no heading link.
+   */
+  onOpenDocument?: (task: BoardTask) => void;
 }
 
 /** The group's Tasks tab. Instructors and admins see the same board read-only (the server decides). */
-export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange }: Props) {
+export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, onOpenDocument }: Props) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const query = useTaskBoardQuery(projectId);
@@ -78,6 +83,12 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange }: 
 
   const open = useCallback((id: number | null) => {
     if (id !== null) openerRef.current = document.activeElement as HTMLElement | null;
+    setOpenId(id);
+    onOpenTaskChange?.(id);
+  }, [onOpenTaskChange]);
+
+  /** Move to another task inside the open details window (the opener to return focus to stays the same). */
+  const navigate = useCallback((id: number) => {
     setOpenId(id);
     onOpenTaskChange?.(id);
   }, [onOpenTaskChange]);
@@ -163,10 +174,6 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange }: 
 
   const openTask: BoardTask | null = openId !== null ? board.tasks.find((t) => t.id === openId) ?? null : null;
 
-  async function quickAdd(status: TaskStatus, title: string) {
-    await actions.createTask({ title }, status);
-  }
-
   function onMove(task: BoardTask, to: Placement, previous: Placement | null) {
     void actions.moveTask(task, to, { previous });
   }
@@ -213,7 +220,6 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange }: 
           today={today}
           onOpen={open}
           onMove={onMove}
-          onQuickAdd={quickAdd}
           onDenied={actions.showError}
         />
       )}
@@ -257,12 +263,15 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange }: 
       </p>
 
       {openTask && (
-        <TaskPanel
+        <TaskDetailsModal
           board={board}
           task={openTask}
           actions={actions}
+          orderedIds={orderedIds}
+          onNavigate={navigate}
           onClose={() => open(null)}
           restoreFocusTo={openerRef.current}
+          onOpenDocument={onOpenDocument}
         />
       )}
       {openId !== null && !openTask && (

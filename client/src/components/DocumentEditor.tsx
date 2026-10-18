@@ -67,6 +67,12 @@ interface Props {
   awaitInitialNodeCount?: number;
   /** The document's title (the group's name): the PDF's file name and title metadata. */
   title?: string;
+  /**
+   * Heading text a task is linked to: once the document has synced, scroll to that heading. Client-only
+   * navigation (reads the editor's state, writes nothing). Reports whether it was found.
+   */
+  scrollToHeading?: string | null;
+  onHeadingResolved?: (found: boolean) => void;
 }
 
 interface CollabHandle {
@@ -150,7 +156,7 @@ function PaperStage({ pageWidth, zoom, children }: { pageWidth: number; zoom: nu
   );
 }
 
-export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title }: Props) {
+export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title, scrollToHeading, onHeadingResolved }: Props) {
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -731,6 +737,31 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       dom.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
+
+  // Task "linked heading": scroll to it once the shared document has arrived. A heading that is not
+  // there after the connection settles was renamed or removed, which the page explains to the user.
+  const headingHandledRef = useRef<string | null>(null);
+  const onHeadingResolvedRef = useRef(onHeadingResolved);
+  onHeadingResolvedRef.current = onHeadingResolved;
+  useEffect(() => {
+    const wanted = scrollToHeading?.trim();
+    if (!wanted || !editor || headingHandledRef.current === wanted) return;
+    const hit = tocHeadings.find((h) => h.text.trim() === wanted);
+    if (hit) {
+      headingHandledRef.current = wanted;
+      handleSelectHeading(hit.pos);
+      onHeadingResolvedRef.current?.(true);
+      return;
+    }
+    if (connStatus !== "connected") return;
+    const timer = window.setTimeout(() => {
+      headingHandledRef.current = wanted;
+      onHeadingResolvedRef.current?.(false);
+    }, 2500);
+    return () => window.clearTimeout(timer);
+    // handleSelectHeading only reads the editor, which is already a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollToHeading, editor, tocHeadings, connStatus]);
 
   const handleImportClick = () => {
     if (importing) return;

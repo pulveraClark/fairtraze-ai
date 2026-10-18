@@ -5,9 +5,9 @@ import type { BoardResponse, BoardTask, TaskPermissions, TaskStatus } from "@sha
 
 const ALL: TaskStatus[] = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 
-export const LEADER_PERMS: TaskPermissions = { edit: true, setDue: true, assign: true, delete: true, move: true, allowedStatuses: ALL };
-export const ASSIGNEE_PERMS: TaskPermissions = { edit: true, setDue: true, assign: false, delete: false, move: true, allowedStatuses: ["TODO", "IN_PROGRESS", "IN_REVIEW"] };
-export const NO_PERMS: TaskPermissions = { edit: false, setDue: false, assign: false, delete: false, move: false, allowedStatuses: [] };
+export const LEADER_PERMS: TaskPermissions = { edit: true, setDue: true, assign: true, delete: true, move: true, comment: true, watch: true, allowedStatuses: ALL };
+export const ASSIGNEE_PERMS: TaskPermissions = { edit: true, setDue: true, assign: false, delete: false, move: true, comment: true, watch: true, allowedStatuses: ["TODO", "IN_PROGRESS", "IN_REVIEW"] };
+export const NO_PERMS: TaskPermissions = { edit: false, setDue: false, assign: false, delete: false, move: false, comment: false, watch: false, allowedStatuses: [] };
 
 let nextId = 1;
 export function resetFixtureIds() { nextId = 1; }

@@ -15,6 +15,8 @@ import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { TasksTab } from "../components/tasks/TasksTab";
+import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
+import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { parseClassLabel } from "../components/ClassCard";
@@ -76,6 +78,8 @@ export function ProjectDetailPage({ projectId }: Props) {
     window.history.replaceState(window.history.state, "", url);
   }
   const [viewingHistory, setViewingHistory]     = useState(false);
+  // "Open in document" from a task: the editor scrolls to the task's linked heading (read-only here).
+  const docFocus = useDocHeadingFocus(() => { setViewingHistory(false); selectTab("document"); });
 
   // Summary used for breadcrumb + group switcher — shared with the dashboard/class pages
   // via useProjectsSummaryQuery so navigating between them reuses the cached fetch.
@@ -659,6 +663,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             projectId={projectId}
             initialTaskId={initialTaskId}
             onOpenTaskChange={(id) => selectTab("tasks", id)}
+            onOpenDocument={visibleTabs.includes("document") ? docFocus.openAt : undefined}
           />
         )}
 
@@ -680,7 +685,19 @@ export function ProjectDetailPage({ projectId }: Props) {
             {viewingHistory ? (
               <DocumentHistoryPanel groupId={projectId} />
             ) : (
-              <DocumentGate groupId={projectId} editable={false} canChooseTemplate={false} title={groupName} />
+              <>
+                {docFocus.focus?.missing && (
+                  <LinkedHeadingNotice projectId={projectId} focus={docFocus.focus} onRelink={docFocus.onRelink} onDismiss={docFocus.clear} />
+                )}
+                <DocumentGate
+                  groupId={projectId}
+                  editable={false}
+                  canChooseTemplate={false}
+                  title={groupName}
+                  scrollToHeading={docFocus.focus?.heading}
+                  onHeadingResolved={docFocus.onResolved}
+                />
+              </>
             )}
           </div>
         )}

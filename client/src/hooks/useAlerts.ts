@@ -24,7 +24,10 @@ export type AlertType =
   | "DEPARTMENT_CREATED"
   | "USER_REGISTERED"
   | "INSTRUCTOR_APPROVED"
-  | "INSTRUCTOR_REJECTED";
+  | "INSTRUCTOR_REJECTED"
+  | "TASK_MENTIONED"
+  | "TASK_COMMENTED"
+  | "TASK_STATUS_CHANGED";
 
 export interface AlertItem {
   id: number;
@@ -83,6 +86,9 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   USER_REGISTERED:         { label: "New Instructor", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", light: "text-amber-700 bg-amber-50 border-amber-200" },
   INSTRUCTOR_APPROVED:     { label: "Account Approved", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
   INSTRUCTOR_REJECTED:     { label: "Request Not Approved", color: "text-slate-300 bg-slate-500/10 border-slate-500/30", light: "text-slate-700 bg-slate-100 border-slate-200" },
+  TASK_MENTIONED:          { label: "Mention", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+  TASK_COMMENTED:          { label: "Task Comment", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
+  TASK_STATUS_CHANGED:     { label: "Task Update", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
 };
 
 const FALLBACK_META: AlertTypeMeta = {

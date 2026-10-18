@@ -13,13 +13,16 @@ interface Props {
   canChooseTemplate: boolean;
   /** The document's title (the group's name): the PDF's file name and title metadata. */
   title?: string;
+  /** Heading a task is linked to: the editor scrolls to it once the document has synced. */
+  scrollToHeading?: string | null;
+  onHeadingResolved?: (found: boolean) => void;
 }
 
 // Gates DocumentEditor behind a one-time "start your document" step: before any Document row
 // exists for the group, the leader (or instructor) picks a template or starts blank. Once a
 // document exists, this renders DocumentEditor exactly as before — no behavior change for
 // already-started documents.
-export function DocumentGate({ groupId, editable, canChooseTemplate, title }: Props) {
+export function DocumentGate({ groupId, editable, canChooseTemplate, title, scrollToHeading, onHeadingResolved }: Props) {
   const { token } = useAuth();
   const [exists, setExists] = useState<boolean | null>(null);
   // Whether the document is still safe to reset (no real typed/imported content, no image
@@ -146,6 +149,8 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title }: Pr
           title={title}
           editable={editable}
           awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
+          scrollToHeading={scrollToHeading}
+          onHeadingResolved={onHeadingResolved}
         />
       </div>
     );

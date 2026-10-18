@@ -19,7 +19,6 @@ interface Props {
   today: string;
   onOpen: (taskId: number) => void;
   onMove: (task: BoardTask, to: Placement, previous: Placement | null) => void;
-  onQuickAdd: (status: TaskStatus, title: string) => Promise<void>;
   onDenied: (message: string) => void;
 }
 
@@ -37,7 +36,7 @@ function statusOfContainer(id: UniqueIdentifier): TaskStatus | null {
  * and saved through `onMove`. A card can only be dropped where the server would allow it
  * (`task.permissions.allowedStatuses`); anything else snaps back with an explanation.
  */
-export function Board({ board, tasks, today, onOpen, onMove, onQuickAdd, onDenied }: Props) {
+export function Board({ board, tasks, today, onOpen, onMove, onDenied }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
@@ -175,9 +174,6 @@ export function Board({ board, tasks, today, onOpen, onMove, onQuickAdd, onDenie
     return allowed(activeTask, status) ? "allowed" : "denied";
   }
 
-  const canQuickAdd = (status: TaskStatus) =>
-    board.viewer.canCreate && (isLeader || status === "TODO");
-
   return (
     <DndContext
       sensors={sensors}
@@ -203,7 +199,6 @@ export function Board({ board, tasks, today, onOpen, onMove, onQuickAdd, onDenie
             board={board}
             today={today}
             onOpen={onOpen}
-            onQuickAdd={canQuickAdd(status) ? (title) => onQuickAdd(status, title) : null}
             dropState={dropStateFor(status)}
             showDropHint={originStatus !== status}
             unfilteredCount={unfilteredCounts[status]}

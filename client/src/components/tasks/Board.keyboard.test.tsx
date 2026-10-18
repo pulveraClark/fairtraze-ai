@@ -70,7 +70,7 @@ function renderBoard(board: BoardResponse, tasks: BoardTask[], handlers: Partial
   const onMove = handlers.onMove ?? vi.fn();
   const onDenied = handlers.onDenied ?? vi.fn();
   render(
-    <Board board={board} tasks={tasks} today="2026-10-16" onOpen={vi.fn()} onMove={onMove} onQuickAdd={vi.fn(async () => undefined)} onDenied={onDenied} />,
+    <Board board={board} tasks={tasks} today="2026-10-16" onOpen={vi.fn()} onMove={onMove} onDenied={onDenied} />,
   );
   return { onMove, onDenied };
 }

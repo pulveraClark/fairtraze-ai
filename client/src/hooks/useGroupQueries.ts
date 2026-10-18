@@ -15,6 +15,8 @@ export const groupKeys = {
   requests:        (uid: number | null, pid: number) => ["group", uid, "requests", pid] as const,
   roleSuggestions: (uid: number | null, pid: number) => ["group", uid, "role-suggestions", pid] as const,
   tasks:           (uid: number | null, pid: number) => ["group", uid, "tasks", pid] as const, // the whole Tasks board payload
+  taskDetails:     (uid: number | null, pid: number, tid: number) => ["group", uid, "task-details", pid, tid] as const,
+  docHeadings:     (uid: number | null, pid: number) => ["group", uid, "doc-headings", pid] as const,
 };
 export const disputeKeys = {
   all:  (uid: number | null) => ["disputes", uid] as const,

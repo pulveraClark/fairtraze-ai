@@ -1,5 +1,6 @@
 import type {
   BoardTask, TaskPriority, TaskStatus, BoardLabel, TaskLabelColor, BulkAction, BulkEditResponse,
+  TaskAttachmentMeta, TaskCommentView, TaskDetails, TaskSubtask,
 } from "@shared/taskTypes";
 import type { Placement } from "./placement";
 
@@ -36,6 +37,19 @@ async function call<T>(token: string | null, method: string, url: string, body?:
 }
 
 const base = (projectId: number) => `/api/groups/${projectId}`;
+const taskBase = (projectId: number, taskId: number) => `${base(projectId)}/tasks/${taskId}`;
+
+/** Upload a raw file body (the server sniffs the real type, so Content-Type is only a hint). */
+async function upload(token: string | null, url: string, file: Blob, filename: string): Promise<TaskAttachmentMeta> {
+  const res = await fetch(`${url}?filename=${encodeURIComponent(filename)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  const json = (await res.json().catch(() => ({}))) as TaskAttachmentMeta & { error?: string };
+  if (!res.ok) throw new TaskApiError(res.status, json.error ?? "Could not upload the file.");
+  return json;
+}
 
 export interface CreateTaskInput {
   title: string;
@@ -84,4 +98,37 @@ export const taskApi = {
 
   createLabel: (token: string | null, projectId: number, input: { name: string; color: TaskLabelColor }) =>
     call<BoardLabel>(token, "POST", `${base(projectId)}/labels`, input),
+
+  // ── Task details ──
+  details: (token: string | null, projectId: number, taskId: number) =>
+    call<TaskDetails>(token, "GET", `${taskBase(projectId, taskId)}/details`),
+
+  addSubtask: (token: string | null, projectId: number, taskId: number, title: string) =>
+    call<TaskSubtask>(token, "POST", `${taskBase(projectId, taskId)}/subtasks`, { title }),
+  updateSubtask: (token: string | null, projectId: number, taskId: number, id: number, input: { title?: string; done?: boolean }) =>
+    call<TaskSubtask>(token, "PATCH", `${taskBase(projectId, taskId)}/subtasks/${id}`, input),
+  removeSubtask: (token: string | null, projectId: number, taskId: number, id: number) =>
+    call<{ ok: true }>(token, "DELETE", `${taskBase(projectId, taskId)}/subtasks/${id}`),
+  reorderSubtasks: (token: string | null, projectId: number, taskId: number, ids: number[]) =>
+    call<{ ok: true }>(token, "PUT", `${taskBase(projectId, taskId)}/subtasks/order`, { ids }),
+
+  uploadAttachment: (token: string | null, projectId: number, taskId: number, file: Blob, filename: string) =>
+    upload(token, `${taskBase(projectId, taskId)}/attachments`, file, filename),
+  removeAttachment: (token: string | null, projectId: number, taskId: number, id: number) =>
+    call<{ ok: true }>(token, "DELETE", `${taskBase(projectId, taskId)}/attachments/${id}`),
+  attachmentUrl: (projectId: number, taskId: number, id: number) => `${taskBase(projectId, taskId)}/attachments/${id}`,
+
+  addComment: (token: string | null, projectId: number, taskId: number, body: string) =>
+    call<TaskCommentView>(token, "POST", `${taskBase(projectId, taskId)}/comments`, { body }),
+  editComment: (token: string | null, projectId: number, taskId: number, id: number, body: string) =>
+    call<TaskCommentView>(token, "PATCH", `${taskBase(projectId, taskId)}/comments/${id}`, { body }),
+  removeComment: (token: string | null, projectId: number, taskId: number, id: number) =>
+    call<{ ok: true }>(token, "DELETE", `${taskBase(projectId, taskId)}/comments/${id}`),
+
+  watch: (token: string | null, projectId: number, taskId: number, on: boolean) =>
+    call<TaskDetails>(token, on ? "PUT" : "DELETE", `${taskBase(projectId, taskId)}/watch`),
+
+  /** H1/H2 headings of the group's document, read from the saved copy on the server (read-only). */
+  documentHeadings: (token: string | null, projectId: number) =>
+    call<{ headings: { level: 1 | 2; text: string }[] }>(token, "GET", `${base(projectId)}/document/headings`),
 };

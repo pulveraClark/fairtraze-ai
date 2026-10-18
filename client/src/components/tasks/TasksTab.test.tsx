@@ -144,13 +144,13 @@ describe("permissions mirrored in the UI", () => {
     mkTask({ id: 3, title: "Unassigned", permissions: NO_PERMS }),
   ];
 
-  it("leader: a grip on every card, quick add in every column", async () => {
+  it("leader: a grip on every card, no per-column Add task button", async () => {
     signInAs(1);
     installFakeServer(mkBoard({}, tasks().map((t) => ({ ...t, permissions: LEADER_PERMS }))));
     renderTab();
     await screen.findByText("Mine");
     expect(screen.getAllByRole("button", { name: /^Move FT-/ })).toHaveLength(3);
-    expect(screen.getAllByRole("button", { name: /^Add task/ })).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: /^Add task/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New task" })).toBeInTheDocument();
   });
 
@@ -163,9 +163,9 @@ describe("permissions mirrored in the UI", () => {
     expect(within(screen.getByTestId("task-card-1")).getByRole("button", { name: /^Move FT-1/ })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Only Ana Reyes or the group leader can move this task." })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Only the group leader can move this task." })).toBeInTheDocument();
-    // A member can create, but only into To do.
-    expect(screen.getAllByRole("button", { name: /^Add task/ })).toHaveLength(1);
-    expect(within(column("TODO")).getByRole("button", { name: /^Add task/ })).toBeInTheDocument();
+    // A member creates through "New task" (always into To do); columns have no Add task button.
+    expect(screen.queryByRole("button", { name: /^Add task/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New task" })).toBeInTheDocument();
   });
 
   it("instructor/admin: read-only, no grips, no locks, no creating", async () => {
@@ -192,8 +192,10 @@ describe("permissions mirrored in the UI", () => {
     const done = screen.getByRole("option", { name: "Done (leader only)" }) as HTMLOptionElement;
     expect(done.disabled).toBe(true);
     expect((screen.getByRole("option", { name: "In review" }) as HTMLOptionElement).disabled).toBe(false);
-    // Fields the assignee cannot change are plain text.
-    expect(screen.queryByLabelText("Assignee", { selector: "select" })).not.toBeInTheDocument();
+    // Fields the assignee cannot change stay visible but disabled, with the reason as a tooltip.
+    const assignee = screen.getByLabelText("Assignee", { selector: "select" }) as HTMLSelectElement;
+    expect(assignee.disabled).toBe(true);
+    expect(assignee.closest("[title]")).toHaveAttribute("title", "Only the group leader can do this.");
   });
 });
 
@@ -272,28 +274,14 @@ describe("filters", () => {
 });
 
 describe("creating tasks", () => {
-  it("quick add creates a task in To do with just a title", async () => {
+  it("columns have no Add task button; an empty column says 'No tasks here yet.'", async () => {
     signInAs(1);
-    const server = installFakeServer(mkBoard({}, []));
+    installFakeServer(mkBoard({}, []));
     renderTab();
-    const user = userEvent.setup();
     await screen.findByRole("region", { name: "Task board" });
-    await user.click(within(column("TODO")).getByRole("button", { name: /^Add task/ }));
-    await user.type(screen.getByLabelText(/New task title in To do/), "Book the room{Enter}");
-    expect(await screen.findByText("Book the room")).toBeInTheDocument();
-    expect(server.calls.find((c) => c.method === "POST" && c.url === "/api/groups/7/tasks")?.body).toEqual({ title: "Book the room" });
-  });
-
-  it("the leader's quick add in another column creates the task and moves it there", async () => {
-    signInAs(1);
-    const server = installFakeServer(mkBoard({}, []));
-    renderTab();
-    const user = userEvent.setup();
-    await screen.findByRole("region", { name: "Task board" });
-    await user.click(within(column("IN_REVIEW")).getByRole("button", { name: /^Add task/ }));
-    await user.type(screen.getByLabelText(/New task title in In review/), "Needs a look{Enter}");
-    await waitFor(() => expect(within(column("IN_REVIEW")).getByText("Needs a look")).toBeInTheDocument());
-    expect(server.calls.some((c) => c.url.endsWith("/move") && c.body?.status === "IN_REVIEW")).toBe(true);
+    expect(screen.queryByRole("button", { name: /^Add task/ })).not.toBeInTheDocument();
+    expect(within(column("TODO")).getByText("No tasks here yet.")).toBeInTheDocument();
+    expect(screen.getAllByText("No tasks here yet.")).toHaveLength(4);
   });
 
   it("the New task dialog creates a task", async () => {
