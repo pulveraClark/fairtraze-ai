@@ -11,6 +11,7 @@ import { canCommentOnTask, canEditTask, canWatchTask } from "../lib/taskPermissi
 import { logActivity, type TaskRow } from "../lib/taskBoard.js";
 import { kindForMime, sanitizeFilename, sniffBriefMime } from "../lib/briefAttachments.js";
 import { addWatchers, notifyComment, notifyMentions } from "../lib/taskWatchers.js";
+import { commitUrl } from "../lib/taskCommitLinks.js";
 import { VIEW_ONLY, idParam, isMemberOf, mentionError, openGroup, openTask, type Ctx } from "./tasks.js";
 
 // Task details (phase 4): subtasks, attachments, comments, watchers and the History feed for one task.
@@ -36,7 +37,7 @@ async function storageUsed(projectId: number): Promise<number> {
 }
 
 async function loadDetails(ctx: Ctx, task: TaskRow): Promise<TaskDetails> {
-  const [subtasks, attachments, comments, watchers, activity, used] = await Promise.all([
+  const [subtasks, attachments, comments, watchers, activity, used, commitRows] = await Promise.all([
     prisma.taskSubtask.findMany({ where: { taskId: task.id }, orderBy: [{ position: "asc" }, { id: "asc" }] }),
     prisma.taskAttachment.findMany({
       where: { taskId: task.id },
@@ -47,6 +48,7 @@ async function loadDetails(ctx: Ctx, task: TaskRow): Promise<TaskDetails> {
     prisma.taskWatcher.findMany({ where: { taskId: task.id }, select: { userId: true } }),
     prisma.taskActivity.findMany({ where: { taskId: task.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: TASK_LIMITS.historyEntries }),
     storageUsed(ctx.groupId),
+    prisma.taskCommitLink.findMany({ where: { taskId: task.id }, orderBy: [{ committedAt: "desc" }, { id: "desc" }], take: TASK_LIMITS.commitsShown }),
   ]);
   const members = new Set(ctx.project.groupMemberships.map((m) => m.userId));
   const watcherIds = watchers.map((w) => w.userId).filter((id) => members.has(id)).sort((a, b) => a - b);
@@ -64,6 +66,14 @@ async function loadDetails(ctx: Ctx, task: TaskRow): Promise<TaskDetails> {
     })),
     watchers: watcherIds,
     watching: watcherIds.includes(ctx.actor.userId),
+    commits: commitRows.map((c) => ({
+      sha: c.sha,
+      shortSha: c.sha.slice(0, 7),
+      message: c.message,
+      authorLogin: c.authorLogin,
+      committedAt: c.committedAt.toISOString(),
+      url: commitUrl(c.repo, c.sha),
+    })),
     activity: activity.map((a): TaskActivityEntry => ({
       id: a.id, actorId: a.actorId, type: a.type as TaskActivityType,
       data: (a.data as Record<string, unknown> | null) ?? null, createdAt: a.createdAt.toISOString(),

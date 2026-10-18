@@ -16,7 +16,7 @@ import {
 } from "../lib/taskPermissions.js";
 import {
   afterDeadlineWarning, formatDateOnly, loadBoard, loadTaskRow, logActivity, nextBottomPosition,
-  parseDateOnly, serializeTaskWithCounts, statusFields, subtaskCountsFor, serializeTask, type TaskRow,
+  commitCountsFor, parseDateOnly, serializeTaskWithCounts, statusFields, subtaskCountsFor, serializeTask, type TaskRow,
 } from "../lib/taskBoard.js";
 import { computePosition, rebalanced } from "../lib/taskPosition.js";
 import { deriveTaskKey, effectiveTaskKey } from "../lib/taskKey.js";
@@ -56,7 +56,7 @@ export async function openGroup(req: Request, res: Response, opts: { write?: boo
   return { project, actor, groupId: id.data };
 }
 
-function leaderOnly(res: Response, actor: TaskActor, message: string): boolean {
+export function leaderOnly(res: Response, actor: TaskActor, message: string): boolean {
   if (actor.isLeader) return true;
   res.status(403).json({ error: actor.isMember ? message : VIEW_ONLY });
   return false;
@@ -632,8 +632,9 @@ tasksRouter.post("/api/groups/:id/tasks/bulk", requireAuth, async (req: Request,
   if (newlyAssigned.length) await notifyAssigned(project, actor.userId, newlyAssigned);
   if (action.type === "status") for (const t of statusMoved) await notifyStatusChange(project, actor.userId, t, action.status);
   const updated = await prisma.task.findMany({ where: { id: { in: taskIds } }, include: { labelLinks: true } });
-  const counts = await subtaskCountsFor(updated.map((t) => t.id));
-  res.json({ tasks: updated.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id) })), skipped });
+  const updatedIds = updated.map((t) => t.id);
+  const [counts, commitCounts] = await Promise.all([subtaskCountsFor(updatedIds), commitCountsFor(updatedIds)]);
+  res.json({ tasks: updated.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id), commitCount: commitCounts.get(t.id) })), skipped });
 });
 
 // ── Milestones (leader only) ──────────────────────────────────────────────────

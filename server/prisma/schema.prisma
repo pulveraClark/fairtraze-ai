@@ -335,6 +335,9 @@ model Project {
   // per-group counter, allocated atomically. Neither is ever read by scoring.
   taskKey                  String?
   nextTaskNumber           Int               @default(1)
+  // When the leader last pressed "Refresh commits" (once per 5 minutes per group, enforced in the
+  // route). Display and rate limit only: never read by scoring, never marks a report outdated.
+  commitsRefreshedAt       DateTime?
   createdAt                DateTime          @default(now())
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   members                  Member[]
@@ -348,6 +351,7 @@ model Project {
   tasks                    Task[]
   taskMilestones           TaskMilestone[]
   taskLabels               TaskLabel[]
+  taskKeyAliases           TaskKeyAlias[]
 }
 
 // Leader/instructor-assigned sub-tasks for deliverables GitHub and the
@@ -393,6 +397,7 @@ model Task {
   attachments      TaskAttachment[]
   comments         TaskComment[]
   watchers         TaskWatcher[]
+  commitLinks      TaskCommitLink[]
 
   @@unique([projectId, number])
   @@index([projectId, status, position])
@@ -816,4 +821,34 @@ model CachedCommitDiff {
   createdAt DateTime @default(now())
 
   @@unique([repo, sha])
+}
+
+// A group's earlier task keys. When the leader changes the key ("FT" -> "APP"), the old one is kept
+// here so commits that still say FT-12 keep linking. Display always uses the current key.
+model TaskKeyAlias {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  key       String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+}
+
+// A commit in the group's own repo whose message names this task ("FT-12"). Message first line only,
+// no diff. Planning data: never read by scoring or the AI narrative.
+model TaskCommitLink {
+  id          Int      @id @default(autoincrement())
+  taskId      Int
+  // "owner/repo", lower-case.
+  repo        String
+  sha         String
+  message     String
+  authorLogin String?
+  committedAt DateTime
+  createdAt   DateTime @default(now())
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, sha])
+  @@index([taskId, committedAt])
 }

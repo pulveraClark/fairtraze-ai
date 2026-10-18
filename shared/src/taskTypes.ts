@@ -45,6 +45,10 @@ export const TASK_LIMITS = {
   comment: 2000,
   /** History entries returned by the details endpoint. */
   historyEntries: 100,
+  /** Leader "Refresh commits": once per group per this many seconds. */
+  commitRefreshSeconds: 300,
+  /** Linked commits listed in the details window. */
+  commitsShown: 50,
 } as const;
 
 export interface TaskPermissions {
@@ -144,6 +148,12 @@ export interface BoardResponse {
     taskKey: string;
     /** The assignment (project) deadline, ISO, or null. */
     deadline: string | null;
+    /** The group has a GitHub repo to read commit messages from (not an editor-only group). */
+    hasRepo: boolean;
+    /** When the leader last pressed "Refresh commits", ISO, or null. */
+    commitsRefreshedAt: string | null;
+    /** Earlier task keys; commits that still use them keep linking. */
+    keyAliases: string[];
   };
   viewer: {
     userId: number;
@@ -178,7 +188,8 @@ export type TaskActivityType =
   | "subtask_removed"
   | "comment_added"
   | "attachment_added"
-  | "attachment_removed";
+  | "attachment_removed"
+  | "commit_linked";
 
 export interface TaskSubtask {
   id: number;
@@ -215,6 +226,19 @@ export interface TaskActivityEntry {
   createdAt: string;
 }
 
+/** A commit in the group's repo whose message names this task. */
+export interface TaskCommitView {
+  sha: string;
+  /** First 7 characters, as shown. */
+  shortSha: string;
+  /** First line of the commit message. */
+  message: string;
+  authorLogin: string | null;
+  committedAt: string;
+  /** Link to the commit on GitHub, or null if the repo could not be resolved. */
+  url: string | null;
+}
+
 /** Everything the details window needs beyond the board payload. */
 export interface TaskDetails {
   taskId: number;
@@ -227,6 +251,8 @@ export interface TaskDetails {
   watching: boolean;
   /** Newest first. */
   activity: TaskActivityEntry[];
+  /** Newest first. */
+  commits: TaskCommitView[];
 }
 
 /** <@123> mention tokens, as stored in comments and descriptions. */

@@ -91,10 +91,19 @@ export async function subtaskCountsFor(taskIds: number[]): Promise<Map<number, {
   return map;
 }
 
-/** serializeTask for one row, filling in its subtask progress. */
+/** Linked commits per task id (one grouped query). */
+export async function commitCountsFor(taskIds: number[]): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  if (!taskIds.length) return map;
+  const groups = await prisma.taskCommitLink.groupBy({ by: ["taskId"], where: { taskId: { in: taskIds } }, _count: { _all: true } });
+  for (const g of groups) map.set(g.taskId, g._count._all);
+  return map;
+}
+
+/** serializeTask for one row, filling in its subtask progress and linked-commit count. */
 export async function serializeTaskWithCounts(task: TaskRow, ctx: { project: LoadedGroup; actor: TaskActor }): Promise<BoardTask> {
-  const counts = await subtaskCountsFor([task.id]);
-  return serializeTask(task, { ...ctx, subtasks: counts.get(task.id) });
+  const [subtasks, commits] = await Promise.all([subtaskCountsFor([task.id]), commitCountsFor([task.id])]);
+  return serializeTask(task, { ...ctx, subtasks: subtasks.get(task.id), commitCount: commits.get(task.id) });
 }
 
 export async function loadTaskRow(taskId: number): Promise<TaskRow | null> {
@@ -102,7 +111,7 @@ export async function loadTaskRow(taskId: number): Promise<TaskRow | null> {
 }
 
 export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise<BoardResponse> {
-  const [rows, milestones, labels] = await Promise.all([
+  const [rows, milestones, labels, aliases] = await Promise.all([
     prisma.task.findMany({
       where: { projectId: project.id },
       include: { labelLinks: true },
@@ -110,10 +119,12 @@ export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise
     }),
     prisma.taskMilestone.findMany({ where: { projectId: project.id }, orderBy: [{ position: "asc" }, { id: "asc" }] }),
     prisma.taskLabel.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" } }),
+    prisma.taskKeyAlias.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" }, select: { key: true } }),
   ]);
 
-  const counts = await subtaskCountsFor(rows.map((t) => t.id));
-  const tasks = rows.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id) }));
+  const ids = rows.map((t) => t.id);
+  const [counts, commits] = await Promise.all([subtaskCountsFor(ids), commitCountsFor(ids)]);
+  const tasks = rows.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id), commitCount: commits.get(t.id) }));
   const boardMilestones: BoardMilestone[] = milestones.map((m) => {
     const inMs = rows.filter((t) => t.milestoneId === m.id);
     return {
@@ -133,6 +144,9 @@ export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise
       groupName: project.groupName.trim() || `Group ${project.id}`,
       taskKey: effectiveTaskKey(project),
       deadline: project.assignment?.deadline ? project.assignment.deadline.toISOString() : null,
+      hasRepo: !!project.repoUrl && project.assignment?.sourceType !== "EDITOR",
+      commitsRefreshedAt: project.commitsRefreshedAt ? project.commitsRefreshedAt.toISOString() : null,
+      keyAliases: aliases.map((a) => a.key),
     },
     viewer: {
       userId: actor.userId,

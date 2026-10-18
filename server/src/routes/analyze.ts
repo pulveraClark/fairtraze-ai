@@ -12,6 +12,7 @@ import { generateAlertsForProject } from "../lib/alerts.js";
 import { notify } from "../lib/notify.js";
 import { countByDay } from "../lib/dayCounts.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig } from "../lib/scoringConfig.js";
+import { linkCommitsBestEffort } from "../lib/taskCommitLinks.js";
 import type { Request, Response } from "express";
 import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 
@@ -451,6 +452,8 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     });
 
     await notifyReportReady(project);
+    // Task commit linking (messages only). Best effort: never throws and never touches the report or scores.
+    await linkCommitsBestEffort({ id: projectId, repoUrl: project.repoUrl });
 
     generateAlertsForProject(projectId, report, {
       groupName:      project.groupName,
@@ -543,6 +546,8 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
 
   // Fire-and-forget: generate alerts for at-risk groups. Never blocks the response.
   await notifyReportReady(project);
+  // Task commit linking (messages only). Best effort: never throws and never touches the report or scores.
+  await linkCommitsBestEffort({ id: projectId, repoUrl: project.repoUrl });
 
   generateAlertsForProject(projectId, report, {
     groupName:      project.groupName,

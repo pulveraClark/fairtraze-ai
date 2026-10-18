@@ -11,6 +11,12 @@ vi.mock("../src/lib/github.js", () => ({
   fetchRepoStats: vi.fn().mockResolvedValue([]),
 }));
 
+// Task commit linking reads commit messages from GitHub; tests inject their own fetcher instead.
+vi.mock("../src/lib/githubCommitMessages.js", () => ({
+  COMMIT_MESSAGE_MAX_PAGES: 10,
+  fetchRepoCommitMessages: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("../src/lib/email.js", () => ({
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
   sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
