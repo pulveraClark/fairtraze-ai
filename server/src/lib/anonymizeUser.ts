@@ -160,7 +160,75 @@ export async function anonymizeUser(
         if (next !== c.body) await tx.taskComment.update({ where: { id: c.id }, data: { body: next } });
       }
 
+      // 3c. Task data (phase 8). Free text and file names lose the person's identity; everything stays attached
+      //     to the tombstone user, so no task, comment, count or score changes. Attachment bytes are KEPT: the
+      //     files are the group's work and removing them would damage teammates' tasks (the privacy notice says so).
+      if (projectIds.length > 0) {
+        const insensitive = "insensitive" as const;
+        const like = (field: string) => needles.map((n) => ({ [field]: { contains: n, mode: insensitive } }));
+        const inMyGroups = { task: { projectId: { in: projectIds } } };
+        const login = (user.githubUsername ?? "").trim();
+
+        const tasks = await tx.task.findMany({
+          where: { projectId: { in: projectIds }, OR: [{ createdByUserId: userId }, ...like("title"), ...like("description")] },
+          select: { id: true, title: true, description: true },
+        });
+        for (const t of tasks) {
+          const title = scrubIdentity(t.title, id);
+          const description = t.description ? scrubIdentity(t.description, id) : t.description;
+          if (title !== t.title || description !== t.description) await tx.task.update({ where: { id: t.id }, data: { title, description } });
+        }
+
+        const groupComments = await tx.taskComment.findMany({ where: { ...inMyGroups, OR: like("body") }, select: { id: true, body: true } });
+        for (const c of groupComments) {
+          const next = scrubIdentity(c.body, id);
+          if (next !== c.body) await tx.taskComment.update({ where: { id: c.id }, data: { body: next } });
+        }
+
+        const subtasks = await tx.taskSubtask.findMany({ where: { ...inMyGroups, OR: like("title") }, select: { id: true, title: true } });
+        for (const s of subtasks) {
+          const next = scrubIdentity(s.title, id);
+          if (next !== s.title) await tx.taskSubtask.update({ where: { id: s.id }, data: { title: next } });
+        }
+
+        const files = await tx.taskAttachment.findMany({
+          where: { projectId: { in: projectIds }, OR: [{ createdById: userId }, ...like("filename")] },
+          select: { id: true, filename: true },
+        });
+        for (const f of files) {
+          const next = scrubIdentity(f.filename, id);
+          if (next !== f.filename) await tx.taskAttachment.update({ where: { id: f.id }, data: { filename: next } });
+        }
+
+        const links = await tx.taskCommitLink.findMany({
+          where: { ...inMyGroups, OR: [...(login ? [{ authorLogin: { equals: login, mode: insensitive } }] : []), ...like("message")] },
+          select: { id: true, message: true, authorLogin: true },
+        });
+        for (const l of links) {
+          const mine = !!login && !!l.authorLogin && l.authorLogin.toLowerCase() === login.toLowerCase();
+          await tx.taskCommitLink.update({ where: { id: l.id }, data: { message: scrubIdentity(l.message, id), ...(mine ? { authorLogin: null } : {}) } });
+        }
+
+        // History keeps ids and values; the few free-text values (subtask titles, file names, commit author) are scrubbed.
+        const activity = await tx.taskActivity.findMany({
+          where: { ...inMyGroups, type: { in: ["subtask_added", "subtask_done", "subtask_reopened", "subtask_removed", "attachment_added", "attachment_removed", "commit_linked"] } },
+          select: { id: true, data: true },
+        });
+        for (const a of activity) {
+          if (a.data === null || typeof a.data !== "object" || Array.isArray(a.data)) continue;
+          const before = JSON.stringify(a.data);
+          const data = JSON.parse(before) as Record<string, unknown>;
+          for (const [k, v] of Object.entries(data)) {
+            if (typeof v !== "string") continue;
+            if (k === "authorLogin" && login && v.toLowerCase() === login.toLowerCase()) data[k] = null;
+            else if (k === "title" || k === "filename") data[k] = scrubIdentity(v, id);
+          }
+          if (JSON.stringify(data) !== before) await tx.taskActivity.update({ where: { id: a.id }, data: { data: data as never } });
+        }
+      }
+
       // 4. Personal rows that have no value once the account is gone.
+      await tx.taskNotificationLog.deleteMany({ where: { userId } });
       await tx.taskWatcher.deleteMany({ where: { userId } });
       await tx.refreshToken.deleteMany({ where: { userId } });
       await tx.passwordResetToken.deleteMany({ where: { userId } });

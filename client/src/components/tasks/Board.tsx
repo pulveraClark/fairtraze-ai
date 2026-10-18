@@ -185,7 +185,9 @@ export function Board({ board, tasks, today, onOpen, onMove, onDenied }: Props) 
       onDragCancel={() => finish(null)}
     >
       <div
-        className="flex gap-3 overflow-x-auto pb-3"
+        // relative: visually hidden (absolutely positioned) text inside the cards must scroll with the board,
+        // not stretch the whole page sideways.
+        className="relative flex gap-3 overflow-x-auto pb-3"
         role="region"
         aria-label="Task board"
         tabIndex={-1}

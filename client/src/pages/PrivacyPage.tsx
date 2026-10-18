@@ -79,7 +79,7 @@ export function PrivacyPage() {
             <li><strong>GitHub activity</strong> (for GitHub and Combined projects): commit counts and dates, lines added and deleted, and the types of files changed in your group's repository, read from GitHub's API.</li>
             <li><strong>Collaborative Editor activity</strong> (for Editor and Combined projects): what you insert and delete in your group's document, with timestamps and editing sessions, plus the comments you write.</li>
             <li><strong>Reports:</strong> contribution scores, flags and an AI-written explanation computed from the activity above.</li>
-            <li><strong>Other records:</strong> tasks assigned to or created by you, notes you submit when you flag a report for review, notifications sent to you, and an audit log of administrative actions.</li>
+            <li><strong>Other records:</strong> tasks assigned to or created by you (including their subtasks, comments, history, files attached to them and the GitHub commit messages that name them), notes you submit when you flag a report for review, notifications sent to you, and an audit log of administrative actions.</li>
             <li><strong>Consent record:</strong> the notice version you accepted and when.</li>
           </ul>
         </Section>
@@ -126,6 +126,7 @@ export function PrivacyPage() {
             <li>your name, email, GitHub username, profile photo and password are removed and you can no longer sign in;</li>
             <li>your contributions are <strong>anonymized, not deleted</strong>: they remain as "Former member" so your teammates' reports and scores stay correct;</li>
             <li>text you typed stays in your group's shared document, but is no longer linked to your name;</li>
+            <li>files attached to tasks (images and PDFs) are <strong>kept</strong> as your group's work, because removing them would damage your teammates' tasks; the file name no longer carries your name, and the file is no longer linked to you;</li>
             <li>your notes to the instructor, notifications and group requests are deleted, and the audit log keeps what happened and when, without your name or email.</li>
           </ul>
           <p>

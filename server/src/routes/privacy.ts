@@ -55,6 +55,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
   const [
     enrollments, memberships, joinRequests, roleSuggestions, tasks, disputes, alerts,
     comments, sessions, events, auditEntries, deletionRequests, taskComments, taskAttachments,
+    taskWatches, taskActivityMine, taskMentionComments, taskMentionDescriptions, taskCommits,
   ] = await Promise.all([
     prisma.classEnrollment.findMany({
       where: { userId },
@@ -77,7 +78,12 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     prisma.roleSuggestion.findMany({ where: { userId }, select: { projectId: true, suggestedRoles: true, status: true, createdAt: true, resolvedAt: true } }),
     prisma.task.findMany({
       where:  { OR: [{ assignedToUserId: userId }, { createdByUserId: userId }] },
-      select: { id: true, projectId: true, title: true, description: true, done: true, completedAt: true, createdAt: true, assignedToUserId: true, createdByUserId: true },
+      select: {
+        id: true, projectId: true, number: true, title: true, description: true, done: true, completedAt: true, createdAt: true,
+        assignedToUserId: true, createdByUserId: true, status: true, priority: true, dueDate: true,
+        milestone: { select: { name: true } },
+        labelLinks: { select: { label: { select: { name: true } } } },
+      },
     }),
     prisma.dispute.findMany({
       where:  { studentUserId: userId },
@@ -123,6 +129,31 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
       select: { id: true, taskId: true, projectId: true, kind: true, filename: true, size: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.taskWatcher.findMany({ where: { userId }, select: { taskId: true, createdAt: true }, orderBy: { createdAt: "asc" } }),
+    // History entries hold ids and values only (never display names).
+    prisma.taskActivity.findMany({
+      where: { actorId: userId },
+      select: { taskId: true, type: true, data: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    // Messages addressed to you with @mention: the text others wrote to you (their identity is not included).
+    prisma.taskComment.findMany({
+      where: { body: { contains: `<@${userId}>` }, NOT: { authorId: userId } },
+      select: { id: true, taskId: true, body: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.task.findMany({
+      where: { description: { contains: `<@${userId}>` }, NOT: { createdByUserId: userId } },
+      select: { id: true, projectId: true, description: true },
+    }),
+    // Commits in your group's repo that name a task and carry your GitHub login.
+    user.githubUsername
+      ? prisma.taskCommitLink.findMany({
+          where: { authorLogin: { equals: user.githubUsername, mode: "insensitive" } },
+          select: { taskId: true, repo: true, sha: true, message: true, committedAt: true },
+          orderBy: { committedAt: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   // The caller's OWN entry from each group's latest stored report. Same matching rule as the
@@ -166,9 +197,21 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
       })),
       eventTotals: events.map((e) => ({ eventType: e.eventType, count: e._count._all, totalLength: e._sum.length ?? 0 })),
     },
-    tasks,
+    tasks: tasks.map(({ milestone, labelLinks, dueDate, ...t }) => ({
+      ...t,
+      dueDate: dueDate ? dueDate.toISOString().slice(0, 10) : null,
+      milestone: milestone?.name ?? null,
+      labels: labelLinks.map((l) => l.label.name),
+    })),
     taskComments,
     taskAttachments,
+    taskWatches,
+    taskActivityByYou: taskActivityMine,
+    taskMentionsOfMe: {
+      inComments: taskMentionComments,
+      inDescriptions: taskMentionDescriptions.map((t) => ({ taskId: t.id, projectId: t.projectId, text: t.description })),
+    },
+    taskCommitLinks: taskCommits,
     disputes,
     comments,
     alerts,
