@@ -102,3 +102,14 @@ export function isAfterDeadline(date: string | null, deadlineIso: string | null)
 export function formatDeadline(deadlineIso: string): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric" }).format(new Date(deadlineIso));
 }
+
+/** "just now", "3 min ago", "2 h ago", "4 d ago": for "Last refreshed ...". */
+export function formatAgo(iso: string, now: Date = new Date()): string {
+  const secs = Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}

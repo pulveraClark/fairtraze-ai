@@ -128,6 +128,14 @@ export const taskApi = {
   watch: (token: string | null, projectId: number, taskId: number, on: boolean) =>
     call<TaskDetails>(token, on ? "PUT" : "DELETE", `${taskBase(projectId, taskId)}/watch`),
 
+  /** Leader only: read the repo's commit messages and link them to tasks (once per 5 minutes per group). */
+  syncCommits: (token: string | null, projectId: number) =>
+    call<{ linked: number; matched: number; scanned: number; commitsRefreshedAt: string }>(token, "POST", `${base(projectId)}/tasks/sync-commits`),
+
+  /** Leader only: change the group's task key; the old key keeps linking commits. */
+  changeTaskKey: (token: string | null, projectId: number, key: string) =>
+    call<{ taskKey: string; keyAliases: string[] }>(token, "PATCH", `${base(projectId)}/task-key`, { key }),
+
   /** H1/H2 headings of the group's document, read from the saved copy on the server (read-only). */
   documentHeadings: (token: string | null, projectId: number) =>
     call<{ headings: { level: 1 | 2; text: string }[] }>(token, "GET", `${base(projectId)}/document/headings`),

@@ -13,6 +13,7 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "../icons";
 import { ActivityTabs } from "./ActivityTabs";
 import { AttachmentsSection } from "./AttachmentsSection";
 import { DetailsSidebar } from "./DetailsSidebar";
+import { LinkedCommits } from "./LinkedCommits";
 import { MentionText, MentionTextarea, displayFromStored, storedFromDisplay } from "./MentionTextarea";
 import { SubtaskList } from "./SubtaskList";
 
@@ -268,6 +269,7 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
                   onUpload={details.uploadAttachment}
                   onRemove={details.removeAttachment}
                 />
+                <LinkedCommits task={task} commits={d.commits} hasRepo={board.group.hasRepo} />
                 <ActivityTabs
                   board={board}
                   task={task}

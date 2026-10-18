@@ -8,7 +8,7 @@ import * as AuthContextModule from "../../context/AuthContext";
 import { ToastProvider } from "../Toast";
 import { TasksTab } from "./TasksTab";
 import { addDays, todayManila } from "../../lib/tasks/dates";
-import { LEADER_PERMS, mkBoard, mkTask, NO_PERMS, resetFixtureIds } from "../../../test/taskFixtures";
+import { LEADER_PERMS, mkBoard, mkGroup, mkTask, NO_PERMS, resetFixtureIds } from "../../../test/taskFixtures";
 
 // Capture the props TasksTab's views give DndContext, so a calendar drop can be driven directly
 // (jsdom has no layout for the real pointer sensor).
@@ -364,7 +364,7 @@ describe("calendar view", () => {
 
   it("shows the month, highlights today, marks the project deadline and milestone stars, and has a legend", async () => {
     await setup([mkTask({ id: 1, title: "Poster", dueDate: "2026-11-20" })], {
-      group: { id: 7, groupName: "G", taskKey: "FT", deadline: "2026-11-25T10:00:00.000Z" },
+      group: mkGroup({ groupName: "G", deadline: "2026-11-25T10:00:00.000Z" }),
       milestones: [{ id: 5, name: "Alpha release", dueDate: "2026-11-18", position: 1, total: 0, done: 0 }],
     });
     expect(screen.getByRole("heading", { name: "November 2026" })).toBeInTheDocument();
@@ -381,7 +381,7 @@ describe("calendar view", () => {
   });
 
   it("puts a deadline stored at 16:00 UTC on the next Manila day (no off-by-one)", async () => {
-    await setup([], { group: { id: 7, groupName: "G", taskKey: "FT", deadline: "2026-11-24T16:00:00.000Z" } });
+    await setup([], { group: mkGroup({ groupName: "G", deadline: "2026-11-24T16:00:00.000Z" }) });
     expect(within(cell("2026-11-25")).getByText("Deadline")).toBeInTheDocument();
     expect(within(cell("2026-11-24")).queryByText("Deadline")).not.toBeInTheDocument();
   });

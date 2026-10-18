@@ -9,7 +9,7 @@ import { TasksTab } from "./TasksTab";
 import { addDays, todayManila } from "../../lib/tasks/dates";
 import { applyMove } from "../../lib/tasks/board";
 import {
-  ASSIGNEE_PERMS, BEN, LEADER, LEADER_PERMS, mkBoard, mkTask, NO_PERMS, resetFixtureIds,
+  ASSIGNEE_PERMS, BEN, LEADER, LEADER_PERMS, mkBoard, mkGroup, mkTask, NO_PERMS, resetFixtureIds,
 } from "../../../test/taskFixtures";
 
 vi.mock("../../context/AuthContext", async () => {
@@ -123,7 +123,7 @@ describe("board layout", () => {
     signInAs(1);
     const deadline = new Date(`${addDays(todayManila(), 10)}T10:00:00Z`).toISOString();
     installFakeServer(mkBoard({
-      group: { id: 7, groupName: "G", taskKey: "FT", deadline },
+      group: mkGroup({ groupName: "G", deadline }),
       milestones: [
         { id: 5, name: "Too late", dueDate: addDays(todayManila(), 20), position: 1, total: 2, done: 1 },
         { id: 6, name: "On time", dueDate: addDays(todayManila(), 5), position: 2, total: 0, done: 0 },

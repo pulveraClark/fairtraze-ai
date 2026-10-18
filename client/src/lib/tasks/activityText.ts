@@ -64,6 +64,11 @@ export function describeActivity(entry: TaskActivityEntry, board: Board): string
     case "subtask_removed": return `${actor} removed the subtask "${str(d.title) ?? ""}"`;
     case "comment_added": return `${actor} commented`;
     case "attachment_added": return `${actor} attached ${str(d.filename) ?? "a file"}`;
+    case "commit_linked": {
+      const sha = (str(d.sha) ?? "").slice(0, 7);
+      const by = str(d.authorLogin);
+      return `Commit ${sha} was linked${by ? ` (by ${by})` : ""}`;
+    }
     case "attachment_removed": return `${actor} removed ${str(d.filename) ?? "an attachment"}`;
     default: return `${actor} updated this task`;
   }

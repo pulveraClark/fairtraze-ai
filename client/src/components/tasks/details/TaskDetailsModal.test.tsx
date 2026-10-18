@@ -8,7 +8,7 @@ import { ToastProvider } from "../../Toast";
 import { TasksTab } from "../TasksTab";
 import { addDays, todayManila } from "../../../lib/tasks/dates";
 import {
-  ASSIGNEE_PERMS, ANA, BEN, LEADER, mkBoard, mkTask, NO_PERMS, resetFixtureIds,
+  ASSIGNEE_PERMS, ANA, BEN, LEADER, mkBoard, mkGroup, mkTask, NO_PERMS, resetFixtureIds,
 } from "../../../../test/taskFixtures";
 
 vi.mock("../../../context/AuthContext", async () => {
@@ -29,7 +29,7 @@ interface Call { method: string; url: string; body?: Record<string, unknown> }
 
 const emptyDetails = (taskId: number): TaskDetails => ({
   taskId, subtasks: [], attachments: [], storage: { usedBytes: 1_258_291, limitBytes: 50 * 1024 * 1024 },
-  comments: [], watchers: [], watching: false, activity: [],
+  comments: [], watchers: [], watching: false, activity: [], commits: [],
 });
 
 /** An in-memory stand-in for the Tasks and task-details API. */
@@ -454,7 +454,7 @@ describe("due date and milestone warnings", () => {
     const deadline = new Date(`${addDays(todayManila(), 10)}T10:00:00Z`).toISOString();
     installFakeServer(mkBoard(
       {
-        group: { id: 7, groupName: "G", taskKey: "FT", deadline },
+        group: mkGroup({ groupName: "G", deadline }),
         milestones: [{ id: 5, name: "Too late", dueDate: addDays(todayManila(), 20), position: 1, total: 1, done: 0 }],
       },
       [mkTask({ id: 1, title: "Late plan", dueDate: addDays(todayManila(), 20), milestoneId: 5 })],
@@ -472,7 +472,7 @@ describe("due date and milestone warnings", () => {
   it("shows no warning when the date is on time", async () => {
     signInAs(1);
     const deadline = new Date(`${addDays(todayManila(), 10)}T10:00:00Z`).toISOString();
-    installFakeServer(mkBoard({ group: { id: 7, groupName: "G", taskKey: "FT", deadline } }, [mkTask({ id: 1, title: "Fine", dueDate: addDays(todayManila(), 3) })]));
+    installFakeServer(mkBoard({ group: mkGroup({ groupName: "G", deadline }) }, [mkTask({ id: 1, title: "Fine", dueDate: addDays(todayManila(), 3) })]));
     renderTab();
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /Fine/ }));

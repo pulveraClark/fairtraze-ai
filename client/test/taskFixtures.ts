@@ -46,9 +46,14 @@ export const LEADER = { userId: 1, name: "Leader Lee", avatarUpdatedAt: null, ro
 export const BEN = { userId: 2, name: "Ben Cruz", avatarUpdatedAt: null, role: "MEMBER" as const, functionalRoles: ["DEVELOPER"] };
 export const ANA = { userId: 3, name: "Ana Reyes", avatarUpdatedAt: null, role: "MEMBER" as const, functionalRoles: ["DOCUMENTATION"] };
 
+/** The board's `group` block with the phase 5 fields filled in (a group with a repo, never refreshed). */
+export function mkGroup(over: Partial<BoardResponse["group"]> = {}): BoardResponse["group"] {
+  return { id: 7, groupName: "Group Alpha", taskKey: "FT", deadline: null, hasRepo: true, commitsRefreshedAt: null, keyAliases: [], ...over };
+}
+
 export function mkBoard(over: Partial<BoardResponse> = {}, tasks: BoardTask[] = []): BoardResponse {
   return {
-    group: { id: 7, groupName: "Group Alpha", taskKey: "FT", deadline: null },
+    group: mkGroup(),
     viewer: { userId: 1, isLeader: true, isMember: true, readOnly: false, canCreate: true, canManageBoard: true },
     members: [LEADER, BEN, ANA],
     tasks,

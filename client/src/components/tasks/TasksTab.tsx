@@ -17,6 +17,7 @@ import { BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
 import { Board } from "./Board";
 import { BulkBar } from "./BulkBar";
 import { BulkConfirmDialog, BulkSkippedDialog } from "./BulkDialogs";
+import { CommitLinkBar } from "./CommitLinkBar";
 import { CalendarView } from "./CalendarView";
 import { ListView } from "./ListView";
 import { MilestoneStrip } from "./MilestoneStrip";
@@ -254,6 +255,8 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
       {view === "calendar" && (
         <CalendarView board={board} tasks={visible} today={today} onOpen={open} onReschedule={(t, d) => void reschedule(t, d)} />
       )}
+
+      <CommitLinkBar board={board} />
 
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
         <span>Tasks help your group plan. They don't change contribution scores.</span>
