@@ -254,6 +254,10 @@ export interface ProjectSummaryItem {
   assignmentLabel: string;
   classId: number | null;      // ClassSection.id — for breadcrumb navigation
   assignmentId: number | null; // Assignment.id   — for breadcrumb navigation
+  // Real names for breadcrumbs and labels (display only; absent on older payloads and assignment-less projects).
+  classCode?: string;        // ClassSection.subjectCode, e.g. "CC-APPSDEV22"
+  classSubjectName?: string; // ClassSection.subjectName
+  assignmentTitle?: string;  // Assignment.title
   // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment).
   // Available even before any report exists — unlike report-derived fields below,
   // this doesn't depend on the project having been analyzed.

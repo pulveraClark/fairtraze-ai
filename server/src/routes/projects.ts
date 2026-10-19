@@ -92,7 +92,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     include: {
       members: true,
       reports: { orderBy: { generatedAt: "desc" }, take: 1 },
-      assignment: { select: { id: true, classSectionId: true, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT } },
+      assignment: { select: { id: true, title: true, classSectionId: true, classSection: { select: { subjectCode: true, subjectName: true } }, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT } },
     },
     orderBy: { id: "asc" },
   });
@@ -125,6 +125,9 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
       assignmentLabel: p.assignmentLabel || "General Assignment",
       classId:      p.assignment?.classSectionId ?? null,
       assignmentId: p.assignment?.id ?? null,
+      classCode:        p.assignment?.classSection?.subjectCode ?? undefined,
+      classSubjectName: p.assignment?.classSection?.subjectName ?? undefined,
+      assignmentTitle:  p.assignment?.title ?? undefined,
       sourceType:   p.assignment?.sourceType ?? null,
       memberCount:  p.members.length,
       teamHealth:   (latestReport?.teamHealth as TeamHealth | null) ?? null,

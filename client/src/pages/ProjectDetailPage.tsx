@@ -19,7 +19,7 @@ import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNo
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
-import { parseClassLabel } from "../components/ClassCard";
+import { groupCrumbLabels } from "../lib/groupCrumbs";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
@@ -254,7 +254,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   // ── Breadcrumb derivation ──────────────────────────────────────────────────
   const assignmentLabel = projectMeta?.assignmentLabel ?? "";
-  const { code, subjectName } = assignmentLabel ? parseClassLabel(assignmentLabel) : { code: "", subjectName: "" };
+  const crumbs = groupCrumbLabels(projectMeta);
 
   const classId      = projectMeta?.classId ?? null;
   const assignmentId = projectMeta?.assignmentId ?? null;
@@ -308,8 +308,8 @@ export function ProjectDetailPage({ projectId }: Props) {
           <PageHeader
             breadcrumbs={[
               { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
-              ...(classId ? [{ label: code || "Class", href: classUrl }] : []),
-              ...(assignmentId ? [{ label: subjectName || "Assignment", href: assignmentUrl }] : []),
+              ...(classId ? [{ label: crumbs.classLabel, href: classUrl }] : []),
+              ...(assignmentId ? [{ label: crumbs.assignmentLabel, href: assignmentUrl }] : []),
               { label: groupName },
             ]}
             title={groupName}
