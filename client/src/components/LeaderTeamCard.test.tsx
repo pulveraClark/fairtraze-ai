@@ -16,7 +16,7 @@ describe("LeaderTeamCard", () => {
     expect(screen.getByText(/distributing work fairly/i)).toBeTruthy();
     expect(screen.getByText("60.0%")).toBeTruthy();
     expect(screen.getByText(/GitHub 70.0% · Docs 50.0%/)).toBeTruthy();
-    expect(screen.getAllByText(/Tasks: 2 open · 1 done/)).toHaveLength(2);
+    expect(screen.getAllByText(/Tasks: 1 of 3 done/)).toHaveLength(2);
     expect(screen.getByText("—")).toBeTruthy(); // member missing from the report
   });
 
@@ -34,6 +34,14 @@ describe("LeaderTeamCard share bars (18)", () => {
     expect(screen.getByTestId("share-bar-tick")).toHaveStyle({ left: "50%" });
     rerender(<LeaderTeamCard sourceType="GITHUB" noActivity team={[member({})]} />);
     expect(screen.queryByTestId("share-bar")).toBeNull();
+  });
+});
+
+describe("LeaderTeamCard task wording (19)", () => {
+  it("says 'No tasks' for a member with none, and never 'open' or 'completed'", () => {
+    render(<LeaderTeamCard sourceType="GITHUB" team={[member({ tasks: { open: 0, done: 0 } })]} />);
+    expect(screen.getByText("No tasks")).toBeTruthy();
+    expect(screen.queryByText(/open|completed/)).toBeNull();
   });
 });
 
@@ -55,7 +63,7 @@ describe("LeaderTeamCard with no recorded activity", () => {
     expect(screen.getAllByText("Not enough activity yet")).toHaveLength(2);
     expect(screen.queryByText(/inactive/i)).toBeNull();
     expect(screen.queryByText("0.0%")).toBeNull();
-    expect(screen.getAllByText(/Tasks: 2 open · 1 done/)).toHaveLength(2);
+    expect(screen.getAllByText(/Tasks: 1 of 3 done/)).toHaveLength(2);
     expect(screen.getByText("Member B")).toBeTruthy();
   });
 });

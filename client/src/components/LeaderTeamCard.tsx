@@ -3,6 +3,7 @@ import type { Flag } from "@shared/types";
 import { FlagTag } from "./FlagTag";
 import { NoActivityPill } from "./NoActivityPill";
 import { ShareBar } from "./report/DrawerParts";
+import { taskCountLabel } from "../lib/tasks/countLabel";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -71,7 +72,7 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
               )}
             </div>
             <p className="col-span-2 text-xs tabular-nums text-slate-700 sm:col-span-1 sm:text-right">
-              Tasks: {m.tasks.open} open · {m.tasks.done} done
+              {m.tasks.open + m.tasks.done === 0 ? "No tasks" : `Tasks: ${taskCountLabel(m.tasks.done, m.tasks.open + m.tasks.done)}`}
             </p>
           </li>
         ))}

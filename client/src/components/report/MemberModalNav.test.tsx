@@ -252,14 +252,14 @@ describe("Member details modal: two-column layout", () => {
         memberRoles={[info as never]}
       />,
     );
-    expect(side().getByText("2 of 5 completed", { exact: false })).toBeInTheDocument();
+    expect(side().getByText("2 of 5 done", { exact: false })).toBeInTheDocument();
     const note = side().getByText("Planning only. Not part of the score.");
     expect(note.className).toContain("text-xs");
-    expect(note.previousElementSibling).toHaveTextContent("Tasks: 2 of 5 completed");
+    expect(note.previousElementSibling).toHaveTextContent("Tasks: 2 of 5 done");
     expect(main().queryByText(/Planning only/)).not.toBeInTheDocument();
   });
 
-  it("omits the Tasks line and its note when the member has no tasks", async () => {
+  it("says 'No tasks' when the member has none (19)", async () => {
     const info = { userId: 1, githubUsername: members[0].githubUsername, functionalRoles: [], isLeader: false, mismatchNotes: [], taskSummary: { completed: 0, total: 0 } };
     render(
       <MemberDrawer
@@ -267,6 +267,7 @@ describe("Member details modal: two-column layout", () => {
         memberRoles={[info as never]}
       />,
     );
-    expect(screen.queryByText(/Planning only/)).not.toBeInTheDocument();
+    expect(side().getByText("No tasks")).toBeInTheDocument();
+    expect(screen.queryByText(/completed/)).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { taskCountLabel } from "../../lib/tasks/countLabel";
 import type { ReactNode } from "react";
 import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared/types";
 import { Modal, StatusPill, BUTTON_SECONDARY, FOCUS_LIGHT } from "../ui";
@@ -253,12 +254,14 @@ function MemberSidebar({
             {onOpenDisputes && <button type="button" onClick={onOpenDisputes} className={BUTTON_SECONDARY}>View disputes</button>}
           </div>
         )}
-        {(notes.length > 0 || (tasks && tasks.total > 0) || importedChars > 0 || images > 0) && (
+        {(notes.length > 0 || !!tasks || importedChars > 0 || images > 0) && (
           <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
-            {tasks && tasks.total > 0 && (
+            {tasks && (
               <div>
-                <p><span className="font-semibold">Tasks: </span>{tasks.completed} of {tasks.total} completed</p>
+                {tasks.total === 0
+                  ? <p>No tasks</p>
+                  : <p><span className="font-semibold">Tasks: </span>{taskCountLabel(tasks.completed, tasks.total)}</p>}
                 <p className="text-xs leading-normal text-slate-700">Planning only. Not part of the score.</p>
               </div>
             )}
