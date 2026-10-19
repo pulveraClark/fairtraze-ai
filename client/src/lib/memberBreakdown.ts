@@ -121,23 +121,36 @@ function githubSummary(gh: ScoredMember): string | null {
   return parts.join(" · ");
 }
 
-function docsSummary(d: DocumentScoredMember): string {
+/** Plain words for the most common kind of edit (the internal names stay in the detailed sections). */
+const EDIT_PLAIN: Record<EditKey, string> = {
+  substantive: "Mostly new writing",
+  revision: "Mostly rewrites",
+  formatting: "Mostly formatting changes",
+  trivial: "Mostly small edits",
+};
+
+function docsSummary(d: DocumentScoredMember): { text: string; detail: string | null } {
   const parts: string[] = [];
+  let detail: string | null = null;
   const b = d.editTypeBreakdown;
   const total = b ? EDIT_ORDER.reduce((s, k) => s + (b[k] ?? 0), 0) : 0;
   if (b && total > 0) {
     const top = [...EDIT_ORDER].sort((x, y) => b[y] - b[x])[0];
-    parts.push(`Mostly ${top} edits (${b[top]} of ${total})`);
+    parts.push(EDIT_PLAIN[top]);
+    // The numbers stay available on hover instead of in the sentence.
+    detail = `${b[top]} of ${total} recorded edits are classed as ${EDIT_LABEL[top].toLowerCase()}.`;
   }
   parts.push(`${d.sessionCount} session${d.sessionCount === 1 ? "" : "s"}`);
   parts.push(`${d.retainedChars.toLocaleString()} characters kept`);
-  return parts.join(" · ");
+  return { text: parts.join(" · "), detail };
 }
 
 export interface ScoreSummary {
   /** Semibold lead phrase (first segment). */
   lead: string;
   rest: string;
+  /** The exact counts behind a plain-words phrase, for a tooltip. */
+  detail?: string;
 }
 
 /** One-line "what drove the score", from stored values only. */
@@ -146,12 +159,17 @@ export function scoreDriverSummary(m: AnyScoredMember): ScoreSummary | null {
   const docs = docsStatsOf(m);
   const segments: string[] = [];
   if (gh) { const s = githubSummary(gh); if (s) segments.push(s); }
-  if (docs) segments.push(docsSummary(docs));
+  let detail: string | undefined;
+  if (docs) {
+    const d = docsSummary(docs);
+    segments.push(d.text);
+    detail = d.detail ?? undefined;
+  }
   if (segments.length === 0) return null;
   const full = segments.join(" · ");
   const idx = full.indexOf(" (");
   const leadEnd = idx > 0 ? idx : full.indexOf(" · ") > 0 ? full.indexOf(" · ") : full.length;
-  return { lead: full.slice(0, leadEnd), rest: full.slice(leadEnd) };
+  return { lead: full.slice(0, leadEnd), rest: full.slice(leadEnd), ...(detail ? { detail } : {}) };
 }
 
 // Per-user remembered open/closed state for drawer sections. Storage can be unavailable or throw.

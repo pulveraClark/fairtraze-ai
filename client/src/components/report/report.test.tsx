@@ -50,6 +50,16 @@ describe("MemberDrawer", () => {
     expect(screen.queryByText(/Activity over time/)).not.toBeInTheDocument();
   });
 
+  it("says 'Mostly small edits' in plain words and keeps the counts in a tooltip (I32)", () => {
+    const small = { ...doc, sessionCount: 1, retainedChars: 132, editTypeBreakdown: { substantive: 0, revision: 0, formatting: 0, trivial: 132 } };
+    render(<MemberDrawer {...baseProps} source="document" member={small} />);
+    const lead = screen.getByText("Mostly small edits");
+    expect(lead).toBeInTheDocument();
+    expect(screen.queryByText(/Mostly trivial/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/132 of 132/)).not.toBeInTheDocument();
+    expect(lead.parentElement).toHaveAttribute("title", expect.stringContaining("132 of 132 recorded edits"));
+  });
+
   it("shows the flag name only when thresholds are missing", () => {
     render(<MemberDrawer {...baseProps} member={gh} thresholds={null} />);
     expect(screen.getByText("Deadline-driven")).toBeInTheDocument();

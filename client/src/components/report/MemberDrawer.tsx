@@ -218,7 +218,7 @@ function MemberSidebar({
       {summary && (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-indigo-50 px-3 py-2.5 text-sm leading-normal text-slate-900">
           <InfoIcon />
-          <p><span className="font-semibold">{summary.lead}</span>{summary.rest}</p>
+          <p title={summary.detail}><span className="font-semibold">{summary.lead}</span>{summary.rest}</p>
         </div>
       )}
 
