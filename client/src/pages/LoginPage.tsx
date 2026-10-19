@@ -181,10 +181,11 @@ export function LoginPage() {
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="login-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email address
               </label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -198,7 +199,7 @@ export function LoginPage() {
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
+                <label htmlFor="login-password" className="block text-xs font-semibold text-slate-700">
                   Password
                 </label>
                 <button
@@ -210,6 +211,7 @@ export function LoginPage() {
                 </button>
               </div>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

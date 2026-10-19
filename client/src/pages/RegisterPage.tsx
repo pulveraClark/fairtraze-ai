@@ -243,8 +243,9 @@ export function RegisterPage() {
 
             {/* Full name */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Full name</label>
+              <label htmlFor="register-name" className="block text-xs font-semibold text-slate-700 mb-1.5">Full name</label>
               <input
+                id="register-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -257,8 +258,9 @@ export function RegisterPage() {
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional email</label>
+              <label htmlFor="register-email" className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional email</label>
               <input
+                id="register-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -287,11 +289,12 @@ export function RegisterPage() {
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="register-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Password
                 <span className="ml-1.5 text-slate-400 font-normal">(min. 8 characters)</span>
               </label>
               <input
+                id="register-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -304,10 +307,11 @@ export function RegisterPage() {
 
             {/* Confirm password */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="register-confirm-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Confirm password
               </label>
               <input
+                id="register-confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
