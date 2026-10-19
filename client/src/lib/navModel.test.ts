@@ -25,6 +25,13 @@ describe("getNavItems", () => {
     expect(getNavItems("INSTRUCTOR").some((i) => i.key === "disputes")).toBe(true);
     expect(getNavItems("STUDENT").some((i) => i.key === "disputes")).toBe(false);
   });
+  it("shows 'Your notes' to a student only once they have filed a note", () => {
+    expect(getNavItems("STUDENT").some((i) => i.label === "Your notes")).toBe(false);
+    expect(getNavItems("STUDENT", { hasNotes: false }).some((i) => i.label === "Your notes")).toBe(false);
+    const item = getNavItems("STUDENT", { hasNotes: true }).find((i) => i.label === "Your notes");
+    expect(item?.href).toBe("/disputes");
+    expect(getNavItems("INSTRUCTOR", { hasNotes: true }).some((i) => i.label === "Your notes")).toBe(false);
+  });
   it("labels the student tree 'My classes'", () => {
     expect(getNavItems("STUDENT").find((i) => i.key === "classes")?.label).toBe("My classes");
   });

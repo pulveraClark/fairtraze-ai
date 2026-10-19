@@ -22,6 +22,7 @@ const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default:
 const AuditLogPage = lazy(() => import("./pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AlertsPage = lazy(() => import("./pages/AlertsPage").then((m) => ({ default: m.AlertsPage })));
+const StudentNotesPage = lazy(() => import("./pages/StudentNotesPage").then((m) => ({ default: m.StudentNotesPage })));
 const DisputesPage = lazy(() => import("./pages/DisputesPage").then((m) => ({ default: m.DisputesPage })));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage").then((m) => ({ default: m.PendingApprovalPage })));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
@@ -146,12 +147,18 @@ function pageElement(pathname: string) {
   );
 
   if (pathname === "/disputes") return (
-    <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
-      <DisputesPage />
+    <ProtectedRoute allowedRoles={["INSTRUCTOR", "STUDENT"]}>
+      <DisputesRoute />
     </ProtectedRoute>
   );
 
   return <LandingPage />;
+}
+
+/** /disputes: instructors review student notes; students see their own notes and the replies. */
+function DisputesRoute() {
+  const { user } = useAuth();
+  return user?.systemRole === "STUDENT" ? <StudentNotesPage /> : <DisputesPage />;
 }
 
 export default function App() {

@@ -83,13 +83,13 @@ export function useGroupTasksQuery(projectId: number) {
   return { ...board, data: board.data?.tasks as BoardTask[] | undefined };
 }
 
-export function useMyDisputesQuery<T>() {
+export function useMyDisputesQuery<T>(opts: { enabled?: boolean } = {}) {
   const { token, user } = useAuth();
   const uid = user?.id ?? null;
   return useQuery({
     queryKey: disputeKeys.mine(uid),
     queryFn:  async () => (await getJson<{ disputes: T[] }>("/api/disputes/mine", token, "Could not load disputes.")).disputes,
-    enabled:  !!token && uid !== null,
+    enabled:  (opts.enabled ?? true) && !!token && uid !== null,
   });
 }
 

@@ -15,7 +15,8 @@ export interface NavItemDef {
   icon: NavIconName;
 }
 
-export function getNavItems(role: SystemRole): NavItemDef[] {
+/** `hasNotes`: a student sees "Your notes" only once they have filed at least one. */
+export function getNavItems(role: SystemRole, opts: { hasNotes?: boolean } = {}): NavItemDef[] {
   const notifications: NavItemDef = { key: "notifications", label: "Notifications", href: "/alerts",   icon: "bell" };
   const settings: NavItemDef      = { key: "settings",      label: "Settings",      href: "/settings", icon: "settings" };
   if (role === "ADMIN") {
@@ -38,6 +39,7 @@ export function getNavItems(role: SystemRole): NavItemDef[] {
   return [
     { key: "dashboard", label: "Dashboard",  href: "/student", icon: "home" },
     { key: "classes",   label: "My classes", href: "/student", icon: "classes" },
+    ...(opts.hasNotes ? [{ key: "disputes", label: "Your notes", href: "/disputes", icon: "disputes" } as NavItemDef] : []),
     notifications,
     settings,
   ];

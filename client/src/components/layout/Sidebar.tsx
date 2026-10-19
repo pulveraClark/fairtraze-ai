@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "../../router";
 import { useAlerts } from "../../hooks/useAlerts";
 import { useInvalidateOnAlertCount } from "../../hooks/useInvalidateOnAlertCount";
+import { useMyDisputesQuery } from "../../hooks/useGroupQueries";
 import { useClassesListQuery, useProjectsSummaryQuery } from "../../hooks/useSharedQueries";
 import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../../hooks/useStudentClassesQuery";
 import { usePopover } from "../../hooks/usePopover";
@@ -364,7 +365,9 @@ export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggle
   const { pathname } = useRouter();
   if (!user) return null;
   const role = user.systemRole;
-  const items = getNavItems(role);
+  // Students get a "Your notes" item only once they have filed a note (shares the Report page's cache).
+  const notesQuery = useMyDisputesQuery<unknown>({ enabled: role === "STUDENT" });
+  const items = getNavItems(role, { hasNotes: (notesQuery.data?.length ?? 0) > 0 });
 
   return (
     <div className="flex h-full flex-col bg-[#020617] text-slate-300">

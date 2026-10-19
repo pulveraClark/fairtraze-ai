@@ -9,6 +9,8 @@ import {
 } from "../hooks/useGroupQueries";
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
+import { StudentNoteCard } from "../components/StudentNoteCard";
+import { sortNotes } from "../lib/notes";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
@@ -212,6 +214,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const dispute: DisputeRecord | null | undefined = disputesQuery.isPending
     ? undefined
     : (disputesQuery.data?.find((d) => d.projectId === projectId) ?? null);
+
+  const myNotes = useMemo(
+    () => sortNotes((disputesQuery.data ?? []).filter((d) => d.projectId === projectId)),
+    [disputesQuery.data, projectId],
+  );
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -940,6 +947,17 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       </div>
                     )}
                   </div>
+                )}
+                {myNotes.length > 0 && (
+                  <section aria-labelledby="your-notes-heading" className="mt-6">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <h2 id="your-notes-heading" className="text-xs font-semibold uppercase tracking-widest text-slate-700">Your notes ({myNotes.length})</h2>
+                      <button type="button" onClick={() => navigate("/disputes")} className="text-xs font-medium text-indigo-700 underline">See all your notes</button>
+                    </div>
+                    <div className="space-y-3">
+                      {myNotes.map((n) => <StudentNoteCard key={n.id} note={n} />)}
+                    </div>
+                  </section>
                 )}
               </>
             )}

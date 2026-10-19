@@ -267,7 +267,7 @@ describe("dispute notifications", () => {
     expect(rows[0]).toMatchObject({
       recipientId: member.id,
       type: "DISPUTE_RESPONDED",
-      link: `/student/group/${project.id}`,
+      link: `/disputes?note=${dispute.id}`,
     });
     expect(rows[0].message).not.toContain("0.12");
   });
