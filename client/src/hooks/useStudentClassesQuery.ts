@@ -6,7 +6,7 @@ export interface MyGroup {
   groupName: string;
   repoUrl: string;
   role: "LEADER" | "MEMBER";
-  report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
+  report: { gini: number | null; teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
 }
 
 export interface AssignmentSummary {

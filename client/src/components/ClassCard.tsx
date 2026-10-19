@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
+import { presentedHealth, visibleFlags } from "../lib/groupActivity";
 
 interface Props {
   assignmentLabel: string;
@@ -40,7 +41,7 @@ export function classAtRiskCount(items: ProjectSummaryItem[]): number {
       i.isAnalyzed &&
       (i.teamHealth === "High Risk" ||
         i.teamHealth === "Moderate Risk" ||
-        i.flagsPresent.length > 0)
+        visibleFlags(i).length > 0)
   ).length;
 }
 
@@ -57,7 +58,8 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
   }
 
   const analyzed   = items.filter((i) => i.isAnalyzed);
-  const healthy    = analyzed.filter((i) => i.teamHealth === "Healthy").length;
+  const healthy    = analyzed.filter((i) => presentedHealth(i) === "Healthy").length;
+  const quiet      = analyzed.filter((i) => presentedHealth(i) === "no-activity").length;
   const moderate   = analyzed.filter((i) => i.teamHealth === "Moderate Risk").length;
   const highRisk   = analyzed.filter((i) => i.teamHealth === "High Risk").length;
   const unanalyzed = items.filter((i) => !i.isAnalyzed).length;
@@ -190,6 +192,12 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
             <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
               {healthy} Healthy
+            </span>
+          )}
+          {quiet > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+              {quiet} Not enough activity
             </span>
           )}
           {unanalyzed > 0 && (

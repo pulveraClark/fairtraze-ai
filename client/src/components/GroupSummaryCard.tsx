@@ -1,4 +1,6 @@
 import { shortMemberNames } from "../lib/names";
+import { presentedHealth, visibleFlags } from "../lib/groupActivity";
+import { NoActivityPill } from "./NoActivityPill";
 import type { ProjectSummaryItem, TeamHealth } from "@shared/types";
 import { ContributionMiniBar } from "./ContributionMiniBar";
 import { FlagTag } from "./FlagTag";
@@ -32,6 +34,8 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
   const memberLabels = shortMemberNames(item.memberShares.map((m) => m.studentName));
+  const health = presentedHealth(item);
+  const flags = visibleFlags(item);
 
   function openDetail() {
     navigate(`/project/${item.projectId}`);
@@ -114,12 +118,16 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
           </div>
         </div>
-        {item.teamHealth && (
-          <span
-            className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${HEALTH_BADGE[item.teamHealth]}`}
-          >
-            {item.teamHealth}
-          </span>
+        {health === "no-activity" ? (
+          <NoActivityPill className="shrink-0" />
+        ) : (
+          item.teamHealth && (
+            <span
+              className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${HEALTH_BADGE[item.teamHealth]}`}
+            >
+              {item.teamHealth}
+            </span>
+          )
         )}
       </div>
 
@@ -139,9 +147,9 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
       </div>
 
       {/* Flag chips */}
-      {item.flagsPresent.length > 0 && (
+      {flags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {item.flagsPresent.map((flag) => (
+          {flags.map((flag) => (
             <FlagTag key={flag} flag={flag} />
           ))}
         </div>

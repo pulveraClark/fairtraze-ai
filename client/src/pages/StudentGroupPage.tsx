@@ -10,6 +10,7 @@ import {
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { StudentNoteCard } from "../components/StudentNoteCard";
+import { NoActivityPill } from "../components/NoActivityPill";
 import { sortNotes } from "../lib/notes";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
@@ -42,6 +43,8 @@ interface GroupDetail {
   report: {
     gini:        number;
     teamHealth:  string;
+    /** Server flag: no member has any recorded activity yet (display only). */
+    noActivity?: boolean;
     analyzedAt:  string;
     memberCount: number;
     deadlineWindowBasis: "assignment-deadline" | "activity-span";
@@ -526,7 +529,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               </svg>
               Manage Group
             </button>
-            {report?.teamHealth && (
+            {report?.noActivity ? (
+              <NoActivityPill />
+            ) : report?.teamHealth && (
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
                 {report.teamHealth}
               </span>
@@ -762,8 +767,19 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   </div>
                 )}
 
+                {report.noActivity && (
+                  <div role="status" className="rounded-xl border border-slate-300 bg-slate-100 p-5">
+                    <NoActivityPill />
+                    <p className="mt-2 text-sm leading-relaxed text-slate-800">
+                      Nobody in your group has recorded activity yet, so there is nothing to compare. Shares and team health
+                      appear after the group has commits or document edits and your instructor analyzes it again.
+                    </p>
+                    <p className="mt-1 text-xs text-slate-700">Last analyzed {new Date(report.analyzedAt).toLocaleDateString()}</p>
+                  </div>
+                )}
+
                 {/* Share overview */}
-                {report.myContribution && (
+                {report.myContribution && !report.noActivity && (
                   <div className="bg-white border border-slate-200 rounded-xl p-6">
                     <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
                       <div>
@@ -803,7 +819,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 )}
 
                 {/* Stats grid */}
-                {report.myContribution && (
+                {report.myContribution && !report.noActivity && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {getContributionStatsCards(report.myContribution, sourceType).map(({ label, value }) => (
                       <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
@@ -815,9 +831,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 )}
 
                 {/* Leader-only: every member's share, so work can be rebalanced */}
-                {report.team && <LeaderTeamCard team={report.team} sourceType={sourceType} />}
+                {report.team && <LeaderTeamCard team={report.team} sourceType={sourceType} noActivity={report.noActivity} />}
 
                 {/* Team context */}
+                {!report.noActivity && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
                   <div className="flex items-start gap-6 flex-wrap">
@@ -851,9 +868,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       : " Your group leader can see each member's contribution share."}
                   </p>
                 </div>
+                )}
 
                 {/* Your flags */}
-                {report.myContribution && (
+                {report.myContribution && !report.noActivity && (
                   <div>
                     <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Your Flags</h3>
                     {report.myContribution.flags.length === 0 ? (

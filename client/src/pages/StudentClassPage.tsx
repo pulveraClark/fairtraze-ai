@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NoActivityPill } from "../components/NoActivityPill";
 import { BriefModal } from "../components/BriefCard";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,7 +30,7 @@ interface MyGroup {
   repoUrl: string;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
-  report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
+  report: { gini: number | null; teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
 }
 
 interface MyRequest {
@@ -268,7 +269,9 @@ function ProjectCard({
                   {g.role === "LEADER" ? "Leader" : "Member"}
                 </span>
                 <span className="text-sm font-semibold text-slate-700">{g.groupName}</span>
-                {g.report?.teamHealth && (
+                {g.report?.noActivity ? (
+                  <NoActivityPill />
+                ) : g.report?.teamHealth && (
                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
                     {g.report.teamHealth}
                   </span>

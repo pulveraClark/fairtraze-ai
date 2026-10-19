@@ -10,6 +10,8 @@ import type {
   TeamReport, AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember,
 } from "@shared/types.js";
 
+import { contentHasNoRecordedActivity, hasNoRecordedActivity } from "../lib/reportActivity.js";
+
 export const joinRouter = Router();
 
 // ─── POST /api/join/class ──────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
                   reports: {
                     orderBy: { generatedAt: "desc" },
                     take: 1,
-                    select: { gini: true, teamHealth: true, generatedAt: true },
+                    select: { gini: true, teamHealth: true, generatedAt: true, content: true },
                   },
                 },
               },
@@ -127,6 +129,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
                       gini:        myProject.reports[0].gini,
                       teamHealth:  myProject.reports[0].teamHealth,
                       generatedAt: myProject.reports[0].generatedAt.toISOString(),
+                      noActivity:  contentHasNoRecordedActivity(myProject.reports[0].content),
                     }
                   : null,
               }
@@ -175,7 +178,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
               reports: {
                 orderBy: { generatedAt: "desc" },
                 take: 1,
-                select: { gini: true, teamHealth: true, generatedAt: true },
+                select: { gini: true, teamHealth: true, generatedAt: true, content: true },
               },
             },
           },
@@ -254,6 +257,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
                   gini:        myProject.reports[0].gini,
                   teamHealth:  myProject.reports[0].teamHealth,
                   generatedAt: myProject.reports[0].generatedAt.toISOString(),
+                  noActivity:  contentHasNoRecordedActivity(myProject.reports[0].content),
                 }
               : null,
           }
@@ -748,6 +752,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       gini:        teamReport.gini,
       teamHealth:  teamReport.teamHealth,
       analyzedAt:  latestReport.generatedAt.toISOString(),
+      noActivity:  hasNoRecordedActivity(teamReport.members),
       memberCount: teamReport.memberCount,
       deadlineWindowBasis: teamReport.deadlineWindowBasis,
       myContribution,

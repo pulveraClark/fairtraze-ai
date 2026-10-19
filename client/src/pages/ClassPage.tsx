@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
+import { presentedHealth } from "../lib/groupActivity";
 import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
@@ -63,7 +64,7 @@ function fmtDeadline(iso: string | null): string {
 }
 
 // ── Risk pills ────────────────────────────────────────────────────────────────
-function RiskPills({ healthy, moderate, highRisk, unanalyzed }: { healthy: number; moderate: number; highRisk: number; unanalyzed: number }) {
+function RiskPills({ healthy, moderate, highRisk, unanalyzed, quiet = 0 }: { healthy: number; moderate: number; highRisk: number; unanalyzed: number; quiet?: number }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {highRisk > 0 && (
@@ -79,6 +80,11 @@ function RiskPills({ healthy, moderate, highRisk, unanalyzed }: { healthy: numbe
       {healthy > 0 && (
         <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />{healthy} Healthy
+        </span>
+      )}
+      {quiet > 0 && (
+        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />{quiet} Not enough activity
         </span>
       )}
       {unanalyzed > 0 && (
@@ -761,7 +767,8 @@ export function ClassPage({ classId }: Props) {
                 {visibleAssignments.map((a) => {
                   const items      = getAssignmentItems(a.id);
                   const atRisk     = classAtRiskCount(items);
-                  const healthy    = items.filter((i) => i.isAnalyzed && i.teamHealth === "Healthy").length;
+                  const healthy    = items.filter((i) => presentedHealth(i) === "Healthy").length;
+                  const quiet      = items.filter((i) => presentedHealth(i) === "no-activity").length;
                   const moderate   = items.filter((i) => i.isAnalyzed && i.teamHealth === "Moderate Risk").length;
                   const highRisk   = items.filter((i) => i.isAnalyzed && i.teamHealth === "High Risk").length;
                   const unanalyzed = items.filter((i) => !i.isAnalyzed).length;
@@ -816,7 +823,7 @@ export function ClassPage({ classId }: Props) {
                         <p className="text-xs text-slate-500">
                           {a._count.projects} group{a._count.projects !== 1 ? "s" : ""}
                         </p>
-                        <RiskPills healthy={healthy} moderate={moderate} highRisk={highRisk} unanalyzed={unanalyzed} />
+                        <RiskPills healthy={healthy} moderate={moderate} highRisk={highRisk} unanalyzed={unanalyzed} quiet={quiet} />
                         <div className="flex justify-end">
                           <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">View groups →</span>
                         </div>

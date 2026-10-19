@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NoActivityPill } from "../components/NoActivityPill";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
@@ -266,9 +267,13 @@ function ClassCard({
         {/* Health — shown in addition to (not instead of) join code */}
         {latestReport?.teamHealth ? (
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-              {latestReport.teamHealth}
-            </span>
+            {latestReport.noActivity ? (
+              <NoActivityPill />
+            ) : (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                {latestReport.teamHealth}
+              </span>
+            )}
             <p className="text-xs text-slate-400">
               Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
             </p>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
+import { visibleFlags } from "../lib/groupActivity";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
@@ -45,7 +46,7 @@ function normalizeCode(code: string): string {
 
 function riskScore(item: ProjectSummaryItem): number {
   if (!item.isAnalyzed) return 10;
-  const hasFlags = item.flagsPresent.length > 0;
+  const hasFlags = visibleFlags(item).length > 0;
   if (item.teamHealth === "High Risk")     return hasFlags ? 0 : 1;
   if (item.teamHealth === "Moderate Risk") return hasFlags ? 2 : 3;
   return hasFlags ? 4 : 5;
@@ -510,7 +511,7 @@ export function InstructorDashboardPage() {
 
   // Global at-risk count
   const atRiskCount = summary.filter(
-    (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || i.flagsPresent.length > 0)
+    (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || visibleFlags(i).length > 0)
   ).length;
 
   const isSearchMode = searchQuery.trim().length > 0;
@@ -521,7 +522,7 @@ export function InstructorDashboardPage() {
 
   const atRiskGroups = sortGroups(
     summary.filter(
-      (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || i.flagsPresent.length > 0)
+      (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || visibleFlags(i).length > 0)
     ),
     sortMode
   );

@@ -25,3 +25,17 @@ describe("LeaderTeamCard", () => {
     expect(screen.queryByText(/Docs/)).toBeNull();
   });
 });
+
+describe("LeaderTeamCard with no recorded activity", () => {
+  it("shows no shares or inactive pills, but keeps names and task counts", () => {
+    render(<LeaderTeamCard sourceType="COMBINED" noActivity team={[
+      member({ contributionShare: 0, flags: ["inactive"] }),
+      member({ userId: 2, name: "Member B", contributionShare: 0, flags: ["inactive"] }),
+    ]} />);
+    expect(screen.getAllByText("Not enough activity yet")).toHaveLength(2);
+    expect(screen.queryByText(/inactive/i)).toBeNull();
+    expect(screen.queryByText("0.0%")).toBeNull();
+    expect(screen.getAllByText(/Tasks: 2 open · 1 done/)).toHaveLength(2);
+    expect(screen.getByText("Member B")).toBeTruthy();
+  });
+});

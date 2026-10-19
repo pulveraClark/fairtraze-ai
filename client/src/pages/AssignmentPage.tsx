@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
+import { visibleFlags } from "../lib/groupActivity";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupTaskCards } from "../components/GroupTaskCards";
@@ -53,7 +54,7 @@ type FilterMode = "all" | "at-risk";
 
 function riskScore(item: ProjectSummaryItem): number {
   if (!item.isAnalyzed) return 10;
-  const hasFlags = item.flagsPresent.length > 0;
+  const hasFlags = visibleFlags(item).length > 0;
   if (item.teamHealth === "High Risk")     return hasFlags ? 0 : 1;
   if (item.teamHealth === "Moderate Risk") return hasFlags ? 2 : 3;
   return hasFlags ? 4 : 5;
@@ -72,7 +73,7 @@ function sortItems(items: ProjectSummaryItem[], mode: SortMode): ProjectSummaryI
 function filterItems(items: ProjectSummaryItem[], mode: FilterMode): ProjectSummaryItem[] {
   if (mode === "all") return items;
   return items.filter(
-    (i) => i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || i.flagsPresent.length > 0
+    (i) => i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || visibleFlags(i).length > 0
   );
 }
 

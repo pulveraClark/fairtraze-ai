@@ -20,6 +20,8 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { groupCrumbLabels } from "../lib/groupCrumbs";
+import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth } from "../lib/groupActivity";
+import { NoActivityPill } from "../components/NoActivityPill";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
@@ -287,14 +289,18 @@ export function ProjectDetailPage({ projectId }: Props) {
   }
 
   // ── Summary values (read straight from the stored report) ─────────────────
-  const reportMembers = stored?.report.members ?? [];
+  // While nobody has any recorded activity, "inactive" pills on every member and a health label say more than
+  // the data does. Display only: the stored report (and Export / Print) keeps the computed flags.
+  const storedMembers = stored?.report.members ?? [];
+  const noActivity    = noActivityFromShares(storedMembers.map((m) => m.contributionShare));
+  const reportMembers = noActivity ? storedMembers.map((m) => ({ ...m, flags: [] })) : storedMembers;
   const selectedIdx    = selectedName === null ? -1 : reportMembers.findIndex((m) => m.studentName === selectedName);
   const selectedMember: AnyScoredMember | null = selectedIdx >= 0 ? reportMembers[selectedIdx] : null;
   const memberCount   = stored?.report.memberCount ?? 0;
   const equalSharePct = memberCount > 0 ? 100 / memberCount : 0;
   const flagged       = reportMembers.filter((m) => m.flags.length > 0);
   const totalFlags    = reportMembers.reduce((s, m) => s + m.flags.length, 0);
-  const healthTone    = stored
+  const healthTone    = stored && !noActivity
     ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
     : "neutral";
 
@@ -366,7 +372,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                       {siblings.map((g) => (
                         <option key={g.projectId} value={g.projectId}>
                           {g.groupName}
-                          {g.isAnalyzed && g.teamHealth ? ` · ${g.teamHealth}` : " · Not analyzed"}
+                          {g.isAnalyzed && g.teamHealth ? ` · ${presentedHealth(g) === "no-activity" ? NO_ACTIVITY_LABEL : g.teamHealth}` : " · Not analyzed"}
                         </option>
                       ))}
                     </select>
@@ -545,8 +551,8 @@ export function ProjectDetailPage({ projectId }: Props) {
                 compact
                 label="Team health"
                 tone={healthTone}
-                value={<StatusPill kind="health" value={stored.report.teamHealth} className="!text-base" />}
-                detail={
+                value={noActivity ? <NoActivityPill className="!text-base" /> : <StatusPill kind="health" value={stored.report.teamHealth} className="!text-base" />}
+                detail={noActivity ? "Scores appear once members have recorded activity." : (
                   <span className="flex items-center gap-1">
                     Gini {stored.report.gini.toFixed(3)}
                     <InfoTip label="About the Gini coefficient and team health">
@@ -564,7 +570,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                       )}
                     </InfoTip>
                   </span>
-                }
+                )}
               />
               <StatTile
                 compact

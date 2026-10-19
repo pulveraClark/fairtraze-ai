@@ -1,4 +1,5 @@
 import type { ProjectSummaryItem } from "@shared/types";
+import { presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { GroupSummaryCard } from "./GroupSummaryCard";
 
 interface Props {
@@ -22,7 +23,7 @@ function isAtRisk(item: ProjectSummaryItem): boolean {
     item.isAnalyzed &&
     (item.teamHealth === "High Risk" ||
       item.teamHealth === "Moderate Risk" ||
-      item.flagsPresent.length > 0)
+      visibleFlags(item).length > 0)
   );
 }
 
@@ -31,7 +32,8 @@ function getRollup(items: ProjectSummaryItem[]) {
   return {
     total:        items.length,
     unanalyzed:   items.filter((i) => !i.isAnalyzed).length,
-    healthy:      analyzed.filter((i) => i.teamHealth === "Healthy").length,
+    healthy:      analyzed.filter((i) => presentedHealth(i) === "Healthy").length,
+    quiet:        analyzed.filter((i) => presentedHealth(i) === "no-activity").length,
     moderate:     analyzed.filter((i) => i.teamHealth === "Moderate Risk").length,
     highRisk:     analyzed.filter((i) => i.teamHealth === "High Risk").length,
     needsAttention: items.filter(isAtRisk).length,
@@ -111,6 +113,12 @@ export function ClassContainerCard({
               <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
                 {rollup.healthy} Healthy
+              </span>
+            )}
+            {rollup.quiet > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-400 inline-block" />
+                {rollup.quiet} Not enough activity
               </span>
             )}
             {rollup.unanalyzed > 0 && (
