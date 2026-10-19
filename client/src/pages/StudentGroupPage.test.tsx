@@ -97,4 +97,20 @@ describe("StudentGroupPage", () => {
     expect(screen.queryByText("Your share")).toBeNull();
     expect(screen.getAllByText("You")).toHaveLength(1);
   });
+
+  it("keeps the project brief out of the page; a Brief link in the header opens it (12)", () => {
+    const withBrief = groupFixture();
+    (withBrief.assignment as { description: string | null }).description = "Build a fair grading tool.";
+    state.data = withBrief;
+    renderPage();
+    expect(screen.queryByText("Build a fair grading tool.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Brief" }));
+    expect(screen.getByRole("dialog", { name: /Project brief/ })).toBeTruthy();
+    expect(screen.getByText("Build a fair grading tool.")).toBeTruthy();
+  });
+
+  it("shows no Brief link when the assignment has no brief (12)", () => {
+    renderPage();
+    expect(screen.queryByRole("button", { name: "Brief" })).toBeNull();
+  });
 });

@@ -19,7 +19,7 @@ import { TasksTab } from "../components/tasks/TasksTab";
 import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
-import { BriefCard } from "../components/BriefCard";
+import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
@@ -253,6 +253,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     () => new URLSearchParams(window.location.search).get("manage") === "1"
   );
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showBrief, setShowBrief] = useState(false);
   // Functional role suggestion state
   const myRoles      = data?.membership?.functionalRoles ?? [];
   const mySuggestion = data?.membership?.roleSuggestion ?? null;
@@ -415,6 +416,16 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         />
       )}
 
+      {showBrief && (
+        <BriefModal
+          assignmentId={assignment.id}
+          title={assignment.title}
+          description={assignment.description}
+          attachments={assignment.attachments}
+          onClose={() => setShowBrief(false)}
+        />
+      )}
+
       {showDisputeModal && token && (
         <DisputeModal
           projectId={projectId}
@@ -509,6 +520,15 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {(assignment.description || assignment.attachments.length > 0) && (
+              <button
+                type="button"
+                onClick={() => setShowBrief(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
+              >
+                Brief
+              </button>
+            )}
             <button
               onClick={() => setShowManageModal(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
@@ -552,18 +572,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       </div>
 
       <main className={`flex-1 ${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} w-full mx-auto px-6 sm:px-8 py-8 min-w-0`}>
-
-        {/* Project brief — read-only context from the instructor; open the first time it is seen */}
-        {(assignment.description || assignment.attachments.length > 0) && (
-          <div className="mb-6">
-            <BriefCard
-              assignmentId={assignment.id}
-              description={assignment.description}
-              attachments={assignment.attachments}
-              rememberOpenState
-            />
-          </div>
-        )}
 
         {/* ── Your tasks widget ───────────────────────────────────────────────── */}
         {myTasks.length > 0 && effectiveTab !== "tasks" && (
