@@ -4,7 +4,7 @@ import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared
 import { Drawer, StatusPill, BUTTON_SECONDARY, FOCUS_LIGHT } from "../ui";
 import { PILL_TONES } from "../ui/StatusPill";
 import { useAuthOptional } from "../../context/AuthContext";
-import { DisclosureSection, HoverTip, Note, Row } from "./DrawerParts";
+import { DisclosureSection, HoverTip, Note, Row, ShareBar } from "./DrawerParts";
 import {
   EDIT_LABEL, EDIT_MULTIPLIER, EDIT_ORDER, EDIT_TIP, IMPACT_TIP, PREDATES_MESSAGE, fileTypeRows, impactRows, impactTotal,
   readSectionOpen, scoreDriverSummary, writeSectionOpen,
@@ -69,9 +69,10 @@ export function MemberDrawer(props: Props) {
 }
 
 function DrawerBody({
-  member, onClose, restoreFocusTo, source, thresholds, deadlineBasis, memberRoles, disputed, flagOutcomes, onOpenDisputes,
+  member, onClose, restoreFocusTo, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes,
   onOpenScoringSettings,
 }: Props & { member: AnyScoredMember }) {
+  const fairPct = memberCount > 0 ? 100 / memberCount : null;
   const userId = useAuthOptional()?.user?.id ?? null;
   const [whereOpen, setWhereOpen] = useState(() => readSectionOpen(userId, "where", true));
   const [impactOpen, setImpactOpen] = useState(false);
@@ -115,8 +116,17 @@ function DrawerBody({
       </div>
       {combined && (
         <dl className="mt-3">
-          <Row label="GitHub share" value={formatPct(combined.githubContributionShare)} />
-          <Row label="Docs share" value={formatPct(combined.documentContributionShare)} />
+          <Row
+            label="GitHub share"
+            value={formatPct(combined.githubContributionShare)}
+            bar={<ShareBar pct={combined.githubContributionShare * 100} fairPct={fairPct} />}
+          />
+          <Row
+            label="Docs share"
+            value={formatPct(combined.documentContributionShare)}
+            bar={<ShareBar pct={combined.documentContributionShare * 100} fairPct={fairPct} />}
+          />
+          {fairPct !== null && <p className="text-xs leading-normal text-slate-700">Line = equal share ({fairPct.toFixed(1)}%)</p>}
           <Row label="Blend weights (GitHub / Docs)" value={`${Math.round(combined.wGitHub * 100)}% / ${Math.round(combined.wDocs * 100)}%`} />
         </dl>
       )}

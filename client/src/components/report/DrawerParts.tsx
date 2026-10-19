@@ -94,11 +94,33 @@ export function HoverTip({ label, children }: { label: string; children: ReactNo
   );
 }
 
-export function Row({ label, value, tip }: { label: ReactNode; value: ReactNode; tip?: ReactNode }) {
+export function Row({ label, value, tip, bar }: { label: ReactNode; value: ReactNode; tip?: ReactNode; bar?: ReactNode }) {
   return (
-    <div className="flex min-h-8 items-center justify-between gap-3 text-sm leading-normal">
+    <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 text-sm leading-normal">
       <dt className="min-w-0 text-slate-800">{label}{tip}</dt>
       <dd className="m-0 shrink-0 text-right font-semibold tabular-nums text-slate-900">{value}</dd>
+      {bar}
+    </div>
+  );
+}
+
+const clampPct = (v: number) => (Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0);
+
+/** Thin decorative 0-100% bar; the percentage text beside it carries the meaning. `fairPct` adds a tick at the equal share. */
+export function ShareBar({ pct, fairPct }: { pct: number; fairPct: number | null }) {
+  return (
+    <div aria-hidden="true" data-testid="share-bar" className="relative mb-2 mt-0.5 h-1.5 w-full basis-full rounded-full bg-slate-200">
+      <div data-testid="share-bar-fill" className="absolute inset-y-0 left-0 rounded-full bg-slate-500" style={{ width: `${clampPct(pct)}%` }} />
+      {fairPct !== null && (
+        // Inset by half the tick's width so the tick stays inside the track at 0% and 100%.
+        <div className="absolute inset-y-0 inset-x-px">
+          <span
+            data-testid="share-bar-tick"
+            className="absolute -inset-y-0.5 w-0.5 -translate-x-1/2 bg-slate-900"
+            style={{ left: `${clampPct(fairPct)}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -249,6 +249,56 @@ describe("MemberDrawer", () => {
     }
   });
 
+  describe("share bars", () => {
+    const both: CombinedScoredMember = {
+      studentName: "Member D", userId: 4, githubUsername: "d", githubContributionShare: 0.6, documentContributionShare: 0.25,
+      wGitHub: 0.5, wDocs: 0.5, contributionShare: 0.425, lastPhaseRatio: 0.1, flags: [], github: ghMixed, document: doc,
+    };
+    const bars = () => screen.getAllByTestId("share-bar");
+
+    it("draws a decorative bar under GitHub and Docs share only, filled to the displayed value, text unchanged", () => {
+      render(<MemberDrawer {...baseProps} source="combined" member={both} />);
+      expect(screen.getByText("60.0%")).toBeInTheDocument();
+      expect(screen.getByText("25.0%")).toBeInTheDocument();
+      expect(bars()).toHaveLength(2);
+      bars().forEach((b) => expect(b).toHaveAttribute("aria-hidden", "true"));
+      const fills = screen.getAllByTestId("share-bar-fill");
+      expect(fills[0]).toHaveStyle({ width: "60%" });
+      expect(fills[1]).toHaveStyle({ width: "25%" });
+      expect(screen.getByText("GitHub share").closest("div")).toContainElement(bars()[0]);
+      expect(screen.getByText("Docs share").closest("div")).toContainElement(bars()[1]);
+      expect(screen.getByText("Blend weights (GitHub / Docs)").closest("div")!.querySelector('[data-testid="share-bar"]')).toBeNull();
+      expect(screen.getByText("50% / 50%")).toBeInTheDocument();
+    });
+
+    it("puts a tick at the equal share with a caption that shows the value", () => {
+      render(<MemberDrawer {...baseProps} source="combined" member={both} />);
+      const ticks = screen.getAllByTestId("share-bar-tick");
+      expect(ticks).toHaveLength(2);
+      ticks.forEach((t) => {
+        expect(t.style.left).toBe(`${100 / 3}%`);
+        expect(t.className).toContain("-translate-x-1/2");
+      });
+      expect(screen.getAllByText("Line = equal share (33.3%)")).toHaveLength(1);
+    });
+
+    it("omits the tick and caption when group size is unknown", () => {
+      render(<MemberDrawer {...baseProps} memberCount={0} source="combined" member={both} />);
+      expect(bars()).toHaveLength(2);
+      expect(screen.queryByTestId("share-bar-tick")).not.toBeInTheDocument();
+      expect(screen.queryByText(/equal share/)).not.toBeInTheDocument();
+    });
+
+    it("keeps the fill and tick within 0-100%", () => {
+      const extreme = { ...both, githubContributionShare: 1.2, documentContributionShare: 0 };
+      render(<MemberDrawer {...baseProps} memberCount={1} source="combined" member={extreme} />);
+      const fills = screen.getAllByTestId("share-bar-fill");
+      expect(fills[0]).toHaveStyle({ width: "100%" });
+      expect(fills[1]).toHaveStyle({ width: "0%" });
+      screen.getAllByTestId("share-bar-tick").forEach((t) => expect(t.style.left).toBe("100%"));
+    });
+  });
+
   it("handles a combined member with a missing Docs side", async () => {
     const combined: CombinedScoredMember = {
       studentName: "Member C", userId: 3, githubUsername: "c", githubContributionShare: 0.5, documentContributionShare: 0,
