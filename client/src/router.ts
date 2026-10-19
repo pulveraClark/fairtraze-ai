@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import type { ReactNode } from "react";
 import { createElement } from "react";
 
-export type AppRoute = "/" | "/overview" | "/privacy" | "/login" | "/register" | "/forgot-password" | "/reset-password" | "/verify-email" | "/dashboard" | "/student" | "/admin" | "/admin/audit" | "/settings" | "/alerts" | "/disputes" | "/join";
+export type AppRoute = "/" | "/overview" | "/privacy" | "/help" | "/login" | "/register" | "/forgot-password" | "/reset-password" | "/verify-email" | "/dashboard" | "/student" | "/admin" | "/admin/audit" | "/settings" | "/alerts" | "/disputes" | "/join";
 
 /** Drops a trailing slash. Unknown paths pass through so App can render "Page not found". */
 export function resolvePathname(rawPath: string): string {

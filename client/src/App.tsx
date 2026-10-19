@@ -25,6 +25,7 @@ const AlertsPage = lazy(() => import("./pages/AlertsPage").then((m) => ({ defaul
 const StudentNotesPage = lazy(() => import("./pages/StudentNotesPage").then((m) => ({ default: m.StudentNotesPage })));
 const DisputesPage = lazy(() => import("./pages/DisputesPage").then((m) => ({ default: m.DisputesPage })));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage").then((m) => ({ default: m.PendingApprovalPage })));
+const HelpPage = lazy(() => import("./pages/HelpPage").then((m) => ({ default: m.HelpPage })));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
 const ConsentGatePage = lazy(() => import("./pages/ConsentGatePage").then((m) => ({ default: m.ConsentGatePage })));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
@@ -46,7 +47,7 @@ function routeElement(pathname: string) {
 
 /** Signed-in app routes get the sidebar; landing and auth pages never had the app chrome. */
 function usesShell(pathname: string): boolean {
-  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy"].includes(pathname);
+  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/help"].includes(pathname);
 }
 
 /** The page for a known route, or null when nothing matches (rendered as "Page not found"). */
@@ -92,6 +93,7 @@ function pageElement(pathname: string) {
   if (pathname === "/verify-email")    return <VerifyEmailPage />;
   if (pathname === "/overview")  return <OverviewPage />;
   if (pathname === "/privacy")   return <PrivacyPage />;
+  if (pathname === "/help")      return <HelpPage />;
 
   if (pathname === "/dashboard") return (
     <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>

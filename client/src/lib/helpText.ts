@@ -5,7 +5,7 @@
 /** Anchors on the /help page. HelpPage renders an element with each of these ids. */
 export const HELP_ANCHORS = [
   "what", "shares", "shares-github", "shares-docs", "combined", "settings",
-  "flags", "gini", "ai", "tasks", "roles", "notes", "privacy", "faq",
+  "flags", "gini", "ai", "tasks", "roles", "leader", "notes", "privacy", "faq",
 ] as const;
 export type HelpAnchor = (typeof HELP_ANCHORS)[number];
 
