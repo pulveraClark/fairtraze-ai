@@ -1,3 +1,4 @@
+import { shortMemberNames } from "../lib/names";
 import type { ProjectSummaryItem, TeamHealth } from "@shared/types";
 import { ContributionMiniBar } from "./ContributionMiniBar";
 import { FlagTag } from "./FlagTag";
@@ -30,6 +31,7 @@ function isMembershipStale(item: ProjectSummaryItem): boolean {
 export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, selectable, selected, onToggleSelect }: Props) {
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
+  const memberLabels = shortMemberNames(item.memberShares.map((m) => m.studentName));
 
   function openDetail() {
     navigate(`/project/${item.projectId}`);
@@ -126,9 +128,9 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
 
       {/* Member legend — first 4, then overflow count */}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-        {item.memberShares.slice(0, 4).map((m) => (
-          <span key={m.studentName} className="text-xs text-slate-500">
-            {m.studentName.split(" ")[0]}: {(m.contributionShare * 100).toFixed(0)}%
+        {item.memberShares.slice(0, 4).map((m, i) => (
+          <span key={`${m.studentName}-${i}`} title={m.studentName} className="text-xs text-slate-500">
+            {memberLabels[i]}: {(m.contributionShare * 100).toFixed(0)}%
           </span>
         ))}
         {item.memberShares.length > 4 && (
