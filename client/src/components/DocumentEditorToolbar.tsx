@@ -882,7 +882,7 @@ export function Toolbar({
   onOpenFind: (replace: boolean) => void;
   onOpenLink: () => void;
 }) {
-  const statusLabel = connStatus === "connected" ? "" : connStatus === "connecting" ? "Connecting…" : "Reconnecting…";
+  const statusLabel = connStatus === "connected" ? "" : connStatus === "connecting" ? "Connecting to the shared document…" : "Reconnecting…";
   const wordCount = editor.storage.characterCount?.words?.() ?? 0;
   const charCount = editor.storage.characterCount?.characters?.() ?? 0;
 

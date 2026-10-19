@@ -36,6 +36,7 @@ import { starterKitOptions, formattingExtensions, EditorShortcuts } from "../lib
 import type { EditorShortcutHandlers } from "../lib/formattingExtensions";
 import { SearchReplace } from "../lib/searchReplace";
 import { useCollabVersionGuard } from "../lib/useCollabVersionGuard";
+import { useCollabSync } from "../lib/useCollabSync";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion";
 import { PAGE_SIZES, MARGIN_PRESET_LABELS, resolvePageGeometry } from "@shared/pageSizes";
 import { DEFAULT_PAGE_SETUP, applyPageSetup, mergePageSetup, pageSetupPatchBody, parsePageSetup, samePageSetup } from "../lib/pageSetup";
@@ -341,7 +342,11 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
 
   // Out-of-date client: stop sending updates and go read-only until the user reloads.
   const { mismatch: versionMismatch } = useCollabVersionGuard(collab?.provider ?? null);
-  const effectiveEditable = editable && !awaitingInitialContent && !versionMismatch;
+  // The first sync must finish before anyone can type (text typed earlier could land ahead of
+  // content still arriving). `editable &&` first: this can only ever switch editing OFF, so a
+  // read-only viewer (the instructor) stays read-only whatever the sync state.
+  const { synced, stalled: syncStalled, retry: retrySync } = useCollabSync(collab?.provider ?? null);
+  const effectiveEditable = editable && synced && !awaitingInitialContent && !versionMismatch;
 
   const editor = useEditor(
     {
@@ -1038,7 +1043,26 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
           </button>
         </div>
       )}
-      {awaitingInitialContent && (
+      {!synced && !versionMismatch && (
+        <div
+          role="status"
+          className={`flex flex-wrap items-center justify-between gap-3 px-3 py-1.5 border-b text-xs font-medium ${
+            syncStalled ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-100 bg-slate-50/60 text-slate-600"
+          }`}
+        >
+          <span>{syncStalled ? "Still connecting. Check your internet, or reload" : "Connecting to the shared document…"}</span>
+          {syncStalled && (
+            <button
+              type="button"
+              onClick={retrySync}
+              className="min-h-8 rounded border border-amber-700 bg-amber-700 px-3 text-xs font-semibold text-white hover:bg-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+      {awaitingInitialContent && synced && (
         <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-400 font-medium">
           Loading document…
         </div>
