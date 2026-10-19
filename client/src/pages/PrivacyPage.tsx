@@ -79,7 +79,7 @@ export function PrivacyPage() {
             <li><strong>GitHub activity</strong> (for GitHub and Combined projects): commit counts and dates, lines added and deleted, and the types of files changed in your group's repository, read from GitHub's API.</li>
             <li><strong>Collaborative Editor activity</strong> (for Editor and Combined projects): what you insert and delete in your group's document, with timestamps and editing sessions, plus the comments you write.</li>
             <li><strong>Reports:</strong> contribution scores, flags and an AI-written explanation computed from the activity above.</li>
-            <li><strong>Other records:</strong> tasks assigned to or created by you (including their subtasks, comments, history, files attached to them and the GitHub commit messages that name them), notes you submit when you flag a report for review, notifications sent to you, and an audit log of administrative actions.</li>
+            <li><strong>Other records:</strong> tasks assigned to or created by you (including their assignments, due dates, subtasks, comments, history, files attached to them, and the GitHub commit links that name them, which keep the commit message and author login), notes you submit when you flag a report for review, notifications sent to you (and a log of the due-date reminders sent, so none is sent twice), and an audit log of administrative actions.</li>
             <li><strong>Consent record:</strong> the notice version you accepted and when.</li>
           </ul>
         </Section>
