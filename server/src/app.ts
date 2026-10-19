@@ -27,6 +27,7 @@ import {
   corsOptions,
   helmetMiddleware,
   authLimiter,
+  trustProxyHops,
   analysisLimiter,
   exportLimiter,
   taskWriteLimiter,
@@ -40,6 +41,10 @@ import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
 // real server entrypoint can share one app definition.
 export function createApp() {
   const app = express();
+
+  // Behind Render's proxy req.ip is the proxy unless told otherwise; see trustProxyHops (security.ts).
+  const proxyHops = trustProxyHops();
+  if (proxyHops > 0) app.set("trust proxy", proxyHops);
 
   app.use(helmetMiddleware);
   app.use(cors(corsOptions));

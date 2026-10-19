@@ -3,7 +3,8 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { authenticateToken } from "../src/middleware/auth.js";
-import { analysisLimiter } from "../src/middleware/security.js";
+import { analysisLimiter, globalLimiter, globalLimiterKey, trustProxyHops } from "../src/middleware/security.js";
+import { createUser } from "./factories.js";
 import { signToken } from "../src/lib/jwt.js";
 
 // The rate limiters in middleware/security.ts are module-level singletons —
@@ -88,5 +89,97 @@ describe("rate limiting", () => {
     // requests come from the same supertest client/IP).
     const resultB = await attemptAs(instructorB);
     expect(resultB.status).toBe(200);
+  });
+
+  // ── Sign-in limits (per account + IP backstop), register, forgot-password, trust proxy ──────────────────
+  // These tests use their own app with TRUST_PROXY_HOPS=1 and a distinct X-Forwarded-For address each, so every
+  // test has its own IP buckets and none of them touches the 127.0.0.1 bucket used by the tests above.
+  describe("auth limits", () => {
+    function proxiedApp() {
+      const before = process.env.TRUST_PROXY_HOPS;
+      process.env.TRUST_PROXY_HOPS = "1";
+      try { return createApp(); } finally { if (before === undefined) delete process.env.TRUST_PROXY_HOPS; else process.env.TRUST_PROXY_HOPS = before; }
+    }
+    const proxied = proxiedApp();
+    const login = (ip: string, email: string, password = "wrong-password") =>
+      request(proxied).post("/api/auth/login").set("X-Forwarded-For", ip).send({ email, password });
+
+    it("two different emails from one IP do not share a failed-sign-in bucket", async () => {
+      for (let i = 0; i < 10; i++) expect((await login("10.0.0.1", "a@example.com")).status).toBe(401);
+      expect((await login("10.0.0.1", "a@example.com")).status).toBe(429);
+      // a classmate on the same Wi-Fi, a different account: still normal
+      expect((await login("10.0.0.1", "b@example.com")).status).toBe(401);
+    });
+
+    it("the same email from a different IP is a different bucket (keyed by the forwarded address)", async () => {
+      for (let i = 0; i < 10; i++) await login("10.0.0.2", "c@example.com");
+      expect((await login("10.0.0.2", "c@example.com")).status).toBe(429);
+      expect((await login("10.0.0.3", "c@example.com")).status).toBe(401);
+    });
+
+    it("successful sign-ins do not use up the allowance", async () => {
+      const { user } = await createUser({ email: "ok-user@example.com", password: "password123" });
+      for (let i = 0; i < 12; i++) {
+        const res = await login("10.0.0.4", user.email, "password123");
+        expect(res.status).toBe(200);
+      }
+    });
+
+    it("an IP-wide backstop stops guessing across many emails (100 failures per 15 min)", async () => {
+      for (let i = 0; i < 100; i++) expect((await login("10.0.0.5", `guess${i}@example.com`)).status).toBe(401);
+      expect((await login("10.0.0.5", "guess-new@example.com")).status).toBe(429);
+      expect((await login("10.0.0.6", "guess-new@example.com")).status).toBe(401); // other visitors unaffected
+    });
+
+    it("register allows 30 per hour per IP, then throttles", async () => {
+      const reg = () => request(proxied).post("/api/auth/register").set("X-Forwarded-For", "10.0.0.7").send({});
+      for (let i = 0; i < 30; i++) expect((await reg()).status).toBe(400);
+      expect((await reg()).status).toBe(429);
+    });
+
+    it("forgot-password allows 5 per hour for the same email and IP", async () => {
+      const ask = (email: string) => request(proxied).post("/api/auth/forgot-password").set("X-Forwarded-For", "10.0.0.8").send({ email });
+      for (let i = 0; i < 5; i++) expect((await ask("nobody-here@example.com")).status).toBe(200);
+      expect((await ask("nobody-here@example.com")).status).toBe(429);
+      expect((await ask("someone-else@example.com")).status).toBe(200);
+    });
+  });
+
+  describe("trustProxyHops", () => {
+    it("is 0 unless set to a small whole number", () => {
+      expect(trustProxyHops({})).toBe(0);
+      expect(trustProxyHops({ TRUST_PROXY_HOPS: "1" })).toBe(1);
+      expect(trustProxyHops({ TRUST_PROXY_HOPS: "2" })).toBe(2);
+      expect(trustProxyHops({ TRUST_PROXY_HOPS: "abc" })).toBe(0);
+      expect(trustProxyHops({ TRUST_PROXY_HOPS: "-1" })).toBe(0);
+      expect(trustProxyHops({ TRUST_PROXY_HOPS: "1.5" })).toBe(0);
+      expect(trustProxyHops({ TRUST_PROXY_HOPS: "99" })).toBe(0);
+    });
+  });
+
+  describe("globalLimiter", () => {
+    const globalApp = express();
+    globalApp.use(globalLimiter);
+    globalApp.get("/probe", (_req, res) => { res.json({ ok: true }); });
+
+    it("keys by user id when a valid token is sent, by IP otherwise", () => {
+      const withToken = { headers: { authorization: `Bearer ${tokenFor(920001)}` }, ip: "1.2.3.4" } as never;
+      const badToken = { headers: { authorization: "Bearer not-a-token" }, ip: "1.2.3.4" } as never;
+      const anonymous = { headers: {}, ip: "1.2.3.4" } as never;
+      expect(globalLimiterKey(withToken)).toBe("user:920001");
+      expect(globalLimiterKey(badToken)).toBe("1.2.3.4");
+      expect(globalLimiterKey(anonymous)).toBe("1.2.3.4");
+    });
+
+    it("allows 1000 requests per user per window; another user on the same IP is not affected", async () => {
+      const a = tokenFor(920002);
+      const b = tokenFor(920003);
+      const hit = (token: string) => request(globalApp).get("/probe").set("Authorization", `Bearer ${token}`);
+      let lastOk = 0;
+      for (let i = 0; i < 1000; i++) { const r = await hit(a); if (r.status === 200) lastOk++; }
+      expect(lastOk).toBe(1000);
+      expect((await hit(a)).status).toBe(429);
+      expect((await hit(b)).status).toBe(200);
+    }, 120_000);
   });
 });
