@@ -2,7 +2,7 @@ import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { AppFooter } from "../components/AppFooter";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { useEffect, useState } from "react";
-import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
+import { classAccent } from "../lib/classBand";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -201,7 +201,7 @@ export function ClassCard({
       {/* Colored band */}
       <div
         className="relative px-4 py-3 flex flex-col gap-2"
-        style={{ background: CLASS_BAND_BACKGROUND }}
+        style={{ background: classAccent(cls.id).color }}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">

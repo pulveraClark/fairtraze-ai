@@ -9,6 +9,7 @@ import { useClassesListQuery, useProjectsSummaryQuery } from "../../hooks/useSha
 import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../../hooks/useStudentClassesQuery";
 import { usePopover } from "../../hooks/usePopover";
 import { usePrefersReducedMotion } from "../../lib/usePrefersReducedMotion";
+import { classAccent } from "../../lib/classBand";
 import {
   buildInstructorTree,
   buildStudentTree,
@@ -162,6 +163,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
           <li key={c.id}>
             <div className="flex min-w-0 items-stretch">
               <SidebarLink href={c.href} active={c.active} title={c.title} onNavigate={onNavigate} className={treeLinkClass(c.active)}>
+                <span aria-hidden="true" className="mr-2 h-2.5 w-2.5 shrink-0 self-center rounded-full ring-1 ring-white/70" style={{ background: classAccent(c.id).color }} />
                 <span className="truncate">{c.label}</span>
               </SidebarLink>
               <button

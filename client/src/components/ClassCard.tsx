@@ -1,6 +1,6 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
 import { useState } from "react";
-import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
+import { classAccent } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, presentedHealth } from "../lib/groupActivity";
 import { NoActivityRollup } from "./NoActivityRollup";
@@ -8,6 +8,7 @@ import { OverflowMenu } from "./ui/OverflowMenu";
 import { ClassCodeLabel } from "./ClassCodeLabel";
 
 interface Props {
+  classId: number;
   assignmentLabel: string;
   items: ProjectSummaryItem[];
   onClick: () => void;
@@ -29,7 +30,7 @@ export function classAtRiskCount(items: ProjectSummaryItem[]): number {
   return items.filter(isAtRiskGroup).length;
 }
 
-export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount, joinCode }: Props) {
+export function ClassCard({ classId, assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount, joinCode }: Props) {
   const { code, subjectName } = parseClassLabel(assignmentLabel);
   const [copied, setCopied] = useState(false);
 
@@ -62,7 +63,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
       {/* Colored band */}
       <div
         className="relative px-4 py-3 flex flex-col gap-2"
-        style={{ background: CLASS_BAND_BACKGROUND }}
+        style={{ background: classAccent(classId).color }}
       >
         <div className="flex items-start justify-between gap-2">
           {/* Clipboard icon */}

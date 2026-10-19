@@ -21,7 +21,7 @@ const items = [
 
 describe("instructor roll-ups with zero-activity groups", () => {
   it("class card: its own neutral line, not counted as risk", () => {
-    render(<ClassCard assignmentLabel="CODE — Subject" items={items} onClick={() => {}} />);
+    render(<ClassCard classId={1} assignmentLabel="CODE — Subject" items={items} onClick={() => {}} />);
     expect(screen.getByText("2 groups: no activity yet")).toBeInTheDocument();
     expect(screen.getByText(/1 Healthy/)).toBeInTheDocument();
     expect(screen.queryByText(/High Risk/)).not.toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("instructor roll-ups with zero-activity groups", () => {
   });
 
   it("singular wording for one group", () => {
-    render(<ClassCard assignmentLabel="CODE — Subject" items={[group(1, [0, 0])]} onClick={() => {}} />);
+    render(<ClassCard classId={1} assignmentLabel="CODE — Subject" items={[group(1, [0, 0])]} onClick={() => {}} />);
     expect(screen.getByText("1 group: no activity yet")).toBeInTheDocument();
   });
 
@@ -45,13 +45,13 @@ describe("attention wording on class cards (I34)", () => {
   const risky = (id: number) => group(id, [0.9, 0.1], { teamHealth: "High Risk" });
 
   it("says '1 group needs attention' for one group", () => {
-    render(<ClassCard assignmentLabel="CODE — Subject" items={[risky(1), group(2, [0.5, 0.5])]} onClick={() => {}} />);
+    render(<ClassCard classId={1} assignmentLabel="CODE — Subject" items={[risky(1), group(2, [0.5, 0.5])]} onClick={() => {}} />);
     expect(screen.getByText("⚠ 1 group needs attention")).toBeInTheDocument();
   });
 
   it("says 'N groups need attention' for several, with the same count as classAtRiskCount", () => {
     const two = [risky(1), risky(2)];
-    render(<ClassCard assignmentLabel="CODE — Subject" items={two} onClick={() => {}} />);
+    render(<ClassCard classId={1} assignmentLabel="CODE — Subject" items={two} onClick={() => {}} />);
     expect(classAtRiskCount(two)).toBe(2);
     expect(screen.getByText("⚠ 2 groups need attention")).toBeInTheDocument();
   });

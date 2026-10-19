@@ -3,7 +3,7 @@ import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { classCrumb } from "../lib/classLabel";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
+import { classAccent } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
 import { presentedHealth } from "../lib/groupActivity";
 import { NoActivityRollup } from "../components/NoActivityRollup";
@@ -467,6 +467,7 @@ function ConfirmDialog({
 interface Props { classId: number }
 
 export function ClassPage({ classId }: Props) {
+  const accent = classAccent(classId).color;
   const { navigate }        = useRouter();
   const { token, user }     = useAuth();
   const isAdmin             = user?.systemRole === "ADMIN";
@@ -607,7 +608,7 @@ export function ClassPage({ classId }: Props) {
         );
       })()}
       {/* Page header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-white border-b border-slate-200 border-t-4" style={{ borderTopColor: accent }}>
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <Breadcrumbs
@@ -620,12 +621,14 @@ export function ClassPage({ classId }: Props) {
               {classInfo ? (
                 <>
                   <h1 className="text-xl font-semibold text-slate-900 shrink-0">{classInfo.subjectName}</h1>
-                  <ClassCodeLabel
-                    subjectCode={classInfo.subjectCode}
-                    edpCode={classInfo.edpCode}
-                    className="shrink-0 text-xs font-mono font-bold text-indigo-600"
-                    edpClassName="font-semibold text-indigo-400"
-                  />
+                  <span className="shrink-0" style={{ color: accent }}>
+                    <ClassCodeLabel
+                      subjectCode={classInfo.subjectCode}
+                      edpCode={classInfo.edpCode}
+                      className="text-xs font-mono font-bold"
+                      edpClassName="font-semibold"
+                    />
+                  </span>
                   {classInfo.department && (
                     <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {classInfo.department.code}
@@ -772,7 +775,7 @@ export function ClassPage({ classId }: Props) {
                       className="group cursor-pointer w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
                       {/* Colored band */}
-                      <div className="relative px-4 py-3 flex flex-col gap-2" style={{ background: CLASS_BAND_BACKGROUND }}>
+                      <div className="relative px-4 py-3 flex flex-col gap-2" style={{ background: accent }}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

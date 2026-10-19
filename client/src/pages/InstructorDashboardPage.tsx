@@ -699,6 +699,7 @@ export function InstructorDashboardPage() {
               {sortedClasses.map((cls) => (
                 <ClassCard
                   key={cls.id}
+                  classId={cls.id}
                   assignmentLabel={`${cls.subjectCode} — ${cls.subjectName}`}
                   items={getItemsForClass(cls)}
                   onClick={() => navigate(`/class/${cls.id}`)}
