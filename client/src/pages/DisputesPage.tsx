@@ -253,11 +253,11 @@ export function DisputesPage() {
 
           {/* Class filter */}
           {classOptions.length > 0 && (
-            <div className="mb-px">
+            <div className="mb-px w-full min-w-0 sm:w-auto">
               <select
                 value={classSectionId}
                 onChange={(e) => { setClassSectionId(e.target.value === "" ? "" : Number(e.target.value)); setPage(1); }}
-                className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer"
+                className="w-full max-w-full min-w-0 truncate text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 sm:w-auto focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer"
               >
                 <option value="">All classes</option>
                 {classOptions.map((cs) => (

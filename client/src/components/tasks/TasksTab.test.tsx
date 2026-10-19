@@ -277,6 +277,19 @@ describe("filters", () => {
     expect(screen.getByRole("button", { name: /^Filter/ })).toHaveTextContent("1");
   });
 
+  it("on a narrow screen the Filter panel spans the top bar instead of hanging off the button (I29)", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Anything" })]));
+    renderTab();
+    const user = userEvent.setup();
+    await screen.findByText("Anything");
+    await user.click(screen.getByRole("button", { name: /^Filter/ }));
+    const panel = screen.getByRole("dialog", { name: "Filter tasks" });
+    expect(panel).toHaveClass("inset-x-0");
+    expect(panel).not.toHaveClass("left-0");
+    expect(panel).toHaveClass("sm:w-72");
+  });
+
   it("a milestone card filters the board and toggles off", async () => {
     signInAs(1);
     installFakeServer(mkBoard({ milestones: [{ id: 5, name: "Beta", dueDate: null, position: 1, total: 1, done: 0 }] }, [

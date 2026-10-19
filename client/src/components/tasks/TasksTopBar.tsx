@@ -44,7 +44,8 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Below sm the filter panel spans this row (relative here), so it can never run off a narrow screen. */}
+      <div className="relative flex flex-wrap items-center gap-2 sm:static">
         <ViewSwitch view={view} onChange={onViewChange} />
         <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
@@ -74,7 +75,7 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
           </button>
         )}
 
-        <div className="relative" ref={menu.ref}>
+        <div className="sm:relative" ref={menu.ref}>
           <button
             type="button"
             ref={menu.triggerRef}
@@ -94,7 +95,7 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
             <div
               role="dialog"
               aria-label="Filter tasks"
-              className="absolute left-0 z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-lg"
+              className="absolute inset-x-0 top-full z-30 mt-1 space-y-4 sm:inset-x-auto sm:left-0 sm:w-72 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-lg"
             >
               <fieldset>
                 <legend className="mb-1.5 font-semibold text-slate-900">Assigned to</legend>
