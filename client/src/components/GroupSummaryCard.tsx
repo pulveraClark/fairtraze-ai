@@ -5,6 +5,8 @@ import type { ProjectSummaryItem, TeamHealth } from "@shared/types";
 import { ContributionMiniBar } from "./ContributionMiniBar";
 import { FlagTag } from "./FlagTag";
 import { useRouter } from "../router";
+import type { GroupTaskSummary } from "@shared/taskTypes";
+import { TaskCountLine } from "./TaskCountLine";
 
 const HEALTH_BADGE: Record<TeamHealth, string> = {
   Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
@@ -18,6 +20,8 @@ interface Props {
   analyzing: boolean;
   onManage?: (projectId: number) => void;
   onTasks?: (projectId: number) => void;
+  /** Task counts for this group (planning data); omitted where they are not loaded. */
+  tasks?: GroupTaskSummary;
   // Bulk-select mode (AssignmentPage) — omitted entirely outside that context,
   // so the checkbox never appears on pages that don't support bulk actions.
   selectable?: boolean;
@@ -30,7 +34,7 @@ function isMembershipStale(item: ProjectSummaryItem): boolean {
   return new Date(item.membershipChangedAt) > new Date(item.lastAnalyzedAt);
 }
 
-export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, selectable, selected, onToggleSelect }: Props) {
+export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, tasks, selectable, selected, onToggleSelect }: Props) {
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
   const memberLabels = shortMemberNames(item.memberShares.map((m) => m.studentName));
@@ -68,6 +72,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           </span>
         </div>
         <div className="h-3 rounded-full bg-slate-100 w-full" />
+        {tasks && <TaskCountLine tasks={tasks} />}
         <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
           <p className="text-xs text-slate-400">No report yet</p>
           <div className="flex items-center gap-3">
@@ -201,6 +206,8 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           )}
         </div>
       )}
+
+      {tasks && <TaskCountLine tasks={tasks} />}
 
       {/* Footer: Gini + date + actions */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 gap-2">

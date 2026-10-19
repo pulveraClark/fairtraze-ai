@@ -2,13 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { AssignmentTaskSummary, BoardResponse, WorkloadResponse } from "@shared/taskTypes";
+import type { BoardResponse, WorkloadResponse } from "@shared/taskTypes";
 import * as AuthContextModule from "../../context/AuthContext";
 import * as RouterModule from "../../router";
 import { ToastProvider } from "../Toast";
 import { TasksTab } from "./TasksTab";
 import { WorkloadPanel } from "./WorkloadPanel";
-import { GroupTaskCards } from "../GroupTaskCards";
 import { mkBoard, mkTask, resetFixtureIds } from "../../../test/taskFixtures";
 
 vi.mock("../../context/AuthContext", async () => {
@@ -127,65 +126,5 @@ describe("Workload button in the Tasks tab", () => {
     serve({ ...boardCall(mkBoard({}, [mkTask({ id: 1 })])), "GET /api/groups/7/tasks/workload": () => ({ status: 200, body: WORKLOAD }) });
     wrap(<TasksTab projectId={7} />);
     expect(await screen.findByRole("dialog", { name: "Workload" })).toBeInTheDocument();
-  });
-});
-
-describe("GroupTaskCards (class page)", () => {
-  const SUMMARY: AssignmentTaskSummary = {
-    assignmentId: 3,
-    groups: [
-      {
-        projectId: 11, groupName: "Group Alpha", total: 8, done: 3, overdue: 2,
-        milestones: [{ id: 1, name: "Alpha release", dueDate: "2026-11-20", total: 4, done: 1 }],
-      },
-      { projectId: 12, groupName: "Group Beta", total: 0, done: 0, overdue: 0, milestones: [] },
-      { projectId: 13, groupName: "Group Gamma", total: 5, done: 5, overdue: 0, milestones: [] },
-    ],
-  };
-
-  it("shows X of Y done, overdue with an icon, milestone mini-bars, three buttons and the planning-only note", async () => {
-    signInAs(50, "INSTRUCTOR");
-    serve({ "GET /api/assignments/3/task-summary": () => ({ status: 200, body: SUMMARY }) });
-    wrap(<GroupTaskCards assignmentId={3} />);
-
-    expect(await screen.findByRole("heading", { name: "Task progress" })).toBeInTheDocument();
-    expect(screen.getByText("Planning only. Not part of the contribution score.")).toBeInTheDocument();
-
-    const alpha = screen.getByRole("article", { name: "Group Alpha task progress" });
-    expect(within(alpha).getByText("3 of 8 tasks done")).toBeInTheDocument();
-    const overdue = within(alpha).getByText("2 overdue");
-    expect(overdue.parentElement?.querySelector("svg")).not.toBeNull();
-    expect(within(alpha).getByRole("progressbar", { name: "Group Alpha tasks done" })).toHaveAttribute("aria-valuenow", "38");
-    expect(within(alpha).getByRole("progressbar", { name: "Alpha release progress" })).toHaveAttribute("aria-valuenow", "25");
-    expect(within(alpha).getByText(/1 of 4 · due Nov 20/)).toBeInTheDocument();
-    expect(within(alpha).getAllByRole("button").map((b) => b.textContent)).toEqual(["Open tasks", "Workload", "Open report"]);
-
-    const beta = screen.getByRole("article", { name: "Group Beta task progress" });
-    expect(within(beta).getByText("No tasks yet.")).toBeInTheDocument();
-    expect(within(screen.getByRole("article", { name: "Group Gamma task progress" })).getByText("None overdue")).toBeInTheDocument();
-  });
-
-  it("the three buttons go to the group's tasks, its workload and its report", async () => {
-    signInAs(50, "INSTRUCTOR");
-    serve({ "GET /api/assignments/3/task-summary": () => ({ status: 200, body: SUMMARY }) });
-    wrap(<GroupTaskCards assignmentId={3} />);
-    const alpha = await screen.findByRole("article", { name: "Group Alpha task progress" });
-    const user = userEvent.setup();
-    await user.click(within(alpha).getByRole("button", { name: "Open tasks" }));
-    await user.click(within(alpha).getByRole("button", { name: "Workload" }));
-    await user.click(within(alpha).getByRole("button", { name: "Open report" }));
-    expect(navigate.mock.calls.map((c) => c[0])).toEqual(["/project/11?tab=tasks", "/project/11?tab=tasks&workload=1", "/project/11"]);
-  });
-
-  it("renders nothing for an assignment with no groups, and a quiet message if the summary cannot load", async () => {
-    signInAs(50, "INSTRUCTOR");
-    serve({ "GET /api/assignments/3/task-summary": () => ({ status: 200, body: { assignmentId: 3, groups: [] } }) });
-    const first = wrap(<GroupTaskCards assignmentId={3} />);
-    await waitFor(() => expect(screen.queryByRole("heading", { name: "Task progress" })).not.toBeInTheDocument());
-    first.unmount();
-
-    serve({ "GET /api/assignments/3/task-summary": () => ({ status: 500, body: { error: "boom" } }) });
-    wrap(<GroupTaskCards assignmentId={3} />);
-    expect(await screen.findByText("Task progress could not be loaded.")).toBeInTheDocument();
   });
 });

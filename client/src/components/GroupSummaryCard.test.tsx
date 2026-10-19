@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { RouterProvider } from "../router";
 import { GroupSummaryCard } from "./GroupSummaryCard";
 import type { ProjectSummaryItem } from "@shared/types";
+import type { GroupTaskSummary } from "@shared/taskTypes";
 
 const item = (names: string[], over: Partial<ProjectSummaryItem> = {}): ProjectSummaryItem => ({
   projectId: 1, groupName: "Group A", assignmentLabel: "X", classId: 1, assignmentId: 1, sourceType: "COMBINED",
@@ -13,10 +14,10 @@ const item = (names: string[], over: Partial<ProjectSummaryItem> = {}): ProjectS
   ...over,
 } as ProjectSummaryItem);
 
-function renderCard(names: string[], over: Partial<ProjectSummaryItem> = {}) {
+function renderCard(names: string[], over: Partial<ProjectSummaryItem> = {}, tasks?: GroupTaskSummary) {
   return render(
     <RouterProvider>
-      <GroupSummaryCard item={item(names, over)} onAnalyze={() => {}} analyzing={false} onManage={() => {}} onTasks={() => {}} />
+      <GroupSummaryCard item={item(names, over)} onAnalyze={() => {}} analyzing={false} onManage={() => {}} onTasks={() => {}} tasks={tasks} />
     </RouterProvider>,
   );
 }
@@ -53,5 +54,30 @@ describe("GroupSummaryCard with no recorded activity", () => {
     expect(screen.queryByText("Not enough activity yet")).not.toBeInTheDocument();
     expect(screen.getByText("Moderate Risk")).toBeInTheDocument();
     expect(screen.getByText(/inactive/i)).toBeInTheDocument();
+  });
+});
+
+describe("GroupSummaryCard task line (R11, 19)", () => {
+  const t = (over: Partial<GroupTaskSummary>): GroupTaskSummary => ({ projectId: 1, groupName: "Group A", total: 8, done: 3, overdue: 2, milestones: [], ...over });
+
+  it("shows 'M of T done' and the overdue count with text, instead of a separate Task progress block", () => {
+    renderCard(["Ana Reyes", "Ben Cruz"], {}, t({}));
+    expect(screen.getByText(/3 of 8 done/)).toBeInTheDocument();
+    expect(screen.getByText("2 overdue")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Tasks done" })).toHaveAttribute("aria-valuenow", "38");
+  });
+
+  it("says 'No tasks' when the group has none, and shows nothing when counts are not loaded", () => {
+    const first = renderCard(["Ana Reyes", "Ben Cruz"], {}, t({ total: 0, done: 0, overdue: 0 }));
+    expect(screen.getByText(/No tasks/)).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    first.unmount();
+    renderCard(["Ana Reyes", "Ben Cruz"]);
+    expect(screen.queryByText(/Tasks:/)).not.toBeInTheDocument();
+  });
+
+  it("also shows it on a group that has not been analyzed yet", () => {
+    renderCard(["Ana Reyes", "Ben Cruz"], { isAnalyzed: false, teamHealth: null }, t({ overdue: 0 }));
+    expect(screen.getByText(/3 of 8 done/)).toBeInTheDocument();
   });
 });

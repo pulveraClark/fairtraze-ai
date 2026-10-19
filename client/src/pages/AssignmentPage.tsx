@@ -3,7 +3,7 @@ import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } f
 import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
-import { GroupTaskCards } from "../components/GroupTaskCards";
+import { useAssignmentTaskSummary } from "../hooks/useAssignmentTaskSummary";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
 import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
@@ -85,6 +85,7 @@ function fmtDeadline(iso: string | null): string {
 interface Props { classId: number; assignmentId: number }
 
 export function AssignmentPage({ classId, assignmentId }: Props) {
+  const taskSummary = useAssignmentTaskSummary(assignmentId);
   const { navigate } = useRouter();
   const { token, user } = useAuth();
   const isAdmin = user?.systemRole === "ADMIN";
@@ -514,6 +515,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 analyzing={analyzing.has(item.projectId)}
                 onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
                 onTasks={(id) => navigate(`/project/${id}?tab=tasks`)}
+                tasks={taskSummary.data?.groups.find((g) => g.projectId === item.projectId)}
                 selectable={!isAdmin}
                 selected={selectedIds.has(item.projectId)}
                 onToggleSelect={toggleSelect}
@@ -522,7 +524,6 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
           </div>
         )}
 
-        {!loading && !loadError && processed.length > 0 && <GroupTaskCards assignmentId={assignmentId} />}
       </main>
 
       <footer className="print:hidden border-t border-slate-200 bg-white">
