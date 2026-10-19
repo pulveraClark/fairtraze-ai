@@ -106,7 +106,7 @@ function JoinCodeBadge({ code }: { code: string }) {
 }
 
 // ── Project card — shows one assignment with create/join or group view ─────────
-function ProjectCard({
+export function ProjectCard({
   asgn,
   token,
   user,
@@ -282,32 +282,20 @@ function ProjectCard({
                 <p className="text-xs text-slate-400 italic">No analysis yet — awaiting instructor.</p>
               )}
 
-              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                {g.role === "LEADER" && (
-                  <button
-                    onClick={() => onManage(g.id)}
-                    className="relative inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
-                  >
-                    Manage group
-                    {g.pendingRequestCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-xs font-bold px-1 leading-none">
-                        {g.pendingRequestCount}
-                      </span>
-                    )}
-                  </button>
-                )}
+              <div className="flex items-center gap-3 pt-1 flex-wrap">
                 <button
                   onClick={() => onNavigate(g.id)}
                   className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
                 >
-                  View report →
+                  Open group →
                 </button>
-                {(asgn.sourceType === "EDITOR" || asgn.sourceType === "COMBINED") && (
+                {/* Shown only when the leader has something to act on; otherwise Manage Group lives on the group page. */}
+                {g.role === "LEADER" && g.pendingRequestCount > 0 && (
                   <button
-                    onClick={() => onNavigate(g.id, "document")}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
+                    onClick={() => onManage(g.id)}
+                    className="text-sm font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
                   >
-                    FairTraze Docs
+                    {g.pendingRequestCount} join request{g.pendingRequestCount === 1 ? "" : "s"} waiting
                   </button>
                 )}
               </div>
