@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import { authenticateToken } from "../src/middleware/auth.js";
 import { analysisLimiter, globalLimiter, globalLimiterKey, trustProxyHops } from "../src/middleware/security.js";
 import { createUser } from "./factories.js";
+import jwt from "jsonwebtoken";
 import { signToken } from "../src/lib/jwt.js";
 
 // The rate limiters in middleware/security.ts are module-level singletons —
@@ -169,6 +170,27 @@ describe("rate limiting", () => {
       expect(globalLimiterKey(withToken)).toBe("user:920001");
       expect(globalLimiterKey(badToken)).toBe("1.2.3.4");
       expect(globalLimiterKey(anonymous)).toBe("1.2.3.4");
+    });
+
+    it("never keys by a token that did not pass full verification (same check as authenticateToken)", () => {
+      const ip = "5.6.7.8";
+      const key = (token: string) => globalLimiterKey({ headers: { authorization: `Bearer ${token}` }, ip } as never);
+      const payload = { sub: 999001, email: "x@example.com", name: "X", role: "INSTRUCTOR" };
+
+      // Signed with a different secret: decodes fine, must not be trusted.
+      expect(key(jwt.sign(payload, "some-other-secret", { expiresIn: "15m" }))).toBe(ip);
+      // Expired.
+      expect(key(jwt.sign(payload, process.env.AUTH_SECRET as string, { expiresIn: -10 }))).toBe(ip);
+      // alg "none" (unsigned) with the claims in place.
+      const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
+      expect(key(`${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.`)).toBe(ip);
+      // Valid header and payload with the signature tampered.
+      const good = tokenFor(999001);
+      const [h, p, sig] = good.split(".");
+      expect(key(`${h}.${b64({ ...payload, sub: 1 })}.${sig}`)).toBe(ip);
+      // Control: the genuine token is keyed by user.
+      expect(key(good)).toBe("user:999001");
+      expect(p).toBeTruthy();
     });
 
     it("allows 1000 requests per user per window; another user on the same IP is not affected", async () => {
