@@ -266,7 +266,7 @@ export function LandingPage() {
   }, [authLoading, user, dashboardPath, navigate]);
 
   return (
-    <div className="ft-legacy-scale min-h-screen bg-white">
+    <div className="ft-legacy-scale min-h-screen bg-white overflow-x-clip">
 
       {/* ══════════════════════════════════════════════════════
           NAV — sticky, white, clean

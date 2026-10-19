@@ -27,6 +27,7 @@ const DisputesPage = lazy(() => import("./pages/DisputesPage").then((m) => ({ de
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage").then((m) => ({ default: m.PendingApprovalPage })));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
 const ConsentGatePage = lazy(() => import("./pages/ConsentGatePage").then((m) => ({ default: m.ConsentGatePage })));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 const JoinPage = lazy(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })));
 
 function RouteFallback() {
@@ -39,6 +40,7 @@ function RouteFallback() {
 
 function routeElement(pathname: string) {
   const page = pageElement(pathname);
+  if (page === null) return <NotFoundPage />;
   return usesShell(pathname) ? <AppShell>{page}</AppShell> : page;
 }
 
@@ -47,6 +49,7 @@ function usesShell(pathname: string): boolean {
   return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy"].includes(pathname);
 }
 
+/** The page for a known route, or null when nothing matches (rendered as "Page not found"). */
 function pageElement(pathname: string) {
   // Dynamic route: /project/:id (instructor only)
   const detailMatch = pathname.match(/^\/project\/(\d+)$/);
@@ -152,7 +155,9 @@ function pageElement(pathname: string) {
     </ProtectedRoute>
   );
 
-  return <LandingPage />;
+  if (pathname === "/") return <LandingPage />;
+
+  return null;
 }
 
 /** /disputes: instructors review student notes; students see their own notes and the replies. */

@@ -1,12 +1,52 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
+import { roleHome } from "../lib/roleHome";
+import { BUTTON_PRIMARY } from "../components/ui/styles";
 
 function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <span className="h-5 w-5 rounded-full border-2 border-indigo-400/40 border-t-indigo-500 animate-spin" />
     </div>
+  );
+}
+
+export function NoCodeView({ onSubmit, onHome, homeLabel }: { onSubmit: (code: string) => void; onHome: () => void; homeLabel: string }) {
+  const [value, setValue] = useState("");
+  const trimmed = value.trim();
+  return (
+    <main className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <h1 className="text-xl font-semibold text-slate-900">Join a class</h1>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            A join code is a short code your instructor gives you, on a slide or as a QR code, to put you in their class.
+            Paste it below. This link did not include one.
+          </p>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => { e.preventDefault(); if (trimmed) onSubmit(trimmed); }}
+          >
+            <div>
+              <label htmlFor="join-code" className="block text-xs font-semibold text-slate-700 mb-1.5">Join code</label>
+              <input
+                id="join-code"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                autoComplete="off"
+                autoCapitalize="characters"
+                className="w-full min-h-9 rounded-lg border border-slate-300 px-3 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              />
+            </div>
+            <button type="submit" disabled={!trimmed} className={`${BUTTON_PRIMARY} w-full`}>Join class</button>
+          </form>
+          <button type="button" onClick={onHome} className="text-sm text-indigo-700 hover:text-indigo-800 font-medium">
+            ← {homeLabel}
+          </button>
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -28,6 +68,8 @@ export function JoinPage() {
     if (authLoading) return;
 
     if (!user) {
+      // Without a code there is nothing to come back to; the page explains and asks for one.
+      if (!code) return;
       // Not logged in — save join URL so LoginPage/RegisterPage can return here after auth
       localStorage.setItem("ft_next", `/join?code=${encodeURIComponent(code)}`);
       setRedirecting(true);
@@ -66,23 +108,14 @@ export function JoinPage() {
   // Loading / about to redirect
   if (authLoading || redirecting) return <Spinner />;
 
-  // No code in URL
+  // No code in URL: explain what a join code is and let the person paste one.
   if (!code) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-sm w-full text-center space-y-3">
-            <p className="text-sm font-medium text-slate-700">No join code found in this link.</p>
-            <p className="text-xs text-slate-400">Ask your instructor for a valid QR code or class code.</p>
-            <button
-              onClick={() => navigate("/")}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-            >
-              ← Back to home
-            </button>
-          </div>
-        </div>
-      </div>
+      <NoCodeView
+        onSubmit={(c) => navigate(`/join?code=${encodeURIComponent(c)}`)}
+        onHome={() => navigate(user ? roleHome(user.systemRole).route : "/")}
+        homeLabel={user ? "Back to your dashboard" : "Back to home"}
+      />
     );
   }
 

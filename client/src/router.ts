@@ -4,16 +4,9 @@ import { createElement } from "react";
 
 export type AppRoute = "/" | "/overview" | "/privacy" | "/login" | "/register" | "/forgot-password" | "/reset-password" | "/verify-email" | "/dashboard" | "/student" | "/admin" | "/admin/audit" | "/settings" | "/alerts" | "/disputes" | "/join";
 
-const VALID_STATIC_ROUTES: AppRoute[] = ["/", "/overview", "/privacy", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/dashboard", "/student", "/admin", "/admin/audit", "/settings", "/alerts", "/disputes", "/join"];
-
-function resolvePathname(raw: string): string {
-  if ((VALID_STATIC_ROUTES as string[]).includes(raw)) return raw;
-  if (/^\/project\/\d+$/.test(raw)) return raw;
-  if (/^\/class\/\d+\/assignment\/\d+$/.test(raw)) return raw;
-  if (/^\/class\/\d+$/.test(raw)) return raw;
-  if (/^\/student\/class\/.+$/.test(raw)) return raw;
-  if (/^\/student\/group\/\d+$/.test(raw)) return raw;
-  return "/";
+/** Drops a trailing slash. Unknown paths pass through so App can render "Page not found". */
+export function resolvePathname(rawPath: string): string {
+  return rawPath.length > 1 ? rawPath.replace(/\/+$/, "") || "/" : rawPath;
 }
 
 interface RouterContextValue {
