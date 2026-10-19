@@ -21,6 +21,7 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
+import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
@@ -76,7 +77,7 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   "overload":        "Your contribution share significantly exceeds the equal share, suggesting an uneven workload distribution.",
 };
 
-type Tab = "report" | "document" | "tasks";
+type Tab = GroupTab;
 
 // ── Dispute types ─────────────────────────────────────────────────────────────
 interface DisputeRecord {
@@ -225,11 +226,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     [disputesQuery.data, projectId],
   );
 
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get("tab");
-    return tab === "document" || tab === "tasks" ? tab : "report";
-  });
+  // null = no ?tab= in the link: the first tab for this project (FairTraze Docs for students) is shown.
+  const [activeTab, setActiveTab] = useState<Tab | null>(() => tabFromSearch(window.location.search));
   // A task notification links here with ?tab=tasks&task=<id> to open that task's panel.
   const initialTaskId = useMemo(() => {
     const raw = new URLSearchParams(window.location.search).get("task");
@@ -241,7 +239,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   function selectTab(tab: Tab, taskId: number | null = null) {
     setActiveTab(tab);
     const url = new URL(window.location.href);
-    if (tab === "report") url.searchParams.delete("tab"); else url.searchParams.set("tab", tab);
+    url.searchParams.set("tab", tab);
     if (tab === "tasks" && taskId !== null) url.searchParams.set("task", String(taskId)); else url.searchParams.delete("task");
     window.history.replaceState(window.history.state, "", url);
   }
@@ -391,11 +389,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const bandCode = classSection.edpCode || classSection.subjectCode;
 
   const sourceType = assignment.sourceType;
-  const visibleTabs: Tab[] =
-    sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["document", "report", "tasks"]
-      : ["report", "tasks"]; // GITHUB (default)
-  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
+  const visibleTabs: Tab[] = groupTabs("student", sourceType);
+  const effectiveTab: Tab = resolveTab(activeTab, visibleTabs);
 
   const giniLabel    = report
     ? (report.gini < 0.2 ? "Healthy" : report.gini < 0.4 ? "Moderate Risk" : "High Risk")

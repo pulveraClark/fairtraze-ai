@@ -14,6 +14,7 @@ import { Narrative } from "../components/Narrative";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
+import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { TasksTab } from "../components/tasks/TasksTab";
 import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
@@ -32,7 +33,7 @@ const SOURCE_LABEL: Record<string, string> = {
   COMBINED: "Combined",
 };
 
-type Tab = "report" | "document" | "tasks";
+type Tab = GroupTab;
 
 interface Props {
   projectId: number;
@@ -63,10 +64,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [resolvedFlagOutcomes, setResolvedFlagOutcomes] = useState<Map<string, Map<string, "RESOLVED" | "DISMISSED">>>(new Map());
   // A "comment reply" notification links here with ?tab=document. effectiveTab falls back to
   // "report" when the Document tab isn't available for this project.
-  const [activeTab, setActiveTab]               = useState<Tab>(() => {
-    const tab = new URLSearchParams(window.location.search).get("tab");
-    return tab === "document" || tab === "tasks" ? tab : "report";
-  });
+  const [activeTab, setActiveTab]               = useState<Tab | null>(() => tabFromSearch(window.location.search));
   // ?tab=tasks&task=<id> opens a task's panel (read-only here: instructors and admins only view tasks).
   const initialTaskId = (() => {
     const n = Number(new URLSearchParams(window.location.search).get("task"));
@@ -75,7 +73,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   function selectTab(tab: Tab, taskId: number | null = null) {
     setActiveTab(tab);
     const url = new URL(window.location.href);
-    if (tab === "report") url.searchParams.delete("tab"); else url.searchParams.set("tab", tab);
+    url.searchParams.set("tab", tab);
     if (tab === "tasks" && taskId !== null) url.searchParams.set("task", String(taskId)); else url.searchParams.delete("task");
     window.history.replaceState(window.history.state, "", url);
   }
@@ -248,11 +246,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   const showGitHub = sourceType !== "EDITOR";   // GITHUB, COMBINED, or legacy (null) → show GitHub (scoring settings button)
   const showCombined = sourceType === "COMBINED";
   const flagSource: FlagSource = showCombined ? "combined" : sourceType === "EDITOR" ? "document" : "github";
-  const visibleTabs: Tab[] =
-    sourceType === "EDITOR" || sourceType === "COMBINED"
-      ? ["document", "report", "tasks"]
-      : ["report", "tasks"]; // GITHUB or legacy
-  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
+  const visibleTabs: Tab[] = groupTabs("instructor", sourceType);
+  const effectiveTab: Tab = resolveTab(activeTab, visibleTabs);
 
   // ── Breadcrumb derivation ──────────────────────────────────────────────────
   const assignmentLabel = projectMeta?.assignmentLabel ?? "";

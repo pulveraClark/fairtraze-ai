@@ -44,6 +44,8 @@ export function groupFixture(over: Record<string, unknown> = {}) {
   };
 }
 
+const REPORT = "/student/group/1?tab=report";
+
 function renderPage() {
   const qc = new QueryClient();
   return render(
@@ -66,6 +68,7 @@ describe("StudentGroupPage", () => {
   });
 
   it("leader's role helper sentence lives in a (?) tooltip, not on the page (R3)", () => {
+    window.history.pushState({}, "", REPORT);
     state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null } });
     renderPage();
     expect(screen.queryByText(/Assign roles for all members/)).toBeNull();
@@ -74,6 +77,7 @@ describe("StudentGroupPage", () => {
   });
 
   it("has no hero card; a member sees one compact 'Your share' tile (R4)", () => {
+    window.history.pushState({}, "", REPORT);
     renderPage();
     expect(screen.queryByText("Your contribution share")).toBeNull();
     expect(screen.getAllByText("Your share")).toHaveLength(1);
@@ -82,6 +86,7 @@ describe("StudentGroupPage", () => {
   });
 
   it("a leader gets no tile and no hero card; their own row is marked You (R4)", () => {
+    window.history.pushState({}, "", REPORT);
     state.data = groupFixture({
       membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null },
       report: {
@@ -112,5 +117,32 @@ describe("StudentGroupPage", () => {
   it("shows no Brief link when the assignment has no brief (12)", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: "Brief" })).toBeNull();
+  });
+
+  it("tabs read FairTraze Docs, Tasks, Report and open on Docs (17)", () => {
+    renderPage();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["FairTraze Docs", "Tasks", "Report"]);
+    expect(screen.getByRole("tab", { name: "FairTraze Docs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("docs-editor")).toBeTruthy();
+  });
+
+  it("?tab= links still land on the named tab (17)", () => {
+    window.history.pushState({}, "", "/student/group/1?tab=tasks");
+    renderPage();
+    expect(screen.getByRole("tab", { name: "Tasks" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("tasks-board")).toBeTruthy();
+  });
+
+  it("choosing the Report tab puts ?tab=report in the address so a reload stays there (17)", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("tab", { name: "Report" }));
+    expect(window.location.search).toContain("tab=report");
+    expect(screen.getByRole("tab", { name: "Report" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("a GitHub-only project has Tasks then Report (17)", () => {
+    state.data = groupFixture({ assignment: { id: 9, title: "P", deadline: null, sourceType: "GITHUB", description: null, attachments: [] } });
+    renderPage();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Tasks", "Report"]);
   });
 });
