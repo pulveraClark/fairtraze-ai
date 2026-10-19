@@ -39,3 +39,15 @@ export function classifyAddedLines(
 
   return { code, comment, blank };
 }
+
+/**
+ * How much one added line is worth by its type. Used by the real GitHub pipeline
+ * (server/src/lib/github.ts) and by the scoring fallback, so the numbers live in one place.
+ */
+export const LINE_TYPE_WEIGHTS: Record<LineClass, number> = { code: 1, comment: 0.25, blank: 0 };
+
+/** Added lines of one file as weighted line-equivalents: code 1.0, comment 0.25, blank 0. */
+export function weightedAddedLines(filename: string, addedLines: string[]): number {
+  const c = classifyAddedLines(filename, addedLines);
+  return c.code * LINE_TYPE_WEIGHTS.code + c.comment * LINE_TYPE_WEIGHTS.comment + c.blank * LINE_TYPE_WEIGHTS.blank;
+}

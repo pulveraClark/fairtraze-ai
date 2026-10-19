@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./prisma.js";
-import { classifyAddedLines } from "@shared/lineClassifier.js";
+import { classifyAddedLines, LINE_TYPE_WEIGHTS } from "@shared/lineClassifier.js";
 import { getFileWeight, categorizeFile } from "@shared/fileWeights.js";
 import { classifyCommit, COMMIT_IMPACT } from "@shared/commitClassifier.js";
 
@@ -275,21 +275,27 @@ export async function fetchCommitDiffs(
       totalAdditionsForChurn += addedLines.length;
       fileAddedLines.set(filename, Math.max(0, priorAdded - selfDeleted) + addedLines.length);
 
-      // Weighted additions (file-type weight applied per line, multiplied by impact later)
-      commitWeightedRaw += addedLines.length * weight;
+      // Classify added lines once: feeds both the weighted signal and the display counts
+      const counts = addedLines.length > 0
+        ? classifyAddedLines(filename, addedLines)
+        : { code: 0, comment: 0, blank: 0 };
+
+      // Weighted additions: line type (code 1.0, comment 0.25, blank 0) x file-type weight,
+      // multiplied by commit impact later
+      commitWeightedRaw += (
+        counts.code    * LINE_TYPE_WEIGHTS.code +
+        counts.comment * LINE_TYPE_WEIGHTS.comment +
+        counts.blank   * LINE_TYPE_WEIGHTS.blank
+      ) * weight;
 
       // File-type breakdown (generated files contribute 0 weight and are excluded)
       if (category !== "generated" && category in fileTypeBreakdown) {
         (fileTypeBreakdown as Record<string, number>)[category] += addedLines.length;
       }
 
-      // Classify added lines for the meaningful-contribution signal
-      if (addedLines.length > 0) {
-        const counts = classifyAddedLines(filename, addedLines);
-        codeLinesAdded    += counts.code;
-        commentLinesAdded += counts.comment;
-        blankLinesAdded   += counts.blank;
-      }
+      codeLinesAdded    += counts.code;
+      commentLinesAdded += counts.comment;
+      blankLinesAdded   += counts.blank;
     }
 
     // Classify commit and apply impact multiplier to this commit's weighted additions

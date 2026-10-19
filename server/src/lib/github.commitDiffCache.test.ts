@@ -202,6 +202,25 @@ describe("fetchRepoStats merge-commit exclusion", () => {
     expect(sum(member.commitImpactBreakdown)).toBe(member.commits);
   });
 
+  it("weights lines by type: comments count 0.25 and blank lines 0 in weightedAdditions, display counts unchanged", async () => {
+    const patch = "@@ -0,0 +1,6 @@
++const a = 1;
++const b = 2;
++// note
++// note 2
++
++";
+    const { member } = await run(
+      [{ sha: "c1", parents: one, date: "2026-01-01T00:00:00Z" }],
+      { c1: [{ filename: "a.ts", status: "modified", additions: 6, deletions: 0, patch }] },
+    );
+    expect(member.codeLinesAdded).toBe(2);
+    expect(member.commentLinesAdded).toBe(2);
+    expect(member.blankLinesAdded).toBe(2);
+    // (2 code + 2 comment * 0.25 + 2 blank * 0) x source weight 1.0 x functional 1.0
+    expect(member.weightedAdditions).toBe(2.5);
+  });
+
   it("keeps a single-parent (squash) merge", async () => {
     const { member, diffCalls } = await run(
       [{ sha: "sq", parents: one, date: "2026-01-02T00:00:00Z" }, { sha: "n1", parents: one, date: "2026-01-01T00:00:00Z" }],
