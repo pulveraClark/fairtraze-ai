@@ -9,3 +9,4 @@ export { EmptyState } from "./EmptyState";
 export { Skeleton } from "./Skeleton";
 export * from "./styles";
 export { OverflowMenu, type OverflowMenuItem } from "./OverflowMenu";
+export { ConfirmDialog } from "./ConfirmDialog";

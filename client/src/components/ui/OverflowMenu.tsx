@@ -17,11 +17,13 @@ interface Props {
   items: OverflowMenuItem[];
   /** Which edge of the button the menu lines up with. */
   align?: "left" | "right";
+  /** "onColor" is for a button sitting on a colored band (white icon, no border). */
+  variant?: "default" | "onColor";
   className?: string;
 }
 
 /** A "…" button that opens a small action menu. Esc and outside click close it; arrows move between items. */
-export function OverflowMenu({ label, items, align = "right", className = "" }: Props) {
+export function OverflowMenu({ label, items, align = "right", variant = "default", className = "" }: Props) {
   const { open, setOpen, ref, triggerRef } = usePopover();
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +38,14 @@ export function OverflowMenu({ label, items, align = "right", className = "" }: 
   }
 
   return (
-    <div className={`relative inline-flex ${className}`} ref={ref}>
+    // Inside a clickable card, neither a click nor Enter/Space on the menu may also open the card.
+    // Escape is left alone so the popover's own document listener still closes the menu.
+    <div
+      className={`relative inline-flex ${className}`}
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
+    >
       <button
         type="button"
         ref={triggerRef}
@@ -44,7 +53,11 @@ export function OverflowMenu({ label, items, align = "right", className = "" }: 
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className={`inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 ${FOCUS_LIGHT}`}
+        className={`inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg ${FOCUS_LIGHT} ${
+          variant === "onColor"
+            ? "text-white hover:bg-white/20"
+            : "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+        }`}
       >
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />

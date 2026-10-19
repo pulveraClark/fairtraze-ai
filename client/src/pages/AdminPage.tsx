@@ -5,6 +5,8 @@ import { useRouter } from "../router";
 import { PaginationBar } from "../components/PaginationBar";
 import { InstructorApprovals } from "../components/InstructorApprovals";
 import { DeletionRequests } from "../components/DeletionRequests";
+import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import {
   useAdminUsersQuery,
   useAdminOverviewQuery,
@@ -174,10 +176,11 @@ export function AdminPage() {
     }
   }
 
+  const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   async function deleteUser(u: UserRecord) {
-    if (!window.confirm(
-      `Delete ${u.name} (${u.email})?\n\nTheir profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates' reports are unchanged. A group leader or an instructor who owns classes must be handed over first. This cannot be undone.`
-    )) return;
+    setDeleting(true);
     try {
       const res  = await fetch(`/api/admin/users/${u.id}`, {
         method:  "DELETE",
@@ -189,6 +192,9 @@ export function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch {
       showToast("error", "Network error.");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -322,6 +328,24 @@ export function AdminPage() {
               }
               {toast.msg}
             </div>
+          )}
+
+          {deleteTarget && (
+            <ConfirmDialog
+              title={`Delete ${deleteTarget.name}?`}
+              confirmLabel="Delete user"
+              busyLabel="Deleting…"
+              busy={deleting}
+              onConfirm={() => void deleteUser(deleteTarget)}
+              onCancel={() => setDeleteTarget(null)}
+            >
+              <p>{deleteTarget.email}</p>
+              <p className="mt-2">
+                Their profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates'
+                reports are unchanged. A group leader or an instructor who owns classes must be handed over first.
+                This cannot be undone.
+              </p>
+            </ConfirmDialog>
           )}
 
           {/* Loading */}
@@ -460,16 +484,10 @@ export function AdminPage() {
                                 </button>
                               )}
 
-                              {/* Delete */}
-                              <button
-                                onClick={() => { void deleteUser(u); }}
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                title="Delete user permanently"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                              <OverflowMenu
+                                label={`More actions for ${u.name}`}
+                                items={[{ label: "Delete user…", tone: "danger", onSelect: () => setDeleteTarget(u) }]}
+                              />
                             </div>
                           )}
                         </td>
