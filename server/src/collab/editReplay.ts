@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import type { EditEvent, EditType as PrismaEditType, EditSource } from "@prisma/client";
 import { EDIT_TYPE_WEIGHT } from "@shared/editClassifier.js";
 import type { EditType } from "@shared/editClassifier.js";
+import { analysisDayOf } from "@shared/analysisDay.js";
 
 // Maps the Prisma (uppercase) enum back to the shared (lowercase) key used by EDIT_TYPE_WEIGHT.
 const PRISMA_TO_EDIT_TYPE: Record<PrismaEditType, EditType> = {
@@ -21,6 +22,7 @@ export interface SlotInfo {
   userId: number;
   weight: number; // EDIT_TYPE_WEIGHT of the INSERT event that placed this character; 1.0 if unclassified
   source: EditSource; // "LIVE" | "IMPORT" — which pipeline produced the INSERT that placed this character
+  day: string; // Asia/Manila calendar day (YYYY-MM-DD) of the INSERT that placed this character
 }
 
 export interface ReplayResult {
@@ -58,7 +60,7 @@ export function replayEditEvents(events: EditEvent[]): ReplayResult {
     if (event.eventType === "INSERT") {
       const editType = event.editType ? PRISMA_TO_EDIT_TYPE[event.editType] : null;
       const weight = editType ? EDIT_TYPE_WEIGHT[editType] : 1.0; // neutral weight for unclassified/legacy edits
-      const inserted: SlotInfo[] = new Array(event.length).fill({ userId: event.userId, weight, source: event.source });
+      const inserted: SlotInfo[] = new Array(event.length).fill({ userId: event.userId, weight, source: event.source, day: analysisDayOf(event.timestamp) ?? "" });
       slots.splice(event.position, 0, ...inserted);
       bump(totalInserted, event.userId, event.length);
       if (editType) {

@@ -144,6 +144,10 @@ export interface RawDocumentMemberStats {
   selfDeletedChars: number;    // of totalDeletedChars, how many they originally inserted themselves
   sessionCount: number;
   sessionDates: string[];      // ISO EditSession.startedAt values — analogous to commitDates
+  // Characters written on each Asia/Manila day (key YYYY-MM-DD) that are still in the final
+  // document. Drives the "active day" count (MIN_ACTIVE_DAY_RETAINED_CHARS). Optional: when absent
+  // (older fixtures/callers) active days fall back to the distinct days of sessionDates.
+  retainedCharsByDay?: Record<string, number>;
   // Edit-type significance (Step 4b; optional so existing test fixtures without them still compile)
   weightedRetainedChars?: number;
   editTypeBreakdown?: { substantive: number; revision: number; formatting: number; trivial: number };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDocumentTeamReport, TYPICAL_SESSION_CHARS_DEFAULT, DOCUMENT_DEFAULT_WEIGHTS } from "./documentScoring";
+import { computeDocumentTeamReport, TYPICAL_SESSION_CHARS_DEFAULT, DOCUMENT_DEFAULT_WEIGHTS, MIN_ACTIVE_DAY_RETAINED_CHARS } from "./documentScoring";
 import type { RawDocumentMemberStats } from "./types";
 
 const ZERO_BREAKDOWN = { substantive: 0, revision: 0, formatting: 0, trivial: 0 };
@@ -313,5 +313,34 @@ describe("computeDocumentTeamReport", () => {
       expect(b.contributionShare).toBe(a.contributionShare);
       expect(b.flags).toEqual(a.flags);
     });
+  });
+});
+
+describe("active day needs real writing (MIN_ACTIVE_DAY_RETAINED_CHARS)", () => {
+  const mk = (byDay: Record<string, number> | undefined): RawDocumentMemberStats => ({
+    studentName: "A", userId: 1, githubUsername: "a", retainedChars: 100, totalInsertedChars: 100,
+    totalDeletedChars: 0, selfDeletedChars: 0, sessionCount: 3,
+    sessionDates: ["2024-01-01T02:00:00Z", "2024-01-02T02:00:00Z", "2024-01-03T02:00:00Z"],
+    retainedCharsByDay: byDay,
+  });
+  const days = (m: RawDocumentMemberStats) => computeDocumentTeamReport([m]).members[0].activeDays;
+
+  it("the threshold is a single named constant of 30", () => {
+    expect(MIN_ACTIVE_DAY_RETAINED_CHARS).toBe(30);
+  });
+
+  it("a 1-character day does not count; 29 does not; 30 and more do", () => {
+    expect(days(mk({ "2024-01-01": 1 }))).toBe(0);
+    expect(days(mk({ "2024-01-01": 29 }))).toBe(0);
+    expect(days(mk({ "2024-01-01": 30 }))).toBe(1);
+    expect(days(mk({ "2024-01-01": 1, "2024-01-02": 30, "2024-01-03": 500 }))).toBe(2);
+  });
+
+  it("a session alone does not make an active day when per-day retention is supplied", () => {
+    expect(days(mk({}))).toBe(0);
+  });
+
+  it("falls back to distinct session days when per-day retention is absent", () => {
+    expect(days(mk(undefined))).toBe(3);
   });
 });

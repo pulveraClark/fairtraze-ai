@@ -9,6 +9,19 @@ export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
   retainedText: 0.6, sessions: 0.2, activeDays: 0.2,
 };
 
+// A day counts as an "active day" only if the member wrote at least this many characters that day
+// that are still in the final document (retained). One place for the threshold.
+export const MIN_ACTIVE_DAY_RETAINED_CHARS = 30;
+
+/**
+ * Active days for one member: Asia/Manila days with >= MIN_ACTIVE_DAY_RETAINED_CHARS retained
+ * characters. Falls back to the distinct session-start days when per-day retention is not supplied.
+ */
+export function countActiveDays(m: Pick<RawDocumentMemberStats, "sessionDates" | "retainedCharsByDay">): number {
+  if (!m.retainedCharsByDay) return countDistinctAnalysisDays(m.sessionDates);
+  return Object.values(m.retainedCharsByDay).filter((n) => n >= MIN_ACTIVE_DAY_RETAINED_CHARS).length;
+}
+
 // Reference volume for converting imported character count into proportional "phantom" session
 // credit (step 3, docx-import hybrid policy) — see computeDocumentTeamReport's logSessions.
 export const TYPICAL_SESSION_CHARS_DEFAULT = 600;
@@ -46,7 +59,7 @@ export function computeDocumentTeamReport(
     // inside the same log-scale diminishing-returns treatment, rather than stacking a full
     // session's credit on top for the one bookkeeping EditSession row an import produces.
     const logSessions = Math.log(liveSessionCount + importedWeightedRetainedChars / typicalSessionChars + 1);
-    const activeDays = countDistinctAnalysisDays(m.sessionDates);
+    const activeDays = countActiveDays(m);
     const churn = m.totalInsertedChars + m.totalDeletedChars;
     return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars, insertedImageCount };
   });

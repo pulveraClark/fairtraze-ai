@@ -28,6 +28,7 @@ export async function computeDocumentRawStats(
       selfDeletedChars: 0,
       sessionCount: 0,
       sessionDates: [],
+      retainedCharsByDay: {},
       weightedRetainedChars: 0,
       importedRetainedChars: 0,
       importedWeightedRetainedChars: 0,
@@ -43,7 +44,13 @@ export async function computeDocumentRawStats(
   const weightedRetainedChars = new Map<number, number>();
   const importedRetainedChars = new Map<number, number>();
   const importedWeightedRetainedChars = new Map<number, number>();
+  const retainedByDay = new Map<number, Record<string, number>>();
   for (const slot of slots) {
+    if (slot.day) {
+      const days = retainedByDay.get(slot.userId) ?? {};
+      days[slot.day] = (days[slot.day] ?? 0) + 1;
+      retainedByDay.set(slot.userId, days);
+    }
     retainedChars.set(slot.userId, (retainedChars.get(slot.userId) ?? 0) + 1);
     weightedRetainedChars.set(slot.userId, (weightedRetainedChars.get(slot.userId) ?? 0) + slot.weight);
     if (slot.source === "IMPORT") {
@@ -81,6 +88,7 @@ export async function computeDocumentRawStats(
       sessionCount: sess.count,
       liveSessionCount: sess.liveCount,
       sessionDates: sess.dates,
+      retainedCharsByDay: retainedByDay.get(r.userId) ?? {},
     };
   });
 }
