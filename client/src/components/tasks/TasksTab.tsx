@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TASK_STATUSES, type BoardTask, type BulkAction, type BulkSkipped } from "@shared/taskTypes";
+import { TASK_STATUSES, type BoardTask, type BulkAction, type BulkSkipped, type TaskStatus } from "@shared/taskTypes";
 import { useTaskBoardQuery } from "../../hooks/useGroupQueries";
 import { useTaskActions } from "../../hooks/useTaskActions";
 import { useTaskShortcuts } from "../../hooks/useTaskShortcuts";
@@ -145,6 +145,13 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
     else void runBulk(action, selectedIds);
   }
 
+  /** Quick add: title only. The server forces members to an unassigned To do task. */
+  async function quickAdd(title: string, status: TaskStatus = "TODO"): Promise<string> {
+    const created = await actions.createTask({ title }, status);
+    const hidden = filterTasks([created], filters, { userId: user?.id ?? 0, today }).length === 0;
+    return hidden ? `Added ${created.key} (hidden by your filters).` : `Added ${created.key}.`;
+  }
+
   /** Drag on the calendar: change only the due date, offer Undo. The server checks permission. */
   async function reschedule(task: BoardTask, date: string) {
     const before = task.dueDate;
@@ -225,6 +232,7 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
           onOpen={open}
           onMove={onMove}
           onDenied={actions.showError}
+          onQuickAdd={board.viewer.canCreate ? quickAdd : undefined}
         />
       )}
 
@@ -237,6 +245,7 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
             sort={sort}
             onSortChange={setSort}
             onOpen={open}
+            onQuickAdd={board.viewer.canCreate ? (title) => quickAdd(title) : undefined}
             selection={canBulk ? {
               ids: new Set(selectedIds),
               onToggle: toggleSelected,

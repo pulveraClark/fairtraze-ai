@@ -20,6 +20,8 @@ interface Props {
   onOpen: (taskId: number) => void;
   onMove: (task: BoardTask, to: Placement, previous: Placement | null) => void;
   onDenied: (message: string) => void;
+  /** Quick add. Leaders may add to any column; everyone else only to To do (the server decides too). */
+  onQuickAdd?: (title: string, status: TaskStatus) => Promise<string | void>;
 }
 
 const INSTRUCTIONS =
@@ -36,7 +38,7 @@ function statusOfContainer(id: UniqueIdentifier): TaskStatus | null {
  * and saved through `onMove`. A card can only be dropped where the server would allow it
  * (`task.permissions.allowedStatuses`); anything else snaps back with an explanation.
  */
-export function Board({ board, tasks, today, onOpen, onMove, onDenied }: Props) {
+export function Board({ board, tasks, today, onOpen, onMove, onDenied, onQuickAdd }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
@@ -204,6 +206,7 @@ export function Board({ board, tasks, today, onOpen, onMove, onDenied }: Props) 
             dropState={dropStateFor(status)}
             showDropHint={originStatus !== status}
             unfilteredCount={unfilteredCounts[status]}
+            onQuickAdd={onQuickAdd && (board.viewer.isLeader || status === "TODO") ? (title) => onQuickAdd(title, status) : undefined}
           />
         ))}
       </div>

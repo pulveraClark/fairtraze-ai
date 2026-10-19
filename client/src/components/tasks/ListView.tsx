@@ -5,6 +5,7 @@ import { formatDue, isOverdue } from "../../lib/tasks/dates";
 import { LABEL_CHIP_CLASSES } from "../../lib/tasks/labels";
 import { sortTasks, type Sort, type SortKey } from "../../lib/tasks/sort";
 import { FOCUS_LIGHT } from "../ui/styles";
+import { QuickAddTask } from "./QuickAddTask";
 import { AlertTriangleIcon, CalendarIcon, ChevronDownIcon, ChevronUpIcon, FlagIcon, PriorityIcon } from "./icons";
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   onSortChange: (sort: Sort) => void;
   onOpen: (taskId: number) => void;
   /** Present only for the leader: the ticked task ids and how to change them. */
+  /** Quick add above the table (creates in To do). */
+  onQuickAdd?: (title: string) => Promise<string | void>;
   selection?: { ids: Set<number>; onToggle: (id: number) => void; onSetAll: (ids: number[] | null) => void };
 }
 
@@ -31,7 +34,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 ];
 
 /** Sortable table of the tasks. It scrolls inside its own box, so the page never scrolls sideways. */
-export function ListView({ board, tasks, today, sort, onSortChange, onOpen, selection }: Props) {
+export function ListView({ board, tasks, today, sort, onSortChange, onOpen, selection, onQuickAdd }: Props) {
   const rows = useMemo(() => sortTasks(tasks, sort, board), [tasks, sort, board]);
   const allRef = useRef<HTMLInputElement>(null);
   const ticked = selection ? rows.filter((t) => selection.ids.has(t.id)).length : 0;
@@ -44,11 +47,24 @@ export function ListView({ board, tasks, today, sort, onSortChange, onOpen, sele
     onSortChange(sort.key === key ? { key, dir: sort.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
   }
 
+  const quickAdd = onQuickAdd && (
+    <div className="max-w-sm">
+      <QuickAddTask label="To do" onAdd={onQuickAdd} />
+    </div>
+  );
+
   if (rows.length === 0) {
-    return <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-800">No tasks match the current filters.</p>;
+    return (
+      <div className="space-y-3">
+        {quickAdd}
+        <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-800">No tasks match the current filters.</p>
+      </div>
+    );
   }
 
   return (
+    <div className="space-y-3">
+    {quickAdd}
     <div role="region" aria-label="Task list" tabIndex={0} className={`overflow-x-auto rounded-xl border border-slate-200 bg-white ${FOCUS_LIGHT}`}>
       <table className="w-full min-w-[56rem] border-collapse text-left text-sm">
         <thead className="bg-slate-50">
@@ -90,6 +106,7 @@ export function ListView({ board, tasks, today, sort, onSortChange, onOpen, sele
           ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }

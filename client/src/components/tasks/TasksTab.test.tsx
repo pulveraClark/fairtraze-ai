@@ -144,13 +144,13 @@ describe("permissions mirrored in the UI", () => {
     mkTask({ id: 3, title: "Unassigned", permissions: NO_PERMS }),
   ];
 
-  it("leader: a grip on every card, no per-column Add task button", async () => {
+  it("leader: a grip on every card, an Add task button in every column", async () => {
     signInAs(1);
     installFakeServer(mkBoard({}, tasks().map((t) => ({ ...t, permissions: LEADER_PERMS }))));
     renderTab();
     await screen.findByText("Mine");
     expect(screen.getAllByRole("button", { name: /^Move FT-/ })).toHaveLength(3);
-    expect(screen.queryByRole("button", { name: /^Add task/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Add task/ })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "New task" })).toBeInTheDocument();
   });
 
@@ -163,8 +163,9 @@ describe("permissions mirrored in the UI", () => {
     expect(within(screen.getByTestId("task-card-1")).getByRole("button", { name: /^Move FT-1/ })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Only Ana Reyes or the group leader can move this task." })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Only the group leader can move this task." })).toBeInTheDocument();
-    // A member creates through "New task" (always into To do); columns have no Add task button.
-    expect(screen.queryByRole("button", { name: /^Add task/ })).not.toBeInTheDocument();
+    // A member can quick-add only into To do.
+    expect(screen.getAllByRole("button", { name: /^Add task/ })).toHaveLength(1);
+    expect(within(column("TODO")).getByRole("button", { name: /^Add task/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New task" })).toBeInTheDocument();
   });
 
@@ -293,12 +294,44 @@ describe("milestone strip (15)", () => {
 });
 
 describe("creating tasks", () => {
-  it("columns have no Add task button; an empty column says 'No tasks here yet.'", async () => {
+  it("quick add: Enter creates in the column and the field stays open for the next task", async () => {
+    signInAs(1);
+    const server = installFakeServer(mkBoard({}, []));
+    renderTab();
+    const user = userEvent.setup();
+    await screen.findByRole("region", { name: "Task board" });
+    await user.click(within(column("TODO")).getByRole("button", { name: /^Add task/ }));
+    const field = within(column("TODO")).getByLabelText("Add a task to To do");
+    expect(field).toHaveFocus();
+    await user.type(field, "First{Enter}");
+    expect(await within(column("TODO")).findByText("First")).toBeInTheDocument();
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue("");
+    await user.type(field, "Second{Enter}");
+    expect(await within(column("TODO")).findByText("Second")).toBeInTheDocument();
+    expect(server.calls.filter((c) => c.method === "POST" && c.url === "/api/groups/7/tasks").map((c) => c.body?.title)).toEqual(["First", "Second"]);
+    await user.keyboard("{Escape}");
+    expect(within(column("TODO")).queryByLabelText("Add a task to To do")).not.toBeInTheDocument();
+  });
+
+  it("List view has the same Add task button", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Mine" })]));
+    window.localStorage.setItem("ft.tasks.view.1", "list");
+    renderTab();
+    const user = userEvent.setup();
+    await screen.findByRole("region", { name: "Task list" });
+    await user.click(screen.getByRole("button", { name: /^Add task/ }));
+    await user.type(screen.getByLabelText("Add a task to To do"), "From the list{Enter}");
+    expect(await screen.findByText("From the list")).toBeInTheDocument();
+    window.localStorage.removeItem("ft.tasks.view.1");
+  });
+
+  it("an empty column says 'No tasks here yet.'", async () => {
     signInAs(1);
     installFakeServer(mkBoard({}, []));
     renderTab();
     await screen.findByRole("region", { name: "Task board" });
-    expect(screen.queryByRole("button", { name: /^Add task/ })).not.toBeInTheDocument();
     expect(within(column("TODO")).getByText("No tasks here yet.")).toBeInTheDocument();
     expect(screen.getAllByText("No tasks here yet.")).toHaveLength(4);
   });
