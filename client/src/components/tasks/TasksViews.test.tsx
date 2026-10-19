@@ -520,9 +520,8 @@ describe("keyboard shortcuts", () => {
   it("the shortcuts dialog keeps Tab inside and returns focus on close", async () => {
     const user = await setup();
     await user.click(screen.getByRole("button", { name: "About keyboard shortcuts" }));
-    const hint = screen.getByRole("button", { name: "Show shortcuts" });
-    hint.focus();
-    await user.click(hint);
+    const hint = screen.getByRole("button", { name: "About keyboard shortcuts" });
+    await user.click(screen.getByRole("button", { name: "Show shortcuts" }));
     const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
     await user.tab();
     await user.tab();

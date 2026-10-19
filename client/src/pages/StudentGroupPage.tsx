@@ -620,9 +620,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               <div className="mb-3">
                 <div className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
                   {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
-                  {membership.role === "LEADER" && (
-                    <InfoTip label="About roles" helpHref={helpLink("roles")}>{TIPS.rolesLeader}</InfoTip>
-                  )}
+                  <InfoTip label="About roles" helpHref={helpLink("roles")}>
+                    {membership.role === "LEADER" ? TIPS.rolesLeader : TIPS.roles}
+                  </InfoTip>
                 </div>
                 <div className="flex items-center flex-wrap gap-2">
                   {myRoles.length === 0 ? (
@@ -722,9 +722,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         ) : "Submit suggestion →"}
                       </button>
 
-                      <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                        Roles are context only — they never change contribution scores.
-                      </p>
                     </>
                   )}
                 </div>

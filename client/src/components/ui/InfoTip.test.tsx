@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { InfoTip } from "./InfoTip";
@@ -35,5 +35,19 @@ describe("InfoTip", () => {
     await user.tab();
     expect(link).toHaveFocus();
     expect(screen.getByRole("group", { name: "About shares" })).toBeInTheDocument();
+  });
+
+  it("Esc closes only the tip, so a dialog around it stays open", async () => {
+    const user = userEvent.setup();
+    const dialogEsc = vi.fn();
+    document.addEventListener("keydown", dialogEsc);
+    render(<InfoTip label="About roles">Short help.</InfoTip>);
+    await user.click(screen.getByRole("button", { name: "About roles" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(dialogEsc).not.toHaveBeenCalled(); // the tip took this Esc
+    await user.keyboard("{Escape}");
+    expect(dialogEsc).toHaveBeenCalledTimes(1); // with no tip open, Esc reaches the dialog as before
+    document.removeEventListener("keydown", dialogEsc);
   });
 });

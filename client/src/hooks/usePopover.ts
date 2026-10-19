@@ -16,15 +16,17 @@ export function usePopover() {
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        // Close only this popover: a dialog around it must not also see this Esc (capture phase + stop).
+        e.stopPropagation();
         setOpen(false);
         triggerRef.current?.focus();
       }
     }
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
 

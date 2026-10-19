@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { usePopover } from "../../hooks/usePopover";
 import { FOCUS_LIGHT } from "./styles";
@@ -15,6 +15,19 @@ interface Props {
 export function InfoTip({ label, children, helpHref }: Props) {
   const { open, setOpen, ref, triggerRef } = usePopover();
   const id = useId();
+  const popRef = useRef<HTMLDivElement>(null);
+  // Keep the popover inside the screen: it opens under the button, so near the right edge of a narrow
+  // screen it is slid left (or right, near the left edge) by exactly the overflow.
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    if (!open || !popRef.current) { setShift(0); return; }
+    const r = popRef.current.getBoundingClientRect();
+    const margin = 24; // also clears the padding of a dialog that clips its content
+    const left = r.left - shift;
+    const right = r.right - shift;
+    const vw = document.documentElement.clientWidth;
+    setShift(right > vw - margin ? vw - margin - right : left < margin ? margin - left : 0);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <span ref={ref} className="relative inline-flex">
       <button
@@ -34,9 +47,12 @@ export function InfoTip({ label, children, helpHref }: Props) {
       {open && (
         <div
           id={id}
+          ref={popRef}
+          onClick={(e) => { if ((e.target as HTMLElement).closest("button")) { setOpen(false); triggerRef.current?.focus(); } }} // an action inside the tip closes it
+          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
           role={helpHref ? "group" : "tooltip"}
           aria-label={helpHref ? label : undefined}
-          className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal leading-normal text-slate-800 shadow-lg"
+          className="absolute left-0 top-full z-30 mt-1 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal leading-normal text-slate-800 shadow-lg"
         >
           {children}
           {helpHref && (
@@ -45,7 +61,7 @@ export function InfoTip({ label, children, helpHref }: Props) {
               href={helpHref}
               target="_blank"
               rel="noopener noreferrer"
-              className={`mt-2 inline-block rounded font-semibold text-indigo-700 underline ${FOCUS_LIGHT}`}
+              className={`mt-2 block w-fit rounded font-semibold text-indigo-700 underline ${FOCUS_LIGHT}`}
             >
               More in Help
             </a>
