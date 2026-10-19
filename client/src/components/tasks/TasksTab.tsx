@@ -17,7 +17,8 @@ import { BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
 import { Board } from "./Board";
 import { BulkBar } from "./BulkBar";
 import { BulkConfirmDialog, BulkSkippedDialog } from "./BulkDialogs";
-import { CommitLinkBar } from "./CommitLinkBar";
+import { TasksMenu } from "./TasksMenu";
+import { InfoTip } from "../ui/InfoTip";
 import { CalendarView } from "./CalendarView";
 import { ListView } from "./ListView";
 import { MilestoneStrip } from "./MilestoneStrip";
@@ -207,6 +208,7 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
         onViewChange={changeView}
         searchRef={searchRef}
         onWorkload={() => setWorkload(true)}
+        leaderMenu={<TasksMenu board={board} actions={actions} />}
       />
 
       <MilestoneStrip
@@ -260,10 +262,13 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
         <CalendarView board={board} tasks={visible} today={today} onOpen={open} onReschedule={(t, d) => void reschedule(t, d)} />
       )}
 
-      <CommitLinkBar board={board} />
-
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
         <span>Tasks help your group plan. They don't change contribution scores.</span>
+        {board.group.hasRepo && (
+          <InfoTip label="About commit linking">
+            Put a task's key, like {board.group.taskKey}-12, in a commit message to link that commit to the task. Only commit messages are read.
+          </InfoTip>
+        )}
         <button type="button" onClick={() => setHelp(true)} className={`rounded text-sm text-slate-700 underline ${FOCUS_LIGHT}`}>
           Press <kbd className="rounded border border-slate-300 bg-slate-50 px-1 text-xs font-semibold text-slate-900">?</kbd> for shortcuts
         </button>

@@ -87,7 +87,7 @@ export function MilestoneStrip({ board, selectedId, onSelect, onCreate }: Props)
   );
 }
 
-function AddMilestoneDialog({ deadline, onClose, onCreate }: {
+export function AddMilestoneDialog({ deadline, onClose, onCreate }: {
   deadline: string | null;
   onClose: () => void;
   onCreate: (input: { name: string; dueDate: string | null }) => Promise<void>;

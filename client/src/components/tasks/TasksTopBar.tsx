@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { BoardResponse, TaskPriority } from "@shared/taskTypes";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@shared/taskTypes";
 import { Avatar } from "../Avatar";
@@ -23,6 +23,8 @@ interface Props {
   searchRef?: RefObject<HTMLInputElement | null>;
   /** Opens the Workload panel (offered to the leader, the class instructor and admins). */
   onWorkload?: () => void;
+  /** Leader-only "..." menu (board setup); rendered last. */
+  leaderMenu?: ReactNode;
 }
 
 const DUE_OPTIONS: { value: DueBucket; label: string }[] = [
@@ -35,7 +37,7 @@ function toggle<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 }
 
-export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask, view, onViewChange, searchRef, onWorkload }: Props) {
+export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask, view, onViewChange, searchRef, onWorkload, leaderMenu }: Props) {
   const menu = usePopover();
   const activeMenuFilters = menuFilterCount(filters);
   const line = statusLine(filters, board.members, shown, total);
@@ -222,6 +224,7 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
             New task
           </button>
         )}
+        {leaderMenu}
       </div>
 
       {line && (

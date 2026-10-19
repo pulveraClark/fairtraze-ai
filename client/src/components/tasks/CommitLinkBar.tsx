@@ -11,20 +11,21 @@ import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from ".
 
 interface Props {
   board: BoardResponse;
+  onClose: () => void;
 }
 
 /**
- * Under the board: how commits link to tasks, and (for the leader) "Refresh commits" with the time of
- * the last refresh and "Change task key". Commit linking reads commit messages only and never changes a
- * contribution score. The server enforces who may refresh and how often; this only explains and asks.
+ * Leader-only "Commit linking" window (opened from the Tasks "..." menu): how commits link to tasks and
+ * "Refresh commits" with the time of the last refresh. Commit linking reads commit messages only and never
+ * changes a contribution score. The server enforces who may refresh and how often; this only explains and asks.
  */
-export function CommitLinkBar({ board }: Props) {
+export function CommitLinkingDialog({ board, onClose }: Props) {
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
   const { showToast, showSuccessToast } = useToast();
+  const ref = useFocusTrap<HTMLDivElement>(onClose);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [changingKey, setChangingKey] = useState(false);
   const [, setTick] = useState(0);
   const { group, viewer } = board;
   const canRefresh = viewer.isLeader && group.hasRepo;
@@ -65,39 +66,36 @@ export function CommitLinkBar({ board }: Props) {
   const aliasNote = group.keyAliases.length > 0 ? ` Earlier keys still link: ${group.keyAliases.join(", ")}.` : "";
 
   return (
-    <section aria-label="Commit links and task key" className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-      <p className="text-sm text-slate-800">
-        {group.hasRepo
-          ? <>Put a task's key, like <span className="font-semibold text-slate-900">{group.taskKey}-12</span>, in a commit message to link that commit to the task.{aliasNote}</>
-          : <>This group has no GitHub repository, so commits are not linked to tasks.</>}
-      </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="commit-linking-title" className="w-full max-w-md space-y-3 rounded-xl bg-white p-5 shadow-2xl">
+        <h2 id="commit-linking-title" className="text-lg font-semibold text-slate-900">Commit linking</h2>
+        <p className="text-sm text-slate-800">
+          {group.hasRepo
+            ? <>Put a task's key, like <span className="font-semibold text-slate-900">{group.taskKey}-12</span>, in a commit message to link that commit to the task.{aliasNote}</>
+            : <>This group has no GitHub repository, so commits are not linked to tasks.</>}
+        </p>
 
-      {viewer.isLeader && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {canRefresh && (
-            <>
-              <button type="button" onClick={() => void refresh()} disabled={busy} className={BUTTON_SECONDARY_COMPACT}>
-                {busy ? "Refreshing…" : "Refresh commits"}
-              </button>
-              <span className="text-sm text-slate-700" aria-live="polite">
-                {group.commitsRefreshedAt ? `Last refreshed ${formatAgo(group.commitsRefreshedAt)}` : "Not refreshed yet"}
-              </span>
-            </>
-          )}
-          <button type="button" onClick={() => setChangingKey(true)} className={`${canRefresh ? "ml-auto " : ""}rounded text-sm text-slate-800 underline ${FOCUS_LIGHT}`}>
-            Task key: <span className="font-semibold">{group.taskKey}</span> · Change
-          </button>
+        {canRefresh && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <button type="button" onClick={() => void refresh()} disabled={busy} className={BUTTON_SECONDARY_COMPACT}>
+              {busy ? "Refreshing…" : "Refresh commits"}
+            </button>
+            <span className="text-sm text-slate-700" aria-live="polite">
+              {group.commitsRefreshedAt ? `Last refreshed ${formatAgo(group.commitsRefreshedAt)}` : "Not refreshed yet"}
+            </span>
+          </div>
+        )}
+        {message && <p role="alert" className="text-sm font-medium text-red-800">{message}</p>}
+        <p className="text-xs text-slate-700">Only commit messages are read. Linking never changes contribution scores.</p>
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Close</button>
         </div>
-      )}
-      {message && <p role="alert" className="text-sm font-medium text-red-800">{message}</p>}
-      <p className="text-xs text-slate-700">Only commit messages are read. Linking never changes contribution scores.</p>
-
-      {changingKey && <TaskKeyDialog board={board} onClose={() => setChangingKey(false)} />}
-    </section>
+      </div>
+    </div>
   );
 }
 
-function TaskKeyDialog({ board, onClose }: { board: BoardResponse; onClose: () => void }) {
+export function TaskKeyDialog({ board, onClose }: { board: BoardResponse; onClose: () => void }) {
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
   const { showSuccessToast } = useToast();

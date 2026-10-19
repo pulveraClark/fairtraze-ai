@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BoardResponse } from "@shared/taskTypes";
 import * as AuthContextModule from "../../context/AuthContext";
 import { ToastProvider } from "../Toast";
-import { CommitLinkBar } from "./CommitLinkBar";
+import { CommitLinkingDialog, TaskKeyDialog } from "./CommitLinkBar";
+import { TasksMenu } from "./TasksMenu";
+import type { TaskActions } from "../../hooks/useTaskActions";
 import { LinkedCommits } from "./details/LinkedCommits";
 import { formatAgo } from "../../lib/tasks/dates";
 import { describeActivity } from "../../lib/tasks/activityText";
@@ -39,21 +41,59 @@ function serve(handlers: Record<string, () => { status: number; body: unknown }>
   return calls;
 }
 
-function renderBar(board: BoardResponse) {
+function renderWith(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ToastProvider><CommitLinkBar board={board} /></ToastProvider>
+      <ToastProvider>{ui}</ToastProvider>
     </QueryClientProvider>,
   );
 }
+const renderDialog = (board: BoardResponse) => renderWith(<CommitLinkingDialog board={board} onClose={() => {}} />);
+const renderKey = (board: BoardResponse) => renderWith(<TaskKeyDialog board={board} onClose={() => {}} />);
+const noActions = { createMilestone: vi.fn(), createLabel: vi.fn() } as unknown as TaskActions;
 
 const member = { userId: 2, isLeader: false, isMember: true, readOnly: false, canCreate: true, canManageBoard: false };
 
 beforeEach(() => { resetFixtureIds(); });
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); vi.useRealTimers(); });
 
-describe("CommitLinkBar", () => {
+describe("Tasks menu (13)", () => {
+  it("leader: one menu with Add milestone, Manage labels, Commit linking and Change task key", async () => {
+    signInAs(1);
+    renderWith(<TasksMenu board={mkBoard()} actions={noActions} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "More task options" }));
+    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+      "Add milestone", "Manage labels", "Commit linking", "Change task key",
+    ]);
+    await user.click(screen.getByRole("menuitem", { name: "Commit linking" }));
+    expect(screen.getByRole("dialog", { name: "Commit linking" })).toBeInTheDocument();
+  });
+
+  it("a member (or a read-only viewer) gets no menu at all", () => {
+    signInAs(2);
+    const { container } = renderWith(<TasksMenu board={mkBoard({ viewer: member })} actions={noActions} />);
+    expect(container.querySelector("button")).toBeNull();
+    const readOnly = renderWith(<TasksMenu board={mkBoard({ viewer: { ...member, isLeader: true, readOnly: true } })} actions={noActions} />);
+    expect(readOnly.container.querySelector("button")).toBeNull();
+  });
+
+  it("Manage labels lists the labels and adds a new one", async () => {
+    signInAs(1);
+    const createLabel = vi.fn(async () => ({}));
+    renderWith(<TasksMenu board={mkBoard({ labels: [{ id: 1, name: "Docs", color: "teal" }] })} actions={{ ...noActions, createLabel } as unknown as TaskActions} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "More task options" }));
+    await user.click(screen.getByRole("menuitem", { name: "Manage labels" }));
+    expect(screen.getByText("Docs")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("New label"), "Bug");
+    await user.click(screen.getByRole("button", { name: "Add label" }));
+    expect(createLabel).toHaveBeenCalledWith({ name: "Bug", color: "blue" });
+  });
+});
+
+describe("CommitLinkingDialog", () => {
   it("leader: shows the hint, the last refresh time and a Refresh commits button; posting links and says how many", async () => {
     signInAs(1);
     const recent = new Date(Date.now() - 3 * 60_000).toISOString();
@@ -61,7 +101,7 @@ describe("CommitLinkBar", () => {
       "POST /api/groups/7/tasks/sync-commits": () => ({ status: 200, body: { linked: 2, matched: 2, scanned: 40, commitsRefreshedAt: new Date().toISOString() } }),
       "GET /api/groups/7/tasks": () => ({ status: 200, body: mkBoard() }),
     });
-    renderBar(mkBoard({ group: mkGroup({ commitsRefreshedAt: recent }) }));
+    renderDialog(mkBoard({ group: mkGroup({ commitsRefreshedAt: recent }) }));
     expect(screen.getByText(/Put a task's key, like/)).toHaveTextContent("FT-12");
     expect(screen.getByText("Last refreshed 3 min ago")).toBeInTheDocument();
 
@@ -73,7 +113,7 @@ describe("CommitLinkBar", () => {
   it("says 'Not refreshed yet' before the first refresh", () => {
     signInAs(1);
     serve({});
-    renderBar(mkBoard());
+    renderDialog(mkBoard());
     expect(screen.getByText("Not refreshed yet")).toBeInTheDocument();
   });
 
@@ -83,45 +123,37 @@ describe("CommitLinkBar", () => {
       "POST /api/groups/7/tasks/sync-commits": () => ({ status: 429, body: { error: "Commits were refreshed a moment ago. Try again in 4 minutes.", retryAfterSeconds: 240 } }),
       "GET /api/groups/7/tasks": () => ({ status: 200, body: mkBoard() }),
     });
-    renderBar(mkBoard());
+    renderDialog(mkBoard());
     await userEvent.setup().click(screen.getByRole("button", { name: "Refresh commits" }));
     const alerts = await screen.findAllByText("Commits were refreshed a moment ago. Try again in 4 minutes.");
     expect(alerts.length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Refresh commits" })).toBeEnabled();
   });
 
-  it("a member sees the hint but no Refresh button and no key control", () => {
-    signInAs(2);
-    renderBar(mkBoard({ viewer: member }));
-    expect(screen.getByText(/Put a task's key, like/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Refresh commits" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Change/ })).not.toBeInTheDocument();
-  });
-
-  it("a group without a repository says so and offers no refresh (the leader can still change the key)", () => {
+  it("a group without a repository says so and offers no refresh", () => {
     signInAs(1);
-    renderBar(mkBoard({ group: mkGroup({ hasRepo: false }) }));
+    renderDialog(mkBoard({ group: mkGroup({ hasRepo: false }) }));
     expect(screen.getByText("This group has no GitHub repository, so commits are not linked to tasks.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Refresh commits" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Task key: FT/ })).toBeInTheDocument();
   });
 
   it("names the earlier keys that still link", () => {
-    signInAs(2);
-    renderBar(mkBoard({ viewer: member, group: mkGroup({ taskKey: "APP", keyAliases: ["FT", "GA"] }) }));
+    signInAs(1);
+    renderDialog(mkBoard({ group: mkGroup({ taskKey: "APP", keyAliases: ["FT", "GA"] }) }));
     expect(screen.getByText(/Earlier keys still link: FT, GA\./)).toBeInTheDocument();
   });
+});
 
-  it("change key: sends the upper-cased key, and shows the server's reason when it refuses", async () => {
+describe("TaskKeyDialog", () => {
+  it("sends the upper-cased key, and shows the server's reason when it refuses", async () => {
     signInAs(1);
     let answer: { status: number; body: unknown } = { status: 409, body: { error: "FT was this group's key before, so it can't be used again." } };
     const calls = serve({
       "PATCH /api/groups/7/task-key": () => answer,
       "GET /api/groups/7/tasks": () => ({ status: 200, body: mkBoard() }),
     });
-    renderBar(mkBoard({ group: mkGroup({ taskKey: "APP" }) }));
+    renderKey(mkBoard({ group: mkGroup({ taskKey: "APP" }) }));
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Task key: APP/ }));
     const dialog = screen.getByRole("dialog", { name: "Change task key" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
     const input = screen.getByLabelText("New key");
@@ -136,19 +168,7 @@ describe("CommitLinkBar", () => {
     await user.clear(input);
     await user.type(input, "ga");
     await user.click(screen.getByRole("button", { name: "Change key" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Task key is now GA. APP-… in commit messages still links.")).toBeInTheDocument();
-  });
-
-  it("change key: Esc closes without sending anything", async () => {
-    signInAs(1);
-    const calls = serve({});
-    renderBar(mkBoard());
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Task key: FT/ }));
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
   });
 });
 

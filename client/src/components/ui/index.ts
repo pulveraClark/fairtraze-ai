@@ -8,3 +8,4 @@ export { StatusPill } from "./StatusPill";
 export { EmptyState } from "./EmptyState";
 export { Skeleton } from "./Skeleton";
 export * from "./styles";
+export { OverflowMenu, type OverflowMenuItem } from "./OverflowMenu";
