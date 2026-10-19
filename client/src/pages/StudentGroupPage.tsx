@@ -852,7 +852,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <FlagTag flag={flag} />
+                                  <FlagTag flag={flag} view="own" />
                                   {(() => {
                                     const outcome = getFlagDisputeOutcome(flag, dispute);
                                     if (!outcome) return null;

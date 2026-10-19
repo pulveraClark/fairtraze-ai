@@ -36,7 +36,7 @@ describe("StudentNotesPage", () => {
     expect(screen.getByText("Most of my work was offline research.")).toBeInTheDocument();
     expect(screen.getByText("Group Alpha")).toBeInTheDocument();
     expect(screen.getByText(/has not replied yet/)).toBeInTheDocument();
-    expect(screen.getByText(/About: Inactive/)).toBeInTheDocument();
+    expect(screen.getByText(/About: Low contribution/)).toBeInTheDocument();
   });
 
   it("shows the instructor reply on a reviewed note, newest note first", () => {

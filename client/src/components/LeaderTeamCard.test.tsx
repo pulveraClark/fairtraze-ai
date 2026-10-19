@@ -45,6 +45,23 @@ describe("LeaderTeamCard task wording (19)", () => {
   });
 });
 
+describe("LeaderTeamCard flags for a peer (20)", () => {
+  it("shows a teammate's flag as 'Low contribution' in grey, never as free-rider or red; the viewer's own stays amber", () => {
+    render(<LeaderTeamCard sourceType="GITHUB" currentUserId={1} team={[
+      member({ userId: 1, name: "Member A", flags: ["free-rider"] }),
+      member({ userId: 2, name: "Member B", flags: ["inactive", "free-rider"] }),
+    ]} />);
+    expect(screen.queryByText(/free-rider|inactive/i)).toBeNull();
+    const tags = screen.getAllByText("Low contribution");
+    expect(tags).toHaveLength(2); // one per member: Member B's two flags collapse into one
+    const own = tags[0]!.closest("span")!;
+    const peer = tags[1]!.closest("span")!;
+    expect(own.className).toContain("bg-amber-50");
+    expect(peer.className).toContain("bg-slate-100");
+    expect(peer.className).not.toMatch(/red/);
+  });
+});
+
 describe("LeaderTeamCard own row", () => {
   it("marks only the signed-in member's row with 'You'", () => {
     render(<LeaderTeamCard sourceType="GITHUB" currentUserId={2} team={[member({}), member({ userId: 2, name: "Member B" })]} />);

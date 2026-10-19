@@ -1,4 +1,5 @@
 import type { Flag } from "@shared/types";
+import { studentFlagLabel } from "../lib/studentDisplay";
 
 // Stronger visual weight so flags immediately read as "needs attention"
 // rather than blending into surrounding table text — consistent icon,
@@ -39,13 +40,26 @@ function FlagIcon({ flag }: { flag: Flag }) {
   }
 }
 
-export function FlagTag({ flag, className = "" }: { flag: Flag; className?: string }) {
+/**
+ * Who is looking. Instructors (default) see the stored flag name in the strong colours. Students see
+ * "Low contribution" for free-rider/inactive: their own flag in a soft amber, a teammate's in plain grey
+ * (a peer should never see a red pill on someone else). Wording and colour only; the flag itself is unchanged.
+ */
+export type FlagView = "instructor" | "own" | "peer";
+
+const STUDENT_STYLE: Record<Exclude<FlagView, "instructor">, string> = {
+  own:  "bg-amber-50 text-amber-900 border-amber-300",
+  peer: "bg-slate-100 text-slate-800 border-slate-300",
+};
+
+export function FlagTag({ flag, className = "", view = "instructor" }: { flag: Flag; className?: string; view?: FlagView }) {
+  const style = view === "instructor" ? FLAG_STYLE[flag] : STUDENT_STYLE[view];
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border-2 ${FLAG_STYLE[flag]} ${className}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border-2 ${style} ${className}`}
     >
       <FlagIcon flag={flag} />
-      {flag}
+      {view === "instructor" ? flag : studentFlagLabel(flag)}
     </span>
   );
 }

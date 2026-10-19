@@ -4,6 +4,7 @@ import { FlagTag } from "./FlagTag";
 import { NoActivityPill } from "./NoActivityPill";
 import { ShareBar } from "./report/DrawerParts";
 import { taskCountLabel } from "../lib/tasks/countLabel";
+import { studentFlagLabel } from "../lib/studentDisplay";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -19,6 +20,9 @@ export interface LeaderTeamMember {
   flags: string[];
   tasks: { open: number; done: number };
 }
+
+/** One tag per student-facing label (free-rider and inactive both read "Low contribution"). */
+const uniqueByLabel = (flags: string[]) => flags.filter((f, i) => flags.findIndex((g) => studentFlagLabel(g) === studentFlagLabel(f)) === i);
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
 
@@ -66,7 +70,9 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
                     </p>
                   )}
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    {m.flags.length === 0 ? <span className="text-xs text-slate-700">No flags</span> : m.flags.map((f) => <FlagTag key={f} flag={f as Flag} />)}
+                    {m.flags.length === 0
+                      ? <span className="text-xs text-slate-700">No flags</span>
+                      : uniqueByLabel(m.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={m.userId === currentUserId ? "own" : "peer"} />)}
                   </div>
                 </>
               )}

@@ -1,7 +1,6 @@
 import { StatusPill } from "./ui/StatusPill";
-import { FLAG_LABEL } from "./ui/StatusPill";
 import { NOTE_STATUS, noteFlags, type StudentNote } from "../lib/notes";
-import type { Flag } from "@shared/types";
+import { studentFlagLabels } from "../lib/studentDisplay";
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -37,7 +36,7 @@ export function StudentNoteCard({ note, groupName, onOpenGroup, highlighted = fa
       </div>
       {flags.length > 0 && (
         <p className="mt-2 text-xs text-slate-700">
-          About: {flags.map((f) => FLAG_LABEL[f as Flag] ?? f).join(", ")}
+          About: {studentFlagLabels(flags).join(", ")}
         </p>
       )}
       <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-900">{note.reason}</p>

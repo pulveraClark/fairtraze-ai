@@ -155,4 +155,15 @@ describe("StudentGroupPage", () => {
     expect(screen.getByText("Docs Share")).toBeTruthy();
     expect(screen.getByText("Score blend: 50% GitHub / 50% Docs")).toBeTruthy();
   });
+
+  it("a student's own free-rider flag reads 'Low contribution' in a soft warning tone (20)", () => {
+    window.history.pushState({}, "", REPORT);
+    const f = groupFixture();
+    (f.report as { myContribution: { flags: string[] } }).myContribution.flags = ["free-rider"];
+    state.data = f;
+    renderPage();
+    const tag = screen.getByText("Low contribution").closest("span")!;
+    expect(tag.className).toContain("bg-amber-50");
+    expect(screen.queryByText("free-rider")).toBeNull();
+  });
 });
