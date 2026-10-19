@@ -42,45 +42,28 @@ function Warning({ children }: { children: ReactNode }) {
 interface Props {
   board: BoardResponse;
   task: BoardTask;
-  watchers: number[];
   /** Server warning from the last save (e.g. a due date after the deadline). */
   warning: string;
   save: (input: UpdateTaskInput) => Promise<void>;
   changeStatus: (status: TaskStatus) => Promise<void>;
-  addLabel: (input: { name: string; color: TaskLabelColor }) => Promise<void>;
   onDelete: () => Promise<void>;
-  /** Present when the group has a Document tab: lets the task link to, and open, a heading. */
-  onOpenDocument?: (task: BoardTask) => void;
 }
 
-/** The light-gray right column: status, assignee, priority and due date, milestone, labels, linked heading, watchers, delete. */
-export function DetailsSidebar({ board, task, watchers, warning, save, changeStatus, addLabel, onDelete, onOpenDocument }: Props) {
+/** The light-gray right column: status, assignee, priority, due date and delete. The rest lives in "More details". */
+export function DetailsSidebar({ board, task, warning, save, changeStatus, onDelete }: Props) {
   const perms = task.permissions;
   const viewer = board.viewer;
   const assigneeRef = useRef<HTMLSelectElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [newLabel, setNewLabel] = useState({ name: "", color: "blue" as TaskLabelColor });
 
   const assignee = board.members.find((m) => m.userId === task.assignedToUserId) ?? null;
-  const milestone = board.milestones.find((m) => m.id === task.milestoneId) ?? null;
   const dueLate = isAfterDeadline(task.dueDate, board.group.deadline);
-  const milestoneLate = isAfterDeadline(milestone?.dueDate ?? null, board.group.deadline);
   const deadlineLabel = board.group.deadline ? formatDeadline(board.group.deadline) : "";
 
   const editLock = perms.edit ? null : lockReason("edit", task, viewer);
   const dueLock = perms.setDue ? null : lockReason("setDue", task, viewer);
   const assignLock = perms.assign ? null : lockReason("assign", task, viewer);
   const moveLock = perms.move ? null : lockReason("move", task, viewer);
-  const watcherPeople = watchers.map((id) => board.members.find((m) => m.userId === id)).filter((m): m is NonNullable<typeof m> => !!m);
-
-  async function submitLabel() {
-    const name = newLabel.name.trim();
-    if (!name) return;
-    await addLabel({ name, color: newLabel.color });
-    setNewLabel({ name: "", color: "blue" });
-    setAdding(false);
-  }
 
   return (
     <aside aria-label="Task fields" className="flex-1 space-y-4 bg-slate-50 p-4 md:border-l md:border-slate-200">
@@ -160,6 +143,75 @@ export function DetailsSidebar({ board, task, watchers, warning, save, changeSta
       </div>
       {dueLate && deadlineLabel && <Warning>{warning || `This is after the project deadline (${deadlineLabel}).`}</Warning>}
 
+      <div className="border-t border-slate-200 pt-4" title={perms.delete ? undefined : lockReason("delete", task, viewer)}>
+        {!confirmDelete ? (
+          <>
+            <button
+              type="button"
+              disabled={!perms.delete}
+              aria-describedby={perms.delete ? undefined : "task-delete-lock"}
+              onClick={() => setConfirmDelete(true)}
+              className={`${BUTTON_SECONDARY_COMPACT} border-red-300 text-red-900 disabled:border-slate-300 disabled:text-slate-600`}
+            >
+              Delete task
+            </button>
+            {!perms.delete && <p id="task-delete-lock" className="mt-1 text-xs text-slate-700">{lockReason("delete", task, viewer)}</p>}
+          </>
+        ) : (
+          <div role="alertdialog" aria-label="Confirm delete" className="space-y-2">
+            <p className="text-sm font-medium text-slate-900">Delete {task.key}? This also removes its subtasks, comments, attachments and history.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void onDelete()}
+                className="inline-flex min-h-8 items-center rounded-lg bg-red-800 px-3 text-sm font-semibold text-white hover:bg-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
+              >
+                Delete
+              </button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+
+interface AdvancedProps {
+  board: BoardResponse;
+  task: BoardTask;
+  watchers: number[];
+  save: (input: UpdateTaskInput) => Promise<void>;
+  addLabel: (input: { name: string; color: TaskLabelColor }) => Promise<void>;
+  /** Present when the group has a Document tab: lets the task link to, and open, a heading. */
+  onOpenDocument?: (task: BoardTask) => void;
+}
+
+/** Milestone, labels, linked document heading and watchers: shown under "More details". */
+export function AdvancedFields({ board, task, watchers, save, addLabel, onOpenDocument }: AdvancedProps) {
+  const perms = task.permissions;
+  const viewer = board.viewer;
+  const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState({ name: "", color: "blue" as TaskLabelColor });
+
+  const milestone = board.milestones.find((m) => m.id === task.milestoneId) ?? null;
+  const milestoneLate = isAfterDeadline(milestone?.dueDate ?? null, board.group.deadline);
+  const deadlineLabel = board.group.deadline ? formatDeadline(board.group.deadline) : "";
+  const editLock = perms.edit ? null : lockReason("edit", task, viewer);
+  const assignLock = perms.assign ? null : lockReason("assign", task, viewer);
+  const watcherPeople = watchers.map((id) => board.members.find((m) => m.userId === id)).filter((m): m is NonNullable<typeof m> => !!m);
+
+  async function submitLabel() {
+    const name = newLabel.name.trim();
+    if (!name) return;
+    await addLabel({ name, color: newLabel.color });
+    setNewLabel({ name: "", color: "blue" });
+    setAdding(false);
+  }
+
+  return (
+    <div className="space-y-4">
       <div>
         <Field label="Milestone" htmlFor="task-milestone" locked={assignLock}>
           <select
@@ -283,37 +335,6 @@ export function DetailsSidebar({ board, task, watchers, warning, save, changeSta
           </ul>
         )}
       </section>
-
-      <div className="border-t border-slate-200 pt-4" title={perms.delete ? undefined : lockReason("delete", task, viewer)}>
-        {!confirmDelete ? (
-          <>
-            <button
-              type="button"
-              disabled={!perms.delete}
-              aria-describedby={perms.delete ? undefined : "task-delete-lock"}
-              onClick={() => setConfirmDelete(true)}
-              className={`${BUTTON_SECONDARY_COMPACT} border-red-300 text-red-900 disabled:border-slate-300 disabled:text-slate-600`}
-            >
-              Delete task
-            </button>
-            {!perms.delete && <p id="task-delete-lock" className="mt-1 text-xs text-slate-700">{lockReason("delete", task, viewer)}</p>}
-          </>
-        ) : (
-          <div role="alertdialog" aria-label="Confirm delete" className="space-y-2">
-            <p className="text-sm font-medium text-slate-900">Delete {task.key}? This also removes its subtasks, comments, attachments and history.</p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void onDelete()}
-                className="inline-flex min-h-8 items-center rounded-lg bg-red-800 px-3 text-sm font-semibold text-white hover:bg-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
-              >
-                Delete
-              </button>
-              <button type="button" onClick={() => setConfirmDelete(false)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
+    </div>
   );
 }

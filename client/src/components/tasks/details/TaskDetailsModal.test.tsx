@@ -255,6 +255,7 @@ describe("subtasks", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /First task/ }));
     await screen.findByRole("dialog", { name: "FT-1" });
+    await user.click(await screen.findByRole("button", { name: "More details" }));
 
     await user.type(await screen.findByLabelText("New subtask"), "Draft the intro");
     await user.click(screen.getByRole("button", { name: "Add" }));
@@ -438,6 +439,7 @@ describe("permissions mirrored with reasons", () => {
     await screen.findByRole("dialog", { name: "FT-1" });
     expect(screen.getByLabelText("Priority")).toBeEnabled();
     expect(screen.getByLabelText("Due date")).toBeEnabled();
+    await user.click(await screen.findByRole("button", { name: "More details" }));
     const assignee = screen.getByLabelText("Assignee", { selector: "select" });
     expect(assignee).toBeDisabled();
     expect(assignee.closest("[title]")).toHaveAttribute("title", "Only the group leader can do this.");
@@ -478,6 +480,51 @@ describe("due date and milestone warnings", () => {
     await user.click(await screen.findByRole("button", { name: /Fine/ }));
     await screen.findByRole("dialog", { name: "FT-1" });
     expect(screen.queryByText(/after the project deadline/)).not.toBeInTheDocument();
+  });
+});
+
+describe("More details (14)", () => {
+  const openModal = async (tasks: BoardTask[], board: Partial<BoardResponse> = {}) => {
+    signInAs(1);
+    installFakeServer(mkBoard(board, tasks));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Plain task/ }));
+    await screen.findByRole("dialog", { name: "FT-1" });
+    return user;
+  };
+
+  it("shows title, assignee, status, due date and description by default and keeps the rest closed", async () => {
+    await openModal([mkTask({ id: 1, title: "Plain task", description: "Do the thing" })]);
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+    expect(screen.getByLabelText("Assignee", { selector: "select" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Status")).toBeInTheDocument();
+    expect(screen.getByLabelText("Due date")).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
+    const more = await screen.findByRole("button", { name: "More details" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Milestone")).not.toBeInTheDocument();
+    expect(screen.queryByText("Subtasks")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Watchers/)).not.toBeInTheDocument();
+  });
+
+  it("opens to reveal subtasks, attachments, labels, milestone, linked heading and watchers", async () => {
+    const user = await openModal([mkTask({ id: 1, title: "Plain task" })]);
+    await user.click(await screen.findByRole("button", { name: "More details" }));
+    expect(screen.getByRole("button", { name: "More details" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Milestone")).toBeInTheDocument();
+    expect(screen.getByText(/Watchers \(/)).toBeInTheDocument();
+    expect(screen.getByLabelText("New subtask")).toBeInTheDocument();
+    expect(screen.getByLabelText("Choose a file to attach")).toBeInTheDocument();
+  });
+
+  it("starts open when one of them already has content (a milestone here)", async () => {
+    await openModal(
+      [mkTask({ id: 1, title: "Plain task", milestoneId: 5 })],
+      { milestones: [{ id: 5, name: "Beta", dueDate: null, position: 1, total: 1, done: 0 }] },
+    );
+    expect(await screen.findByRole("button", { name: "More details" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Milestone")).toHaveValue("5");
   });
 });
 
@@ -591,6 +638,7 @@ describe("attachments", () => {
     renderTab();
     const user = userEvent.setup({ applyAccept: false });
     await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.click(await screen.findByRole("button", { name: "More details" }));
     const input = await screen.findByLabelText("Choose a file to attach");
     const big = new File([new Uint8Array(6 * 1024 * 1024)], "huge.pdf", { type: "application/pdf" });
     await user.upload(input, big);

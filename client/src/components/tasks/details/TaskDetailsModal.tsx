@@ -12,8 +12,9 @@ import { BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../../ui/styles";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "../icons";
 import { ActivityTabs } from "./ActivityTabs";
 import { AttachmentsSection } from "./AttachmentsSection";
-import { DetailsSidebar } from "./DetailsSidebar";
+import { AdvancedFields, DetailsSidebar } from "./DetailsSidebar";
 import { LinkedCommits } from "./LinkedCommits";
+import { MoreDetails, hasMoreContent } from "./MoreDetails";
 import { MentionText, MentionTextarea, displayFromStored, storedFromDisplay } from "./MentionTextarea";
 import { SubtaskList } from "./SubtaskList";
 
@@ -252,24 +253,36 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
 
             {d && (
               <>
-                <SubtaskList
-                  task={task}
-                  subtasks={d.subtasks}
-                  lockedReason={editLock}
-                  onAdd={details.addSubtask}
-                  onToggle={details.setSubtaskDone}
-                  onRemove={details.removeSubtask}
-                  onReorder={details.reorderSubtasks}
-                />
-                <AttachmentsSection
-                  task={task}
-                  attachments={d.attachments}
-                  storage={d.storage}
-                  lockedReason={editLock}
-                  onUpload={details.uploadAttachment}
-                  onRemove={details.removeAttachment}
-                />
-                <LinkedCommits task={task} commits={d.commits} hasRepo={board.group.hasRepo} />
+                <MoreDetails
+                  open={hasMoreContent(task, d)}
+                >
+                  <SubtaskList
+                    task={task}
+                    subtasks={d.subtasks}
+                    lockedReason={editLock}
+                    onAdd={details.addSubtask}
+                    onToggle={details.setSubtaskDone}
+                    onRemove={details.removeSubtask}
+                    onReorder={details.reorderSubtasks}
+                  />
+                  <AttachmentsSection
+                    task={task}
+                    attachments={d.attachments}
+                    storage={d.storage}
+                    lockedReason={editLock}
+                    onUpload={details.uploadAttachment}
+                    onRemove={details.removeAttachment}
+                  />
+                  <LinkedCommits task={task} commits={d.commits} hasRepo={board.group.hasRepo} />
+                  <AdvancedFields
+                    board={board}
+                    task={task}
+                    watchers={d.watchers}
+                    save={save}
+                    addLabel={addLabel}
+                    onOpenDocument={onOpenDocument}
+                  />
+                </MoreDetails>
                 <ActivityTabs
                   board={board}
                   task={task}
@@ -289,13 +302,10 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
             <DetailsSidebar
               board={board}
               task={task}
-              watchers={d?.watchers ?? []}
               warning={warning}
               save={save}
               changeStatus={changeStatus}
-              addLabel={addLabel}
               onDelete={remove}
-              onOpenDocument={onOpenDocument}
             />
           </div>
         </div>
