@@ -7,10 +7,12 @@ interface Props {
   /** Accessible name of the (i) button, e.g. "About the Gini coefficient". */
   label: string;
   children: ReactNode;
+  /** Optional deep link into the Help page (e.g. "/help#shares"). Adds a small "More in Help" link. */
+  helpHref?: string;
 }
 
 /** Small (i) button that opens a click-toggled popover; closes on outside click or Esc. */
-export function InfoTip({ label, children }: Props) {
+export function InfoTip({ label, children, helpHref }: Props) {
   const { open, setOpen, ref, triggerRef } = usePopover();
   const id = useId();
   return (
@@ -32,10 +34,22 @@ export function InfoTip({ label, children }: Props) {
       {open && (
         <div
           id={id}
-          role="tooltip"
+          role={helpHref ? "group" : "tooltip"}
+          aria-label={helpHref ? label : undefined}
           className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal leading-normal text-slate-800 shadow-lg"
         >
           {children}
+          {helpHref && (
+            // New tab, so help never replaces a form or dialog the reader is in the middle of (e.g. Scoring settings).
+            <a
+              href={helpHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-2 inline-block rounded font-semibold text-indigo-700 underline ${FOCUS_LIGHT}`}
+            >
+              More in Help
+            </a>
+          )}
         </div>
       )}
     </span>
