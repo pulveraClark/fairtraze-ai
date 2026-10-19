@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { StudentGroupPage } from "./StudentGroupPage";
@@ -63,5 +63,13 @@ describe("StudentGroupPage", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: /^Tasks$/ })).toBeNull();
     expect(screen.getByRole("tab", { name: "Tasks" })).toBeTruthy();
+  });
+
+  it("leader's role helper sentence lives in a (?) tooltip, not on the page (R3)", () => {
+    state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null } });
+    renderPage();
+    expect(screen.queryByText(/Assign roles for all members/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "About roles" }));
+    expect(screen.getByRole("tooltip").textContent).toMatch(/Assign roles for all members/);
   });
 });

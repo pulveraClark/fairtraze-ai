@@ -20,6 +20,7 @@ import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNo
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
 import { BriefCard } from "../components/BriefCard";
+import { InfoTip } from "../components/ui/InfoTip";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, type MyContribution } from "../lib/contributionStats";
@@ -615,9 +616,14 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
               {/* Current applied role (always shown, read-only) */}
               <div className="mb-3">
-                <p className="text-xs text-slate-400 mb-1.5">
+                <div className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
                   {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
-                </p>
+                  {membership.role === "LEADER" && (
+                    <InfoTip label="About roles">
+                      Assign roles for all members, including yourself, through Manage Group. Roles are context only — they never affect contribution scores.
+                    </InfoTip>
+                  )}
+                </div>
                 <div className="flex items-center flex-wrap gap-2">
                   {myRoles.length === 0 ? (
                     <span className="text-xs text-slate-400 italic">No role assigned yet</span>
@@ -634,13 +640,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   )}
                 </div>
               </div>
-
-              {/* Leader: informational note */}
-              {membership.role === "LEADER" && (
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Assign roles for all members, including yourself, through Manage Group. Roles are context only — they never affect contribution scores.
-                </p>
-              )}
 
               {/* Member: suggestion flow — only meaningful when the assignment has more than one valid role to choose from */}
               {membership.role === "MEMBER" && (sourceType === "COMBINED" || mySuggestion?.status === "PENDING") && (
