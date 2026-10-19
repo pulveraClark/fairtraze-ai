@@ -35,7 +35,13 @@ export function TasksMenu({ board, actions }: { board: BoardResponse; actions: T
         />
       )}
       {open === "labels" && (
-        <ManageLabelsDialog board={board} onCreate={(input) => actions.createLabel(input)} onClose={() => setOpen(null)} />
+        <ManageLabelsDialog
+          board={board}
+          onCreate={(input) => actions.createLabel(input)}
+          onRename={(id, name) => actions.renameLabel(id, name)}
+          onDelete={(id) => actions.deleteLabel(id)}
+          onClose={() => setOpen(null)}
+        />
       )}
       {open === "commits" && <CommitLinkingDialog board={board} onClose={() => setOpen(null)} />}
       {open === "key" && <TaskKeyDialog board={board} onClose={() => setOpen(null)} />}

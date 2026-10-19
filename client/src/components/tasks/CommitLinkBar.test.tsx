@@ -91,6 +91,52 @@ describe("Tasks menu (13)", () => {
     await user.click(screen.getByRole("button", { name: "Add label" }));
     expect(createLabel).toHaveBeenCalledWith({ name: "Bug", color: "blue" });
   });
+
+  const openLabels = async (actions: Record<string, unknown>, tasks = [] as ReturnType<typeof mkTask>[]) => {
+    signInAs(1);
+    renderWith(<TasksMenu board={mkBoard({ labels: [{ id: 1, name: "Docs", color: "teal" }] }, tasks)} actions={{ ...noActions, ...actions } as unknown as TaskActions} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "More task options" }));
+    await user.click(screen.getByRole("menuitem", { name: "Manage labels" }));
+    return user;
+  };
+
+  it("Manage labels renames a label", async () => {
+    const renameLabel = vi.fn(async () => ({}));
+    const user = await openLabels({ renameLabel });
+    await user.click(screen.getByRole("button", { name: "Rename Docs" }));
+    const input = screen.getByLabelText("New name for Docs");
+    await user.clear(input);
+    await user.type(input, "Writing");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(renameLabel).toHaveBeenCalledWith(1, "Writing");
+    expect(screen.queryByLabelText("New name for Docs")).not.toBeInTheDocument();
+  });
+
+  it("rename shows the server's reason (duplicate name) and stays open", async () => {
+    const renameLabel = vi.fn(async () => { throw new Error("A label with that name already exists."); });
+    const user = await openLabels({ renameLabel });
+    await user.click(screen.getByRole("button", { name: "Rename Docs" }));
+    await user.type(screen.getByLabelText("New name for Docs"), "x");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("A label with that name already exists.");
+    expect(screen.getByLabelText("New name for Docs")).toBeInTheDocument();
+  });
+
+  it("Delete asks first, says how many tasks use the label, and only deletes after Delete label", async () => {
+    const deleteLabel = vi.fn(async () => undefined);
+    const user = await openLabels({ deleteLabel }, [mkTask({ id: 1, labelIds: [1] }), mkTask({ id: 2, labelIds: [1] }), mkTask({ id: 3 })]);
+    await user.click(screen.getByRole("button", { name: "Delete Docs" }));
+    expect(screen.getByRole("alertdialog", { name: /Delete the label "Docs"/ })).toBeInTheDocument();
+    expect(screen.getByText(/removed from 2 tasks/)).toBeInTheDocument();
+    expect(deleteLabel).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteLabel).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Delete Docs" }));
+    await user.click(screen.getByRole("button", { name: "Delete label" }));
+    expect(deleteLabel).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
 });
 
 describe("CommitLinkingDialog", () => {

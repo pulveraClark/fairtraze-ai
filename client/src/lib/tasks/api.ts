@@ -99,6 +99,12 @@ export const taskApi = {
   createLabel: (token: string | null, projectId: number, input: { name: string; color: TaskLabelColor }) =>
     call<BoardLabel>(token, "POST", `${base(projectId)}/labels`, input),
 
+  updateLabel: (token: string | null, projectId: number, labelId: number, input: { name?: string; color?: TaskLabelColor }) =>
+    call<BoardLabel>(token, "PATCH", `${base(projectId)}/labels/${labelId}`, input),
+
+  deleteLabel: (token: string | null, projectId: number, labelId: number) =>
+    call<{ message: string }>(token, "DELETE", `${base(projectId)}/labels/${labelId}`),
+
   // ── Task details ──
   details: (token: string | null, projectId: number, taskId: number) =>
     call<TaskDetails>(token, "GET", `${taskBase(projectId, taskId)}/details`),

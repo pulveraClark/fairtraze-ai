@@ -133,7 +133,18 @@ export function useTaskActions(projectId: number) {
     return created;
   }, [token, projectId, refresh]);
 
-  return { moveTask, moveToStatus, createTask, updateTask, bulkEdit, deleteTask, createMilestone, createLabel, refresh, showError: (message: string) => showToast({ tone: "error", message }) };
+  const renameLabel = useCallback(async (labelId: number, name: string) => {
+    const updated = await taskApi.updateLabel(token, projectId, labelId, { name });
+    await refresh();
+    return updated;
+  }, [token, projectId, refresh]);
+
+  const deleteLabel = useCallback(async (labelId: number) => {
+    await taskApi.deleteLabel(token, projectId, labelId);
+    await refresh();
+  }, [token, projectId, refresh]);
+
+  return { moveTask, moveToStatus, createTask, updateTask, bulkEdit, deleteTask, createMilestone, createLabel, renameLabel, deleteLabel, refresh, showError: (message: string) => showToast({ tone: "error", message }) };
 }
 
 export type TaskActions = ReturnType<typeof useTaskActions>;
