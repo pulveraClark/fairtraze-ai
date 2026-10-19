@@ -64,7 +64,7 @@ export function RegisterPage() {
 
   const [name,          setName]          = useState("");
   const [email,         setEmail]         = useState("");
-  const [role,          setRole]          = useState<"INSTRUCTOR" | "STUDENT">("INSTRUCTOR");
+  const [role,          setRole]          = useState<"" | "INSTRUCTOR" | "STUDENT">("");
   const [password,      setPassword]      = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error,         setError]         = useState<string | null>(null);
@@ -139,7 +139,7 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const result = await register(email, password, name, role, privacyAccepted);
+      const result = await register(email, password, name, role as "INSTRUCTOR" | "STUDENT", privacyAccepted);
       setVerificationRequired(result.emailVerificationRequired);
       setJustRegistered(true);
     } catch (err) {
@@ -268,12 +268,15 @@ export function RegisterPage() {
 
             {/* Role */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Role</label>
+              <label htmlFor="register-role" className="block text-xs font-semibold text-slate-700 mb-1.5">Role</label>
               <select
+                id="register-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as "INSTRUCTOR" | "STUDENT")}
+                required
+                onChange={(e) => setRole(e.target.value as "" | "INSTRUCTOR" | "STUDENT")}
                 className={`${inputClass} cursor-pointer`}
               >
+                <option value="" disabled className="bg-white text-slate-500">Select your role</option>
                 <option value="INSTRUCTOR" className="bg-white text-slate-900">Instructor</option>
                 <option value="STUDENT"    className="bg-white text-slate-900">Student</option>
               </select>
@@ -347,7 +350,7 @@ export function RegisterPage() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !name || !email || !password || !confirmPassword || !privacyAccepted}
+              disabled={submitting || !name || !email || !role || !password || !confirmPassword || !privacyAccepted}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
             >
               {submitting ? (

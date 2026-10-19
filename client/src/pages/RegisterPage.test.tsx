@@ -30,7 +30,38 @@ async function fillForm() {
   const [pw, confirm] = screen.getAllByPlaceholderText("••••••••");
   await userEvent.type(pw!, "password123");
   await userEvent.type(confirm!, "password123");
+  await userEvent.selectOptions(screen.getByLabelText("Role"), "INSTRUCTOR");
 }
+
+describe("RegisterPage role choice", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("starts with no role selected and keeps Create account disabled until one is chosen", async () => {
+    renderPage();
+    const role = screen.getByLabelText("Role") as HTMLSelectElement;
+    expect(role.value).toBe("");
+    await userEvent.type(screen.getByPlaceholderText("Dr. Jane Smith"), "Jane");
+    await userEvent.type(screen.getByPlaceholderText("you@university.edu"), "jane@uclm.edu.ph");
+    const [pw, confirm] = screen.getAllByPlaceholderText("••••••••");
+    await userEvent.type(pw!, "password123");
+    await userEvent.type(confirm!, "password123");
+    await userEvent.click(screen.getByRole("checkbox"));
+    const submit = screen.getByRole("button", { name: "Create account" });
+    expect(submit).toBeDisabled();
+    await userEvent.selectOptions(role, "STUDENT");
+    expect(submit).toBeEnabled();
+  });
+
+  it("sends the role that was chosen", async () => {
+    register.mockResolvedValue({ emailVerificationRequired: false });
+    renderPage();
+    await fillForm();
+    await userEvent.selectOptions(screen.getByLabelText("Role"), "STUDENT");
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => expect(register).toHaveBeenCalledWith("jane@uclm.edu.ph", "password123", "Jane", "STUDENT", true));
+  });
+});
 
 describe("RegisterPage privacy consent", () => {
   afterEach(() => vi.clearAllMocks());
