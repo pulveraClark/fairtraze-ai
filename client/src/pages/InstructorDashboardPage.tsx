@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
-import { visibleFlags } from "../lib/groupActivity";
+import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
@@ -46,6 +46,7 @@ function normalizeCode(code: string): string {
 
 function riskScore(item: ProjectSummaryItem): number {
   if (!item.isAnalyzed) return 10;
+  if (presentedHealth(item) === "no-activity") return 6; // after real health, before not analyzed
   const hasFlags = visibleFlags(item).length > 0;
   if (item.teamHealth === "High Risk")     return hasFlags ? 0 : 1;
   if (item.teamHealth === "Moderate Risk") return hasFlags ? 2 : 3;
@@ -510,9 +511,8 @@ export function InstructorDashboardPage() {
   }
 
   // Global at-risk count
-  const atRiskCount = summary.filter(
-    (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || visibleFlags(i).length > 0)
-  ).length;
+  const atRiskCount = summary.filter(isAtRiskGroup).length;
+  const quietCount  = noActivityCount(summary);
 
   const isSearchMode = searchQuery.trim().length > 0;
   const isAtRiskMode = !isSearchMode && filterMode === "at-risk";
@@ -521,9 +521,7 @@ export function InstructorDashboardPage() {
   const sortedClasses = sortClasses(classes, sortMode, getItemsForClass);
 
   const atRiskGroups = sortGroups(
-    summary.filter(
-      (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || visibleFlags(i).length > 0)
-    ),
+    summary.filter(isAtRiskGroup),
     sortMode
   );
 
@@ -603,6 +601,7 @@ export function InstructorDashboardPage() {
                 {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
               </button>
             )}
+            {quietCount > 0 && <span className="text-xs text-slate-600">{noActivityRollupText(quietCount)}</span>}
           </div>
         </div>
       </div>

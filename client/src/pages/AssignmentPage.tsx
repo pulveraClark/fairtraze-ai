@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
-import { visibleFlags } from "../lib/groupActivity";
+import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { GroupTaskCards } from "../components/GroupTaskCards";
@@ -54,6 +54,7 @@ type FilterMode = "all" | "at-risk";
 
 function riskScore(item: ProjectSummaryItem): number {
   if (!item.isAnalyzed) return 10;
+  if (presentedHealth(item) === "no-activity") return 6; // after real health, before not analyzed
   const hasFlags = visibleFlags(item).length > 0;
   if (item.teamHealth === "High Risk")     return hasFlags ? 0 : 1;
   if (item.teamHealth === "Moderate Risk") return hasFlags ? 2 : 3;
@@ -72,9 +73,7 @@ function sortItems(items: ProjectSummaryItem[], mode: SortMode): ProjectSummaryI
 
 function filterItems(items: ProjectSummaryItem[], mode: FilterMode): ProjectSummaryItem[] {
   if (mode === "all") return items;
-  return items.filter(
-    (i) => i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || visibleFlags(i).length > 0
-  );
+  return items.filter(isAtRiskGroup);
 }
 
 function fmtDeadline(iso: string | null): string {
@@ -272,6 +271,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     ? sorted.filter((i) => i.groupName.toLowerCase().includes(search.trim().toLowerCase()))
     : sorted;
   const atRiskCount = classAtRiskCount(summary);
+  const quietCount  = noActivityCount(summary);
   const classUrl    = `/class/${classId}`;
   // Page-level reference stat — average across every analyzed group in this assignment
   // (self-inclusive; `summary` is already scoped to this one assignment).
@@ -375,6 +375,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
               </button>
             )}
+            {quietCount > 0 && <span className="text-xs text-slate-600">{noActivityRollupText(quietCount)}</span>}
           </div>
         </div>
       </div>

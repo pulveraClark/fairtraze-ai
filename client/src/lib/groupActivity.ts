@@ -28,3 +28,22 @@ export function presentedHealth(
   if (!item.isAnalyzed) return null;
   return summaryHasNoActivity(item) ? "no-activity" : item.teamHealth;
 }
+
+/** At risk = analyzed, has activity, and a risk label or a flag. A group with no activity is never at risk. */
+export function isAtRiskGroup(
+  item: Pick<ProjectSummaryItem, "isAnalyzed" | "memberShares" | "teamHealth" | "flagsPresent">,
+): boolean {
+  const health = presentedHealth(item);
+  if (health === null || health === "no-activity") return false;
+  return health === "High Risk" || health === "Moderate Risk" || visibleFlags(item).length > 0;
+}
+
+/** How many analyzed groups have no recorded activity. */
+export function noActivityCount(items: ReadonlyArray<Pick<ProjectSummaryItem, "isAnalyzed" | "memberShares">>): number {
+  return items.filter(summaryHasNoActivity).length;
+}
+
+/** The neutral roll-up line, e.g. "2 groups: no activity yet". */
+export function noActivityRollupText(count: number): string {
+  return `${count} group${count !== 1 ? "s" : ""}: no activity yet`;
+}

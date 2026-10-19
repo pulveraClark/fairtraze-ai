@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
 import { presentedHealth } from "../lib/groupActivity";
+import { NoActivityRollup } from "../components/NoActivityRollup";
 import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
@@ -52,6 +53,7 @@ function fmtDeadline(iso: string | null): string {
 // ── Risk pills ────────────────────────────────────────────────────────────────
 function RiskPills({ healthy, moderate, highRisk, unanalyzed, quiet = 0 }: { healthy: number; moderate: number; highRisk: number; unanalyzed: number; quiet?: number }) {
   return (
+    <>
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {highRisk > 0 && (
         <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
@@ -68,17 +70,14 @@ function RiskPills({ healthy, moderate, highRisk, unanalyzed, quiet = 0 }: { hea
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />{healthy} Healthy
         </span>
       )}
-      {quiet > 0 && (
-        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />{quiet} Not enough activity
-        </span>
-      )}
       {unanalyzed > 0 && (
         <span className="inline-flex items-center gap-1 text-xs text-slate-400">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />{unanalyzed} Not analyzed
         </span>
       )}
     </div>
+    <NoActivityRollup count={quiet} className="mt-1" />
+    </>
   );
 }
 
@@ -755,8 +754,8 @@ export function ClassPage({ classId }: Props) {
                   const atRisk     = classAtRiskCount(items);
                   const healthy    = items.filter((i) => presentedHealth(i) === "Healthy").length;
                   const quiet      = items.filter((i) => presentedHealth(i) === "no-activity").length;
-                  const moderate   = items.filter((i) => i.isAnalyzed && i.teamHealth === "Moderate Risk").length;
-                  const highRisk   = items.filter((i) => i.isAnalyzed && i.teamHealth === "High Risk").length;
+                  const moderate   = items.filter((i) => presentedHealth(i) === "Moderate Risk").length;
+                  const highRisk   = items.filter((i) => presentedHealth(i) === "High Risk").length;
                   const unanalyzed = items.filter((i) => !i.isAnalyzed).length;
 
                   return (

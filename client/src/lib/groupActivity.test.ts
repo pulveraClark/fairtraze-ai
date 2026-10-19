@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { noActivityFromShares, summaryHasNoActivity, visibleFlags, presentedHealth } from "./groupActivity";
+import { noActivityFromShares, summaryHasNoActivity, visibleFlags, presentedHealth, isAtRiskGroup, noActivityCount, noActivityRollupText } from "./groupActivity";
 
 const item = (shares: number[], over: Record<string, unknown> = {}) => ({
   isAnalyzed: true,
@@ -28,5 +28,18 @@ describe("group activity (display only)", () => {
   it("an unanalyzed group is not 'no activity'", () => {
     expect(summaryHasNoActivity(item([0, 0], { isAnalyzed: false }))).toBe(false);
     expect(presentedHealth(item([0, 0], { isAnalyzed: false }))).toBeNull();
+  });
+
+  it("a zero-activity group is never at risk, even with a stored risk label or flags", () => {
+    expect(isAtRiskGroup(item([0, 0], { teamHealth: "High Risk" }))).toBe(false);
+    expect(isAtRiskGroup(item([0.5, 0.5], { teamHealth: "Moderate Risk", flagsPresent: [] }))).toBe(true);
+    expect(isAtRiskGroup(item([0.9, 0.1], { teamHealth: "Healthy", flagsPresent: ["free-rider"] }))).toBe(true);
+    expect(isAtRiskGroup(item([0.5, 0.5], { teamHealth: "Healthy", flagsPresent: [] }))).toBe(false);
+    expect(isAtRiskGroup(item([0, 0], { isAnalyzed: false }))).toBe(false);
+  });
+  it("counts zero-activity groups and words the roll-up line", () => {
+    expect(noActivityCount([item([0, 0]), item([0.5, 0.5]), item([0], { isAnalyzed: false })])).toBe(1);
+    expect(noActivityRollupText(1)).toBe("1 group: no activity yet");
+    expect(noActivityRollupText(3)).toBe("3 groups: no activity yet");
   });
 });

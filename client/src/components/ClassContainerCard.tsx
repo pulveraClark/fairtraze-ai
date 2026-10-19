@@ -1,5 +1,6 @@
 import type { ProjectSummaryItem } from "@shared/types";
-import { presentedHealth, visibleFlags } from "../lib/groupActivity";
+import { isAtRiskGroup, presentedHealth } from "../lib/groupActivity";
+import { NoActivityRollup } from "./NoActivityRollup";
 import { GroupSummaryCard } from "./GroupSummaryCard";
 
 interface Props {
@@ -18,14 +19,6 @@ function parseLabel(label: string): { code: string; subjectName: string } {
   return { code: label.slice(0, sep), subjectName: label.slice(sep + 3) };
 }
 
-function isAtRisk(item: ProjectSummaryItem): boolean {
-  return (
-    item.isAnalyzed &&
-    (item.teamHealth === "High Risk" ||
-      item.teamHealth === "Moderate Risk" ||
-      visibleFlags(item).length > 0)
-  );
-}
 
 function getRollup(items: ProjectSummaryItem[]) {
   const analyzed = items.filter((i) => i.isAnalyzed);
@@ -34,9 +27,9 @@ function getRollup(items: ProjectSummaryItem[]) {
     unanalyzed:   items.filter((i) => !i.isAnalyzed).length,
     healthy:      analyzed.filter((i) => presentedHealth(i) === "Healthy").length,
     quiet:        analyzed.filter((i) => presentedHealth(i) === "no-activity").length,
-    moderate:     analyzed.filter((i) => i.teamHealth === "Moderate Risk").length,
-    highRisk:     analyzed.filter((i) => i.teamHealth === "High Risk").length,
-    needsAttention: items.filter(isAtRisk).length,
+    moderate:     analyzed.filter((i) => presentedHealth(i) === "Moderate Risk").length,
+    highRisk:     analyzed.filter((i) => presentedHealth(i) === "High Risk").length,
+    needsAttention: items.filter(isAtRiskGroup).length,
   };
 }
 
@@ -115,12 +108,6 @@ export function ClassContainerCard({
                 {rollup.healthy} Healthy
               </span>
             )}
-            {rollup.quiet > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-400 inline-block" />
-                {rollup.quiet} Not enough activity
-              </span>
-            )}
             {rollup.unanalyzed > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-slate-300 inline-block" />
@@ -128,6 +115,7 @@ export function ClassContainerCard({
               </span>
             )}
           </div>
+          <NoActivityRollup count={rollup.quiet} className="mt-1" />
         </div>
 
         {/* Right side: attention badge + chevron */}
