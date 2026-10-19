@@ -2,6 +2,7 @@ import { Avatar } from "./Avatar";
 import type { Flag } from "@shared/types";
 import { FlagTag } from "./FlagTag";
 import { NoActivityPill } from "./NoActivityPill";
+import { ShareBar } from "./report/DrawerParts";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -57,6 +58,7 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
                     <span className="font-semibold">{pct(m.contributionShare)}</span>
                     <span className="text-xs text-slate-700"> share</span>
                   </p>
+                  {m.contributionShare !== null && <ShareBar pct={m.contributionShare * 100} fairPct={equalPct} />}
                   {combined && (
                     <p className="text-xs tabular-nums text-slate-700">
                       GitHub {pct(m.githubContributionShare)} · Docs {pct(m.documentContributionShare)}

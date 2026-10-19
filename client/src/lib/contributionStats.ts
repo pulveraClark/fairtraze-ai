@@ -74,8 +74,6 @@ export function getContributionStatsCards(
     return [
       { label: "GitHub Share", value: fmtPct(m.githubContributionShare) },
       { label: "Docs Share",   value: fmtPct(m.documentContributionShare) },
-      { label: "GitHub Weight", value: fmtPct(m.wGitHub) },
-      { label: "Docs Weight",   value: fmtPct(m.wDocs) },
     ];
   }
 
@@ -87,4 +85,15 @@ export function getContributionStatsCards(
     { label: "Lines Added",   value: fmtLocale(m.additions) },
     { label: "Lines Deleted", value: fmtLocale(m.deletions) },
   ];
+}
+
+/**
+ * "Score blend: 50% GitHub / 50% Docs" for a Combined member, or null for any other source. The weights
+ * are shown as one quiet line instead of two tiles; they are the project's settings, not the member's.
+ */
+export function scoreBlendLine(myContribution: MyContribution | null, sourceType: ContributionSourceType | string): string | null {
+  if (!myContribution || sourceType !== "COMBINED") return null;
+  const m = myContribution as CombinedMyContribution;
+  if (typeof m.wGitHub !== "number" || typeof m.wDocs !== "number" || !Number.isFinite(m.wGitHub) || !Number.isFinite(m.wDocs)) return null;
+  return `Score blend: ${Math.round(m.wGitHub * 100)}% GitHub / ${Math.round(m.wDocs * 100)}% Docs`;
 }

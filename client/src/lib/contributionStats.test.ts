@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getContributionStatsCards,
+  scoreBlendLine,
   type GithubMyContribution,
   type EditorMyContribution,
   type CombinedMyContribution,
@@ -71,13 +72,11 @@ describe("getContributionStatsCards", () => {
     ]);
   });
 
-  it("builds the Combined tiles from the flat share/weight fields", () => {
+  it("builds the Combined tiles from the flat share fields; the weights are no longer tiles (18)", () => {
     const cards = getContributionStatsCards(combinedContribution(), "COMBINED");
     expect(cards).toEqual([
       { label: "GitHub Share", value: "60.0%" },
       { label: "Docs Share", value: "30.0%" },
-      { label: "GitHub Weight", value: "50.0%" },
-      { label: "Docs Weight", value: "50.0%" },
     ]);
   });
 
@@ -86,8 +85,6 @@ describe("getContributionStatsCards", () => {
     expect(cards).toEqual([
       { label: "GitHub Share", value: "60.0%" },
       { label: "Docs Share", value: "30.0%" },
-      { label: "GitHub Weight", value: "50.0%" },
-      { label: "Docs Weight", value: "50.0%" },
     ]);
   });
 
@@ -96,8 +93,6 @@ describe("getContributionStatsCards", () => {
     expect(cards).toEqual([
       { label: "GitHub Share", value: "60.0%" },
       { label: "Docs Share", value: "30.0%" },
-      { label: "GitHub Weight", value: "50.0%" },
-      { label: "Docs Weight", value: "50.0%" },
     ]);
   });
 
@@ -105,5 +100,18 @@ describe("getContributionStatsCards", () => {
     const broken = { ...githubContribution(), commits: undefined as unknown as number };
     const cards = getContributionStatsCards(broken, "GITHUB");
     expect(cards[0]).toEqual({ label: "Commits", value: "—" });
+  });
+});
+
+describe("scoreBlendLine (18)", () => {
+  it("words the project's blend for Combined", () => {
+    expect(scoreBlendLine(combinedContribution(), "COMBINED")).toBe("Score blend: 50% GitHub / 50% Docs");
+    expect(scoreBlendLine(combinedContribution({ wGitHub: 0.7, wDocs: 0.3 }), "COMBINED")).toBe("Score blend: 70% GitHub / 30% Docs");
+  });
+  it("is null for single-source projects, a missing report, or missing weights", () => {
+    expect(scoreBlendLine(githubContribution(), "GITHUB")).toBeNull();
+    expect(scoreBlendLine(editorContribution(), "EDITOR")).toBeNull();
+    expect(scoreBlendLine(null, "COMBINED")).toBeNull();
+    expect(scoreBlendLine(combinedContribution({ wGitHub: undefined as unknown as number }), "COMBINED")).toBeNull();
   });
 });

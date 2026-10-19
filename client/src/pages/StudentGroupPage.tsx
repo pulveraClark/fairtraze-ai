@@ -25,7 +25,7 @@ import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/grou
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
-import { getContributionStatsCards, type MyContribution } from "../lib/contributionStats";
+import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RoleSuggestionData {
@@ -774,16 +774,23 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 )}
 
                 {/* Stats grid */}
-                {report.myContribution && !report.noActivity && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {getContributionStatsCards(report.myContribution, sourceType).map(({ label, value }) => (
-                      <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
-                        <p className="text-xl font-semibold tabular-nums text-slate-800">{value}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+                {report.myContribution && !report.noActivity && (() => {
+                  const cards = getContributionStatsCards(report.myContribution, sourceType);
+                  const blend = scoreBlendLine(report.myContribution, sourceType);
+                  return (
+                    <div className="space-y-2">
+                      <div className={`grid grid-cols-2 gap-3 ${cards.length === 2 ? "" : "sm:grid-cols-4"}`}>
+                        {cards.map(({ label, value }) => (
+                          <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-4 text-center">
+                            <p className="text-xl font-semibold tabular-nums text-slate-800">{value}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {blend && <p className="text-xs text-slate-600">{blend}</p>}
+                    </div>
+                  );
+                })()}
 
                 {/* Leader-only: every member's share, so work can be rebalanced */}
                 {report.team && <LeaderTeamCard team={report.team} currentUserId={user?.id} sourceType={sourceType} noActivity={report.noActivity} />}

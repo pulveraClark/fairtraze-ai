@@ -145,4 +145,14 @@ describe("StudentGroupPage", () => {
     renderPage();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Tasks", "Report"]);
   });
+
+  it("Combined report: no weight tiles, one muted 'Score blend' line (18)", () => {
+    window.history.pushState({}, "", REPORT);
+    renderPage();
+    expect(screen.queryByText("GitHub Weight")).toBeNull();
+    expect(screen.queryByText("Docs Weight")).toBeNull();
+    expect(screen.getByText("GitHub Share")).toBeTruthy();
+    expect(screen.getByText("Docs Share")).toBeTruthy();
+    expect(screen.getByText("Score blend: 50% GitHub / 50% Docs")).toBeTruthy();
+  });
 });

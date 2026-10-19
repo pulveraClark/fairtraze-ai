@@ -26,6 +26,17 @@ describe("LeaderTeamCard", () => {
   });
 });
 
+describe("LeaderTeamCard share bars (18)", () => {
+  it("draws a small bar per member with the equal-share tick, and none for a member missing from the report or in a no-activity group", () => {
+    const { rerender } = render(<LeaderTeamCard sourceType="GITHUB" team={[member({ contributionShare: 0.6 }), member({ userId: 2, name: "Member B", contributionShare: null })]} />);
+    expect(screen.getAllByTestId("share-bar")).toHaveLength(1);
+    expect(screen.getByTestId("share-bar-fill")).toHaveStyle({ width: "60%" });
+    expect(screen.getByTestId("share-bar-tick")).toHaveStyle({ left: "50%" });
+    rerender(<LeaderTeamCard sourceType="GITHUB" noActivity team={[member({})]} />);
+    expect(screen.queryByTestId("share-bar")).toBeNull();
+  });
+});
+
 describe("LeaderTeamCard own row", () => {
   it("marks only the signed-in member's row with 'You'", () => {
     render(<LeaderTeamCard sourceType="GITHUB" currentUserId={2} team={[member({}), member({ userId: 2, name: "Member B" })]} />);
