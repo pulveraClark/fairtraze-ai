@@ -99,7 +99,7 @@ const rooms = new Map<string, RoomState>();
 // type `Collaboration.configure({document: ydoc})` syncs as document content. It never touches
 // `provider.awareness` (a completely separate wire message type), which is where
 // CollaborationCursor's name/color labels live — so cursor decorations can never leak in here.
-function extractPlainText(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText): string {
+export function extractPlainText(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText): string {
   if (node instanceof Y.XmlText) {
     let text = "";
     for (const op of node.toDelta() as { insert?: unknown }[]) {
