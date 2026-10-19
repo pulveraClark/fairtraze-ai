@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDocumentTeamReport, TYPICAL_SESSION_CHARS_DEFAULT } from "./documentScoring";
+import { computeDocumentTeamReport, TYPICAL_SESSION_CHARS_DEFAULT, DOCUMENT_DEFAULT_WEIGHTS } from "./documentScoring";
 import type { RawDocumentMemberStats } from "./types";
 
 const ZERO_BREAKDOWN = { substantive: 0, revision: 0, formatting: 0, trivial: 0 };
@@ -78,7 +78,24 @@ describe("computeDocumentTeamReport", () => {
     expect(report.members[0].effectiveRetainedChars).toBeCloseTo(75, 3);
   });
 
-  it("does not change the base formula weights or shape (0.4 retainedText / 0.2 sessions / 0.4 activeDays)", () => {
+  it("default document weights are 0.6 retained text / 0.2 sessions / 0.2 active days and sum to 1", () => {
+    expect(DOCUMENT_DEFAULT_WEIGHTS).toEqual({ retainedText: 0.6, sessions: 0.2, activeDays: 0.2 });
+    const w = DOCUMENT_DEFAULT_WEIGHTS;
+    expect(w.retainedText + w.sessions + w.activeDays).toBeCloseTo(1, 10);
+  });
+
+  it("applies the default weights to the shares: contributionShare = 0.6 text + 0.2 sessions + 0.2 days", () => {
+    const mk = (n: string, id: number, chars: number): RawDocumentMemberStats => ({
+      studentName: n, userId: id, githubUsername: n, retainedChars: chars, totalInsertedChars: chars,
+      totalDeletedChars: 0, selfDeletedChars: 0, sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
+    });
+    // Same sessions and days; A has 3x the retained text -> text share 0.75 / 0.25
+    const r = computeDocumentTeamReport([mk("a", 1, 300), mk("b", 2, 100)]);
+    expect(r.members[0].contributionShare).toBeCloseTo(0.6 * 0.75 + 0.2 * 0.5 + 0.2 * 0.5, 3);
+    expect(r.members[1].contributionShare).toBeCloseTo(0.6 * 0.25 + 0.2 * 0.5 + 0.2 * 0.5, 3);
+  });
+
+  it("does not change the base formula weights or shape (0.6 retainedText / 0.2 sessions / 0.2 activeDays)", () => {
     const members: RawDocumentMemberStats[] = [
       {
         studentName: "A", userId: 1, githubUsername: "a",

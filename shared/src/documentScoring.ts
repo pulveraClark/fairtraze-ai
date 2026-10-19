@@ -5,7 +5,7 @@ import type {
 import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
 export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
-  retainedText: 0.4, sessions: 0.2, activeDays: 0.4,
+  retainedText: 0.6, sessions: 0.2, activeDays: 0.2,
 };
 
 // Reference volume for converting imported character count into proportional "phantom" session
