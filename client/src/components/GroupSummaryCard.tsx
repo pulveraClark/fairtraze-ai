@@ -7,6 +7,7 @@ import { FlagTag } from "./FlagTag";
 import { useRouter } from "../router";
 import type { GroupTaskSummary } from "@shared/taskTypes";
 import { TaskCountLine } from "./TaskCountLine";
+import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 
 const HEALTH_BADGE: Record<TeamHealth, string> = {
   Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
@@ -75,11 +76,12 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
         {tasks && <TaskCountLine tasks={tasks} />}
         <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
           <p className="text-xs text-slate-400">No report yet</p>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {onTasks && (
               <button
                 onClick={(e) => { e.stopPropagation(); onTasks(item.projectId); }}
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                className={BUTTON_SECONDARY_COMPACT}
+                title="Open this group's task board"
               >
                 Tasks
               </button>
@@ -87,14 +89,15 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             {onManage && (
               <button
                 onClick={(e) => { e.stopPropagation(); onManage(item.projectId); }}
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                className={BUTTON_SECONDARY_COMPACT}
+                title="Manage members, leader and roles"
               >
                 Manage
               </button>
             )}
             <button
               onClick={openDetail}
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+              className={BUTTON_PRIMARY_COMPACT}
             >
               {onAnalyze ? "Analyze →" : "View →"}
             </button>
@@ -210,7 +213,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
       {tasks && <TaskCountLine tasks={tasks} />}
 
       {/* Footer: Gini + date + actions */}
-      <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 gap-2">
+      <div className="flex flex-wrap items-center justify-between mt-auto pt-2 border-t border-slate-100 gap-2">
         <div className="flex items-center gap-3 text-xs text-slate-400">
           {item.gini !== null && (
             <span>
@@ -221,11 +224,12 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <span>{new Date(item.lastAnalyzedAt).toLocaleDateString()}</span>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {onTasks && (
             <button
               onClick={(e) => { e.stopPropagation(); onTasks(item.projectId); }}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              className={BUTTON_SECONDARY_COMPACT}
+              title="Open this group's task board"
             >
               Tasks
             </button>
@@ -233,7 +237,8 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           {onManage && (
             <button
               onClick={(e) => { e.stopPropagation(); onManage(item.projectId); }}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              className={BUTTON_SECONDARY_COMPACT}
+              title="Manage members, leader and roles"
             >
               Manage
             </button>
@@ -242,8 +247,8 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <button
               onClick={(e) => { e.stopPropagation(); onAnalyze?.(item.projectId); }}
               disabled={analyzing}
-              className="text-xs text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
-              title="Re-analyze this project"
+              className={BUTTON_SECONDARY_COMPACT}
+              title="Run the analysis again for this group"
             >
               {analyzing ? "Analyzing…" : "Re-analyze"}
             </button>

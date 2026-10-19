@@ -81,3 +81,18 @@ describe("GroupSummaryCard task line (R11, 19)", () => {
     expect(screen.getByText(/3 of 8 done/)).toBeInTheDocument();
   });
 });
+
+describe("GroupSummaryCard footer actions (I14)", () => {
+  it("Tasks, Manage and Re-analyze are real bordered buttons with a tooltip saying what they do", () => {
+    renderCard(["Ana", "Ben"]);
+    for (const [name, hint] of [
+      ["Tasks", /task board/i],
+      ["Manage", /members, leader and roles/i],
+      ["Re-analyze", /analysis again/i],
+    ] as const) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveClass("border", "min-h-8");
+      expect(button).toHaveAttribute("title", expect.stringMatching(hint));
+    }
+  });
+});
