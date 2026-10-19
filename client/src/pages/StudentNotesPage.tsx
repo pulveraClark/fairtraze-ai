@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { AppFooter } from "../components/AppFooter";
 import { useMyDisputesQuery } from "../hooks/useGroupQueries";
 import { useRouter } from "../router";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -59,11 +60,7 @@ export function StudentNotesPage() {
           ))}
         </ul>
       </main>
-      <footer className="border-t border-slate-200 bg-white">
-        <p className="px-6 py-3 text-xs text-slate-700 sm:px-8">
-          Outputs support instructor judgment — they do not constitute grades or final assessments.
-        </p>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

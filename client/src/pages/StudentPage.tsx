@@ -1,4 +1,5 @@
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { AppFooter } from "../components/AppFooter";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { useEffect, useState } from "react";
 import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
@@ -393,13 +394,7 @@ export function StudentPage() {
 
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

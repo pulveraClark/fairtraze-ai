@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppFooter } from "../components/AppFooter";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
@@ -205,15 +206,11 @@ export function AlertsPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            {user?.systemRole === "INSTRUCTOR"
+      <AppFooter>
+        {user?.systemRole === "INSTRUCTOR"
               ? "Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments."
               : "Notifications are informational and do not constitute grades or final assessments."}
-          </p>
-        </div>
-      </footer>
+      </AppFooter>
     </div>
   );
 }

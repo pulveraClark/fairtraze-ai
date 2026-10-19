@@ -40,6 +40,11 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   return createElement(RouterContext.Provider, { value: { pathname, navigate } }, children);
 }
 
+/** Like useRouter, but null outside a RouterProvider (for shared bits that tests render on their own). */
+export function useOptionalRouter(): RouterContextValue | null {
+  return useContext(RouterContext);
+}
+
 export function useRouter(): RouterContextValue {
   const ctx = useContext(RouterContext);
   if (!ctx) throw new Error("useRouter must be used inside <RouterProvider>");

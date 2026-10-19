@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AppFooter } from "../components/AppFooter";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { PaginationBar } from "../components/PaginationBar";
@@ -184,13 +185,7 @@ export function AuditLogPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

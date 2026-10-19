@@ -1,4 +1,5 @@
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { AppFooter } from "../components/AppFooter";
 import { classFullLabel } from "../lib/classLabel";
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -390,13 +391,7 @@ export function DisputesPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
 
       {resolving && token && (
         <ResolveModal

@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { AppFooter } from "../components/AppFooter";
 import { useAuth } from "../context/AuthContext";
 import { Avatar } from "../components/Avatar";
 import { ProfilePhotoControls } from "../components/ProfilePhotoControls";
@@ -473,13 +474,7 @@ export function SettingsPage() {
 
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

@@ -19,7 +19,7 @@ const projects = (classId: number, n: number) =>
 describe("getNavItems", () => {
   it("gives admins flat links only (no classes tree)", () => {
     const keys = getNavItems("ADMIN").map((i) => i.key);
-    expect(keys).toEqual(["dashboard", "audit", "notifications", "settings"]);
+    expect(keys).toEqual(["dashboard", "audit", "notifications", "help", "settings"]);
   });
   it("adds Disputes for instructors only", () => {
     expect(getNavItems("INSTRUCTOR").some((i) => i.key === "disputes")).toBe(true);
@@ -31,6 +31,15 @@ describe("getNavItems", () => {
     const item = getNavItems("STUDENT", { hasNotes: true }).find((i) => i.label === "Your notes");
     expect(item?.href).toBe("/disputes");
     expect(getNavItems("INSTRUCTOR", { hasNotes: true }).some((i) => i.label === "Your notes")).toBe(false);
+  });
+  it("gives every role one Help item, just before Settings, pointing at /help", () => {
+    for (const role of ["ADMIN", "INSTRUCTOR", "STUDENT"] as const) {
+      const items = getNavItems(role);
+      const help = items.filter((i) => i.key === "help");
+      expect(help).toHaveLength(1);
+      expect(help[0]).toMatchObject({ label: "Help", href: "/help" });
+      expect(items.findIndex((i) => i.key === "help")).toBe(items.findIndex((i) => i.key === "settings") - 1);
+    }
   });
   it("labels the student tree 'My classes'", () => {
     expect(getNavItems("STUDENT").find((i) => i.key === "classes")?.label).toBe("My classes");

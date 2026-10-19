@@ -1,4 +1,5 @@
 import { HISTORY_HINT } from "../lib/docActionHints";
+import { AppFooter } from "../components/AppFooter";
 import { BUTTON_SECONDARY_COMPACT } from "../components/ui/styles";
 import { classCrumb } from "../lib/classLabel";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -972,13 +973,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

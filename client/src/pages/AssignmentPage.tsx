@@ -1,4 +1,5 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { AppFooter } from "../components/AppFooter";
 import { useEffect, useState, useCallback } from "react";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
@@ -528,13 +529,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
       </main>
 
-      <footer className="print:hidden border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter printHidden />
 
       {/* Print-only bundle for bulk export — hidden on screen, populated only while a
           bulk-export print pass is in flight (see handleBulkExport / the afterprint effect). */}

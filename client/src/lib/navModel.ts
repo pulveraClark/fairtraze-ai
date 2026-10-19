@@ -3,14 +3,14 @@
 import { classTooltip } from "./classLabel";
 
 export type SystemRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
-export type NavIconName = "home" | "classes" | "disputes" | "bell" | "settings" | "audit";
+export type NavIconName = "home" | "classes" | "disputes" | "bell" | "settings" | "audit" | "help";
 
 export const MAX_CLASSES  = 8;
 export const MAX_PROJECTS = 8;
 export const MAX_GROUPS   = 8;
 
 export interface NavItemDef {
-  key: "dashboard" | "classes" | "disputes" | "notifications" | "settings" | "audit";
+  key: "dashboard" | "classes" | "disputes" | "notifications" | "settings" | "audit" | "help";
   label: string;
   href: string;
   icon: NavIconName;
@@ -20,11 +20,14 @@ export interface NavItemDef {
 export function getNavItems(role: SystemRole, opts: { hasNotes?: boolean } = {}): NavItemDef[] {
   const notifications: NavItemDef = { key: "notifications", label: "Notifications", href: "/alerts",   icon: "bell" };
   const settings: NavItemDef      = { key: "settings",      label: "Settings",      href: "/settings", icon: "settings" };
+  // One Help entry for everyone, next to Settings; /help opens on the viewer's own role.
+  const help: NavItemDef          = { key: "help",          label: "Help",          href: "/help",     icon: "help" };
   if (role === "ADMIN") {
     return [
       { key: "dashboard", label: "Admin dashboard", href: "/admin",       icon: "home" },
       { key: "audit",     label: "Audit log",       href: "/admin/audit", icon: "audit" },
       notifications,
+      help,
       settings,
     ];
   }
@@ -34,6 +37,7 @@ export function getNavItems(role: SystemRole, opts: { hasNotes?: boolean } = {})
       { key: "classes",   label: "Classes",   href: "/dashboard", icon: "classes" },
       { key: "disputes",  label: "Disputes",  href: "/disputes",  icon: "disputes" },
       notifications,
+      help,
       settings,
     ];
   }
@@ -42,6 +46,7 @@ export function getNavItems(role: SystemRole, opts: { hasNotes?: boolean } = {})
     { key: "classes",   label: "My classes", href: "/student", icon: "classes" },
     ...(opts.hasNotes ? [{ key: "disputes", label: "Your notes", href: "/disputes", icon: "disputes" } as NavItemDef] : []),
     notifications,
+    help,
     settings,
   ];
 }

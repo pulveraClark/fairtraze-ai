@@ -1,4 +1,5 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { classCrumb } from "../lib/classLabel";
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -825,13 +826,7 @@ export function ClassPage({ classId }: Props) {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
