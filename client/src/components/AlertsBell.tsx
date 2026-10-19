@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAlerts, alertMeta, alertLink, timeAgo } from "../hooks/useAlerts";
 import type { AlertItem } from "../hooks/useAlerts";
 import { usePopover } from "../hooks/usePopover";
 import { useRouter } from "../router";
 import { NavIcon } from "./layout/icons";
 import { FOCUS_RING, RAIL_TOOLTIP, navItemClass } from "./layout/navStyles";
+import { flyoutPosition, type FlyoutPosition } from "../lib/flyoutPosition";
 
 const PREVIEW_COUNT = 6;
-// Rough flyout height (header + 22rem list + footer) used only to keep it on screen.
-const FLYOUT_ESTIMATE_PX = 480;
 
 interface AlertsBellProps {
   /** Icon-rail mode: no label, a red dot instead of the count, and a tooltip. */
@@ -23,18 +22,28 @@ interface AlertsBellProps {
 export function AlertsBell({ collapsed = false }: AlertsBellProps) {
   const { navigate, pathname } = useRouter();
   const { open, setOpen, ref, triggerRef } = usePopover();
-  const [pos, setPos] = useState({ left: 0, top: 0 });
+  const [pos, setPos] = useState<FlyoutPosition>({ left: 0, top: 0, maxHeight: 480 });
   // Full list is only fetched while the flyout is open; the badge polls the count alone.
   const { alerts, unreadCount, loading, markRead, markAllRead } = useAlerts({ listEnabled: open });
 
+  function place() {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPos(flyoutPosition(rect, { width: window.innerWidth, height: window.innerHeight }));
+  }
+
   function toggle() {
-    if (!open && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const maxTop = Math.max(8, window.innerHeight - FLYOUT_ESTIMATE_PX - 8);
-      setPos({ left: rect.right + 8, top: Math.max(8, Math.min(rect.top, maxTop)) });
-    }
+    if (!open) place();
     setOpen(!open);
   }
+
+  // Keep the flyout on screen if the window is resized while it is open.
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   async function handleAlertClick(alert: AlertItem) {
     setOpen(false);
@@ -89,7 +98,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
         <div
           role="dialog"
           aria-label="Notifications"
-          style={{ left: pos.left, top: pos.top, maxHeight: "calc(100vh - 1rem)" }}
+          style={{ left: pos.left, top: pos.top, maxHeight: pos.maxHeight }}
           className="fixed z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-xl shadow-black/50"
         >
           <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-800/50 px-4 py-3">

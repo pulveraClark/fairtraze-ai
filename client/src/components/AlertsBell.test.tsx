@@ -93,6 +93,34 @@ describe("AlertsBell for non-instructor roles", () => {
   });
 });
 
+describe("AlertsBell flyout stays on screen (22)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
+
+  it("caps its height to the space below it in a short window and scrolls the list inside", async () => {
+    signInAs("INSTRUCTOR");
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (url === "/api/alerts/unread-count" ? { unreadCount: 1 } : { alerts: [studentAlert], unreadCount: 1 }),
+    })));
+    const innerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 400 });
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ top: 300, right: 240, bottom: 340, left: 0, width: 240, height: 40, x: 0, y: 300, toJSON: () => ({}) });
+    try {
+      renderBell();
+      await userEvent.click(await screen.findByRole("button", { name: /1 unread/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Notifications" });
+      const top = parseFloat(dialog.style.top);
+      const maxHeight = parseFloat(dialog.style.maxHeight);
+      expect(top).toBeGreaterThanOrEqual(8);
+      expect(top + maxHeight).toBeLessThanOrEqual(400 - 8);
+      expect(dialog.querySelector(".overflow-y-auto")).not.toBeNull();
+    } finally {
+      rect.mockRestore();
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: innerHeight });
+    }
+  });
+});
+
 describe("alertLink / alertMeta", () => {
   it("prefers the stored link", () => {
     expect(alertLink({ type: "TASK_ASSIGNED", link: "/student/group/9", projectId: 9 })).toBe("/student/group/9");
