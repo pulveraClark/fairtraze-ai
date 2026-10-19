@@ -62,7 +62,7 @@ The system has three packages that communicate in two ways: through shared TypeS
 4. The server looks up the project (name, repo URL) and its member roster from SQLite.
 5. The server calls the GitHub Stats API (`GET /repos/{owner}/{repo}/stats/contributors`) via Octokit to get per-contributor commit counts, additions, and deletions. This endpoint returns 202 while GitHub computes the data; the server retries up to 30 times with a 1-second delay.
 6. For each contributor, the server fetches all commit SHAs and dates (`GET /repos/{owner}/{repo}/commits`, paginated at 100 per page).
-7. The server samples the first 50 SHAs per contributor and calls `GET /repos/{owner}/{repo}/commits/{sha}` for each, parses the diff patch, and classifies every added line as code, comment, or blank using `classifyAddedLines()` from `shared/src/lineClassifier.ts`.
+7. The server samples the newest 100 non-merge SHAs per contributor and calls `GET /repos/{owner}/{repo}/commits/{sha}` for each, parses the diff patch, and classifies every added line as code, comment, or blank using `classifyAddedLines()` from `shared/src/lineClassifier.ts`.
 8. GitHub contributor logins are matched (case-insensitively) to the seeded member roster. Unmatched logins are collected separately.
 9. `computeTeamReport()` in `shared/src/scoring.ts` runs the deterministic scoring pipeline and returns a `TeamReport`.
 10. `generateFairnessNarrative()` in `server/src/lib/gemini.ts` sends the `TeamReport` JSON to Gemini and gets back a prose explanation.
@@ -146,7 +146,7 @@ activeDaysShare = member.activeDays / sum(all activeDays)
 meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded
 ```
 
-- `codeLinesAdded`, `commentLinesAdded`, and `blankLinesAdded` come from parsing the actual diff patches of up to 50 commits per member.
+- `codeLinesAdded`, `commentLinesAdded`, and `blankLinesAdded` come from parsing the actual diff patches of up to 100 commits per member.
 - Blank lines contribute **zero** to `meaningfulLines`. This prevents large formatting-only commits from inflating a member's line score.
 - Comments contribute at 25% of full weight. They are recognized effort but less than substantive code.
 - `codeToCommentRatio = codeLinesAdded / commentLinesAdded` (null when `commentLinesAdded === 0`).

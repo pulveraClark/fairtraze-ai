@@ -525,7 +525,7 @@ export function LandingPage() {
               </div>
               <h3 className="font-display font-bold text-slate-900 text-xl mb-2">GitHub</h3>
               <p className="text-slate-500 text-sm leading-relaxed mb-5">
-                Analyze commits, diff patches, and activity patterns. Meaningful-line detection separates code from comments and blanks. Significance scoring weights production source files over config and generated files.
+                Analyze commits, diff patches, and activity patterns. Significance scoring weights each added line by file type (production source over config and generated files) and by commit impact, and discounts lines a member later deletes themselves.
               </p>
               <div className="flex flex-wrap gap-2">
                 {["Commits", "Diffs", "Active days", "Contribution share"].map((tag) => (

@@ -129,7 +129,7 @@ function DataSources() {
           </div>
           <p className="text-sm text-indigo-900 leading-relaxed">
             Per-member commit history from the GitHub API: authored commits (merge commits
-            excluded), lines added by file type, code versus comment versus blank lines, commit
+            excluded), lines added by file type, commit
             impact, self-churn and active days.
           </p>
         </div>
@@ -292,7 +292,7 @@ function DataAccuracy() {
   const rules = [
     "Merge commits are excluded from line and impact analysis, so merging a teammate's branch does not credit the merger with that work.",
     `Generated files (lock files, build output, minified files, source maps) count ${num(FILE_WEIGHTS.generated)}.`,
-    "Blank lines add nothing, and comment lines count a quarter as much as code lines.",
+    "Every added line counts, whether it is code, a comment or blank. What a line is worth depends on its file type and on the commit it was in, and deleting your own lines lowers it by at most half.",
     "Writing something and later deleting it yourself reduces credit by at most 50%. Deleting a teammate's lines is not penalized.",
     "Formatting changes do not count as authored text: toggling bold or changing a heading changes no characters, so it records no contribution.",
     "Inserted images and imported .docx content are disclosed on the report. Images are never scored; imports are scored with the adjustments described above.",

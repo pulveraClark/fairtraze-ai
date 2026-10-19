@@ -113,7 +113,7 @@ For each member, the system collects:
 - Commit timestamps (to calculate active days and detect deadline-driven work)
 - Per-commit diffs (to classify added lines as code, comments, or blank lines)
 
-Up to 50 commits per member are sampled for the diff analysis.
+Up to 100 commits per member (the newest, merge commits excluded) are sampled for the diff analysis.
 
 ### Meaningful lines
 
