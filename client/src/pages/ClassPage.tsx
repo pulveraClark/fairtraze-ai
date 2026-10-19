@@ -5,8 +5,8 @@ import { classCrumb } from "../lib/classLabel";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { classAccent } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
-import { presentedHealth } from "../lib/groupActivity";
-import { NoActivityRollup } from "../components/NoActivityRollup";
+import { noActivityCount, presentedHealth } from "../lib/groupActivity";
+import { NoActivityHeaderPill, NoActivityRollup } from "../components/NoActivityRollup";
 import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
@@ -555,6 +555,7 @@ export function ClassPage({ classId }: Props) {
   }
 
   const totalAtRisk = assignments.reduce((sum, a) => sum + classAtRiskCount(getAssignmentItems(a.id)), 0);
+  const totalQuiet = assignments.reduce((sum, a) => sum + noActivityCount(getAssignmentItems(a.id)), 0);
 
   const filteredByRisk = filterAtRisk
     ? assignments.filter((a) => classAtRiskCount(getAssignmentItems(a.id)) > 0)
@@ -681,6 +682,7 @@ export function ClassPage({ classId }: Props) {
                 {groupsNeedAttention(totalAtRisk)}
               </button>
             )}
+            <NoActivityHeaderPill count={totalQuiet} />
           </div>
         </div>
       </div>

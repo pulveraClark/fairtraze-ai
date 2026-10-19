@@ -1,8 +1,9 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
 import { useEffect, useState, useCallback } from "react";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
-import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
+import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { useAssignmentTaskSummary } from "../hooks/useAssignmentTaskSummary";
@@ -379,7 +380,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 {groupsNeedAttention(atRiskCount)}
               </button>
             )}
-            {quietCount > 0 && <span className="text-xs text-slate-600">{noActivityRollupText(quietCount)}</span>}
+            <NoActivityHeaderPill count={quietCount} />
           </div>
         </div>
       </div>

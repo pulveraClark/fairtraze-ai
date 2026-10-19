@@ -1,9 +1,10 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
-import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
+import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
@@ -604,7 +605,7 @@ export function InstructorDashboardPage() {
                 {groupsNeedAttention(atRiskCount)}
               </button>
             )}
-            {quietCount > 0 && <span className="text-xs text-slate-600">{noActivityRollupText(quietCount)}</span>}
+            <NoActivityHeaderPill count={quietCount} />
           </div>
         </div>
       </div>
