@@ -40,7 +40,9 @@ export function Column({ status, ids, tasksById, board, today, onOpen, dropState
   return (
     <section
       aria-labelledby={`col-title-${status}`}
-      className={`flex w-[min(18rem,85vw)] shrink-0 flex-col rounded-xl bg-slate-100 p-2.5 ${outline}`}
+      // Fixed width (the board scrolls sideways) below xl; from xl up the columns share the row,
+      // never narrower than 14rem (15rem + gaps would overflow the 960px board next to the sidebar), so all four fit next to the open sidebar.
+      className={`flex w-[min(18rem,85vw)] shrink-0 flex-col xl:w-auto xl:min-w-[14rem] xl:flex-1 xl:basis-0 rounded-xl bg-slate-100 p-2.5 ${outline}`}
     >
       <header className="flex items-center justify-between gap-2 px-1 pb-2">
         <h3 id={`col-title-${status}`} className="text-sm font-semibold text-slate-900">{label}</h3>

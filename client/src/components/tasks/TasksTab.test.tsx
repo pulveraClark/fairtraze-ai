@@ -290,6 +290,18 @@ describe("filters", () => {
     expect(panel).toHaveClass("sm:w-72");
   });
 
+  it("board columns share the row from xl up, never narrower than 14rem, and keep a fixed width below it (I20)", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Anything" })]));
+    renderTab();
+    await screen.findByText("Anything");
+    const columns = screen.getAllByRole("region").filter((el) => el.tagName === "SECTION");
+    expect(columns).toHaveLength(4);
+    for (const column of columns) {
+      expect(column).toHaveClass("xl:flex-1", "xl:min-w-[14rem]", "shrink-0");
+    }
+  });
+
   it("a milestone card filters the board and toggles off", async () => {
     signInAs(1);
     installFakeServer(mkBoard({ milestones: [{ id: 5, name: "Beta", dueDate: null, position: 1, total: 1, done: 0 }] }, [
