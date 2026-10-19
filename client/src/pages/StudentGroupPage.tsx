@@ -1,3 +1,5 @@
+import { HISTORY_HINT } from "../lib/docActionHints";
+import { BUTTON_SECONDARY_COMPACT } from "../components/ui/styles";
 import { classCrumb } from "../lib/classLabel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -942,7 +944,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               <button
                 type="button"
                 onClick={() => setViewingHistory((v) => !v)}
-                className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline"
+                title={viewingHistory ? undefined : HISTORY_HINT}
+                className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}
               >
                 {viewingHistory ? "Back to live document" : "History"}
               </button>

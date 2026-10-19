@@ -1,3 +1,4 @@
+import { HISTORY_HINT } from "../lib/docActionHints";
 import { useEffect, useState, useCallback } from "react";
 import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint, AnyScoredMember } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
@@ -695,7 +696,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                   : "Collaborative editor — shared document for this group. Highlighting shows who wrote each part of the current text — it does not show edit history or deleted content."}
               </p>
               <StatusPill kind="status" label="Read-only — instructor view" />
-              <button type="button" onClick={() => setViewingHistory((v) => !v)} className={`${BUTTON_SECONDARY} ml-auto`}>
+              <button type="button" onClick={() => setViewingHistory((v) => !v)} title={viewingHistory ? undefined : HISTORY_HINT} className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}>
                 {viewingHistory ? "Back to live document" : "History"}
               </button>
             </div>

@@ -1,3 +1,5 @@
+import { CHANGE_TEMPLATE_HINT } from "../lib/docActionHints";
+import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { DocumentEditor } from "./DocumentEditor";
@@ -138,7 +140,8 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
                   handleReset();
                 }
               }}
-              className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline disabled:opacity-50"
+              title={CHANGE_TEMPLATE_HINT}
+              className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}
             >
               {resetting ? "Changing template…" : "Change template"}
             </button>
