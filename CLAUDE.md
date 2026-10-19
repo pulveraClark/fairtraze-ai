@@ -68,7 +68,10 @@ Strikethrough, justify, links, clear formatting, checklists (`@tiptap/extension-
 
 ### Not implemented (documented as a limitation, not a bug)
 - Tracked-change suggestions (accepted/rejected) — no `Suggestion` model exists; only insert/delete shape is captured. Deliberately deferred — see "Tracked-change suggestions — NOT implemented (deliberately deferred)" below for why.
-- Full document revision history / snapshots — the system replays the `EditEvent` log to reconstruct current ownership, it does not store point-in-time document snapshots
+- Per-edit (continuous) revision history — point-in-time snapshots exist only once per analysis run (see "Document history" below); there is no snapshot per edit, and current ownership is still reconstructed by replaying the `EditEvent` log
+
+### Document history — IMPLEMENTED (one snapshot per analysis run)
+`DocumentSnapshot` (`documentId`, `reportId`, `yjsState`, `createdAt`) is written by `writeDocumentSnapshot` in `server/src/routes/analyze.ts` right after each `EDITOR`/`COMBINED` analysis creates its `Report`: a plain Prisma copy of the already-persisted `Document.yjsState` (skipped when the document has no saved state). It never calls `getYDoc()`, never touches the live room and has no interaction with `authorshipCapture.ts`. Read-only browsing: `GET /api/groups/:id/document/snapshots` and `.../snapshots/:snapshotId` (`routes/documents.ts`; group members and the class's instructor; `EDITOR`/`COMBINED` assignments only; a snapshot is rebuilt into read-only blocks with `readDocumentStructure`), shown as **History** by `DocumentHistoryPanel` on the student group page and the instructor `ProjectDetailPage`. "No history yet" until the first analysis. Never read by scoring.
 
 ### Why it matters — the system's main differentiator
 GitHub captures code. The Collaborative Editor captures writing and documentation. Together they give instructors a view of both technical and documentary contributions — especially important for teams where some members are primarily documentation or research contributors who appear invisible in GitHub data alone. This dual-source integration distinguishes FAIR TRAZE AI from tools that analyse only code repositories.
@@ -201,6 +204,14 @@ Follow these for all new UI (`client/src/components/ui/styles.ts` implements mos
 - Never color alone: statuses and pills always include text.
 - No horizontal scroll at 375px width or 200% zoom.
 - Exceptions to the compact scale, pinned explicitly so the token remap does not touch them: the FairTraze Docs writing area (`.ft-doc-content`, ~16px body), print/PDF output (`PrintableReport`, `@media print`), and the public landing page (wrapped in `.ft-legacy-scale`).
+
+## Help and documentation (IMPLEMENTED)
+Short, on-demand help; nothing explains itself in a paragraph on a busy screen.
+- **(?) tips:** `ui/InfoTip.tsx` (click-toggled, 1–2 sentences). An optional `helpHref` adds "More in Help", opened in a **new tab** so help never replaces a form or dialog. All tip texts live in `client/src/lib/helpText.ts` (numbers owned by the scoring code are passed in, never typed; `helpText.test.ts` enforces ≤ 2 sentences and no Gini wording in student-visible tips). Consequence lines (e.g. "Saving marks every group's report as outdated until you re-analyze", the one-time template choice) stay inline on purpose.
+- **`/help` page** ("How FairTraze works", `pages/HelpPage.tsx`): public like `/privacy`, For students / For instructors switch (default from the signed-in role), anchors listed in `HELP_ANCHORS` (the test checks each exists). Weights, thresholds and multipliers are **imported from `shared/`**, so it cannot drift from the scoring code. The student view never shows the Gini value.
+- **Entry points:** a **Help** item in the sidebar for every role (`navModel.getNavItems`) and one shared `components/AppFooter.tsx` (the "Outputs are evidence… not grades" note, one wording, plus a "How FairTraze works" link) used by every signed-in page.
+- Student-facing wording: students see "note" (Add a note, Send note, Note status); instructor screens, routes and models keep "dispute".
+- Draft, plan and the lines-weighting check are in `ux-audit/` (`BATCH5_PLAN.md`, `HELP_DRAFT.md`, `LINES_WEIGHTING_CHECK.md`).
 
 ## Setup-responsibilities workflow (IMPLEMENTED)
 Setup is distributed so an instructor with many sections and many groups per section is not a data-entry bottleneck. This is real, working flow — not a proposed design:
