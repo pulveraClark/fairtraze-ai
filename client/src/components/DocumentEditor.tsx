@@ -294,7 +294,9 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
 
     const handleStatus = ({ status }: { status: ConnStatus }) => setConnStatus(status);
     provider.on("status", handleStatus);
-    setConnStatus("connecting");
+    // This effect re-runs when the roster or the user arrives, usually AFTER the socket connected and
+    // its "status" event already fired; start from the provider's real state, not always "connecting".
+    setConnStatus(provider.wsconnected ? "connected" : "connecting");
 
     return () => {
       awareness.off("change", updatePresence);

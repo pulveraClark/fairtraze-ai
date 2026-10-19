@@ -9,6 +9,7 @@ const { created, FakeProvider } = vi.hoisted(() => {
 const created: unknown[] = [];
 class FakeProvider {
   synced = false;
+  wsconnected = false;
   awareness = {
     setLocalStateField: vi.fn(),
     getStates: () => new Map(),
@@ -28,7 +29,7 @@ class FakeProvider {
   }
   off(event: string, cb: (arg: never) => void) { this.handlers.get(event)?.delete(cb); }
   emit(event: string, arg: unknown) { this.handlers.get(event)?.forEach((cb) => cb(arg as never)); }
-  finishSync() { this.synced = true; this.emit("status", { status: "connected" }); this.emit("sync", true); }
+  finishSync() { this.synced = true; this.wsconnected = true; this.emit("status", { status: "connected" }); this.emit("sync", true); }
 }
 return { created: created as FakeProvider[], FakeProvider };
 });
@@ -57,6 +58,22 @@ describe("DocumentEditor first sync", () => {
     expect(screen.getAllByText("Connecting to the shared document…").length).toBeGreaterThan(0);
     act(() => created[0].finishSync());
     await waitFor(() => expect(isEditable()).toBe("true"));
+    expect(screen.queryByText("Connecting to the shared document…")).not.toBeInTheDocument();
+  });
+
+  it("does not fall back to 'Connecting' when the effect re-runs after the socket already connected", async () => {
+    // The roster fetch resolving re-runs the presence effect after the provider's one "status" event.
+    let releaseRoster!: () => void;
+    const rosterGate = new Promise<void>((r) => { releaseRoster = r; });
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url !== "/api/groups/1") return { ok: false, status: 404, json: async () => ({}) };
+      await rosterGate;
+      return { ok: true, status: 200, json: async () => ({ members: [{ userId: 1 }] }) };
+    }));
+    render(<DocumentEditor groupId={1} editable />);
+    act(() => created[0].finishSync()); // connected and synced first...
+    await waitFor(() => expect(isEditable()).toBe("true"));
+    await act(async () => { releaseRoster(); await new Promise((r) => setTimeout(r, 50)); }); // ...then the roster arrives
     expect(screen.queryByText("Connecting to the shared document…")).not.toBeInTheDocument();
   });
 
