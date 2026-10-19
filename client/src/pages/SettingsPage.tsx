@@ -1,15 +1,8 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
-import { useRouter } from "../router";
 import { Avatar } from "../components/Avatar";
 import { ProfilePhotoControls } from "../components/ProfilePhotoControls";
 import { PrivacySettingsCard } from "../components/PrivacySettingsCard";
-
-function roleHome(role?: string): string {
-  if (role === "STUDENT") return "/student";
-  if (role === "ADMIN")   return "/admin";
-  return "/dashboard";
-}
 
 interface FullProfile {
   id: number;
@@ -291,8 +284,7 @@ function ChangePasswordModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function SettingsPage() {
-  const { user, token, refreshUser } = useAuth();
-  const { navigate } = useRouter();
+  const { token, refreshUser } = useAuth();
 
   const [profile, setProfile]     = useState<FullProfile | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -358,15 +350,6 @@ export function SettingsPage() {
             <h1 className="text-xl font-semibold text-slate-800">Profile &amp; Settings</h1>
             <p className="text-sm text-slate-500 mt-0.5">Manage your account details and password.</p>
           </div>
-          <button
-            onClick={() => navigate(roleHome(user?.systemRole))}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Dashboard
-          </button>
         </div>
 
         {fetchErr && <ErrorBanner msg={fetchErr} />}

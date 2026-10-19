@@ -35,4 +35,10 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText(/anacruz/)).toHaveLength(1);
     expect(screen.getAllByText("Download my data")).toHaveLength(1);
   });
+
+  it("has no Dashboard back button; the sidebar and breadcrumb remain (R6)", async () => {
+    renderPage();
+    await screen.findAllByText("Ana Cruz");
+    expect(screen.queryByRole("button", { name: /dashboard/i })).toBeNull();
+  });
 });
