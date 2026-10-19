@@ -21,10 +21,9 @@ function AuthIllustration() {
       <path d="M54.5 113.5 C54.5 111.8 55.8 110.5 57.5 110.5 C59.2 110.5 60.5 111.8 60.5 113.5 C60.5 115 59.6 116.3 58.3 116.7 L58.3 119.5 L57.7 119.5 L57.7 116.7 C56.4 116.3 55.5 115 55.5 113.5 Z M58 111.5 C56.9 111.5 56 112.4 56 113.5 C56 114.6 56.9 115.5 58 115.5 C59.1 115.5 60 114.6 60 113.5 C60 112.4 59.1 111.5 58 111.5 Z" fill="white" opacity="0.7" />
 
       {/* Right node: FairTraze Docs */}
-      <circle cx="262" cy="110" r="28" fill="rgba(255,255,255,0.08)" stroke="rgba(196,181,253,0.3)" strokeWidth="1.5" strokeDasharray="4 3" />
+      <circle cx="262" cy="110" r="28" fill="rgba(255,255,255,0.08)" stroke="rgba(196,181,253,0.3)" strokeWidth="1.5" />
       <text x="262" y="103" textAnchor="middle" fontSize="7.5" fill="rgba(196,181,253,0.7)" fontFamily="sans-serif">FairTraze</text>
       <text x="262" y="113" textAnchor="middle" fontSize="7.5" fill="rgba(196,181,253,0.7)" fontFamily="sans-serif">Docs</text>
-      <text x="262" y="128" textAnchor="middle" fontSize="7" fill="rgba(196,181,253,0.5)" fontFamily="sans-serif">soon</text>
 
       {/* Connection lines */}
       <line x1="87" y1="110" x2="121" y2="110" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeDasharray="5 3" />

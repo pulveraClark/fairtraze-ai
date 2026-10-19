@@ -575,7 +575,7 @@ export function InstructorDashboardPage() {
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Instructor Dashboard</h1>
             <p className="text-sm text-slate-400 mt-0.5">
-              Group contribution overview · GitHub analysis
+              Group contribution overview · GitHub and FairTraze Docs
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">

@@ -29,4 +29,10 @@ describe.each([["Login", LoginPage], ["Register", RegisterPage]] as const)("%s s
     const { container } = render(<RouterProvider><Page /></RouterProvider>);
     expect(container.querySelector("svg[viewBox='0 0 320 220']")).not.toBeNull();
   });
+
+  it("does not label FairTraze Docs as coming soon (it is live) (I9)", () => {
+    stubWidth(true);
+    const { container } = render(<RouterProvider><Page /></RouterProvider>);
+    expect(container.textContent).not.toMatch(/soon/i);
+  });
 });
