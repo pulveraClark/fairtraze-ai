@@ -381,7 +381,7 @@ export function SettingsPage() {
         {/* ── Account info ────────────────────────────────────────────────── */}
         {profile && (
           <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <div className="flex items-center gap-4 pb-5 mb-5 border-b border-slate-100">
+            <div className="flex items-center gap-4">
               <Avatar
                 userId={profile.id}
                 name={profile.name}
@@ -391,35 +391,13 @@ export function SettingsPage() {
               <div className="min-w-0">
                 <p className="font-semibold text-slate-800 truncate">{profile.name}</p>
                 <p className="text-xs text-slate-500 truncate">{profile.email}</p>
+                <p className="text-xs text-slate-500">
+                  Member since {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                </p>
               </div>
               <span className={`ml-auto shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded border ${ROLE_BADGE[profile.systemRole] ?? ROLE_BADGE.STUDENT}`}>
                 {ROLE_LABEL[profile.systemRole] ?? profile.systemRole}
               </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-xs">
-              <div>
-                <p className="text-slate-400 mb-0.5">Email</p>
-                <p className="text-slate-700 font-medium truncate">{profile.email}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 mb-0.5">Role</p>
-                <p className="text-slate-700 font-medium">{ROLE_LABEL[profile.systemRole]}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 mb-0.5">Member since</p>
-                <p className="text-slate-700 font-medium">
-                  {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </p>
-              </div>
-              {isStudent && (
-                <div>
-                  <p className="text-slate-400 mb-0.5">GitHub username</p>
-                  <p className="text-slate-700 font-medium font-mono">
-                    {profile.githubUsername ? `@${profile.githubUsername}` : <span className="text-slate-300 font-sans">Not set</span>}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         )}

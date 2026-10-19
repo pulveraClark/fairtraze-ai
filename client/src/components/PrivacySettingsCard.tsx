@@ -122,7 +122,7 @@ export function PrivacySettingsCard() {
 
       <div className="mt-4 space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Download my data</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Your data</h3>
           <p className="mt-0.5 text-sm text-slate-800">
             A JSON file with your profile, group memberships, your own contribution entries, your editing and commit
             summaries, tasks, notes you filed and notifications. It never includes other members' data.
