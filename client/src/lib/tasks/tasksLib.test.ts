@@ -76,7 +76,8 @@ describe("filters", () => {
   });
 
   it("counts only the menu filters for the Filter button badge", () => {
-    expect(menuFilterCount({ ...NO_FILTERS, memberIds: [2], myTasks: true, search: "x" })).toBe(0);
+    expect(menuFilterCount({ ...NO_FILTERS, myTasks: true, search: "x" })).toBe(0);
+    expect(menuFilterCount({ ...NO_FILTERS, memberIds: [2, 3] })).toBe(1);
     expect(menuFilterCount({ ...NO_FILTERS, priorities: ["HIGH"], due: "later", milestoneId: 3 })).toBe(3);
   });
 

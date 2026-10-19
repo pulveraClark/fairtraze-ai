@@ -16,13 +16,13 @@ export const NO_FILTERS: TaskFilters = {
   search: "", memberIds: [], myTasks: false, priorities: [], labelIds: [], milestoneId: null, due: null,
 };
 
-/** Filters other than the member avatars and "My tasks" (the ones behind the Filter menu). */
+/** Filters other than search and "My tasks" (the ones behind the Filter menu, member included). */
 export function menuFilterCount(f: TaskFilters): number {
-  return (f.priorities.length ? 1 : 0) + (f.labelIds.length ? 1 : 0) + (f.milestoneId !== null ? 1 : 0) + (f.due ? 1 : 0);
+  return (f.memberIds.length ? 1 : 0) + (f.priorities.length ? 1 : 0) + (f.labelIds.length ? 1 : 0) + (f.milestoneId !== null ? 1 : 0) + (f.due ? 1 : 0);
 }
 
 export function hasAnyFilter(f: TaskFilters): boolean {
-  return !!f.search.trim() || f.memberIds.length > 0 || f.myTasks || menuFilterCount(f) > 0;
+  return !!f.search.trim() || f.myTasks || menuFilterCount(f) > 0;
 }
 
 export function filterTasks(

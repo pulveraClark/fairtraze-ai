@@ -215,9 +215,6 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
         board={board}
         selectedId={filters.milestoneId}
         onSelect={(id) => setFilters({ ...filters, milestoneId: id })}
-        onCreate={async (input) => {
-          await actions.createMilestone(input);
-        }}
       />
 
       {view === "board" && (

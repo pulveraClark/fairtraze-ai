@@ -213,20 +213,21 @@ describe("filters", () => {
     return userEvent.setup();
   };
 
-  it("member avatars filter, show the status line and the full name, and Clear resets", async () => {
+  it("members are filtered inside the Filter menu (no avatar row), with the status line and a Clear all (15)", async () => {
     const user = await setup();
-    const ben = screen.getByRole("button", { name: "Ben Cruz" });
-    expect(ben).toHaveAttribute("title", "Ben Cruz");
-    expect(ben).toHaveAttribute("aria-pressed", "false");
-    await user.click(ben);
-    expect(ben).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText(/^Showing /)).toHaveTextContent("Showing tasks for Ben Cruz · 1 of 4 tasks");
+    expect(screen.queryByRole("group", { name: "Filter by member" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ben Cruz" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Filter/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Ben Cruz" }));
+    expect(screen.getByText(/^Showing /)).toHaveTextContent("Showing tasks for Ben Cruz \u00b7 1 of 4 tasks");
     expect(screen.queryByText("Beta task")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Filter/ })).toHaveTextContent("1");
 
-    await user.click(screen.getByRole("button", { name: "Ana Reyes" }));
-    expect(screen.getByText(/^Showing /)).toHaveTextContent("Showing tasks for Ben Cruz, Ana Reyes · 2 of 4 tasks");
+    await user.click(screen.getByRole("checkbox", { name: "Ana Reyes" }));
+    expect(screen.getByText(/^Showing /)).toHaveTextContent("Showing tasks for Ben Cruz, Ana Reyes \u00b7 2 of 4 tasks");
 
-    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
     expect(screen.getByText("Gamma task")).toBeInTheDocument();
     expect(screen.queryByText(/^Showing /)).not.toBeInTheDocument();
   });
@@ -270,6 +271,24 @@ describe("filters", () => {
     expect(screen.queryByText("Not in beta")).not.toBeInTheDocument();
     await user.click(card);
     expect(screen.getByText("Not in beta")).toBeInTheDocument();
+  });
+});
+
+describe("milestone strip (15)", () => {
+  it("is not shown until the group has a milestone, even for the leader", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Only task" })]));
+    renderTab();
+    await screen.findByText("Only task");
+    expect(screen.queryByRole("region", { name: "Milestones" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add milestone" })).not.toBeInTheDocument();
+  });
+
+  it("is shown once a milestone exists", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({ milestones: [{ id: 5, name: "Beta", dueDate: null, position: 1, total: 1, done: 0 }] }, [mkTask({ id: 1, title: "T", milestoneId: 5 })]));
+    renderTab();
+    expect(await screen.findByRole("region", { name: "Milestones" })).toBeInTheDocument();
   });
 });
 

@@ -3,23 +3,21 @@ import type { BoardResponse } from "@shared/taskTypes";
 import { formatDue, todayManila } from "../../lib/tasks/dates";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
-import { AlertTriangleIcon, FlagIcon, PlusIcon } from "./icons";
+import { AlertTriangleIcon, FlagIcon } from "./icons";
 
 interface Props {
   board: BoardResponse;
   /** Currently filtered milestone id (clicking a card toggles it). */
   selectedId: number | null;
   onSelect: (id: number | null) => void;
-  onCreate: (input: { name: string; dueDate: string | null }) => Promise<void>;
 }
 
 /** One card per milestone: name, "X of Y", progress bar and due date. Clicking filters the board. */
-export function MilestoneStrip({ board, selectedId, onSelect, onCreate }: Props) {
-  const [adding, setAdding] = useState(false);
-  const canManage = board.viewer.canManageBoard;
+export function MilestoneStrip({ board, selectedId, onSelect }: Props) {
   const deadlineDay = board.group.deadline ? todayManila(new Date(board.group.deadline)) : null;
 
-  if (board.milestones.length === 0 && !canManage) return null;
+  // Shown only once the group has milestones; the leader adds the first from the "..." menu.
+  if (board.milestones.length === 0) return null;
 
   return (
     <section aria-label="Milestones" className="flex items-stretch gap-3 overflow-x-auto pb-1">
@@ -65,24 +63,6 @@ export function MilestoneStrip({ board, selectedId, onSelect, onCreate }: Props)
         );
       })}
 
-      {canManage && (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className={`flex w-40 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-400 bg-white p-3 text-sm font-medium text-slate-800 hover:bg-slate-50 ${FOCUS_LIGHT}`}
-        >
-          <PlusIcon className="h-4 w-4" />
-          Add milestone
-        </button>
-      )}
-
-      {adding && (
-        <AddMilestoneDialog
-          deadline={board.group.deadline}
-          onClose={() => setAdding(false)}
-          onCreate={async (input) => { await onCreate(input); setAdding(false); }}
-        />
-      )}
     </section>
   );
 }

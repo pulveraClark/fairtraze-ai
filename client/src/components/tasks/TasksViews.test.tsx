@@ -212,11 +212,12 @@ describe("list view", () => {
     expect(within(screen.getByTestId("task-row-3")).queryByText(/Overdue/)).not.toBeInTheDocument();
   });
 
-  it("uses the same filters as the board, including the member avatars", async () => {
+  it("uses the same filters as the board, including the member filter", async () => {
     const user = await setup();
-    await user.click(screen.getByRole("button", { name: "Ben Cruz" }));
+    await user.click(screen.getByRole("button", { name: /^Filter/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Ben Cruz" }));
     expect(rows()).toEqual(["Charlie"]);
-    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
     await user.type(screen.getByRole("textbox", { name: "Search tasks" }), "brav");
     expect(rows()).toEqual(["Bravo"]);
   });

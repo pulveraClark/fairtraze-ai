@@ -1,7 +1,6 @@
 import type { ReactNode, RefObject } from "react";
 import type { BoardResponse, TaskPriority } from "@shared/taskTypes";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@shared/taskTypes";
-import { Avatar } from "../Avatar";
 import { usePopover } from "../../hooks/usePopover";
 import { menuFilterCount, hasAnyFilter, NO_FILTERS, statusLine, type TaskFilters } from "../../lib/tasks/filters";
 import type { DueBucket } from "../../lib/tasks/dates";
@@ -41,7 +40,6 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
   const menu = usePopover();
   const activeMenuFilters = menuFilterCount(filters);
   const line = statusLine(filters, board.members, shown, total);
-  const anySelected = filters.memberIds.length > 0;
   const set = (patch: Partial<TaskFilters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -59,41 +57,6 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
             aria-label="Search tasks"
             className={`min-h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-sm text-slate-900 placeholder:text-slate-600 ${FOCUS_LIGHT}`}
           />
-        </div>
-
-        <div role="group" aria-label="Filter by member" className="flex items-center">
-          {board.members.map((m) => {
-            const selected = filters.memberIds.includes(m.userId);
-            return (
-              <button
-                key={m.userId}
-                type="button"
-                aria-pressed={selected}
-                aria-label={m.name}
-                title={m.name}
-                onClick={() => set({ memberIds: toggle(filters.memberIds, m.userId) })}
-                className={`-ml-1 flex h-11 w-10 items-center justify-center rounded-full first:ml-0 ${FOCUS_LIGHT}`}
-              >
-                <Avatar
-                  userId={m.userId}
-                  name={m.name}
-                  avatarUpdatedAt={m.avatarUpdatedAt}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-900 transition ${
-                    selected ? "ring-2 ring-indigo-700 ring-offset-2" : anySelected ? "opacity-40" : ""
-                  }`}
-                />
-              </button>
-            );
-          })}
-          {anySelected && (
-            <button
-              type="button"
-              onClick={() => set({ memberIds: [] })}
-              className={`ml-1 min-h-9 rounded-lg px-2 text-sm font-medium text-indigo-800 hover:bg-indigo-50 ${FOCUS_LIGHT}`}
-            >
-              Clear
-            </button>
-          )}
         </div>
 
         {board.viewer.isMember && (
@@ -133,6 +96,23 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
               aria-label="Filter tasks"
               className="absolute left-0 z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-lg"
             >
+              <fieldset>
+                <legend className="mb-1.5 font-semibold text-slate-900">Assigned to</legend>
+                <div className="flex flex-col">
+                  {board.members.map((m) => (
+                    <label key={m.userId} className="flex min-h-9 items-center gap-2 text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={filters.memberIds.includes(m.userId)}
+                        onChange={() => set({ memberIds: toggle(filters.memberIds, m.userId) })}
+                        className="h-4 w-4"
+                      />
+                      {m.name}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
               <fieldset>
                 <legend className="mb-1.5 font-semibold text-slate-900">Priority</legend>
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -203,7 +183,7 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
               <button
                 type="button"
                 disabled={activeMenuFilters === 0}
-                onClick={() => set({ priorities: [], labelIds: [], milestoneId: null, due: null })}
+                onClick={() => set({ memberIds: [], priorities: [], labelIds: [], milestoneId: null, due: null })}
                 className={`${BUTTON_SECONDARY_COMPACT} w-full`}
               >
                 Clear filters
