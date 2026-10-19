@@ -1,3 +1,4 @@
+import { classCrumb } from "../lib/classLabel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
@@ -387,7 +388,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   }
 
   const { classSection, assignment, project, membership, hasReport, report } = data;
-  const bandCode = classSection.subjectCode; // the class code, as in the sidebar (not the EDP code)
 
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] = groupTabs("student", sourceType);
@@ -439,7 +439,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <Breadcrumbs
               items={[
                 { label: "Dashboard", href: "/student" },
-                { label: bandCode, href: `/student/class/${classSection.id}` },
+                classCrumb(classSection, `/student/class/${classSection.id}`),
                 { label: project.groupName },
               ]}
             />

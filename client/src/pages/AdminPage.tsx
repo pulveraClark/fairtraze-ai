@@ -1,3 +1,4 @@
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -618,10 +619,12 @@ export function AdminPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-indigo-600">{cls.subjectCode}</span>
-                      {cls.edpCode && (
-                        <span className="text-xs text-indigo-400 font-mono">EDP {cls.edpCode}</span>
-                      )}
+                      <ClassCodeLabel
+                        subjectCode={cls.subjectCode}
+                        edpCode={cls.edpCode}
+                        className="text-xs font-mono font-bold text-indigo-600"
+                        edpClassName="font-semibold text-indigo-400"
+                      />
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
                       {cls.department && (
                         <span className="text-xs text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>

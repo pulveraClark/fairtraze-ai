@@ -11,10 +11,9 @@ const cls = {
 } as unknown as EnrolledClass;
 
 describe("student dashboard class card (23)", () => {
-  it("is headed by the class code, not the EDP code, and still shows the class code to copy", () => {
+  it("is headed by the subject code and the EDP code in the one shared format, and still shows the join code to copy", () => {
     render(<ClassCard cls={cls} onNavigate={() => {}} />);
-    expect(screen.getByText("IT-ELEC 2")).toBeInTheDocument();
-    expect(screen.queryByText("UXA634062")).not.toBeInTheDocument();
+    expect(document.body.textContent).toContain("IT-ELEC 2 · EDP UXA634062");
     expect(screen.getByText("ABC123")).toBeInTheDocument(); // R2: the join code stays
   });
 });

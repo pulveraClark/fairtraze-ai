@@ -1,3 +1,5 @@
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { classCrumb } from "../lib/classLabel";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
@@ -609,19 +611,19 @@ export function ClassPage({ classId }: Props) {
             <Breadcrumbs
               items={[
                 { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
-                { label: classInfo?.subjectCode ?? "Class" },
+                classCrumb(classInfo),
               ]}
             />
             <div className="flex items-center gap-2 flex-wrap">
               {classInfo ? (
                 <>
                   <h1 className="text-xl font-semibold text-slate-900 shrink-0">{classInfo.subjectName}</h1>
-                  <span className="shrink-0 text-xs font-mono font-bold text-indigo-600">
-                    {classInfo.subjectCode}
-                    {classInfo.edpCode && (
-                      <span className="font-semibold text-indigo-400"> · EDP {classInfo.edpCode}</span>
-                    )}
-                  </span>
+                  <ClassCodeLabel
+                    subjectCode={classInfo.subjectCode}
+                    edpCode={classInfo.edpCode}
+                    className="shrink-0 text-xs font-mono font-bold text-indigo-600"
+                    edpClassName="font-semibold text-indigo-400"
+                  />
                   {classInfo.department && (
                     <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {classInfo.department.code}

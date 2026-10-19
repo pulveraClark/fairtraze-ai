@@ -1,3 +1,5 @@
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { classFullLabel } from "../lib/classLabel";
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -101,7 +103,7 @@ function ResolveModal({
   const context = [
     dispute.project.groupName || `Group ${dispute.project.id}`,
     dispute.project.assignment?.title,
-    cs ? (cs.edpCode ? `${cs.subjectCode} (${cs.edpCode})` : cs.subjectCode) : undefined,
+    cs ? classFullLabel(cs) : undefined,
   ].filter(Boolean).join(" · ");
 
   return (
@@ -262,7 +264,7 @@ export function DisputesPage() {
                 <option value="">All classes</option>
                 {classOptions.map((cs) => (
                   <option key={cs.id} value={cs.id}>
-                    {cs.edpCode ? `${cs.subjectCode} (${cs.edpCode})` : cs.subjectCode} — {cs.subjectName}
+                    {classFullLabel(cs)} — {cs.subjectName}
                   </option>
                 ))}
               </select>
@@ -333,9 +335,12 @@ export function DisputesPage() {
 
                         <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500">
                           {cs && (
-                            <span className="font-mono font-semibold text-slate-700">
-                              {cs.subjectCode}{cs.edpCode && <span className="text-slate-400 font-normal"> ({cs.edpCode})</span>}
-                            </span>
+                            <ClassCodeLabel
+                              subjectCode={cs.subjectCode}
+                              edpCode={cs.edpCode}
+                              className="font-mono font-semibold text-slate-700"
+                              edpClassName="text-slate-500 font-normal"
+                            />
                           )}
                           {cs && <span className="text-slate-300">·</span>}
                           {asgn && <span>{asgn.title}</span>}

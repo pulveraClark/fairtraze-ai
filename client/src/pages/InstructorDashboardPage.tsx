@@ -1,3 +1,4 @@
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
@@ -768,7 +769,9 @@ export function InstructorDashboardPage() {
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 font-mono">{cls.subjectCode}</p>
+                          <p className="text-sm font-semibold text-slate-800 font-mono">
+                            <ClassCodeLabel subjectCode={cls.subjectCode} edpCode={cls.edpCode} edpClassName="font-normal text-slate-500" />
+                          </p>
                           <p className="text-xs text-slate-500 truncate">{cls.subjectName}</p>
                         </div>
                         <span className="shrink-0 text-xs text-slate-400">

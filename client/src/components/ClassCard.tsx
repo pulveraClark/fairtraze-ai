@@ -4,6 +4,7 @@ import type { ProjectSummaryItem } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, presentedHealth } from "../lib/groupActivity";
 import { NoActivityRollup } from "./NoActivityRollup";
 import { OverflowMenu } from "./ui/OverflowMenu";
+import { ClassCodeLabel } from "./ClassCodeLabel";
 
 interface Props {
   assignmentLabel: string;
@@ -91,10 +92,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
         {/* Subject code · EDP code */}
         <div>
           <p className="text-white font-mono font-bold text-base leading-tight tracking-tight">
-            {code}
-            {edpCode && (
-              <span className="font-semibold text-white/75"> · EDP {edpCode}</span>
-            )}
+            <ClassCodeLabel subjectCode={code} edpCode={edpCode} edpClassName="font-semibold text-white/75" />
           </p>
           {classType && (
             <p className="text-white/60 text-xs font-mono mt-0.5">

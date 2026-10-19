@@ -1,3 +1,5 @@
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { classCrumb } from "../lib/classLabel";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { useState } from "react";
 import { NoActivityPill } from "../components/NoActivityPill";
@@ -591,17 +593,19 @@ export function StudentClassPage({ classId }: Props) {
             <Breadcrumbs
               items={[
                 { label: "Dashboard", href: "/student" },
-                { label: cls?.subjectCode ?? "Class" },
+                classCrumb(cls),
               ]}
             />
             <div className="min-w-0">
               {cls ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-semibold text-slate-900">{cls.subjectName}</h1>
-                  <span className="text-xs font-mono font-bold text-indigo-600">
-                    {cls.subjectCode}
-                    {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
-                  </span>
+                  <ClassCodeLabel
+                    subjectCode={cls.subjectCode}
+                    edpCode={cls.edpCode}
+                    className="text-xs font-mono font-bold text-indigo-600"
+                    edpClassName="font-semibold text-indigo-400"
+                  />
                   {cls.department && (
                     <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {cls.department.code}

@@ -1,3 +1,4 @@
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { useEffect, useState } from "react";
 import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
@@ -175,7 +176,6 @@ export function ClassCard({
   
   const joinedCount    = cls.assignments.filter((a) => a.myGroup !== null).length;
   const totalAssignments = cls.assignments.length;
-  const bandLabel      = cls.subjectCode; // the class code, as in the sidebar (not the EDP code)
 
   const latestReport = cls.assignments
     .flatMap((a) => (a.myGroup?.report ? [a.myGroup.report] : []))
@@ -212,7 +212,9 @@ export function ClassCard({
             {joinedCount}/{totalAssignments} joined
           </span>
         </div>
-        <p className="text-white font-mono font-bold text-base leading-tight tracking-tight">{bandLabel}</p>
+        <p className="text-white font-mono font-bold text-base leading-tight tracking-tight">
+          <ClassCodeLabel subjectCode={cls.subjectCode} edpCode={cls.edpCode} edpClassName="font-semibold text-white/75" />
+        </p>
       </div>
 
       {/* Card body */}

@@ -1,5 +1,6 @@
 // Pure navigation model for the sidebar: which top-level items a role sees and how the
 // class → project → group tree is derived from data the app already fetches. No React, no I/O.
+import { classTooltip } from "./classLabel";
 
 export type SystemRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
 export type NavIconName = "home" | "classes" | "disputes" | "bell" | "settings" | "audit";
@@ -60,6 +61,7 @@ export function isItemActive(role: SystemRole, key: NavItemDef["key"], href: str
 export interface InstructorClassInput {
   id: number;
   subjectCode?: string | null;
+  edpCode?: string | null;
   subjectName?: string | null;
   assignments?: { id: number; title?: string | null }[];
 }
@@ -72,6 +74,7 @@ export interface GroupSummaryInput {
 export interface StudentClassInput {
   id: number;
   subjectCode?: string | null;
+  edpCode?: string | null;
   subjectName?: string | null;
   assignments?: { id?: number; title?: string | null; myGroup: { id: number; groupName: string } | null }[];
 }
@@ -108,6 +111,11 @@ export interface NavTree {
 
 function classLabel(c: { subjectCode?: string | null; subjectName?: string | null; id: number }): string {
   return c.subjectCode || c.subjectName || `Class ${c.id}`;
+}
+
+/** Tooltip of a class link: "SUBJECT CODE · EDP 12345" (see lib/classLabel.ts), else the subject name. */
+function classTitle(c: { subjectCode?: string | null; edpCode?: string | null; subjectName?: string | null; id: number }): string {
+  return classTooltip(c) || c.subjectName || classLabel(c);
 }
 
 /** Class id the current route belongs to, or null when none can be determined (yet). */
@@ -219,7 +227,7 @@ export function buildInstructorTree(
       return {
         id: c.id,
         label: classLabel(c),
-        title: c.subjectName || classLabel(c),
+        title: classTitle(c),
         href: `/class/${c.id}`,
         active: pathname === `/class/${c.id}` || pathname.startsWith(`/class/${c.id}/`),
         projects: capped.shown,
@@ -261,7 +269,7 @@ export function buildStudentTree(
       return {
         id: c.id,
         label: classLabel(c),
-        title: c.subjectName || classLabel(c),
+        title: classTitle(c),
         href,
         active: pathname === href,
         projects: capped.shown,

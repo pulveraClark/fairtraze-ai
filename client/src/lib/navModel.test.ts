@@ -138,3 +138,18 @@ describe("buildStudentTree", () => {
     expect(tree.classes[0].projects.every((p) => p.groups.length === 0)).toBe(true);
   });
 });
+
+describe("class link tooltip (I12)", () => {
+  it("shows the subject code in the sidebar and SUBJECT CODE · EDP in the tooltip", () => {
+    const tree = buildInstructorTree([{ id: 1, subjectCode: "UXA-101", edpCode: "12345", subjectName: "UX" }], undefined, "/dashboard", null);
+    expect(tree.classes[0].label).toBe("UXA-101");
+    expect(tree.classes[0].title).toBe("UXA-101 · EDP 12345");
+    const student = buildStudentTree([{ id: 1, subjectCode: "UXA-101", edpCode: "12345", subjectName: "UX", assignments: [] }], "/student", null);
+    expect(student.classes[0].title).toBe("UXA-101 · EDP 12345");
+  });
+
+  it("keeps the subject name as the tooltip when the class has no EDP code", () => {
+    const tree = buildInstructorTree([{ id: 1, subjectCode: "UXA-101", subjectName: "UX" }], undefined, "/dashboard", null);
+    expect(tree.classes[0].title).toBe("UX");
+  });
+});

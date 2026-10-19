@@ -4,6 +4,8 @@ export interface Crumb {
   label: string;
   /** Omit on the last crumb (the current page). */
   href?: string;
+  /** Hover text, for a short label that stands for something longer (a class code). */
+  title?: string;
 }
 
 /** Page trail shown above the page title. Links are real anchors with 44px-tall hit areas. */
@@ -24,12 +26,13 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
                     e.preventDefault();
                     navigate(c.href!);
                   }}
+                  title={c.title}
                   className="inline-flex min-h-10 items-center rounded-md px-1 font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                 >
                   {c.label}
                 </a>
               ) : (
-                <span aria-current={last ? "page" : undefined} className="inline-flex min-h-10 items-center truncate px-1 font-semibold text-slate-800">
+                <span aria-current={last ? "page" : undefined} title={c.title} className="inline-flex min-h-10 items-center truncate px-1 font-semibold text-slate-800">
                   {c.label}
                 </span>
               )}

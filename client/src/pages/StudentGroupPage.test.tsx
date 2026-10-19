@@ -185,10 +185,11 @@ describe("StudentGroupPage", () => {
     expect(screen.getAllByText("Work is a bit uneven").length).toBeGreaterThan(0);
   });
 
-  it("the breadcrumb names the class by its class code, not the EDP code (23)", () => {
+  it("the breadcrumb shows the subject code only, with SUBJECT CODE · EDP as its tooltip (I12)", () => {
     renderPage();
     const crumbs = screen.getByRole("navigation", { name: /breadcrumb/i });
     expect(crumbs.textContent).toContain("IT-ELEC 2");
     expect(crumbs.textContent).not.toContain("UXA634062");
+    expect(screen.getByRole("link", { name: "IT-ELEC 2" })).toHaveAttribute("title", "IT-ELEC 2 · EDP UXA634062");
   });
 });

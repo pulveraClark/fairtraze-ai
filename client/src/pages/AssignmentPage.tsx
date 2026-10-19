@@ -12,6 +12,7 @@ import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { BriefCard } from "../components/BriefCard";
+import { classCrumb, classFullLabel } from "../lib/classLabel";
 import { EditAssignmentModal } from "../components/EditAssignmentModal";
 import type { BriefAttachment } from "../lib/briefAttachments";
 
@@ -315,7 +316,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
             <Breadcrumbs
               items={[
                 { label: isAdmin ? "Admin" : "Dashboard", href: isAdmin ? "/admin" : "/dashboard" },
-                { label: classInfo?.subjectCode ?? "Class", href: classUrl },
+                classCrumb(classInfo, classUrl),
                 { label: assignment?.title ?? "Assignment" },
               ]}
             />
@@ -331,7 +332,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 <h1 className="text-xl font-semibold text-slate-400">Loading…</h1>
               )}
               <p className="text-sm text-slate-400 mt-0.5">
-                {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}
+                {classInfo && <span className="mr-1">{classFullLabel(classInfo)}{classInfo.subjectName ? ` · ${classInfo.subjectName}` : ""} ·</span>}
                 {summary.length} group{summary.length !== 1 ? "s" : ""}
                 {assignment?.deadline && <span className="ml-1">· Deadline: {fmtDeadline(assignment.deadline)}</span>}
                 {/* Require at least 2 analyzed groups — a page-level "average" of just one
