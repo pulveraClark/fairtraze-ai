@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { FOCUS_LIGHT } from "../ui";
 
 /** Full-width section header button (>=44px) with a title, one-line subtitle and a rotating chevron. */
@@ -51,6 +52,31 @@ export function HoverTip({ label, children }: { label: string; children: ReactNo
   const [focus, setFocus] = useState(false);
   const id = useId();
   const show = pinned || hover || focus;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const tipRef = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  // The tooltip is drawn in a portal with fixed coordinates so a scrolling column (the member modal's sidebar)
+  // can never clip it. It sits above the button, right-aligned, kept inside the viewport, below if there is no room above.
+  useLayoutEffect(() => {
+    if (!show) { setPos(null); return; }
+    function place() {
+      const b = btnRef.current?.getBoundingClientRect();
+      const t = tipRef.current;
+      if (!b || !t) return;
+      const w = t.offsetWidth;
+      const h = t.offsetHeight;
+      const vw = document.documentElement.clientWidth;
+      const vh = window.innerHeight;
+      const left = Math.max(8, Math.min(b.right - w, vw - w - 8));
+      const top = b.top - h - 4 >= 8 ? b.top - h - 4 : Math.max(8, Math.min(b.bottom + 4, vh - h - 8));
+      setPos({ left, top });
+    }
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
+  }, [show]);
 
   // While a tooltip is visible (hover, focus or click), Escape dismisses it alone. A capture-phase
   // document listener runs before the drawer's bubble-phase Escape handler and stops the event, so
@@ -68,6 +94,7 @@ export function HoverTip({ label, children }: { label: string; children: ReactNo
   return (
     <span className="relative inline-flex" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <button
+        ref={btnRef}
         type="button"
         aria-label={label}
         aria-describedby={show ? id : undefined}
@@ -81,14 +108,17 @@ export function HoverTip({ label, children }: { label: string; children: ReactNo
           <path strokeLinecap="round" d="M12 11v5M12 8h.01" />
         </svg>
       </button>
-      {show && (
+      {show && createPortal(
         <span
+          ref={tipRef}
           id={id}
           role="tooltip"
-          className="absolute bottom-full right-0 z-30 mb-1 w-56 max-w-[70vw] rounded-lg bg-slate-900 p-2.5 text-xs font-normal leading-normal text-white shadow-lg"
+          style={{ position: "fixed", left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: pos ? "visible" : "hidden" }}
+          className="z-[60] w-56 max-w-[70vw] rounded-lg bg-slate-900 p-2.5 text-xs font-normal leading-normal text-white shadow-lg"
         >
           {children}
-        </span>
+        </span>,
+        document.body
       )}
     </span>
   );

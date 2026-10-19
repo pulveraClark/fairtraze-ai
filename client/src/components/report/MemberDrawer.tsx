@@ -128,6 +128,7 @@ function DrawerBody({ member, onClose, restoreFocusTo, position, onPrev, onNext,
       title={member.studentName}
       restoreFocusTo={restoreFocusTo}
       scrollKey={member.studentName}
+      sidebar={<MemberSidebar member={member} memberRoles={memberRoles} {...rest} />}
       heading={
         <div className="flex min-w-0 items-center gap-3">
           <Avatar
@@ -154,47 +155,47 @@ function DrawerBody({ member, onClose, restoreFocusTo, position, onPrev, onNext,
     >
       {hasNav && <p className="sr-only" role="status" aria-live="polite">Member {position.index + 1} of {position.total}: {member.studentName}</p>}
       {/* Keyed by member so section open/closed state resets when another member is shown, without remounting the dialog. */}
-      <MemberContent key={member.studentName} member={member} memberRoles={memberRoles} {...rest} />
+      <MemberSections key={member.studentName} member={member} memberRoles={memberRoles} {...rest} />
     </Modal>
   );
 }
 
-type ContentProps = Omit<Props, "onClose" | "restoreFocusTo" | "position" | "onPrev" | "onNext" | "member"> & { member: AnyScoredMember };
-
-function MemberContent({
-  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes, onOpenScoringSettings,
-}: ContentProps) {
-  const fairPct = memberCount > 0 ? 100 / memberCount : null;
-  const userId = useAuthOptional()?.user?.id ?? null;
-  const [whereOpen, setWhereOpen] = useState(() => readSectionOpen(userId, "where", true));
-  const [impactOpen, setImpactOpen] = useState(false);
-  const [rawOpen, setRawOpen] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
-
+/** Facts about the selected member that both columns read; pure, no state. */
+function viewOf(member: AnyScoredMember, memberRoles: MemberRoleInfo[] | undefined) {
   const info = roleInfoOf(member, memberRoles);
   const gh = githubStatsOf(member);
   const docs = docsStatsOf(member);
-  const combined = isCombinedMember(member) ? member : null;
-  const importedChars = docs && docs.importNote ? docs.importedRetainedChars : 0;
-  const images = docs?.insertedImageCount ?? 0;
+  return {
+    info, gh, docs,
+    combined: isCombinedMember(member) ? member : null,
+    importedChars: docs && docs.importNote ? docs.importedRetainedChars : 0,
+    images: docs?.insertedImageCount ?? 0,
+  };
+}
+
+type ColumnProps = Omit<Props, "onClose" | "restoreFocusTo" | "position" | "onPrev" | "onNext" | "member"> & { member: AnyScoredMember };
+
+/** Left column: the share at a glance, the score-driver summary and flags. No state. */
+function MemberSidebar({
+  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes,
+}: ColumnProps) {
+  const fairPct = memberCount > 0 ? 100 / memberCount : null;
+  const { info, combined, importedChars, images } = viewOf(member, memberRoles);
   const notes = info?.mismatchNotes ?? [];
   const tasks = info?.taskSummary;
   const summary = scoreDriverSummary(member);
-  const showGithub = source !== "document";
-  const typeRows = fileTypeRows(gh);
-  const impacts = impactRows(gh);
-  const analyzedCommits = impactTotal(gh);
-  const maxImpact = impacts ? Math.max(1, ...impacts.map((r) => r.count)) : 1;
-  // Final-third share is the unified-timeline value for Combined members; Docs-only members show it in their Docs section.
-  const finalThird = formatPct(member.lastPhaseRatio);
-  const docsShowsFinalThird = !gh;
 
   return (
     <>
       {/* Always visible */}
-      <div className="rounded-xl border border-slate-200 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
         <p className="text-xs leading-normal text-slate-700">Contribution share</p>
         <p className="text-xl font-semibold tabular-nums leading-tight text-slate-900">{formatPct(member.contributionShare)}</p>
+        {fairPct !== null && (
+          <p className="mt-1 text-xs leading-normal text-slate-700">
+            Equal share for {memberCount} member{memberCount === 1 ? "" : "s"}: {fairPct.toFixed(1)}%
+          </p>
+        )}
       </div>
       {combined && (
         <dl className="mt-3">
@@ -220,7 +221,7 @@ function MemberContent({
         </div>
       )}
 
-      <div className="mt-4 pb-4">
+      <div className="mt-4">
         <h3 className="mb-1.5 text-sm font-semibold text-slate-900">Flags</h3>
         {member.flags.length === 0 ? (
           <p className="text-sm text-slate-800">No flags</p>
@@ -255,7 +256,12 @@ function MemberContent({
         {(notes.length > 0 || (tasks && tasks.total > 0) || importedChars > 0 || images > 0) && (
           <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
-            {tasks && tasks.total > 0 && <p><span className="font-semibold">Tasks: </span>{tasks.completed} of {tasks.total} completed</p>}
+            {tasks && tasks.total > 0 && (
+              <div>
+                <p><span className="font-semibold">Tasks: </span>{tasks.completed} of {tasks.total} completed</p>
+                <p className="text-xs leading-normal text-slate-700">Planning only. Not part of the score.</p>
+              </div>
+            )}
             {importedChars > 0 && (
               <p className="flex flex-wrap items-center gap-x-1">
                 <span><span className="font-semibold">Import: </span>{n(importedChars)} characters imported from .docx</span>
@@ -271,7 +277,30 @@ function MemberContent({
           </div>
         )}
       </div>
+    </>
+  );
+}
 
+/** Right column: the collapsible detail sections. Keyed by member so open/closed state resets on a switch. */
+function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: ColumnProps) {
+  const userId = useAuthOptional()?.user?.id ?? null;
+  const [whereOpen, setWhereOpen] = useState(() => readSectionOpen(userId, "where", true));
+  const [impactOpen, setImpactOpen] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
+
+  const { gh, docs, importedChars, images } = viewOf(member, memberRoles);
+  const showGithub = source !== "document";
+  const typeRows = fileTypeRows(gh);
+  const impacts = impactRows(gh);
+  const analyzedCommits = impactTotal(gh);
+  const maxImpact = impacts ? Math.max(1, ...impacts.map((r) => r.count)) : 1;
+  // Final-third share is the unified-timeline value for Combined members; Docs-only members show it in their Docs section.
+  const finalThird = formatPct(member.lastPhaseRatio);
+  const docsShowsFinalThird = !gh;
+
+  return (
+    <>
       {/* Collapsible sections */}
       {showGithub && (
         <>

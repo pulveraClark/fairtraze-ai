@@ -37,11 +37,12 @@ describe("MemberDrawer", () => {
     fileTypeBreakdown: { source: 380, test: 40, docs: 20, style: 0, config: 20, other: 0 },
   };
 
-  it("shows share, the stored-rule flag text and the score-driver summary, but no equal-share line", () => {
+  it("shows share, the equal-share line, the stored-rule flag text and the score-driver summary, but no bar caption", () => {
     render(<MemberDrawer {...baseProps} member={ghMixed} />);
     expect(screen.getByText("40.0%")).toBeInTheDocument();
     expect(screen.queryByText(/percentage points/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/equal share/)).not.toBeInTheDocument();
+    expect(screen.getByText("Equal share for 3 members: 33.3%")).toBeInTheDocument();
+    expect(screen.queryByText(/Line = equal share/)).not.toBeInTheDocument();
     expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
     expect(screen.getByText(/More than 60%/)).toBeInTheDocument();
     expect(screen.getByText("Mostly source code")).toBeInTheDocument();
@@ -286,7 +287,12 @@ describe("MemberDrawer", () => {
       render(<MemberDrawer {...baseProps} memberCount={0} source="combined" member={both} />);
       expect(bars()).toHaveLength(2);
       expect(screen.queryByTestId("share-bar-tick")).not.toBeInTheDocument();
-      expect(screen.queryByText(/equal share/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/equal share/i)).not.toBeInTheDocument();
+    });
+
+    it("says 'member' for a group of one", () => {
+      render(<MemberDrawer {...baseProps} memberCount={1} source="combined" member={both} />);
+      expect(screen.getByText("Equal share for 1 member: 100.0%")).toBeInTheDocument();
     });
 
     it("keeps the fill and tick within 0-100%", () => {

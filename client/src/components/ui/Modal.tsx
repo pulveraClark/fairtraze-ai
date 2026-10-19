@@ -14,6 +14,11 @@ interface Props {
   /** Controls placed before the close button (e.g. previous/next). */
   actions?: ReactNode;
   children: ReactNode;
+  /**
+   * Optional summary column. Above lg it is a 320px grey column on the left (sticky while the body scrolls,
+   * with its own scroll only if taller than the dialog); below lg it stacks above `children`.
+   */
+  sidebar?: ReactNode;
   /** The element that opened the modal; focus returns here on close. */
   restoreFocusTo?: HTMLElement | null;
   /** When this changes the body scrolls back to the top (e.g. another member is shown). */
@@ -21,7 +26,7 @@ interface Props {
 }
 
 /** Centered dialog (full screen under 640px): Esc and backdrop close it, Tab is trapped, focus returns to the opener. */
-export function Modal({ open, onClose, title, heading, actions, children, restoreFocusTo, scrollKey }: Props) {
+export function Modal({ open, onClose, title, heading, actions, children, sidebar, restoreFocusTo, scrollKey }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   useFocusTrap(open, panelRef, onClose, restoreFocusTo);
@@ -55,7 +60,17 @@ export function Modal({ open, onClose, title, heading, actions, children, restor
             </button>
           </div>
         </div>
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        {sidebar ? (
+          // One scroll area for the whole body; the grey column stretches the full height and its content sticks.
+          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[320px_minmax(0,1fr)]">
+            <aside aria-label="Summary" data-testid="modal-sidebar" className="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
+              <div className="px-4 py-4 sm:px-5 lg:sticky lg:top-0 lg:max-h-[calc(min(92vh,56rem)-5rem)] lg:self-start lg:overflow-y-auto">{sidebar}</div>
+            </aside>
+            <div data-testid="modal-main" className="min-w-0 px-4 py-4 sm:px-5">{children}</div>
+          </div>
+        ) : (
+          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        )}
       </div>
     </div>,
     document.body

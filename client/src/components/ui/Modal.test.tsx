@@ -66,4 +66,12 @@ describe("Modal", () => {
     expect(cls).toContain("w-full");
     expect(cls).toContain("sm:max-w-[1040px]");
   });
+
+  it("renders a sidebar column before the content, only when a sidebar is given", () => {
+    const { rerender } = render(<Modal open onClose={() => {}} title="T" sidebar={<p>Side</p>}><p>Main</p></Modal>);
+    expect(screen.getByTestId("modal-sidebar")).toHaveTextContent("Side");
+    expect(screen.getByTestId("modal-main")).toHaveTextContent("Main");
+    rerender(<Modal open onClose={() => {}} title="T"><p>Main</p></Modal>);
+    expect(screen.queryByTestId("modal-sidebar")).not.toBeInTheDocument();
+  });
 });

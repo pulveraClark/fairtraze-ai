@@ -183,3 +183,90 @@ describe("Member details modal: previous/next", () => {
 function dialogContainsFocus(): boolean {
   return !!document.activeElement && screen.getByRole("dialog").contains(document.activeElement);
 }
+
+describe("Member details modal: two-column layout", () => {
+  const side = () => within(screen.getByTestId("modal-sidebar"));
+  const main = () => within(screen.getByTestId("modal-main"));
+
+  it("puts share, equal share, summary and flags in the left column, and the four sections on the right", async () => {
+    const withFlag = [{ ...members[0], flags: ["deadline-driven"] } as AnyScoredMember, members[1], members[2]];
+    render(<Harness list={withFlag} />);
+    await openRow("Member A");
+    expect(side().getByText("Contribution share")).toBeInTheDocument();
+    expect(side().getByText("Equal share for 3 members: 33.3%")).toBeInTheDocument();
+    expect(side().getByRole("heading", { name: "Flags" })).toBeInTheDocument();
+    expect(side().getByText("Deadline-driven")).toBeInTheDocument();
+    expect(main().getByRole("button", { name: /Where the work went/ })).toBeInTheDocument();
+    expect(main().getByRole("button", { name: /Commit impact/ })).toBeInTheDocument();
+    expect(main().getByRole("button", { name: /Raw numbers/ })).toBeInTheDocument();
+    expect(main().getByText(/FairTraze Docs activity/)).toBeInTheDocument();
+    expect(side().queryByText(/FairTraze Docs activity/)).not.toBeInTheDocument();
+    expect(side().queryByRole("button", { name: /Where the work went|Commit impact|Raw numbers/ })).not.toBeInTheDocument();
+  });
+
+  it("is one scroll area: the sidebar is sticky from lg with a 320px column, and neither column scrolls on its own below lg", async () => {
+    render(<Harness />);
+    await openRow("Member A");
+    const sidebar = screen.getByTestId("modal-sidebar");
+    const grid = sidebar.parentElement!;
+    expect(grid.className).toContain("lg:grid-cols-[320px_minmax(0,1fr)]");
+    expect(grid.className).toContain("overflow-y-auto");
+    expect(sidebar.className).toContain("bg-slate-50");
+    const sticky = sidebar.firstElementChild as HTMLElement;
+    expect(sticky.className).toContain("lg:sticky");
+    expect(sticky.className).toContain("lg:top-0");
+    expect(sticky.className).toContain("lg:self-start");
+    expect(sticky.className).toContain("lg:overflow-y-auto");
+    expect(sticky.className).not.toMatch(/(^|\s)overflow-y-auto/);
+    expect(screen.getByTestId("modal-main").className).not.toContain("overflow");
+  });
+
+  it("keeps the summary before the details in DOM order so the single-column reading order is share, flags, sections", async () => {
+    render(<Harness />);
+    await openRow("Member A");
+    const sidebar = screen.getByTestId("modal-sidebar");
+    const mainCol = screen.getByTestId("modal-main");
+    expect(sidebar.compareDocumentPosition(mainCol) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows no equal-share line when the group size is unknown", async () => {
+    render(<Harness />);
+    render(<MemberDrawer member={members[0]} onClose={() => {}} source="github" thresholds={thresholds} deadlineBasis="activity-span" memberCount={0} />);
+    expect(screen.queryByText(/Equal share for/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the sections collapsible by keyboard", async () => {
+    render(<Harness />);
+    await openRow("Member A");
+    const raw = main().getByRole("button", { name: /Raw numbers/ });
+    raw.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(raw).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keeps the Tasks line in the left column with a muted planning-only note under it", async () => {
+    const info = { userId: 1, githubUsername: members[0].githubUsername, functionalRoles: [], isLeader: false, mismatchNotes: [], taskSummary: { completed: 2, total: 5 } };
+    render(
+      <MemberDrawer
+        member={members[0]} onClose={() => {}} source="github" thresholds={thresholds} deadlineBasis="activity-span" memberCount={3}
+        memberRoles={[info as never]}
+      />,
+    );
+    expect(side().getByText("2 of 5 completed", { exact: false })).toBeInTheDocument();
+    const note = side().getByText("Planning only. Not part of the score.");
+    expect(note.className).toContain("text-xs");
+    expect(note.previousElementSibling).toHaveTextContent("Tasks: 2 of 5 completed");
+    expect(main().queryByText(/Planning only/)).not.toBeInTheDocument();
+  });
+
+  it("omits the Tasks line and its note when the member has no tasks", async () => {
+    const info = { userId: 1, githubUsername: members[0].githubUsername, functionalRoles: [], isLeader: false, mismatchNotes: [], taskSummary: { completed: 0, total: 0 } };
+    render(
+      <MemberDrawer
+        member={members[0]} onClose={() => {}} source="github" thresholds={thresholds} deadlineBasis="activity-span" memberCount={3}
+        memberRoles={[info as never]}
+      />,
+    );
+    expect(screen.queryByText(/Planning only/)).not.toBeInTheDocument();
+  });
+});
