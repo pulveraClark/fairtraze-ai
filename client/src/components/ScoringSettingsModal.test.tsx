@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { ProjectScoringConfig } from "@shared/types";
 import { ScoringSettingsModal } from "./ScoringSettingsModal";
 
@@ -27,5 +27,62 @@ describe("ScoringSettingsModal", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(fetchMock.mock.calls[0][0]).toBe("/api/assignments/7/scoring-config");
     expect(fetchMock.mock.calls[0][1].method).toBe("PATCH");
+  });
+
+  const renderModal = (sourceType = "GITHUB") =>
+    render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType={sourceType} onClose={() => {}} onSaved={() => {}} />);
+  const numberInput = (i: number) => screen.getAllByRole("spinbutton")[i] as HTMLInputElement;
+
+  it("shows a live total; an off total says how far, disables Save and Balance fixes it", () => {
+    renderModal();
+    expect(screen.getByRole("status")).toHaveTextContent("Weights total: 1.00 of 1.00");
+    expect(screen.queryByRole("button", { name: "Balance" })).toBeNull();
+
+    fireEvent.change(numberInput(2), { target: { value: "0.1" } });
+    expect(screen.getByRole("status")).toHaveTextContent("Weights total: 0.90 of 1.00");
+    expect(screen.getByRole("status")).toHaveTextContent("0.10 short");
+    expect((screen.getByRole("button", { name: "Save settings" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Balance" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Weights total: 1.00 of 1.00");
+    expect((screen.getByRole("button", { name: "Save settings" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(numberInput(0).value).toBe("0.45");
+  });
+
+  it("an over total says so, and the blend has its own Balance", () => {
+    renderModal("COMBINED");
+    fireEvent.change(numberInput(3), { target: { value: "0.8" } });
+    const blend = screen.getAllByRole("status").find((n) => /Blend total/.test(n.textContent ?? ""))!;
+    expect(blend).toHaveTextContent("Blend total: 1.30 of 1.00");
+    expect(blend).toHaveTextContent("0.30 over");
+    fireEvent.click(screen.getByRole("button", { name: "Balance" }));
+    expect(screen.getAllByRole("status").find((n) => /Blend total/.test(n.textContent ?? ""))).toHaveTextContent("Blend total: 1.00 of 1.00");
+  });
+
+  it("Reset to defaults asks first; Cancel changes nothing, Confirm restores the defaults without saving", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    fireEvent.change(numberInput(0), { target: { value: "0.6" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("Nothing is saved until you press Save settings");
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(numberInput(0).value).toBe("0.6");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset to defaults" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(numberInput(0).value).toBe("0.4");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("Esc closes only the reset confirmation, not the whole dialog", () => {
+    const onClose = vi.fn();
+    render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType="GITHUB" onClose={onClose} onSaved={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import type { ProjectScoringConfig } from "@shared/types";
 import { useToast } from "./Toast";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
+import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { balanceWeights } from "../lib/balanceWeights";
 
 const DEFAULTS: ProjectScoringConfig = {
   weights:    { commits: 0.4, lines: 0.4, activeDays: 0.2 },
@@ -35,6 +38,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
 
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   const isCombined = sourceType === "COMBINED";
 
@@ -47,11 +51,22 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
   // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      // While the reset confirmation is open, Esc closes only that.
+      if (e.key === "Escape" && !confirmingReset) onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, confirmingReset]);
+
+  function balanceBase() {
+    const [c, l, a] = balanceWeights([commits, lines, activeDays]);
+    setCommits(c!); setLines(l!); setActiveDays(a!);
+  }
+
+  function balanceBlend() {
+    const [g, d] = balanceWeights([wGitHub, wDocs]);
+    setWGitHub(g!); setWDocs(d!);
+  }
 
   function resetToDefaults() {
     setCommits(DEFAULTS.weights.commits);
@@ -152,18 +167,9 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
               />
             </div>
 
-            {/* Sum indicator — real-time; blocks Save until the weights sum to exactly 1.0 */}
-            <div className={`mt-3 flex items-center gap-2 text-xs font-semibold rounded-lg px-3 py-2 ${
-              sumOk
-                ? "bg-green-50 text-green-700 border border-green-200"
-                : "bg-red-50 text-red-700 border border-red-200"
-            }`}>
-              <span className="text-base leading-none">{sumOk ? "✓" : "✕"}</span>
-              <span>
-                Weights sum: <strong>{weightSum.toFixed(3)}</strong>
-                {!sumOk && " — Weights must sum to 1.0."}
-              </span>
-            </div>
+            {/* Live total; Save stays disabled until the weights add up to 1.00 */}
+            <SumRow name="Weights" sum={weightSum} ok={sumOk} onBalance={balanceBase} />
+
           </section>
 
           {/* ── Source Blend (COMBINED projects only) ───────────────────────────── */}
@@ -192,17 +198,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
                 />
               </div>
 
-              <div className={`mt-3 flex items-center gap-2 text-xs font-semibold rounded-lg px-3 py-2 ${
-                blendSumOk
-                  ? "bg-green-50 text-green-700 border border-green-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}>
-                <span className="text-base leading-none">{blendSumOk ? "✓" : "✕"}</span>
-                <span>
-                  Blend sum: <strong>{blendSum.toFixed(3)}</strong>
-                  {!blendSumOk && " — wGitHub + wDocs must sum to 1.0."}
-                </span>
-              </div>
+              <SumRow name="Blend" sum={blendSum} ok={blendSumOk} onBalance={balanceBlend} />
             </section>
           )}
 
@@ -248,10 +244,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
 
           {/* ── Reset ────────────────────────────────────────────────────────── */}
           <div className="flex justify-end">
-            <button
-              onClick={resetToDefaults}
-              className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2 transition-colors"
-            >
+            <button type="button" onClick={() => setConfirmingReset(true)} className={BUTTON_SECONDARY_COMPACT}>
               Reset to defaults
             </button>
           </div>
@@ -286,11 +279,46 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
           </div>
         </div>
       </div>
+
+      {confirmingReset && (
+        <ConfirmDialog
+          title="Reset to defaults?"
+          confirmLabel="Reset to defaults"
+          onCancel={() => setConfirmingReset(false)}
+          onConfirm={() => { resetToDefaults(); setConfirmingReset(false); }}
+        >
+          Every weight and threshold on this screen goes back to its default value. Nothing is saved until you press Save settings.
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
+
+/** Live total of a group of weights: text plus icon, and a one-click Balance when it is not 1.00. */
+function SumRow({ name, sum, ok, onBalance }: { name: string; sum: number; ok: boolean; onBalance: () => void }) {
+  const diff = Math.round(Math.abs(1 - sum) * 100) / 100;
+  return (
+    <div
+      role="status"
+      className={`mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-sm ${
+        ok ? "border-green-300 bg-green-50 text-green-900" : "border-red-300 bg-red-50 text-red-900"
+      }`}
+    >
+      <span className="font-semibold">
+        {ok ? "✓ " : "✕ "}
+        {name} total: <span className="tabular-nums">{sum.toFixed(2)}</span> of 1.00
+      </span>
+      {!ok && (
+        <>
+          <span>{sum < 1 ? `${diff.toFixed(2)} short. ` : `${diff.toFixed(2)} over. `}Save is off until the total is 1.00.</span>
+          <button type="button" onClick={onBalance} className={`${BUTTON_SECONDARY_COMPACT} min-h-10`}>Balance</button>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface WeightRowProps {
   label: string;
