@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared/types";
-import { Drawer, StatusPill, BUTTON_SECONDARY, FOCUS_LIGHT } from "../ui";
+import { Modal, StatusPill, BUTTON_SECONDARY, FOCUS_LIGHT } from "../ui";
 import { PILL_TONES } from "../ui/StatusPill";
 import { useAuthOptional } from "../../context/AuthContext";
 import { DisclosureSection, HoverTip, Note, Row, ShareBar } from "./DrawerParts";
@@ -20,6 +20,10 @@ interface Props {
   member: AnyScoredMember | null;
   onClose: () => void;
   restoreFocusTo?: HTMLElement | null;
+  /** This member's place in the list order; shows "Member N of M" and the previous/next arrows. */
+  position?: { index: number; total: number };
+  onPrev?: () => void;
+  onNext?: () => void;
   source: FlagSource;
   /** Thresholds that produced the stored report (scoringConfig), or null if the report has none. */
   thresholds: ScoringThresholds | null;
@@ -64,14 +68,102 @@ function WarnIcon() {
 
 export function MemberDrawer(props: Props) {
   const { member, onClose } = props;
-  if (!member) return <Drawer open={false} onClose={onClose} title="">{null}</Drawer>;
+  if (!member) return <Modal open={false} onClose={onClose} title="">{null}</Modal>;
   return <DrawerBody {...props} member={member} />;
 }
 
-function DrawerBody({
-  member, onClose, restoreFocusTo, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes,
-  onOpenScoringSettings,
-}: Props & { member: AnyScoredMember }) {
+const NAV_BUTTON = `flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent ${FOCUS_LIGHT}`;
+
+function NavArrow({ dir }: { dir: "prev" | "next" }) {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d={dir === "prev" ? "M15 19l-7-7 7-7" : "M9 5l7 7-7 7"} />
+    </svg>
+  );
+}
+
+function isEditableTarget(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+}
+
+function DrawerBody({ member, onClose, restoreFocusTo, position, onPrev, onNext, memberRoles, ...rest }: Props & { member: AnyScoredMember }) {
+  const info = roleInfoOf(member, memberRoles);
+  const prevRef = useRef<HTMLButtonElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  const hasNav = !!position && position.total > 1;
+  const canPrev = hasNav && !!onPrev && position.index > 0;
+  const canNext = hasNav && !!onNext && position.index < position.total - 1;
+  const handlersRef = useRef({ canPrev, canNext, onPrev, onNext });
+  handlersRef.current = { canPrev, canNext, onPrev, onNext };
+
+  // ←/→ move between members. Never while typing, with modifiers, or while a tooltip is open
+  // (Esc dismisses the tooltip first), and never past the first/last member.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (isEditableTarget(e.target) || document.querySelector('[role="tooltip"]')) return;
+      const h = handlersRef.current;
+      if (e.key === "ArrowLeft" && h.canPrev) { e.preventDefault(); h.onPrev?.(); }
+      if (e.key === "ArrowRight" && h.canNext) { e.preventDefault(); h.onNext?.(); }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // A button that becomes disabled (first/last member) would drop focus to the page; hand it to the other arrow.
+  const index = position?.index;
+  useEffect(() => {
+    const active = document.activeElement as HTMLButtonElement | null;
+    if (active && active !== document.body && active.isConnected && !active.disabled) return;
+    (canNext ? nextRef.current : canPrev ? prevRef.current : null)?.focus();
+  }, [index, canPrev, canNext]);
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={member.studentName}
+      restoreFocusTo={restoreFocusTo}
+      scrollKey={member.studentName}
+      heading={
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar
+            userId={info?.userId}
+            name={member.studentName}
+            avatarUpdatedAt={info?.avatarUpdatedAt}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
+          />
+          <div className="min-w-0">
+            <h2 className="break-words text-lg font-semibold leading-snug text-slate-900">{member.studentName}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <RoleChips info={info} />
+              {hasNav && <span className="text-xs tabular-nums text-slate-700">Member {position.index + 1} of {position.total}</span>}
+            </div>
+          </div>
+        </div>
+      }
+      actions={hasNav ? (
+        <>
+          <button ref={prevRef} type="button" disabled={!canPrev} onClick={onPrev} aria-label="Previous member" className={NAV_BUTTON}><NavArrow dir="prev" /></button>
+          <button ref={nextRef} type="button" disabled={!canNext} onClick={onNext} aria-label="Next member" className={NAV_BUTTON}><NavArrow dir="next" /></button>
+        </>
+      ) : undefined}
+    >
+      {hasNav && <p className="sr-only" role="status" aria-live="polite">Member {position.index + 1} of {position.total}: {member.studentName}</p>}
+      {/* Keyed by member so section open/closed state resets when another member is shown, without remounting the dialog. */}
+      <MemberContent key={member.studentName} member={member} memberRoles={memberRoles} {...rest} />
+    </Modal>
+  );
+}
+
+type ContentProps = Omit<Props, "onClose" | "restoreFocusTo" | "position" | "onPrev" | "onNext" | "member"> & { member: AnyScoredMember };
+
+function MemberContent({
+  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes, onOpenScoringSettings,
+}: ContentProps) {
   const fairPct = memberCount > 0 ? 100 / memberCount : null;
   const userId = useAuthOptional()?.user?.id ?? null;
   const [whereOpen, setWhereOpen] = useState(() => readSectionOpen(userId, "where", true));
@@ -98,17 +190,7 @@ function DrawerBody({
   const docsShowsFinalThird = !gh;
 
   return (
-    <Drawer open onClose={onClose} title={member.studentName} restoreFocusTo={restoreFocusTo} subtitle={
-        <span className="flex items-center gap-3">
-          <Avatar
-            userId={info?.userId}
-            name={member.studentName}
-            avatarUpdatedAt={info?.avatarUpdatedAt}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
-          />
-          <RoleChips info={info} />
-        </span>
-      }>
+    <>
       {/* Always visible */}
       <div className="rounded-xl border border-slate-200 p-4">
         <p className="text-xs leading-normal text-slate-700">Contribution share</p>
@@ -372,6 +454,6 @@ function DrawerBody({
           )}
         </DisclosureSection>
       )}
-    </Drawer>
+    </>
   );
 }

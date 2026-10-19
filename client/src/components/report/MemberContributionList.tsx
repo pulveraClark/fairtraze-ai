@@ -55,7 +55,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
           const disputed = disputedMembers?.has(m.studentName);
           const outcomes = resolvedFlagOutcomes?.get(m.studentName);
           return (
-            <li key={m.studentName}>
+            <li key={m.studentName} data-member-row={m.studentName}>
               <ListRow
                 opensDialog
                 onClick={(el) => onOpen(m, el)}

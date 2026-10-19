@@ -231,8 +231,10 @@ export function ProjectDetailPage({ projectId }: Props) {
   const reducedMotion = usePrefersReducedMotion();
   // Measured duration of this session's last analysis run; shown as a note once the report is up.
   const analysisSeconds = progress.stage === "done" ? stageDurations(progress.times).total : undefined;
-  const [selectedMember, setSelectedMember]= useState<AnyScoredMember | null>(null);
+  // Selected by name (the list's own key) so a refreshed report resolves to the current member object.
+  const [selectedName, setSelectedName]     = useState<string | null>(null);
   const [drawerOpener, setDrawerOpener]     = useState<HTMLElement | null>(null);
+  const [openedName, setOpenedName]         = useState<string | null>(null);
 
   const isAdmin = user?.systemRole === "ADMIN";
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
@@ -272,8 +274,22 @@ export function ProjectDetailPage({ projectId }: Props) {
   const nextGroup  = currentIdx >= 0 && currentIdx < siblings.length - 1
     ? siblings[currentIdx + 1] : null;
 
+  // Focus goes back to the row that opened the dialog; if the user moved to another member, to that member's row.
+  function closeMember() {
+    const name = selectedName;
+    setSelectedName(null);
+    if (name !== null && name !== openedName) {
+      requestAnimationFrame(() => {
+        const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-member-row]"));
+        rows.find((r) => r.dataset.memberRow === name)?.querySelector<HTMLElement>("button")?.focus();
+      });
+    }
+  }
+
   // ── Summary values (read straight from the stored report) ─────────────────
   const reportMembers = stored?.report.members ?? [];
+  const selectedIdx    = selectedName === null ? -1 : reportMembers.findIndex((m) => m.studentName === selectedName);
+  const selectedMember: AnyScoredMember | null = selectedIdx >= 0 ? reportMembers[selectedIdx] : null;
   const memberCount   = stored?.report.memberCount ?? 0;
   const equalSharePct = memberCount > 0 ? 100 / memberCount : 0;
   const flagged       = reportMembers.filter((m) => m.flags.length > 0);
@@ -597,7 +613,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               memberRoles={stored.memberRoles}
               disputedMembers={disputedMembers}
               resolvedFlagOutcomes={resolvedFlagOutcomes}
-              onOpen={(m, el) => { setDrawerOpener(el); setSelectedMember(m); }}
+              onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
             />
 
             {/* Unmatched logins (GitHub-based sources only) */}
@@ -715,8 +731,11 @@ export function ProjectDetailPage({ projectId }: Props) {
       {stored && (
         <MemberDrawer
           member={selectedMember}
-          onClose={() => setSelectedMember(null)}
+          onClose={closeMember}
           restoreFocusTo={drawerOpener}
+          position={selectedIdx >= 0 ? { index: selectedIdx, total: reportMembers.length } : undefined}
+          onPrev={() => selectedIdx > 0 && setSelectedName(reportMembers[selectedIdx - 1].studentName)}
+          onNext={() => selectedIdx >= 0 && selectedIdx < reportMembers.length - 1 && setSelectedName(reportMembers[selectedIdx + 1].studentName)}
           source={flagSource}
           thresholds={stored.scoringConfig?.thresholds ?? null}
           deadlineBasis={stored.report.deadlineWindowBasis ?? null}
@@ -724,8 +743,8 @@ export function ProjectDetailPage({ projectId }: Props) {
           memberRoles={stored.memberRoles}
           disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
-          onOpenDisputes={() => { setSelectedMember(null); navigate("/disputes"); }}
-          onOpenScoringSettings={() => { setSelectedMember(null); setShowScoringModal(true); }}
+          onOpenDisputes={() => { setSelectedName(null); navigate("/disputes"); }}
+          onOpenScoringSettings={() => { setSelectedName(null); setShowScoringModal(true); }}
         />
       )}
 
