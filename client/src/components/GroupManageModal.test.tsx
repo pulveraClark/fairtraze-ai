@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { GroupManageModal } from "./GroupManageModal";
@@ -34,6 +35,23 @@ function renderModal() {
     </QueryClientProvider>,
   );
 }
+
+describe("GroupManageModal leader change wording (I33)", () => {
+  beforeEach(() => { q.requests = []; q.suggestions = []; });
+
+  it("calls it 'Change leader' everywhere and has no 'Reassign to leave'", async () => {
+    renderModal();
+    expect(screen.queryByText(/reassign/i)).toBeNull();
+    const buttons = screen.getAllByRole("button", { name: /change leader/i });
+    expect(buttons).toHaveLength(1);
+    await userEvent.click(buttons[0]);
+    expect(screen.getByRole("heading", { name: "Change leader" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("radio"));
+    await userEvent.click(screen.getByRole("button", { name: /^continue/i }));
+    expect(screen.getByRole("button", { name: "Confirm leader change" })).toBeTruthy();
+    expect(screen.queryByText(/reassign/i)).toBeNull();
+  });
+});
 
 describe("GroupManageModal empty sections (R7)", () => {
   beforeEach(() => { q.requests = []; q.suggestions = []; });

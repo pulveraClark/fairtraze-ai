@@ -151,7 +151,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         body:    JSON.stringify({ userId: reassignTarget }),
       });
       const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not reassign leader."); return; }
+      if (!res.ok) { setActionErr(data.error ?? "Could not change the leader."); return; }
       onChanged();
       setStep("list");
       setReassignTarget(null);
@@ -514,9 +514,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                    {isSelf && isThisLeader && (
-                      <span className="text-xs text-slate-400">Reassign to leave</span>
-                    )}
                     {isSelf && !isThisLeader && (
                       <button
                         onClick={() => setStep({ type: "confirm-remove", userId: m.userId, name: m.name })}
@@ -785,7 +782,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy ? "Reassigning…" : "Confirm reassignment"}
+            {busy ? "Changing leader…" : "Confirm leader change"}
           </button>
         </div>
       </>
@@ -866,8 +863,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   // ── Title per step ─────────────────────────────────────────────────────────
   function stepTitle() {
     if (step === "list")            return "Manage Group";
-    if (step === "reassign-select") return "Change Leader";
-    if (typeof step === "object" && step.type === "confirm-reassign") return "Confirm Leader Change";
+    if (step === "reassign-select") return "Change leader";
+    if (typeof step === "object" && step.type === "confirm-reassign") return "Confirm leader change";
     if (typeof step === "object" && step.type === "confirm-remove")   return "Are you sure?";
     if (typeof step === "object" && step.type === "confirm-disband")  return "Delete group?";
     return "Manage Group";
