@@ -186,7 +186,7 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
                 onClick={() => set({ memberIds: [], priorities: [], labelIds: [], milestoneId: null, due: null })}
                 className={`${BUTTON_SECONDARY_COMPACT} w-full`}
               >
-                Clear filters
+                Reset these filters
               </button>
             </div>
           )}
@@ -214,9 +214,9 @@ export function TasksTopBar({ board, filters, onChange, shown, total, onNewTask,
             <button
               type="button"
               onClick={() => onChange(NO_FILTERS)}
-              className={`rounded px-1.5 text-sm font-medium text-indigo-800 underline ${FOCUS_LIGHT}`}
+              className={`inline-flex min-h-10 items-center rounded px-2 text-sm font-medium text-indigo-800 underline ${FOCUS_LIGHT}`}
             >
-              Clear all
+              Clear filters
             </button>
           )}
         </p>

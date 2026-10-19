@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, within, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BoardResponse, BoardTask } from "@shared/taskTypes";
@@ -214,7 +214,7 @@ describe("filters", () => {
     return userEvent.setup();
   };
 
-  it("members are filtered inside the Filter menu (no avatar row), with the status line and a Clear all (15)", async () => {
+  it("members are filtered inside the Filter menu (no avatar row), with the status line and a Clear filters (15)", async () => {
     const user = await setup();
     expect(screen.queryByRole("group", { name: "Filter by member" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ben Cruz" })).not.toBeInTheDocument();
@@ -228,9 +228,28 @@ describe("filters", () => {
     await user.click(screen.getByRole("checkbox", { name: "Ana Reyes" }));
     expect(screen.getByText(/^Showing /)).toHaveTextContent("Showing tasks for Ben Cruz, Ana Reyes \u00b7 2 of 4 tasks");
 
-    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(screen.getByText("Gamma task")).toBeInTheDocument();
     expect(screen.queryByText(/^Showing /)).not.toBeInTheDocument();
+  });
+
+  it("filters are remembered per group across a remount; search is not; Clear filters forgets them", async () => {
+    const user = await setup();
+    await user.click(screen.getByRole("button", { name: "My tasks" }));
+    await user.type(screen.getByRole("textbox", { name: "Search tasks" }), "mine");
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+
+    cleanup();
+    renderTab();
+    await screen.findByText("Mine task");
+    expect(screen.queryByText("Alpha task")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "My tasks" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("textbox", { name: "Search tasks" })).toHaveValue("");
+    expect(screen.getByText(/^Showing /)).toHaveTextContent("Showing 1 of 4 tasks");
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText("Alpha task")).toBeInTheDocument();
+    expect(window.localStorage.getItem("ft.tasks.filters.1.7")).toBeNull();
   });
 
   it("My tasks and search narrow the board", async () => {

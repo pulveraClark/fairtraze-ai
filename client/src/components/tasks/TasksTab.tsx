@@ -5,7 +5,8 @@ import { useTaskActions } from "../../hooks/useTaskActions";
 import { useTaskShortcuts } from "../../hooks/useTaskShortcuts";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../Toast";
-import { filterTasks, NO_FILTERS, type TaskFilters } from "../../lib/tasks/filters";
+import { filterTasks, type TaskFilters } from "../../lib/tasks/filters";
+import { pruneFilters, readStoredFilters, storeFilters } from "../../lib/tasks/filterStore";
 import { formatDue, todayManila } from "../../lib/tasks/dates";
 import type { Placement } from "../../lib/tasks/placement";
 import { columnsFromTasks } from "../../lib/tasks/placement";
@@ -47,7 +48,8 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
   const { showToast } = useToast();
   const query = useTaskBoardQuery(projectId);
   const actions = useTaskActions(projectId);
-  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
+  // Remembered per user per group (search text excluded: it starts empty each visit).
+  const [filters, setFilters] = useState<TaskFilters>(() => readStoredFilters(user?.id ?? null, projectId));
   const [openId, setOpenId] = useState<number | null>(initialTaskId);
   const [newTask, setNewTask] = useState(false);
   const [help, setHelp] = useState(false);
@@ -64,6 +66,15 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
 
   const board = query.data;
   const today = todayManila();
+
+  // A remembered filter on a member, label or milestone that has since been removed must not hide tasks.
+  useEffect(() => {
+    if (board) setFilters((f) => pruneFilters(f, board));
+  }, [board]);
+
+  useEffect(() => {
+    storeFilters(user?.id ?? null, projectId, filters);
+  }, [user?.id, projectId, filters]);
 
   const visible = useMemo(
     () => (board ? filterTasks(board.tasks, filters, { userId: user?.id ?? 0, today }) : []),

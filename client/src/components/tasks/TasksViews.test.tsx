@@ -217,7 +217,7 @@ describe("list view", () => {
     await user.click(screen.getByRole("button", { name: /^Filter/ }));
     await user.click(screen.getByRole("checkbox", { name: "Ben Cruz" }));
     expect(rows()).toEqual(["Charlie"]);
-    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
     await user.type(screen.getByRole("textbox", { name: "Search tasks" }), "brav");
     expect(rows()).toEqual(["Bravo"]);
   });
