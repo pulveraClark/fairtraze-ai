@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import logoUrl from "../assets/logo_transparent.png";
+import { useMinWidth } from "../lib/useMinWidth";
 
 // ── Left-panel illustration: stylized contribution dashboard ──────────────────
 function AuthIllustration() {
@@ -56,6 +57,8 @@ function AuthIllustration() {
 }
 
 export function LoginPage() {
+  // The sample artwork is decorative and only fits the desktop side panel (lg and up).
+  const showArt = useMinWidth(1024);
   const { navigate } = useRouter();
   const { login, user, loading: authLoading } = useAuth();
 
@@ -129,7 +132,7 @@ export function LoginPage() {
 
         {/* Center: illustration + copy */}
         <div className="relative z-10 space-y-7">
-          <AuthIllustration />
+          {showArt && <AuthIllustration />}
           <div>
             <h2 className="font-display font-bold text-white text-2xl leading-tight mb-2">
               Fair assessment starts<br />with visible data.
