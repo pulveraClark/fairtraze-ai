@@ -116,10 +116,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const requestsQuery    = useGroupRequestsQuery<JoinRequest>(projectId, canSeeQueues);
   const suggestionsQuery = useRoleSuggestionsQuery<RoleSuggestion>(projectId, canSeeQueues);
   const requests              = requestsQuery.data ?? [];
-  const requestsLoading       = requestsQuery.isLoading;
   const requestsErr           = requestsQuery.data ? "" : requestsQuery.error?.message ?? "";
   const roleSuggestions       = suggestionsQuery.data ?? [];
-  const roleSuggestionsLoading = suggestionsQuery.isLoading;
   const roleSuggestionsErr    = suggestionsQuery.data ? "" : suggestionsQuery.error?.message ?? "";
 
   const groupKey = groupKeys.manage(uid, projectId);
@@ -575,7 +573,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         </div>
 
         {/* ── Pending Join Requests — only visible to leader / instructor ──── */}
-        {canManage && (
+        {canManage && (requests.length > 0 || !!requestsErr) && (
           <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
               <h3 className="text-xs font-semibold text-slate-700">Pending Join Requests</h3>
@@ -586,12 +584,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               )}
             </div>
 
-            {requestsLoading ? (
-              <p className="text-xs text-slate-400">Loading requests…</p>
-            ) : requestsErr ? (
+            {requestsErr ? (
               <p className="text-xs text-red-500">{requestsErr}</p>
-            ) : requests.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No pending requests.</p>
             ) : (
               <ul className="space-y-2">
                 {requests.map((r) => (
@@ -630,7 +624,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         )}
 
         {/* ── Pending Role Suggestions — visible to leader / instructor ────── */}
-        {canManage && (
+        {canManage && (roleSuggestions.length > 0 || !!roleSuggestionsErr) && (
           <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
               <h3 className="text-xs font-semibold text-slate-700">Pending Role Suggestions</h3>
@@ -641,12 +635,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               )}
             </div>
 
-            {roleSuggestionsLoading ? (
-              <p className="text-xs text-slate-400">Loading suggestions…</p>
-            ) : roleSuggestionsErr ? (
+            {roleSuggestionsErr ? (
               <p className="text-xs text-red-500">{roleSuggestionsErr}</p>
-            ) : roleSuggestions.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No pending role suggestions.</p>
             ) : (
               <ul className="space-y-2">
                 {roleSuggestions.map((s) => (

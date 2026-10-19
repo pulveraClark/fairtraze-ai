@@ -304,7 +304,8 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
       {/* Collapsible sections */}
       {showGithub && (
         <>
-          <DisclosureSection
+          {typeRows && (
+<DisclosureSection
             title="Where the work went"
             subtitle="File types changed and how much each counts"
             open={whereOpen}
@@ -360,12 +361,12 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
                   </button>
                 )}
               </>
-            ) : (
-              <NotAvailable>{gh ? PREDATES_MESSAGE : "no GitHub data for this member in the stored report."}</NotAvailable>
-            )}
+            ) : null}
           </DisclosureSection>
+)}
 
-          <DisclosureSection title="Commit impact" subtitle="How meaningful each commit was, regardless of file type" open={impactOpen} onToggle={setImpactOpen}>
+          {impacts && gh && (
+<DisclosureSection title="Commit impact" subtitle="How meaningful each commit was, regardless of file type" open={impactOpen} onToggle={setImpactOpen}>
             {impacts && gh ? (
               <>
                 <p className="mb-2 text-sm leading-normal text-slate-800">
@@ -395,12 +396,12 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
                   Self-churn applies up to a 50% penalty to lines the member later deleted themselves.
                 </Note>
               </>
-            ) : (
-              <NotAvailable>{gh ? PREDATES_MESSAGE : "no GitHub data for this member in the stored report."}</NotAvailable>
-            )}
+            ) : null}
           </DisclosureSection>
+)}
 
-          <DisclosureSection title="Raw numbers" subtitle="Totals from GitHub" open={rawOpen} onToggle={setRawOpen}>
+          {gh && (
+<DisclosureSection title="Raw numbers" subtitle="Totals from GitHub" open={rawOpen} onToggle={setRawOpen}>
             {gh ? (
               <>
                 <dl>
@@ -428,10 +429,9 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
                   <p>Raw lines are GitHub's totals and include generated files such as lock files, which are not counted in the weighted score.</p>
                 </div>
               </>
-            ) : (
-              <NotAvailable>no GitHub data for this member in the stored report.</NotAvailable>
-            )}
+            ) : null}
           </DisclosureSection>
+)}
         </>
       )}
 
@@ -439,9 +439,9 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
         <div className="border-t border-slate-200 py-3 text-sm leading-normal text-slate-800">
           <span className="font-semibold text-slate-900">FairTraze Docs activity</span> — Not used in this project
         </div>
-      ) : (
+      ) : docs ? (
         <DisclosureSection title="FairTraze Docs activity" subtitle="Writing and editing in the shared document" open={docsOpen} onToggle={setDocsOpen}>
-          {docs ? (
+          {(
             <>
               <dl>
                 <Row label="Editing sessions" value={n(docs.sessionCount)} />
@@ -468,9 +468,7 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
                     ))}
                   </dl>
                 </>
-              ) : (
-                <NotAvailable>{PREDATES_MESSAGE}</NotAvailable>
-              )}
+              ) : null}
               {(importedChars > 0 || images > 0) && (
                 <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
                   {importedChars > 0 && <p><span className="font-semibold">Import: </span>{n(importedChars)} characters imported from .docx (session credit includes an estimate).</p>}
@@ -478,11 +476,9 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
                 </div>
               )}
             </>
-          ) : (
-            <NotAvailable>no Docs data for this member in the stored report.</NotAvailable>
           )}
         </DisclosureSection>
-      )}
+      ) : null}
     </>
   );
 }

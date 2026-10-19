@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, EmptyState, StatusPill } from "./ui";
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, StatusPill } from "./ui";
 
 interface RequestRow {
   id: number;
@@ -79,8 +79,11 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
   const pendingCount = data?.pendingCount ?? 0;
   const busyId = review.isPending ? review.variables?.id : undefined;
 
+  // Nothing waiting and nothing reviewed yet: hide the whole section until it has content.
+  if (data && data.pending.length === 0 && (data.recent?.length ?? 0) === 0) return null;
+
   return (
-    <section ref={sectionRef} id="deletion-requests" aria-labelledby="deletion-requests-title" className="scroll-mt-4">
+    <section ref={sectionRef} id="deletion-requests" aria-labelledby="deletion-requests-title" className="scroll-mt-4 rounded-lg border border-slate-200 p-4 sm:col-span-1 lg:col-span-2">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h3 id="deletion-requests-title" className="text-lg font-semibold text-slate-900">Deletion requests</h3>
         <span
@@ -104,9 +107,6 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
         </div>
       )}
 
-      {data && data.pending.length === 0 && (
-        <EmptyState title="No deletion requests are waiting" description="Requests from users will appear here." />
-      )}
 
       {data && data.pending.length > 0 && (
         <ul className={`${CARD} divide-y divide-slate-200`}>

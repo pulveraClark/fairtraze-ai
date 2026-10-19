@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, EmptyState, StatusPill } from "./ui";
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, StatusPill } from "./ui";
 
 interface PendingInstructor {
   id: number;
@@ -78,8 +78,11 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
   const pendingCount = data?.pendingCount ?? 0;
   const busyId = review.isPending ? review.variables?.id : undefined;
 
+  // Nothing waiting and nothing reviewed yet: hide the whole section until it has content.
+  if (data && data.pending.length === 0 && (data.recent?.length ?? 0) === 0) return null;
+
   return (
-    <section ref={sectionRef} id="instructor-approvals" aria-labelledby="instructor-approvals-title" className="scroll-mt-4">
+    <section ref={sectionRef} id="instructor-approvals" aria-labelledby="instructor-approvals-title" className="scroll-mt-4 rounded-lg border border-slate-200 p-4 sm:col-span-1 lg:col-span-2">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h3 id="instructor-approvals-title" className="text-lg font-semibold text-slate-900">Instructor approvals</h3>
         <span
@@ -102,9 +105,6 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
         </div>
       )}
 
-      {data && data.pending.length === 0 && (
-        <EmptyState title="No instructors are waiting for approval" description="New instructor sign-ups will appear here." />
-      )}
 
       {data && data.pending.length > 0 && (
         <ul className={`${CARD} divide-y divide-slate-200`}>

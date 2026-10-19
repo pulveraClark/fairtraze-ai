@@ -38,10 +38,13 @@ function mockFetch(data: unknown) {
 describe("InstructorApprovals", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("shows an empty state when nobody is waiting", async () => {
-    mockFetch({ pendingCount: 0, pending: [], recent: [] });
-    renderApprovals();
-    expect(await screen.findByText("No instructors are waiting for approval")).toBeInTheDocument();
+  it("renders nothing while nobody is waiting and nothing was reviewed (R7)", async () => {
+    const fetchFn = mockFetch({ pendingCount: 0, pending: [], recent: [] });
+    const { container } = renderApprovals();
+    await waitFor(() => expect(fetchFn).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText("Loading approvals…")).toBeNull());
+    expect(container.querySelector("section")).toBeNull();
+    expect(screen.queryByText("Instructor approvals")).toBeNull();
   });
 
   it("lists pending instructors with a count and approves one", async () => {

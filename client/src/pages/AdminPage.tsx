@@ -690,12 +690,8 @@ export function AdminPage() {
                 </ul>
               )}
             </div>
-            <div className="border border-slate-200 rounded-lg p-4 sm:col-span-1 lg:col-span-2">
-              <InstructorApprovals onToast={showToast} />
-            </div>
-            <div className="border border-slate-200 rounded-lg p-4 sm:col-span-1 lg:col-span-2">
-              <DeletionRequests onToast={showToast} />
-            </div>
+            <InstructorApprovals onToast={showToast} />
+            <DeletionRequests onToast={showToast} />
           </div>
         </section>
 

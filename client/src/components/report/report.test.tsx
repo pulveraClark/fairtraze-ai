@@ -203,10 +203,11 @@ describe("MemberDrawer", () => {
     expect(screen.getByText(/include generated files such as lock files/)).toBeInTheDocument();
   });
 
-  it("says breakdowns are unavailable for older reports with zeroed values", () => {
+  it("hides the breakdown sections instead of showing 'Not available' for older reports (R7)", () => {
     const old = { ...gh, fileTypeBreakdown: { source: 0, test: 0, docs: 0, style: 0, config: 0, other: 0 } };
     render(<MemberDrawer {...baseProps} member={old} />);
-    expect(screen.getByText(/Not available: this report predates detailed breakdowns\. Re-analyze to see them\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Not available/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Where the work went/ })).toBeNull();
   });
 
   it("shows a single 'Not used in this project' line for GITHUB projects", () => {
@@ -312,8 +313,8 @@ describe("MemberDrawer", () => {
     };
     render(<MemberDrawer {...baseProps} source="combined" member={combined} />);
     expect(screen.getByText("Blend weights (GitHub / Docs)")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /FairTraze Docs activity/ }));
-    expect(screen.getByText(/Not available: no Docs data/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /FairTraze Docs activity/ })).toBeNull();
+    expect(screen.queryByText(/Not available/)).toBeNull();
   });
 });
 
