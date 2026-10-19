@@ -1,3 +1,4 @@
+import { groupsNeedAttention } from "../lib/attentionLabel";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { useEffect, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
@@ -599,7 +600,7 @@ export function InstructorDashboardPage() {
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
+                {groupsNeedAttention(atRiskCount)}
               </button>
             )}
             {quietCount > 0 && <span className="text-xs text-slate-600">{noActivityRollupText(quietCount)}</span>}
@@ -779,7 +780,7 @@ export function InstructorDashboardPage() {
                         </span>
                         {atRisk > 0 && (
                           <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-xs font-semibold text-red-700 whitespace-nowrap">
-                            ⚠ {atRisk} at risk
+                            ⚠ {groupsNeedAttention(atRisk)}
                           </span>
                         )}
                         <svg className="shrink-0 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -1,3 +1,4 @@
+import { groupsNeedAttention } from "../lib/attentionLabel";
 import { useEffect, useState, useCallback } from "react";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, noActivityRollupText, presentedHealth, visibleFlags } from "../lib/groupActivity";
@@ -374,7 +375,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
+                {groupsNeedAttention(atRiskCount)}
               </button>
             )}
             {quietCount > 0 && <span className="text-xs text-slate-600">{noActivityRollupText(quietCount)}</span>}

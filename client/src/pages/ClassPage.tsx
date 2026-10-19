@@ -1,3 +1,4 @@
+import { groupsNeedAttention } from "../lib/attentionLabel";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { classCrumb } from "../lib/classLabel";
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -673,7 +674,7 @@ export function ClassPage({ classId }: Props) {
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {totalAtRisk} group{totalAtRisk !== 1 ? "s" : ""} need attention
+                {groupsNeedAttention(totalAtRisk)}
               </button>
             )}
           </div>
@@ -783,7 +784,7 @@ export function ClassPage({ classId }: Props) {
                             </span>
                             {atRisk > 0 && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-xs font-semibold whitespace-nowrap">
-                                ⚠ {atRisk} at risk
+                                ⚠ {groupsNeedAttention(atRisk)}
                               </span>
                             )}
                             {!isAdmin && (

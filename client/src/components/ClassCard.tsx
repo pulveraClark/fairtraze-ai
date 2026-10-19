@@ -1,3 +1,4 @@
+import { groupsNeedAttention } from "../lib/attentionLabel";
 import { useState } from "react";
 import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
@@ -76,7 +77,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
           <div className="flex items-center gap-1.5">
             {atRisk > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-xs font-semibold whitespace-nowrap">
-                ⚠ {atRisk} at risk
+                ⚠ {groupsNeedAttention(atRisk)}
               </span>
             )}
             {onDelete && (
