@@ -28,6 +28,7 @@ import { NoActivityPill } from "../components/NoActivityPill";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
+import { helpLink } from "../lib/helpText";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -552,7 +553,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                 detail={noActivity ? "Scores appear once members have recorded activity." : (
                   <span className="flex items-center gap-1">
                     Gini {stored.report.gini.toFixed(3)}
-                    <InfoTip label="About the Gini coefficient and team health">
+                    <InfoTip label="About the Gini coefficient and team health" helpHref={helpLink("gini")}>
                       <span className="block">0 = perfectly equal, 1 = one member holds everything.</span>
                       <span className="mt-1 block">{giniBandsText()}</span>
                       {benchmark.averageGini !== null && (

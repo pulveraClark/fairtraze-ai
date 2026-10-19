@@ -29,6 +29,18 @@ describe("ScoringSettingsModal", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("PATCH");
   });
 
+  it("keeps the consequence lines visible and moves the explanations into (?) tips that describe what the code does", () => {
+    render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType="GITHUB" onClose={() => {}} onSaved={() => {}} />);
+    expect(screen.queryByText(/math stays the same/i)).toBeNull();
+    expect(screen.queryByText(/must sum to 1/i)).toBeNull();
+    expect(screen.getByText(/Saving marks every group's report as outdated until you re-analyze\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "About lines added" }));
+    const tip = screen.getByRole("group", { name: "About lines added" });
+    expect(tip).toHaveTextContent(/file type/);
+    expect(tip).not.toHaveTextContent(/comment/i); // comments and blanks are not discounted in a real analysis
+    expect(within(tip).getByRole("link", { name: "More in Help" })).toHaveAttribute("href", "/help#shares");
+  });
+
   const renderModal = (sourceType = "GITHUB") =>
     render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType={sourceType} onClose={() => {}} onSaved={() => {}} />);
   const numberInput = (i: number) => screen.getAllByRole("spinbutton")[i] as HTMLInputElement;

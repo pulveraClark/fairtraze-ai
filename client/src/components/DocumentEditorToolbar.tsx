@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 import type { AuthorshipUser } from "../lib/authorshipHighlight";
 import { getUserColor } from "../lib/collabColors";
 import { DocsDataApproximateNotice } from "./DocsDataApproximateNotice";
+import { TIPS } from "../lib/helpText";
 
 // Platform-aware modifier for tooltips: Cmd on Apple devices, Ctrl elsewhere.
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "\u2318" : "Ctrl";
@@ -18,15 +19,15 @@ export interface PresentUser {
 
 export const ToolbarButton = forwardRef<
   HTMLButtonElement,
-  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean; shortcut?: string }
->(function ToolbarButton({ onClick, active, label, children, disabled, shortcut }, ref) {
+  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean; shortcut?: string; hint?: string }
+>(function ToolbarButton({ onClick, active, label, children, disabled, shortcut, hint }, ref) {
   return (
     <button
       ref={ref}
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      title={`${shortcut ? `${label} (${shortcut})` : label}${hint ? `. ${hint}` : ""}`}
       aria-label={label}
       className={`w-8 h-8 shrink-0 rounded flex items-center justify-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed ${
         active
@@ -1029,7 +1030,7 @@ export function Toolbar({
 
   const viewButtons = (
     <>
-      <ToolbarButton label="Highlight authorship" active={showAuthorship} onClick={onToggleAuthorship}>
+      <ToolbarButton label="Highlight authorship" hint={TIPS.authorship} active={showAuthorship} onClick={onToggleAuthorship}>
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <rect x="3" y="3" width="7" height="7" rx="1.5" />
           <rect x="14" y="3" width="7" height="7" rx="1.5" />

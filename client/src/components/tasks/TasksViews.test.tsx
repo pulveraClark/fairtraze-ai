@@ -495,7 +495,7 @@ describe("keyboard shortcuts", () => {
 
   it("shows the footer hint on the board", async () => {
     await setup();
-    expect(screen.getByRole("button", { name: /Press \? for shortcuts/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "About keyboard shortcuts" })).toBeInTheDocument();
   });
 
   it("C opens New task; / focuses search; ? opens the shortcuts dialog and Esc closes it", async () => {
@@ -519,7 +519,8 @@ describe("keyboard shortcuts", () => {
 
   it("the shortcuts dialog keeps Tab inside and returns focus on close", async () => {
     const user = await setup();
-    const hint = screen.getByRole("button", { name: /Press \? for shortcuts/ });
+    await user.click(screen.getByRole("button", { name: "About keyboard shortcuts" }));
+    const hint = screen.getByRole("button", { name: "Show shortcuts" });
     hint.focus();
     await user.click(hint);
     const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });

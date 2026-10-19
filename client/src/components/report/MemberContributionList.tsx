@@ -3,6 +3,8 @@ import { ListRow, StatusPill, CARD } from "../ui";
 import { PILL_TONES } from "../ui/StatusPill";
 import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
 import { Avatar } from "../Avatar";
+import { InfoTip } from "../ui/InfoTip";
+import { TIPS, helpLink } from "../../lib/helpText";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -43,8 +45,9 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
     <section aria-labelledby="member-contributions-title" className={CARD}>
       <div className="border-b border-slate-200 px-4 py-4">
         <h2 id="member-contributions-title" className="text-lg font-semibold text-slate-900">Member contributions</h2>
-        <p className="mt-1 text-sm leading-normal text-slate-700">
-          Select a member for details. The vertical marker on each bar shows the equal share ({equalPct.toFixed(1)}% each).
+        <p className="mt-1 flex flex-wrap items-center gap-x-1 text-sm leading-normal text-slate-700">
+          Select a member for details.
+          <InfoTip label="About the equal-share marker" helpHref={helpLink("shares")}>{TIPS.equalShareList(equalPct)}</InfoTip>
         </p>
       </div>
       <ul className="divide-y divide-slate-200">

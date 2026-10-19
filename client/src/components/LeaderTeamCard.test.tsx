@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { LeaderTeamCard, type LeaderTeamMember } from "./LeaderTeamCard";
@@ -11,9 +12,12 @@ const member = (o: Partial<LeaderTeamMember>): LeaderTeamMember => ({
 });
 
 describe("LeaderTeamCard", () => {
-  it("shows shares, the GitHub/Docs split for COMBINED, task counts and the fairness note", () => {
+  it("shows shares, the GitHub/Docs split for COMBINED, task counts and the fairness note (the note is a (?) tip)", async () => {
     render(<LeaderTeamCard sourceType="COMBINED" team={[member({}), member({ userId: 2, name: "Member B", contributionShare: null, githubContributionShare: null, documentContributionShare: null })]} />);
-    expect(screen.getByText(/distributing work fairly/i)).toBeTruthy();
+    expect(screen.getByText("Equal share: 50.0% each.")).toBeTruthy();
+    expect(screen.queryByText(/not grades/i)).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: "About the team contributions view" }));
+    expect(screen.getByRole("group", { name: "About the team contributions view" })).toHaveTextContent(/not grades/i);
     expect(screen.getByText("60.0%")).toBeTruthy();
     expect(screen.getByText(/GitHub 70.0% · Docs 50.0%/)).toBeTruthy();
     expect(screen.getAllByText(/Tasks: 1 of 3 done/)).toHaveLength(2);

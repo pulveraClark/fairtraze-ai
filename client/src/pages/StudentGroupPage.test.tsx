@@ -73,7 +73,15 @@ describe("StudentGroupPage", () => {
     renderPage();
     expect(screen.queryByText(/Assign roles for all members/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "About roles" }));
-    expect(screen.getByRole("tooltip").textContent).toMatch(/Assign roles for all members/);
+    expect(screen.getByRole("group", { name: "About roles" }).textContent).toMatch(/labels for context and never change anyone's score/);
+  });
+
+  it("explains how evenly work is shared in a (?) tip instead of a paragraph under Team overview (P7)", () => {
+    window.history.pushState({}, "", REPORT);
+    renderPage();
+    expect(screen.queryByText(/worked out from everyone's recorded activity/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "About how evenly work is shared" }));
+    expect(screen.getByRole("group", { name: "About how evenly work is shared" })).toHaveTextContent(/describes the team, not you/);
   });
 
   it("has no hero card; a member sees one compact 'Your share' tile (R4)", () => {

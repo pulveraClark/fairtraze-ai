@@ -14,6 +14,8 @@ import { RoleChips } from "./MemberContributionList";
 import { Avatar } from "../Avatar";
 import { describeFlagRule, type DeadlineBasis, type FlagSource } from "../../lib/flagRules";
 import { docsStatsOf, formatPct, githubStatsOf, isCombinedMember, roleInfoOf } from "../../lib/memberView";
+import { InfoTip } from "../ui/InfoTip";
+import { TIPS, helpLink } from "../../lib/helpText";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -259,10 +261,12 @@ function MemberSidebar({
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
             {tasks && (
               <div>
-                {tasks.total === 0
-                  ? <p>No tasks</p>
-                  : <p><span className="font-semibold">Tasks: </span>{taskCountLabel(tasks.completed, tasks.total)}</p>}
-                <p className="text-xs leading-normal text-slate-700">Planning only. Not part of the score.</p>
+                <p className="flex flex-wrap items-center gap-x-1">
+                  {tasks.total === 0
+                    ? <span>No tasks</span>
+                    : <span><span className="font-semibold">Tasks: </span>{taskCountLabel(tasks.completed, tasks.total)}</span>}
+                  <InfoTip label="About tasks" helpHref={helpLink("tasks")}>{TIPS.tasksPlanning}</InfoTip>
+                </p>
               </div>
             )}
             {importedChars > 0 && (

@@ -4,6 +4,8 @@ import { useToast } from "./Toast";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { balanceWeights } from "../lib/balanceWeights";
+import { InfoTip } from "./ui/InfoTip";
+import { SETTINGS_TIPS, helpLink } from "../lib/helpText";
 
 const DEFAULTS: ProjectScoringConfig = {
   weights:    { commits: 0.4, lines: 0.4, activeDays: 0.2 },
@@ -119,9 +121,6 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Scoring Settings</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Adjust weights and thresholds. The math stays the same — only the inputs change.
-            </p>
             <p className="text-xs font-medium text-slate-600 mt-1">
               Applies to all groups in this project. Re-analyze groups to apply new settings.
             </p>
@@ -139,29 +138,28 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
           {/* ── Contribution Weights ─────────────────────────────────────────── */}
           <section>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Contribution Weights
+              <span className="inline-flex items-center gap-1">
+                Contribution Weights
+                <InfoTip label="About contribution weights" helpHref={helpLink("shares")}>{SETTINGS_TIPS.weights}</InfoTip>
+              </span>
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              These three values must sum to 1.0. They control how much each signal contributes
-              to a member's overall contribution share.
-            </p>
 
             <div className="space-y-4">
               <WeightRow
                 label="Commits"
-                description="Weight on log-scaled commit count. Commit frequency after diminishing-returns adjustment."
+                description={SETTINGS_TIPS.commits}
                 value={commits}
                 onChange={setCommits}
               />
               <WeightRow
-                label="Lines (meaningful)"
-                description="Weight on weighted, effective line additions — code counts more than comments; self-churn penalised."
+                label="Lines added"
+                description={SETTINGS_TIPS.lines}
                 value={lines}
                 onChange={setLines}
               />
               <WeightRow
                 label="Active days"
-                description="Weight on distinct calendar days with at least one commit. Rewards consistent participation over time."
+                description={SETTINGS_TIPS.activeDays}
                 value={activeDays}
                 onChange={setActiveDays}
               />
@@ -176,23 +174,22 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
           {isCombined && (
             <section>
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                Source Blend
+                <span className="inline-flex items-center gap-1">
+                  Source Blend
+                  <InfoTip label="About the source blend" helpHref={helpLink("combined")}>{SETTINGS_TIPS.blend}</InfoTip>
+                </span>
               </h3>
-              <p className="text-xs text-slate-400 mb-4">
-                These two values must sum to 1.0. They control how much a member's GitHub share
-                vs. their FairTraze Docs share counts toward their combined contribution share.
-              </p>
 
               <div className="space-y-4">
                 <WeightRow
                   label="GitHub weight"
-                  description="Weight on the member's GitHub-only contribution share."
+                  description={SETTINGS_TIPS.githubWeight}
                   value={wGitHub}
                   onChange={setWGitHub}
                 />
                 <WeightRow
                   label="Docs weight"
-                  description="Weight on the member's FairTraze Docs-only contribution share."
+                  description={SETTINGS_TIPS.docsWeight}
                   value={wDocs}
                   onChange={setWDocs}
                 />
@@ -211,7 +208,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
             <div className="space-y-4">
               <ThresholdRow
                 label="Free-rider threshold"
-                description={`A member is flagged as a free-rider if their contribution share is below this fraction of the equal share. At ${pct(freeRider)}, a member must contribute at least ${pct(freeRider)} of what an equal split would expect.`}
+                description={SETTINGS_TIPS.freeRider}
                 value={freeRider}
                 onChange={setFreeRider}
                 min={0.1}
@@ -221,7 +218,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
               />
               <ThresholdRow
                 label="Overload threshold"
-                description={`A member is flagged as overloaded if their contribution share exceeds this multiple of the equal share. At ${overload.toFixed(2)}×, one member doing ${pct(overload)} of expected equal work triggers the flag.`}
+                description={SETTINGS_TIPS.overload}
                 value={overload}
                 onChange={setOverload}
                 min={1.1}
@@ -231,13 +228,13 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
               />
               <ThresholdRow
                 label="Deadline-driven threshold"
-                description={`A member is flagged as deadline-driven if more than this fraction of their commits fell in the final third of the project timeline. At ${pct(deadlineDriven)}, a member whose last-phase ratio exceeds ${pct(deadlineDriven)} is flagged.`}
+                description={SETTINGS_TIPS.deadlineDriven}
                 value={deadlineDriven}
                 onChange={setDeadlineDriven}
                 min={0.3}
                 max={0.95}
                 step={0.05}
-                formatValue={(v) => `>${pct(v)} of commits in final third`}
+                formatValue={(v) => `>${pct(v)} of activity in last third`}
               />
             </div>
           </section>
@@ -260,7 +257,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
           <p className="text-xs text-slate-400 max-w-xs">
-            Saving changed settings marks every group's report as outdated. Re-analyze each group to apply them.
+            Saving marks every group's report as outdated until you re-analyze.
           </p>
           <div className="flex gap-2 shrink-0">
             <button
@@ -332,7 +329,10 @@ function WeightRow({ label, description, value, onChange }: WeightRowProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-slate-700">{label}</span>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
+          {label}
+          <InfoTip label={`About ${label.toLowerCase()}`} helpHref={helpLink("shares")}>{description}</InfoTip>
+        </span>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -354,7 +354,6 @@ function WeightRow({ label, description, value, onChange }: WeightRowProps) {
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-1.5 rounded-full accent-indigo-600 cursor-pointer"
       />
-      <p className="text-xs text-slate-400 mt-1">{description}</p>
     </div>
   );
 }
@@ -374,7 +373,10 @@ function ThresholdRow({ label, description, value, onChange, min, max, step, for
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-slate-700">{label}</span>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
+          {label}
+          <InfoTip label={`About the ${label.toLowerCase()}`} helpHref={helpLink("flags")}>{description}</InfoTip>
+        </span>
         <span className="text-xs font-mono text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
           {formatValue(value)}
         </span>
@@ -388,7 +390,6 @@ function ThresholdRow({ label, description, value, onChange, min, max, step, for
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-1.5 rounded-full accent-indigo-600 cursor-pointer"
       />
-      <p className="text-xs text-slate-400 mt-1">{description}</p>
     </div>
   );
 }

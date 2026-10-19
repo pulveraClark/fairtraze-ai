@@ -25,6 +25,7 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
+import { TIPS, helpLink } from "../lib/helpText";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
@@ -76,10 +77,10 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 const FLAG_DESCRIPTIONS: Record<string, string> = {
-  "deadline-driven": "A high proportion of your commits were recorded in the final third of the project timeline. This pattern may indicate delayed contribution.",
-  "free-rider":      "Your contribution share is below half the equal share for this team.",
-  "inactive":        "No recorded activity was found in the analyzed period.",
-  "overload":        "Your contribution share significantly exceeds the equal share, suggesting an uneven workload distribution.",
+  "deadline-driven": "Most of your recorded activity (commits or document edits) happened in the last third of the time before the deadline.",
+  "free-rider":      "Your share of the recorded work is below the low-contribution level for this project (half of an equal split, unless your instructor changed it).",
+  "inactive":        "No recorded activity (commits or document edits) was found in the analyzed period.",
+  "overload":        "Your share of the recorded work is well above an equal split, which may mean the workload is uneven.",
 };
 
 type Tab = GroupTab;
@@ -620,9 +621,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 <div className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
                   {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
                   {membership.role === "LEADER" && (
-                    <InfoTip label="About roles">
-                      Assign roles for all members, including yourself, through Manage Group. Roles are context only — they never affect contribution scores.
-                    </InfoTip>
+                    <InfoTip label="About roles" helpHref={helpLink("roles")}>{TIPS.rolesLeader}</InfoTip>
                   )}
                 </div>
                 <div className="flex items-center flex-wrap gap-2">
@@ -788,7 +787,12 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                           </div>
                         ))}
                       </div>
-                      {blend && <p className="text-xs text-slate-600">{blend}</p>}
+                      {blend && (
+                        <p className="flex items-center gap-1 text-xs text-slate-700">
+                          {blend}
+                          <InfoTip label="About the score blend" helpHref={helpLink("combined")}>{TIPS.scoreBlend}</InfoTip>
+                        </p>
+                      )}
                     </div>
                   );
                 })()}
@@ -802,7 +806,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
                   <div className="flex items-start gap-6 flex-wrap">
                     <div>
-                      <p className="text-xs text-slate-400 mb-1.5">How evenly work is shared</p>
+                      <p className="mb-1.5 flex items-center gap-1 text-xs text-slate-700">
+                        How evenly work is shared
+                        <InfoTip label="About how evenly work is shared" helpHref={helpLink("flags")}>{TIPS.evenness}</InfoTip>
+                      </p>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
                         {studentHealthLabel(report.teamHealth)}
                       </span>
@@ -814,11 +821,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-4 leading-relaxed">
-                    This is worked out from everyone's recorded activity, so it describes the team as a whole.{membership.role === "LEADER"
-                      ? " As group leader you can see each member's share in the team contributions card above."
-                      : " Your group leader can see each member's contribution share."}
-                  </p>
                 </div>
                 )}
 
@@ -843,6 +845,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                                   <FlagTag flag={flag} view="own" />
+                                  {flag === "deadline-driven" && (
+                                    <InfoTip label="About the last third" helpHref={helpLink("flags")}>
+                                      {report.deadlineWindowBasis === "assignment-deadline" ? TIPS.flagBasisDeadline : TIPS.flagBasisSpan}
+                                    </InfoTip>
+                                  )}
                                   {(() => {
                                     const outcome = getFlagDisputeOutcome(flag, dispute);
                                     if (!outcome) return null;
@@ -863,15 +870,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 <p className="text-sm text-slate-700 leading-relaxed">
                                   {FLAG_DESCRIPTIONS[flag] ?? "A flag has been raised on your contribution pattern."}
                                 </p>
-                                {flag === "deadline-driven" && (
-                                  <p className="text-xs text-slate-400 mt-1">
-                                    {report.deadlineWindowBasis === "assignment-deadline"
-                                      ? "Based on the assignment deadline."
-                                      : "Based on observed activity span (no deadline was set for this assignment)."}
-                                  </p>
-                                )}
                                 <p className="text-xs text-slate-400 mt-1.5">
-                                  This flag is visible to your instructor. You may submit a note to provide context.
+                                  Your instructor can see this. You can add a note to explain.
                                 </p>
                                 <div className="mt-4">
                                   {/* Existing dispute status */}

@@ -5,6 +5,8 @@ import { NoActivityPill } from "./NoActivityPill";
 import { ShareBar } from "./report/DrawerParts";
 import { taskCountLabel } from "../lib/tasks/countLabel";
 import { studentFlagLabel } from "../lib/studentDisplay";
+import { InfoTip } from "./ui/InfoTip";
+import { TIPS, helpLink } from "../lib/helpText";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -32,11 +34,11 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
   const equalPct = team.length > 0 ? 100 / team.length : 0;
   return (
     <section aria-labelledby="leader-team-title" className="h-full rounded-xl border border-slate-200 bg-white p-4">
-      <h2 id="leader-team-title" className="text-sm font-semibold text-slate-900">Team contributions</h2>
-      <p className="mt-1 text-xs leading-normal text-slate-700">
-        This view is for distributing work fairly. Shares are evidence from recorded activity, not grades, and your instructor
-        makes the final assessment. The equal share is {equalPct.toFixed(1)}% each.
-      </p>
+      <h2 id="leader-team-title" className="flex items-center gap-1 text-sm font-semibold text-slate-900">
+        Team contributions
+        <InfoTip label="About the team contributions view" helpHref={helpLink("ai")}>{TIPS.leaderTeam}</InfoTip>
+      </h2>
+      <p className="mt-1 text-xs leading-normal text-slate-700">Equal share: {equalPct.toFixed(1)}% each.</p>
       <ul className="mt-3 divide-y divide-slate-200">
         {team.map((m) => (
           <li key={m.userId} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 py-3 sm:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,1.6fr)_auto]">

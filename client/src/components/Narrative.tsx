@@ -3,6 +3,8 @@ import ReactMarkdown from "react-markdown";
 import type { NarrativeResponse } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui/styles";
+import { InfoTip } from "./ui/InfoTip";
+import { TIPS, helpLink } from "../lib/helpText";
 
 interface Props {
   narrative: string | null;
@@ -43,7 +45,10 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 id="narrative-title" className="text-lg font-semibold text-slate-900">AI report</h2>
-          <p className="text-sm leading-normal text-slate-700">Scores computed by formula · explained by AI</p>
+          <p className="flex items-center gap-1 text-sm leading-normal text-slate-700">
+            Scores computed by formula · explained by AI
+            <InfoTip label="About the AI report" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
+          </p>
         </div>
         {narrative && !generating && (
           <button type="button" onClick={() => generate(true)} className={BUTTON_SECONDARY}>

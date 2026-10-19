@@ -6,6 +6,8 @@ import { useToast } from "./Toast";
 import {
   groupKeys, useGroupManageQuery, useGroupRequestsQuery, useRoleSuggestionsQuery,
 } from "../hooks/useGroupQueries";
+import { InfoTip } from "./ui/InfoTip";
+import { TIPS, helpLink } from "../lib/helpText";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
@@ -406,7 +408,13 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         {/* ── Members ─────────────────────────────────────────────────────── */}
         <div className="mb-5">
           <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
-            <h3 className="text-xs font-semibold text-slate-700">Members</h3>
+            <h3 className="flex items-center gap-1 text-xs font-semibold text-slate-700">
+              Members
+              <InfoTip label="About roles" helpHref={helpLink("roles")}>
+                {TIPS.roles}
+                {!canManage && " You can suggest a role for yourself from your project view."}
+              </InfoTip>
+            </h3>
             <p className="text-xs text-slate-400">
               {group.members.length}
               {group.maxGroupSize ? ` / ${group.maxGroupSize}` : ""} members
@@ -416,11 +424,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             </p>
           </div>
 
-          {/* Role-context note */}
-          <p className="text-xs text-slate-400 mb-3">
-            Roles are context only — they never affect contribution scores.
-            {!canManage && " Members can suggest a role from their project view."}
-          </p>
 
           <ul className="space-y-2">
             {group.members.map((m) => {
@@ -548,9 +551,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 </svg>
                 Change leader
               </button>
-              <p className="text-xs text-slate-400 mt-1">
-                Leadership is administrative only — it grants no contribution credit.
-              </p>
             </div>
           )}
 
@@ -761,10 +761,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             {actionErr}
           </div>
         )}
-
-        <p className="text-xs text-slate-400 mb-5">
-          Leadership is administrative only and grants no contribution credit. Scores are based on actual work.
-        </p>
 
         <div className="flex justify-end gap-2">
           <button

@@ -20,6 +20,7 @@ import { BulkBar } from "./BulkBar";
 import { BulkConfirmDialog, BulkSkippedDialog } from "./BulkDialogs";
 import { TasksMenu } from "./TasksMenu";
 import { InfoTip } from "../ui/InfoTip";
+import { TIPS, helpLink } from "../../lib/helpText";
 import { CalendarView } from "./CalendarView";
 import { ListView } from "./ListView";
 import { MilestoneStrip } from "./MilestoneStrip";
@@ -282,13 +283,16 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
         <span>Tasks help your group plan. They don't change contribution scores.</span>
         {board.group.hasRepo && (
-          <InfoTip label="About commit linking">
+          <InfoTip label="About commit linking" helpHref={helpLink("tasks")}>
             Put a task's key, like {board.group.taskKey}-12, in a commit message to link that commit to the task. Only commit messages are read.
           </InfoTip>
         )}
-        <button type="button" onClick={() => setHelp(true)} className={`rounded text-sm text-slate-700 underline ${FOCUS_LIGHT}`}>
-          Press <kbd className="rounded border border-slate-300 bg-slate-50 px-1 text-xs font-semibold text-slate-900">?</kbd> for shortcuts
-        </button>
+        <InfoTip label="About keyboard shortcuts">
+          {TIPS.shortcuts}
+          <button type="button" onClick={() => setHelp(true)} className={`mt-2 block rounded font-semibold text-indigo-700 underline ${FOCUS_LIGHT}`}>
+            Show shortcuts
+          </button>
+        </InfoTip>
       </p>
 
       {openTask && (

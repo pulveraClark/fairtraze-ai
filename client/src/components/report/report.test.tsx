@@ -332,12 +332,15 @@ describe("MemberContributionList", () => {
   it("renders one 44px+ row per member with share, flag text and an equal-share marker, and opens details", async () => {
     const onOpen = vi.fn();
     render(<MemberContributionList members={[gh, { ...doc } as never]} onOpen={onOpen} />);
-    expect(screen.getAllByRole("button")).toHaveLength(2);
-    screen.getAllByRole("button").forEach((b) => expect(b.className).toContain("min-h-10"));
+    // The header's (?) explains the marker; the rows are the other buttons.
+    const rows = screen.getAllByRole("button").filter((b) => b.getAttribute("aria-label") !== "About the equal-share marker");
+    expect(rows).toHaveLength(2);
+    rows.forEach((b) => expect(b.className).toContain("min-h-10"));
     expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
     expect(screen.getByText("No flags")).toBeInTheDocument();
-    expect(screen.getByText(/equal share \(50\.0% each\)/)).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button")[0]);
+    await userEvent.click(screen.getByRole("button", { name: "About the equal-share marker" }));
+    expect(screen.getByRole("group", { name: "About the equal-share marker" })).toHaveTextContent(/equal split of the work \(50% each\)/);
+    await userEvent.click(rows[0]);
     expect(onOpen).toHaveBeenCalledWith(gh, expect.any(HTMLElement));
   });
 });

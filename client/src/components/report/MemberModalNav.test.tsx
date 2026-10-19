@@ -253,10 +253,12 @@ describe("Member details modal: two-column layout", () => {
       />,
     );
     expect(side().getByText("2 of 5 done", { exact: false })).toBeInTheDocument();
-    const note = side().getByText("Planning only. Not part of the score.");
-    expect(note.className).toContain("text-xs");
-    expect(note.previousElementSibling).toHaveTextContent("Tasks: 2 of 5 done");
-    expect(main().queryByText(/Planning only/)).not.toBeInTheDocument();
+    // The planning-only note is a (?) beside the count, not a line of its own.
+    const tip = side().getByRole("button", { name: "About tasks" });
+    expect(tip.closest("p")).toHaveTextContent("Tasks: 2 of 5 done");
+    await userEvent.click(tip);
+    expect(side().getByRole("group", { name: "About tasks" })).toHaveTextContent("never counted in anyone's score");
+    expect(main().queryByText(/never counted/)).not.toBeInTheDocument();
   });
 
   it("says 'No tasks' when the member has none (19)", async () => {
