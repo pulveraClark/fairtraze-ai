@@ -203,7 +203,7 @@ describe("fetchRepoStats merge-commit exclusion", () => {
   });
 
   it("weights lines by type: comments count 0.25 and blank lines 0 in weightedAdditions, display counts unchanged", async () => {
-    const patch = ["@@ -0,0 +1,6 @@", "+const a = 1;", "+const b = 2;", "+// note", "+// note 2", "+", "+"].join("\n";
+    const patch = ["@@ -0,0 +1,6 @@", "+const a = 1;", "+const b = 2;", "+// note", "+// note 2", "+", "+"].join("\n");
     const { member } = await run(
       [{ sha: "c1", parents: one, date: "2026-01-01T00:00:00Z" }],
       { c1: [{ filename: "a.ts", status: "modified", additions: 6, deletions: 0, patch }] },
