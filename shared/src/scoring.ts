@@ -1,3 +1,4 @@
+import { countDistinctAnalysisDays } from "./analysisDay.js";
 import { LINE_TYPE_WEIGHTS } from "./lineClassifier.js";
 import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, ScoringThresholds, Flag } from "./types.js";
 
@@ -77,7 +78,7 @@ export function computeTeamReport(
       commitImpactBreakdown,
       fileTypeBreakdown,
       churn: m.additions + m.deletions,
-      activeDays: new Set(m.commitDates.map((d) => d.slice(0, 10))).size,
+      activeDays: countDistinctAnalysisDays(m.commitDates),
     };
   });
 

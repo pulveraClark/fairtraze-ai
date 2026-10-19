@@ -2,6 +2,7 @@ import type {
   RawDocumentMemberStats, DocumentScoredMember, TeamReport, TeamHealth,
   DocumentScoringWeights, ScoringThresholds, Flag,
 } from "./types.js";
+import { countDistinctAnalysisDays } from "./analysisDay.js";
 import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
 export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
@@ -45,7 +46,7 @@ export function computeDocumentTeamReport(
     // inside the same log-scale diminishing-returns treatment, rather than stacking a full
     // session's credit on top for the one bookkeeping EditSession row an import produces.
     const logSessions = Math.log(liveSessionCount + importedWeightedRetainedChars / typicalSessionChars + 1);
-    const activeDays = new Set(m.sessionDates.map((d) => d.slice(0, 10))).size;
+    const activeDays = countDistinctAnalysisDays(m.sessionDates);
     const churn = m.totalInsertedChars + m.totalDeletedChars;
     return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars, insertedImageCount };
   });

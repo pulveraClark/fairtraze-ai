@@ -1,14 +1,7 @@
-// Calendar day (YYYY-MM-DD) in this one constant time zone, used for the analysis progress
-// stream's "activity by day" counts (commits and edit sessions alike).
-export const ANALYSIS_TIME_ZONE = "Asia/Manila";
-
-// en-CA formats dates as YYYY-MM-DD.
-const dayFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: ANALYSIS_TIME_ZONE,
-  year:     "numeric",
-  month:    "2-digit",
-  day:      "2-digit",
-});
+// Calendar day (YYYY-MM-DD) in the one scoring time zone (Asia/Manila), shared with scoring so the
+// progress stream's "activity by day" counts and the active-day counts always agree.
+import { ANALYSIS_TIME_ZONE, analysisDayOf } from "@shared/analysisDay.js";
+export { ANALYSIS_TIME_ZONE };
 
 export interface DayCount { d: string; n: number }
 
@@ -16,9 +9,8 @@ export interface DayCount { d: string; n: number }
 export function countByDay(isoDates: readonly string[]): DayCount[] {
   const counts = new Map<string, number>();
   for (const iso of isoDates) {
-    const t = new Date(iso);
-    if (Number.isNaN(t.getTime())) continue;
-    const d = dayFormatter.format(t);
+    const d = analysisDayOf(iso);
+    if (d === null) continue;
     counts.set(d, (counts.get(d) ?? 0) + 1);
   }
   return [...counts.entries()]
