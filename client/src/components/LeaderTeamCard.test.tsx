@@ -26,6 +26,15 @@ describe("LeaderTeamCard", () => {
   });
 });
 
+describe("LeaderTeamCard own row", () => {
+  it("marks only the signed-in member's row with 'You'", () => {
+    render(<LeaderTeamCard sourceType="GITHUB" currentUserId={2} team={[member({}), member({ userId: 2, name: "Member B" })]} />);
+    const you = screen.getAllByText("You");
+    expect(you).toHaveLength(1);
+    expect(you[0]!.closest("li")!.textContent).toContain("Member B");
+  });
+});
+
 describe("LeaderTeamCard with no recorded activity", () => {
   it("shows no shares or inactive pills, but keeps names and task counts", () => {
     render(<LeaderTeamCard sourceType="COMBINED" noActivity team={[

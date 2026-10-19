@@ -21,6 +21,7 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
 import { BriefCard } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
+import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, type MyContribution } from "../lib/contributionStats";
@@ -395,10 +396,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       : ["report", "tasks"]; // GITHUB (default)
   const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : "report";
 
-  const equalShare   = report ? 1 / report.memberCount : 0;
-  const myShare      = report?.myContribution?.contributionShare ?? null;
-  const mySharePct   = myShare !== null ? (myShare * 100).toFixed(1) : null;
-  const equalSharePct = (equalShare * 100).toFixed(1);
   const giniLabel    = report
     ? (report.gini < 0.2 ? "Healthy" : report.gini < 0.4 ? "Moderate Risk" : "High Risk")
     : null;
@@ -768,44 +765,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   </div>
                 )}
 
-                {/* Share overview */}
-                {report.myContribution && !report.noActivity && (
-                  <div className="bg-white border border-slate-200 rounded-xl p-6">
-                    <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
-                      <div>
-                        <h2 className="text-sm font-semibold text-slate-800">Your contribution share</h2>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {project.groupName} · {report.memberCount} members
-                        </p>
-                      </div>
-                      <span className="text-3xl font-bold text-indigo-600">{mySharePct}%</span>
-                    </div>
-
-                    {/* Your share bar */}
-                    <div className="mb-5">
-                      <div className="flex items-center justify-between text-xs mb-1.5">
-                        <span className="text-slate-500">Your share</span>
-                        <span className="font-semibold text-slate-700">{mySharePct}%</span>
-                      </div>
-                      <div className="h-3 bg-slate-100 rounded-full overflow-hidden relative">
-                        <div
-                          className="h-full rounded-full bg-indigo-400 transition-all"
-                          style={{ width: `${(myShare ?? 0) * 100}%` }}
-                        />
-                        <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-slate-500/60"
-                          style={{ left: `${equalShare * 100}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-slate-400 mt-1.5">
-                        Equal share for {report.memberCount} members = {equalSharePct}%
-                        {(myShare ?? 0) >= equalShare
-                          ? " · Your share is at or above the equal share."
-                          : " · Your share is below the equal share."}
-                        {" "}The marker line shows the equal share.
-                      </p>
-                    </div>
-                  </div>
+                {/* Members see their own overall share in one compact tile; the leader's is the "You" row below */}
+                {report.myContribution && !report.noActivity && membership.role === "MEMBER" && (
+                  <YourShareTile share={report.myContribution.contributionShare} memberCount={report.memberCount} />
                 )}
 
                 {/* Stats grid */}
@@ -821,7 +783,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 )}
 
                 {/* Leader-only: every member's share, so work can be rebalanced */}
-                {report.team && <LeaderTeamCard team={report.team} sourceType={sourceType} noActivity={report.noActivity} />}
+                {report.team && <LeaderTeamCard team={report.team} currentUserId={user?.id} sourceType={sourceType} noActivity={report.noActivity} />}
 
                 {/* Team context */}
                 {!report.noActivity && (

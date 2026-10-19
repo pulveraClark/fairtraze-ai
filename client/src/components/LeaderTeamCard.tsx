@@ -21,7 +21,7 @@ export interface LeaderTeamMember {
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
 
 /** Leader-only team view. The server only sends `team` to the group's leader. */
-export function LeaderTeamCard({ team, sourceType, noActivity = false }: { team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean }) {
+export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUserId }: { team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; currentUserId?: number }) {
   const combined = sourceType === "COMBINED";
   const equalPct = team.length > 0 ? 100 / team.length : 0;
   return (
@@ -42,7 +42,7 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false }: { team:
             />
             <div className="min-w-0">
               <p className="break-words text-sm font-semibold text-slate-900">
-                {m.name}{m.isLeader ? <span className="ml-2 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-900">Leader</span> : null}
+                {m.name}{m.userId === currentUserId ? <span className="ml-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-900">You</span> : null}{m.isLeader ? <span className="ml-2 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-900">Leader</span> : null}
               </p>
               <p className="text-xs text-slate-700">
                 {m.functionalRoles.map((r) => (r === "DOCUMENTATION" ? "Documentation" : "Developer")).join(" · ") || "No role set"}

@@ -72,4 +72,29 @@ describe("StudentGroupPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "About roles" }));
     expect(screen.getByRole("tooltip").textContent).toMatch(/Assign roles for all members/);
   });
+
+  it("has no hero card; a member sees one compact 'Your share' tile (R4)", () => {
+    renderPage();
+    expect(screen.queryByText("Your contribution share")).toBeNull();
+    expect(screen.getAllByText("Your share")).toHaveLength(1);
+    expect(screen.getByText("40.0%")).toBeTruthy();
+    expect(screen.getByTestId("share-bar-tick")).toBeTruthy();
+  });
+
+  it("a leader gets no tile and no hero card; their own row is marked You (R4)", () => {
+    state.data = groupFixture({
+      membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null },
+      report: {
+        ...(groupFixture().report as object),
+        team: [
+          { userId: 1, name: "Ana Cruz", isLeader: true, functionalRoles: ["DEVELOPER"], hasAvatar: false, avatarUpdatedAt: null, contributionShare: 0.4, githubContributionShare: 0.5, documentContributionShare: 0.3, flags: [], tasks: { open: 0, done: 0 } },
+          { userId: 2, name: "Ben Lim", isLeader: false, functionalRoles: ["DEVELOPER"], hasAvatar: false, avatarUpdatedAt: null, contributionShare: 0.6, githubContributionShare: 0.5, documentContributionShare: 0.7, flags: [], tasks: { open: 0, done: 0 } },
+        ],
+      },
+    });
+    renderPage();
+    expect(screen.queryByText("Your contribution share")).toBeNull();
+    expect(screen.queryByText("Your share")).toBeNull();
+    expect(screen.getAllByText("You")).toHaveLength(1);
+  });
 });
