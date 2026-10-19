@@ -387,7 +387,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   }
 
   const { classSection, assignment, project, membership, hasReport, report } = data;
-  const bandCode = classSection.edpCode || classSection.subjectCode;
+  const bandCode = classSection.subjectCode; // the class code, as in the sidebar (not the EDP code)
 
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] = groupTabs("student", sourceType);

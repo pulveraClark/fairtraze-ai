@@ -163,7 +163,7 @@ function JoinClassModal({
 }
 
 // ── Class card — navigates to /student/class/:id ───────────────────────────────
-function ClassCard({
+export function ClassCard({
   cls,
   onNavigate,
 }: {
@@ -175,7 +175,7 @@ function ClassCard({
   
   const joinedCount    = cls.assignments.filter((a) => a.myGroup !== null).length;
   const totalAssignments = cls.assignments.length;
-  const bandLabel      = cls.edpCode || cls.subjectCode;
+  const bandLabel      = cls.subjectCode; // the class code, as in the sidebar (not the EDP code)
 
   const latestReport = cls.assignments
     .flatMap((a) => (a.myGroup?.report ? [a.myGroup.report] : []))

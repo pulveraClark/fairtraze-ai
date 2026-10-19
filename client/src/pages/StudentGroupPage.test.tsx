@@ -184,4 +184,11 @@ describe("StudentGroupPage", () => {
     expect(screen.queryByText(/Moderate Risk|High Risk/)).toBeNull();
     expect(screen.getAllByText("Work is a bit uneven").length).toBeGreaterThan(0);
   });
+
+  it("the breadcrumb names the class by its class code, not the EDP code (23)", () => {
+    renderPage();
+    const crumbs = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(crumbs.textContent).toContain("IT-ELEC 2");
+    expect(crumbs.textContent).not.toContain("UXA634062");
+  });
 });
