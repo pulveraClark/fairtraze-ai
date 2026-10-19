@@ -22,7 +22,8 @@ export function SuggestedAssignee({ board, task, onConfirm, onChange }: Props) {
     return suggestAssigneeForTask(board.members, board.tasks, task, labelNames);
   }, [board.labels, board.members, board.tasks, task]);
 
-  if (!suggestion || suggestion.userId === task.assignedToUserId) return null;
+  // Already assigned: a second name next to the real assignee only confuses.
+  if (task.assignedToUserId !== null || !suggestion) return null;
 
   return (
     <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 p-2.5" role="group" aria-label="Suggested assignee">

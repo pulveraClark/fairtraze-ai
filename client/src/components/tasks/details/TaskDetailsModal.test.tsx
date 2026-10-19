@@ -509,6 +509,16 @@ describe("suggested assignee (leader only)", () => {
     expect(within(box).getByText("Fewest open tasks (0); no Documentation member")).toBeInTheDocument();
   });
 
+  it("is not shown once the task is assigned (R8)", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Taken", assignedToUserId: BEN.userId })]));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Taken/ }));
+    await screen.findByRole("dialog", { name: "FT-1" });
+    expect(screen.queryByRole("group", { name: "Suggested assignee" })).not.toBeInTheDocument();
+  });
+
   it("Change moves focus to the assignee picker without assigning", async () => {
     signInAs(1);
     const server = installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Code it" })]));
