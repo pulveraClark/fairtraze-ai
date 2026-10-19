@@ -315,7 +315,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-64">
             <Breadcrumbs
               items={[
                 { label: isAdmin ? "Admin" : "Dashboard", href: isAdmin ? "/admin" : "/dashboard" },
