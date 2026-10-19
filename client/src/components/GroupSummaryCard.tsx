@@ -8,6 +8,7 @@ import { useRouter } from "../router";
 import type { GroupTaskSummary } from "@shared/taskTypes";
 import { TaskCountLine } from "./TaskCountLine";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
 
 const HEALTH_BADGE: Record<TeamHealth, string> = {
   Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
@@ -164,13 +165,13 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
       )}
 
       {/* Scored with older project settings */}
-      {item.settingsOutdated && !stale && (
+      {(item.settingsOutdated || item.rulesOutdated) && !stale && (
         <div
           className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2"
           onClick={(e) => e.stopPropagation()}
         >
           <p className="text-xs text-amber-800 font-medium leading-snug">
-            Scored with older settings — re-analyze to apply
+            {item.rulesOutdated ? RULES_OUTDATED_INSTRUCTOR_NOTICE : "Scored with older settings — re-analyze to apply"}
           </p>
           {onAnalyze && (
             <button

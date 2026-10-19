@@ -2,6 +2,7 @@ import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { isRulesOutdated } from "@shared/scoringRules.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
@@ -668,7 +669,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember> };
+  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number };
   if (!stored.report) {
     res.json({ ...base, hasReport: false, report: null });
     return;
@@ -747,6 +748,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     ...base,
     hasReport: true,
     docsDataApproximate,
+    rulesOutdated: isRulesOutdated(stored),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     report: {
       gini:        teamReport.gini,

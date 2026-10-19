@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { isRulesOutdated } from "@shared/scoringRules.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
@@ -100,7 +101,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
   const summary: ProjectSummaryItem[] = projects.map((p) => {
     const latestReport = p.reports[0] ?? null;
     const stored = latestReport?.content
-      ? (JSON.parse(latestReport.content) as { report?: TeamReport; narrative?: string; scoringConfig?: ProjectScoringConfig | null })
+      ? (JSON.parse(latestReport.content) as { report?: TeamReport; narrative?: string; scoringConfig?: ProjectScoringConfig | null; scoringRulesVersion?: number })
       : null;
     const report = stored?.report ?? null;
 
@@ -118,6 +119,9 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     // snapshot (EDITOR, legacy) can't be compared and never show as outdated. blend only matters for COMBINED.
     const settingsOutdated = !!(stored?.scoringConfig && p.assignment
       && !configsEqual(stored.scoringConfig, assignmentScoringConfig(p.assignment), p.assignment.sourceType === "COMBINED"));
+
+    // Scored with older scoring rules (read-time; covers EDITOR reports, which store no snapshot).
+    const rulesOutdated = isRulesOutdated(stored);
 
     return {
       projectId:    p.id,
@@ -139,6 +143,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
       membershipChangedAt:    p.membershipChangedAt?.toISOString() ?? null,
       scoringConfigChangedAt: p.scoringConfigChangedAt?.toISOString() ?? null,
       settingsOutdated,
+      rulesOutdated,
     };
   });
 
@@ -238,6 +243,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
         narrative?: string;
         unmatchedLogins?: string[];
         scoringConfig?: ProjectScoringConfig;
+        scoringRulesVersion?: number;
       })
     : {};
 
@@ -288,6 +294,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     membershipChangedAt:    project.membershipChangedAt?.toISOString() ?? null,
     memberRoles,
     docsDataApproximate: await docsDataApproximateFor(projectId, project.assignment?.sourceType),
+    rulesOutdated: isRulesOutdated(stored),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
   };
 

@@ -30,6 +30,7 @@ import { studentHealthLabel } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
+import { RULES_OUTDATED_STUDENT_NOTICE } from "@shared/scoringRules";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
 
@@ -48,6 +49,7 @@ interface GroupDetail {
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
   docsDataApproximate?: boolean;
+  rulesOutdated?: boolean;
   docsDataFixedAt?: string;
   report: {
     gini:        number;
@@ -747,6 +749,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             {hasReport && report && (
               <>
                 {data.docsDataApproximate && <DocsDataApproximateNotice fixedAt={data.docsDataFixedAt} />}
+                {data.rulesOutdated && (
+                  <p role="note" className="text-xs text-slate-600">{RULES_OUTDATED_STUDENT_NOTICE}</p>
+                )}
                 {/* No contribution data for this student in the current report */}
                 {report.myContribution === null && (
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm text-slate-500 leading-relaxed">

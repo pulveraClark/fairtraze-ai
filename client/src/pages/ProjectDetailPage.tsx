@@ -29,6 +29,7 @@ import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
 import { helpLink } from "../lib/helpText";
+import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -124,7 +125,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       const data = (await res.json()) as StoredReportResponse;
       setStored(data);
       setNarrativeText(data.narrative ?? null);
-      setReportStale(!!data.scoringConfigChangedAt || !!data.membershipChangedAt);
+      setReportStale(!!data.scoringConfigChangedAt || !!data.membershipChangedAt || !!data.rulesOutdated);
     } catch {
       setFetchError("Network error — could not reach the server.");
     } finally {
@@ -512,7 +513,9 @@ export function ProjectDetailPage({ projectId }: Props) {
         {reportStale && stored && !reanalyzing && (
           <div className="bg-amber-100 border-2 border-amber-400 rounded-xl px-4 py-3 flex items-center gap-4 flex-wrap">
             <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
-              Report may be outdated — membership or settings have changed. Re-analyze to update.
+              {stored.rulesOutdated
+                ? RULES_OUTDATED_INSTRUCTOR_NOTICE
+                : "Report may be outdated — membership or settings have changed. Re-analyze to update."}
             </p>
             <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY_COMPACT}>
               Re-analyze

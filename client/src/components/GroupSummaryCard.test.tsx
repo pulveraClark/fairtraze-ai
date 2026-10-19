@@ -10,7 +10,7 @@ const item = (names: string[], over: Partial<ProjectSummaryItem> = {}): ProjectS
   memberCount: names.length, teamHealth: "Healthy", gini: 0.1,
   memberShares: names.map((studentName) => ({ studentName, contributionShare: 1 / names.length, flags: [] })),
   flagsPresent: [], lastAnalyzedAt: "2026-10-19T00:00:00Z", isAnalyzed: true, membershipChangedAt: null, scoringConfigChangedAt: null,
-  settingsOutdated: false,
+  settingsOutdated: false, rulesOutdated: false,
   ...over,
 } as ProjectSummaryItem);
 
@@ -32,6 +32,18 @@ describe("GroupSummaryCard member legend", () => {
   it("keeps the full name as a tooltip", () => {
     renderCard(["Klent Sama", "Aldren Baricuatro"]);
     expect(screen.getByTitle("Aldren Baricuatro")).toHaveTextContent("Aldren B.: 50%");
+  });
+});
+
+describe("GroupSummaryCard with older scoring rules", () => {
+  it("shows the scoring-updated notice and a Re-analyze button when the report uses older rules", () => {
+    renderCard(["A", "B"], { rulesOutdated: true });
+    expect(screen.getByText("Scoring was updated. Re-analyze to apply the new rules.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Re-analyze" }).length).toBeGreaterThan(1); // banner + the card's own button
+  });
+  it("shows no notice when the report is current", () => {
+    renderCard(["A", "B"]);
+    expect(screen.queryByText(/Scoring was updated/)).toBeNull();
   });
 });
 

@@ -22,7 +22,7 @@ function item(overrides: Partial<ProjectSummaryItem> = {}): ProjectSummaryItem {
     isAnalyzed: true,
     membershipChangedAt: null,
     scoringConfigChangedAt: null,
-    settingsOutdated: false,
+    settingsOutdated: false, rulesOutdated: false,
     ...overrides,
   };
 }

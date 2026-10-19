@@ -11,6 +11,7 @@
     "./documentScoring": "./src/documentScoring.ts",
     "./documentTemplates": "./src/documentTemplates.ts",
     "./analysisDay": "./src/analysisDay.ts",
+    "./scoringRules": "./src/scoringRules.ts",
     "./lineClassifier": "./src/lineClassifier.ts",
     "./fileWeights": "./src/fileWeights.ts",
     "./commitClassifier": "./src/commitClassifier.ts",

@@ -283,6 +283,9 @@ export interface ProjectSummaryItem {
   // True when the latest report's stored scoringConfig differs from the project's (assignment's)
   // current settings. Always false for reports without a stored config (EDITOR, legacy).
   settingsOutdated: boolean;
+  // True when the latest report was scored with older scoring rules (SCORING_RULES_VERSION). Computed
+  // at read time; also covers EDITOR reports, which store no settings snapshot.
+  rulesOutdated: boolean;
 }
 
 // Stored report — returned by GET /api/projects/:id/report.
@@ -310,6 +313,8 @@ export interface StoredReportResponse {
   // Computed at read time (never stored): true when an EDITOR/COMBINED group's document has
   // EditEvents recorded before AUTHORSHIP_FIX_AT, i.e. before the authorship-capture offset fix.
   docsDataApproximate?: boolean;
+  // Computed at read time (never stored): the report was scored with older scoring rules.
+  rulesOutdated?: boolean;
   docsDataFixedAt?: string; // ISO date of the fix, for the notice text
 }
 

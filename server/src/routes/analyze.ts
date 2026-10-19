@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { fetchRepoStats, type GitHubProgress } from "../lib/github.js";
 import { computeTeamReport } from "@shared/scoring.js";
+import { SCORING_RULES_VERSION } from "@shared/scoringRules.js";
 import { computeDocumentTeamReport } from "@shared/documentScoring.js";
 import { computeCombinedTeamReport } from "@shared/combinedScoring.js";
 import { computeDocumentRawStats } from "../collab/editStats.js";
@@ -317,7 +318,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null }),
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null, scoringRulesVersion: SCORING_RULES_VERSION }),
       },
     });
 
@@ -424,7 +425,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION }),
       },
     });
 
@@ -534,7 +535,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
       projectId,
       gini:      report.gini,
       teamHealth: report.teamHealth,
-      content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig }),
+      content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION }),
     },
   });
 

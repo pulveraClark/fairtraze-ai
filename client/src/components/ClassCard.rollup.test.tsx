@@ -9,7 +9,7 @@ const group = (id: number, shares: number[], over: Partial<ProjectSummaryItem> =
   projectId: id, groupName: `G${id}`, assignmentLabel: "X", classId: 1, assignmentId: 1, sourceType: "GITHUB",
   memberCount: shares.length, teamHealth: "Healthy", gini: 0, isAnalyzed: true, lastAnalyzedAt: "2026-10-19T00:00:00Z",
   memberShares: shares.map((s, i) => ({ studentName: `M${i}`, contributionShare: s, flags: [] })),
-  flagsPresent: [], membershipChangedAt: null, scoringConfigChangedAt: null, settingsOutdated: false, ...over,
+  flagsPresent: [], membershipChangedAt: null, scoringConfigChangedAt: null, settingsOutdated: false, rulesOutdated: false, ...over,
 } as ProjectSummaryItem);
 
 // two empty groups (one carries a stale "High Risk" label and an inactive flag) and one healthy group

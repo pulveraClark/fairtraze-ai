@@ -85,6 +85,17 @@ describe("StudentGroupPage", () => {
     expect(screen.queryByText(/dispute/i)).toBeNull();
   });
 
+  it("shows one calm line when the report uses older scoring rules, and nothing otherwise", () => {
+    window.history.pushState({}, "", REPORT);
+    state.data = groupFixture({ rulesOutdated: true });
+    const { unmount } = renderPage();
+    expect(screen.getByText("This report uses older scoring rules. It updates when your instructor re-analyzes.")).toBeTruthy();
+    unmount();
+    state.data = groupFixture({ rulesOutdated: false });
+    renderPage();
+    expect(screen.queryByText(/older scoring rules/)).toBeNull();
+  });
+
   it("has no header Tasks button; Tasks stays a tab (R1)", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: /^Tasks$/ })).toBeNull();
