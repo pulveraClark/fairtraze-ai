@@ -140,9 +140,9 @@ Processing is done **oldest-first** (`[...shas].reverse()`) so that self-churn t
 For each commit, for each file in the diff:
 1. `categorizeFile(filename)` → determines file category and weight
 2. Parse `file.patch`: collect `addedLines` (lines starting with `+`, not `++`) and count deleted lines (lines starting with `-`, not `--`)
-3. Accumulate `codeLinesAdded`, `commentLinesAdded`, `blankLinesAdded` via `classifyAddedLines()`
+3. Accumulate `codeLinesAdded`, `commentLinesAdded`, `blankLinesAdded` via `classifyAddedLines()` (display counts; they do not enter `weightedAdditions`)
 4. Accumulate self-churn tracking (see §4.4)
-5. Accumulate `commitWeightedRaw += addedLines.length × fileWeight`
+5. Accumulate `commitWeightedRaw += addedLines.length × fileWeight` (all added lines, code, comment and blank alike), then `weightedAdditions += commitWeightedRaw × COMMIT_IMPACT[class]` per commit
 6. Track file-type breakdown counts
 
 After all files, classify the commit via `classifyCommit()` and apply:
@@ -189,14 +189,17 @@ DEFAULT_WEIGHTS = { commits: 0.4, lines: 0.4, activeDays: 0.2 }
 
 ```
 meaningfulLines   = codeLinesAdded + 0.25 × commentLinesAdded
-                    (blank lines contribute 0)
+                    (blank lines contribute 0; display / fallback only, see below)
 
 logCommits        = Math.log(commits + 1)
                     (natural log; log(1) = 0 for 0-commit members)
 
 effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)
                     (falls back to meaningfulLines when weightedAdditions is absent —
-                     preserves compatibility with tests that predate significance scoring)
+                     preserves compatibility with tests that predate significance scoring.
+                     analyze.ts always supplies weightedAdditions, so in real runs the lines
+                     share is file-type weight x commit impact x self-churn discount, and
+                     comments / blanks are NOT discounted)
 
 activeDays        = count of distinct YYYY-MM-DD strings in commitDates[]
 ```
@@ -229,7 +232,7 @@ All output fields are rounded to 3 decimal places via `round3(n) = Math.round(n 
 
 ### 3.6 Worked example
 
-3-member team, no significance data (falls back to meaningfulLines):
+3-member team, no significance data (the test-only fallback to meaningfulLines; real runs use weightedAdditions):
 
 | Member | commits | codeLinesAdded | commentLinesAdded | activeDays |
 |---|---|---|---|---|
@@ -340,7 +343,7 @@ For unknown extensions, no markers are defined — all non-blank lines count as 
 
 `meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded`
 
-Blank lines contribute zero. The 0.25 weight means 4 comment lines equal 1 code line.
+Blank lines contribute zero to `meaningfulLines`, and 4 comment lines equal 1 code line **in that figure**. `meaningfulLines` is shown on the report and used by `scoring.ts` only as a fallback when `weightedAdditions` is absent. It does not discount comments or blanks in a real analysis, where every added line is weighted by file type and commit impact (sections 3.1 and 4.2-4.3).
 
 ### 4.5 Self-churn (`server/src/lib/github.ts`)
 

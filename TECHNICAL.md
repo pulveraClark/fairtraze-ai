@@ -123,35 +123,38 @@ All of the following is implemented in `shared/src/scoring.ts`. These values are
 
 ```
 commits:    0.4
-lines:      0.4   ← applied to meaningfulLines share (renamed from churn)
+lines:      0.4   ← applied to the lines share (effectiveAdditions; renamed from churn)
 activeDays: 0.2
 ```
 
-**Why these weights:** Commits and meaningful lines are weighted equally (0.4 each) because both frequency and code substance matter. Active days gets a lower weight (0.2) because a member who commits all work in two large sessions should not be penalized relative to one who makes small daily commits.
+**Why these weights:** Commits and lines added are weighted equally (0.4 each) because both frequency and code substance matter. Active days gets a lower weight (0.2) because a member who commits all work in two large sessions should not be penalized relative to one who makes small daily commits.
 
 ### Component Shares (all normalized to [0, 1] across the team)
 
 ```
 commitShare    = member.commits / sum(all commits)
-linesShare     = member.meaningfulLines / sum(all meaningfulLines)
+linesShare     = member.effectiveAdditions / sum(all effectiveAdditions)
+                (effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio); see below)
 activeDaysShare = member.activeDays / sum(all activeDays)
 ```
 
 - `activeDays` = count of distinct calendar days (YYYY-MM-DD) that appear in the member's commit timestamps.
 - If a total is zero (e.g., no commits at all), the corresponding share is 0.
 
-### Meaningful Lines Formula
+### Lines signal: what real runs score
 
 ```
-meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded
+weightedAdditions  = Σ over the member's sampled commits of
+                       (Σ over files: addedLines × fileTypeWeight) × commitImpactMultiplier
+effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)
 ```
 
-- `codeLinesAdded`, `commentLinesAdded`, and `blankLinesAdded` come from parsing the actual diff patches of up to 100 commits per member.
-- Blank lines contribute **zero** to `meaningfulLines`. This prevents large formatting-only commits from inflating a member's line score.
-- Comments contribute at 25% of full weight. They are recognized effort but less than substantive code.
-- `codeToCommentRatio = codeLinesAdded / commentLinesAdded` (null when `commentLinesAdded === 0`).
+- **Every added line counts** (`+` lines of the patch), whether it is code, a comment or blank. A line is worth its file-type weight (`FILE_WEIGHTS`: source 1.0, test 0.8, style 0.7, docs 0.6, other 0.5, config 0.3, generated 0) times the multiplier of the commit it was in (`COMMIT_IMPACT`: structural 1.5, functional 1.0, cosmetic 0.5, trivial 0.2), and the total is discounted by up to 50% for lines the member later deleted themselves.
+- Lines come from the diff patches of the newest 100 authored, non-merge commits per member. A file whose patch GitHub omits adds nothing.
+- `analyze.ts` always supplies `weightedAdditions`, so the fallback in `scoring.ts` never fires in a real run.
+- **`meaningfulLines` is display / fallback only.** `meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded` (blank lines 0) is still computed, and `codeLinesAdded`, `commentLinesAdded`, `blankLinesAdded` and `codeToCommentRatio` are shown in the member details, but `scoring.ts` reads `meaningfulLines` only when `weightedAdditions` is absent (tests written before significance scoring). It does not discount comments or blanks in a real analysis. See `ux-audit/LINES_WEIGHTING_CHECK.md`.
 
-**Why:** Raw additions + deletions (churn) counted whitespace and reformatting equally with logic. Classifying lines by type and discounting comments/blanks makes the line-magnitude signal reflect actual code contribution more accurately.
+**Why:** Raw additions + deletions (churn) counted generated and config files equally with source. File-type weights, commit impact and the self-churn discount make the line signal reflect the weight of the work. Comment and blank lines are not discounted separately.
 
 ### Contribution Score
 

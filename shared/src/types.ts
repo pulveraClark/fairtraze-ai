@@ -31,7 +31,8 @@ export interface RawMemberStats {
   additions: number;
   deletions: number;
   commitDates: string[]; // ISO timestamps
-  // Meaningful line classification (optional so existing tests compile without them)
+  // Code/comment/blank line counts. Display only in real runs; the lines share is built from weightedAdditions below.
+  // (They feed meaningfulLines, which scoring.ts uses only as a fallback when weightedAdditions is absent.)
   codeLinesAdded?: number;
   commentLinesAdded?: number;
   blankLinesAdded?: number;
@@ -79,15 +80,15 @@ export interface ScoredMember {
   activeDays: number;
   lastPhaseRatio: number;
   commitShare: number;
-  linesShare: number;    // share of meaningfulLines (was churnShare)
+  linesShare: number;    // share of effectiveAdditions (weightedAdditions x self-churn discount); meaningfulLines only as a fallback
   activeDaysShare: number;
   contributionShare: number;
-  // Meaningful contribution breakdown
+  // Line breakdown (display; not the scored quantity in real runs)
   codeLinesAdded: number;
   commentLinesAdded: number;
   blankLinesAdded: number;
   codeToCommentRatio: number | null; // null when no code or no comments written
-  // Contribution significance
+  // Contribution significance: weightedAdditions = sum over commits of (added lines x file-type weight) x commit-impact multiplier
   weightedAdditions:     number;
   selfChurnRatio:        number;
   commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
@@ -109,7 +110,7 @@ export interface TeamReport<M = ScoredMember> {
 
 export interface ScoringWeights {
   commits: number;
-  lines: number;      // weight applied to meaningfulLines share (renamed from churn)
+  lines: number;      // weight applied to the lines share (effectiveAdditions; was churn)
   activeDays: number;
 }
 

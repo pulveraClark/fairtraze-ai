@@ -100,7 +100,7 @@ A member's functional role implies an expected primary data source (only `DEVELO
 Mirrors the GitHub scoring structure. Implemented signals, grouped by category:
 
 ### Core authorship
-- **Net retained text** *(primary meaningful-contribution signal)* — text the member contributed that survived, weighted by edit-type significance (`weightedRetainedChars`), not gross typing volume. This is the editor analog of `meaningfulLines` in GitHub scoring.
+- **Net retained text** *(primary meaningful-contribution signal)* — text the member contributed that survived, weighted by edit-type significance (`weightedRetainedChars`), not gross typing volume. This is the editor analog of `effectiveAdditions` (weighted lines added) in GitHub scoring.
 - Characters inserted / deleted per user (`totalInsertedChars`, `totalDeletedChars`)
 
 ### Activity & volume
@@ -156,7 +156,7 @@ Unlike Comments, a "suggestion" is provisional content that becomes real documen
 |---|---|
 | Commits | Editing sessions |
 | Lines added / deleted (churn) | Words added / deleted |
-| Meaningful lines (`code + 0.25 × comments`) | Net retained text |
+| Lines added (file type × commit impact, self-churn discounted) | Net retained text |
 | Active days | Active editing days |
 | Commit-impact class (structural / functional / cosmetic / trivial) | Edit-type weight (substantive / revision / formatting / trivial) |
 | Self-churn ratio | Self-churn ratio (own text later deleted) |
@@ -374,18 +374,18 @@ A student team, the app they build, and the repository they use are three differ
 `groupName` and `assignmentLabel` default to `""` so migrations are non-breaking for existing rows (the backend falls back to `"Group {id}"` / `"General Assignment"` when empty). The seed populates both for all three demo projects.
 
 ## Key computed types (`shared/src/types.ts`)
-- `RawMemberStats`: commits, additions, deletions, commitDates, plus optional `codeLinesAdded?`, `commentLinesAdded?`, `blankLinesAdded?` (populated by the GitHub diff fetch)
+- `RawMemberStats`: commits, additions, deletions, commitDates, plus optional `codeLinesAdded?`, `commentLinesAdded?`, `blankLinesAdded?` (populated by the GitHub diff fetch; display counts), plus `weightedAdditions?`, `selfChurnRatio?`
 - `ScoredMember`: commits, additions, deletions, churn, activeDays, lastPhaseRatio, commitShare, linesShare, activeDaysShare, contributionShare, codeLinesAdded, commentLinesAdded, blankLinesAdded, codeToCommentRatio, flags
 - `Flag` = "inactive" | "free-rider" | "overload" | "deadline-driven"
 - `TeamReport`: members, memberCount, gini, teamHealth ("Healthy" | "Moderate Risk" | "High Risk")
 - `ScoringWeights`: commits (0.4), lines (0.4), activeDays (0.2) — `lines` was formerly `churn`
 
 ## Meaningful Contribution Analysis (`shared/src/lineClassifier.ts`)
-Added in `feature/meaningful-contribution`. The scoring's line-magnitude signal is now `meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded` (weight 0.4, same position as old churn).
+Added in `feature/meaningful-contribution`, **later superseded by significance scoring** (next section). `meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded` is still computed and displayed, but in real runs the scored line signal (weight 0.4) is `effectiveAdditions` = every added line × file-type weight × commit-impact multiplier × (1 − 0.5 × self-churn ratio). `meaningfulLines` feeds the score only as a fallback when `weightedAdditions` is absent (`shared` tests); `analyze.ts` always supplies it. See `ux-audit/LINES_WEIGHTING_CHECK.md`.
 
 - `classifyAddedLines(filename, addedLines)` in `shared/src/lineClassifier.ts` classifies each added line as `"code"`, `"comment"`, or `"blank"` using language-aware comment markers derived from the file extension. Supported: js/ts/jsx/tsx/java/c/cpp/cs/go/rs (`//`, `/*`), py/rb/sh/yaml (`#`), html/xml (`<!--`), sql/lua (`--`), css/scss/less (`/*`). Unknown extensions: all lines count as code.
 - The GitHub fetch (`server/src/lib/github.ts`) samples up to **100 commits per member** via `GET /repos/{owner}/{repo}/commits/{sha}`, parses the diff patch for lines starting with `+` (not `++`), and accumulates classified line totals.
-- Blank lines contribute **zero** to `meaningfulLines`, so large formatting-only commits don't inflate scores.
+- Blank lines contribute **zero** to `meaningfulLines` (display / fallback only). They are **not** discounted in the real score: formatting-only commits are kept in check by file-type weights, commit-impact classes and the self-churn discount, not by the blank/comment rule.
 - The AI (Gemini) still only explains the already-computed numbers. It must never assess code quality.
 
 ## Contribution Significance Scoring (`shared/src/fileWeights.ts`, `shared/src/commitClassifier.ts`)
@@ -528,7 +528,7 @@ Scoring weights and flag thresholds are configured **per project (applies to Git
 | Parameter | Default | Meaning |
 |---|---|---|
 | Commit weight | 0.4 | Share of contributionShare from commit count |
-| Lines weight | 0.4 | Share from meaningfulLines |
+| Lines weight | 0.4 | Share from effectiveAdditions (`meaningfulLines` only as a fallback) |
 | Active days weight | 0.2 | Share from distinct active days |
 | Free-rider threshold | 0.5 × equalShare | Below this → free-rider flag |
 | Overload threshold | 1.75 × equalShare | Above this → overload flag |
