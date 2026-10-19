@@ -1,6 +1,6 @@
 import type { PillTone } from "../components/ui/StatusPill";
 
-/** A student's own filed note ("Flag for review"), as returned by GET /api/disputes/mine. */
+/** A student's own filed note ("Add a note"), as returned by GET /api/disputes/mine. */
 export interface StudentNote {
   id:                 number;
   projectId:          number;

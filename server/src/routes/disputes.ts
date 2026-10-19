@@ -334,7 +334,7 @@ disputesRouter.post("/api/disputes/:id/resolve", ...requireRole("INSTRUCTOR"), a
     recipientIds: dispute.studentUserId,
     actorId:      req.user!.sub,
     type:         "DISPUTE_RESPONDED",
-    message:      "Your instructor responded to your review request",
+    message:      "Your instructor replied to your note",
     link:         `/disputes?note=${dispute.id}`,
     projectId:    dispute.projectId,
     refType:      "DISPUTE",

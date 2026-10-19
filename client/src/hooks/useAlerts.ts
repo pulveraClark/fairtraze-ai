@@ -76,7 +76,7 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   JOIN_REQUEST_ACCEPTED: { label: "Request Accepted", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
   JOIN_REQUEST_DECLINED: { label: "Request Declined", color: "text-slate-300 bg-slate-500/10 border-slate-500/30",    light: "text-slate-700 bg-slate-100 border-slate-200" },
   TASK_ASSIGNED:         { label: "Task",            color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
-  DISPUTE_RESPONDED:     { label: "Review Response", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
+  DISPUTE_RESPONDED:     { label: "Note reply", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
   ACCOUNT_LOCKED:        { label: "Account Locked",  color: "text-red-400 bg-red-500/10 border-red-500/30",          light: "text-red-700 bg-red-50 border-red-200" },
   COMMENT_REPLY:           { label: "Comment Reply", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
   REPORT_READY:            { label: "Report Ready", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },

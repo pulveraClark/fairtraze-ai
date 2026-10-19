@@ -44,7 +44,7 @@ export function StudentNotesPage() {
         )}
         {query.isSuccess && notes.length === 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-800">
-            You have not sent a note. If a flag on your report needs context, use "Flag for review / Add a note" on that report.
+            You have not sent a note. If a flag on your report needs context, use "Add a note" on that report.
           </div>
         )}
         <ul className="space-y-3">

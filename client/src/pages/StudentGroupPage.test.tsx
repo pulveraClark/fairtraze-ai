@@ -5,7 +5,7 @@ import { RouterProvider } from "../router";
 import { StudentGroupPage } from "./StudentGroupPage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const state: { data: any } = { data: null };
+const state: { data: any; notes: any[] } = { data: null, notes: [] };
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ token: "t", user: { id: 1, name: "Ana Cruz", role: "STUDENT" } }),
@@ -17,7 +17,7 @@ vi.mock("../hooks/useGroupQueries", () => ({
   disputeKeys: { mine: () => ["d"] },
   groupKeys: { all: () => ["g"], detail: () => ["g", 1] },
   useGroupTasksQuery: () => ({ data: [] }),
-  useMyDisputesQuery: () => ({ data: [], isPending: false }),
+  useMyDisputesQuery: () => ({ data: state.notes, isPending: false }),
   useStudentGroupQuery: () => ({ data: state.data, isLoading: false, error: null }),
 }));
 vi.mock("../hooks/useInvalidateOnAlertCount", () => ({ useInvalidateOnAlertCount: () => undefined }));
@@ -58,7 +58,31 @@ function renderPage() {
 describe("StudentGroupPage", () => {
   beforeEach(() => {
     state.data = groupFixture();
+    state.notes = [];
     window.history.pushState({}, "", "/student/group/1");
+  });
+
+  const flagged = () => groupFixture({ report: { ...(groupFixture().report as object), myContribution: { ...(groupFixture().report.myContribution as object), flags: ["inactive"] } } });
+
+  it("calls it a note everywhere a student sees it: Add a note, Send note, Note status", () => {
+    window.history.pushState({}, "", REPORT);
+    state.data = flagged();
+    renderPage();
+    expect(screen.queryByText(/dispute|Flag for review/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
+    expect(screen.getByRole("heading", { name: "Add a note" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send note" })).toBeTruthy();
+  });
+
+  it("an open note reads 'Note status: Open - awaiting review' and 'Your note is open…'", () => {
+    window.history.pushState({}, "", REPORT);
+    state.data = flagged();
+    state.notes = [{ id: 1, projectId: 1, status: "OPEN", reason: "Offline work", instructorResponse: null, disputedFlags: '["inactive"]', createdAt: "2026-10-18T10:00:00Z", resolvedAt: null }];
+    renderPage();
+    expect(screen.getByText("Note status:")).toBeTruthy();
+    expect(screen.getAllByText("Open - awaiting review").length).toBeGreaterThan(0);
+    expect(screen.getByText("Your note is open and awaiting instructor review.")).toBeTruthy();
+    expect(screen.queryByText(/dispute/i)).toBeNull();
   });
 
   it("has no header Tasks button; Tasks stays a tab (R1)", () => {

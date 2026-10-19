@@ -15,7 +15,7 @@ import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { StudentNoteCard } from "../components/StudentNoteCard";
 import { NoActivityPill } from "../components/NoActivityPill";
-import { sortNotes } from "../lib/notes";
+import { NOTE_STATUS, sortNotes } from "../lib/notes";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
@@ -145,7 +145,7 @@ function DisputeModal({
         body:    JSON.stringify({ projectId, reason: reason.trim() }),
       });
       const json = await res.json() as DisputeRecord & { error?: string };
-      if (!res.ok) { setError(json.error ?? "Could not submit dispute."); return; }
+      if (!res.ok) { setError(json.error ?? "Could not send your note."); return; }
       onSubmitted(json);
     } catch {
       setError("Network error — could not submit.");
@@ -158,7 +158,7 @@ function DisputeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200">
         <div className="px-6 py-5 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-800">Flag for review</h2>
+          <h2 className="text-sm font-semibold text-slate-800">Add a note</h2>
           <p className="text-xs text-slate-400 mt-0.5">
             Describe context for your instructor. They will review and respond.
           </p>
@@ -188,7 +188,7 @@ function DisputeModal({
               disabled={submitting || !reason.trim()}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "Submitting…" : "Submit dispute"}
+              {submitting ? "Sending…" : "Send note"}
             </button>
           </div>
         </form>
@@ -878,15 +878,15 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                   {dispute && (
                                     <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold uppercase tracking-wide">Dispute status:</span>
+                                        <span className="text-xs font-bold uppercase tracking-wide">Note status:</span>
                                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${DISPUTE_STATUS_STYLE[dispute.status]}`}>
-                                          {dispute.status}
+                                          {NOTE_STATUS[dispute.status].label}
                                         </span>
                                       </div>
                                       <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{dispute.reason}</p>
                                       {dispute.instructorResponse && (
                                         <div className="pt-1.5 border-t border-slate-200">
-                                          <p className="text-xs font-semibold text-slate-500 mb-0.5">Instructor response:</p>
+                                          <p className="text-xs font-semibold text-slate-500 mb-0.5">Instructor reply:</p>
                                           <p className="text-xs text-slate-700 leading-relaxed">{dispute.instructorResponse}</p>
                                         </div>
                                       )}
@@ -896,7 +896,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                   {/* Submit button — only if no OPEN dispute exists */}
                                   {dispute?.status === "OPEN" ? (
                                     <p className="text-xs text-amber-600">
-                                      Your dispute is open and awaiting instructor review.
+                                      Your note is open and awaiting instructor review.
                                     </p>
                                   ) : (
                                     <button
@@ -906,7 +906,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
                                       </svg>
-                                      {dispute ? "Submit another note" : "Flag for review / Add a note"}
+                                      {dispute ? "Add another note" : "Add a note"}
                                     </button>
                                   )}
                                 </div>
