@@ -1,3 +1,4 @@
+import { studentHealthLabel } from "../lib/studentDisplay";
 import { useState } from "react";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { BriefModal } from "../components/BriefCard";
@@ -273,7 +274,7 @@ export function ProjectCard({
                   <NoActivityPill />
                 ) : g.report?.teamHealth && (
                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                    {g.report.teamHealth}
+                    {studentHealthLabel(g.report.teamHealth)}
                   </span>
                 )}
               </div>

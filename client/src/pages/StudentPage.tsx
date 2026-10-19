@@ -1,3 +1,4 @@
+import { studentHealthLabel } from "../lib/studentDisplay";
 import { useEffect, useState } from "react";
 import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import { NoActivityPill } from "../components/NoActivityPill";
@@ -258,7 +259,7 @@ function ClassCard({
               <NoActivityPill />
             ) : (
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                {latestReport.teamHealth}
+                {studentHealthLabel(latestReport.teamHealth)}
               </span>
             )}
             <p className="text-xs text-slate-400">

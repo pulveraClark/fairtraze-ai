@@ -21,6 +21,7 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
+import { studentHealthLabel } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
@@ -392,9 +393,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const visibleTabs: Tab[] = groupTabs("student", sourceType);
   const effectiveTab: Tab = resolveTab(activeTab, visibleTabs);
 
-  const giniLabel    = report
-    ? (report.gini < 0.2 ? "Healthy" : report.gini < 0.4 ? "Moderate Risk" : "High Risk")
-    : null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -537,7 +535,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               <NoActivityPill />
             ) : report?.teamHealth && (
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
-                {report.teamHealth}
+                {studentHealthLabel(report.teamHealth)}
               </span>
             )}
           </div>
@@ -801,21 +799,10 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
                   <div className="flex items-start gap-6 flex-wrap">
                     <div>
-                      <p className="text-xs text-slate-400 mb-1.5">Team Health</p>
+                      <p className="text-xs text-slate-400 mb-1.5">How evenly work is shared</p>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
-                        {report.teamHealth}
+                        {studentHealthLabel(report.teamHealth)}
                       </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1.5">Contribution Gini</p>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base font-bold text-slate-700">{report.gini.toFixed(2)}</span>
-                        {giniLabel && (
-                          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded border ${HEALTH_BADGE[giniLabel]}`}>
-                            {giniLabel}
-                          </span>
-                        )}
-                      </div>
                     </div>
                     <div>
                       <p className="text-xs text-slate-400 mb-1.5">Last Analyzed</p>
@@ -825,7 +812,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     </div>
                   </div>
                   <p className="text-xs text-slate-400 mt-4 leading-relaxed">
-                    The Gini coefficient measures contribution inequality across the team. Below 0.2 is Healthy; 0.2–0.4 is Moderate Risk; above 0.4 is High Risk. The Gini coefficient and team health label are aggregate measures computed from all members' activity.{membership.role === "LEADER"
+                    This is worked out from everyone's recorded activity, so it describes the team as a whole.{membership.role === "LEADER"
                       ? " As group leader you can see each member's share in the team contributions card above."
                       : " Your group leader can see each member's contribution share."}
                   </p>

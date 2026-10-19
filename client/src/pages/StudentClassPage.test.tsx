@@ -37,4 +37,10 @@ describe("ProjectCard for a student already in a group (R9)", () => {
     renderCard(asgn({}, { role: "LEADER" }));
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
+
+  it("shows team health in plain words, not 'Moderate Risk' (21)", () => {
+    renderCard(asgn({}, { report: { gini: 0.31, teamHealth: "Moderate Risk", generatedAt: "2026-10-18T00:00:00Z" } }));
+    expect(screen.getByText("Work is a bit uneven")).toBeInTheDocument();
+    expect(screen.queryByText(/Moderate Risk|0\.31/)).toBeNull();
+  });
 });

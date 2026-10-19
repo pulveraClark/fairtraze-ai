@@ -166,4 +166,22 @@ describe("StudentGroupPage", () => {
     expect(tag.className).toContain("bg-amber-50");
     expect(screen.queryByText("free-rider")).toBeNull();
   });
+
+  it("hides the Gini and says 'Work is a bit uneven' instead of Moderate Risk, for members (21)", () => {
+    window.history.pushState({}, "", REPORT);
+    renderPage();
+    expect(screen.queryByText(/Gini/i)).toBeNull();
+    expect(screen.queryByText("0.30")).toBeNull();
+    expect(screen.queryByText(/Moderate Risk/)).toBeNull();
+    expect(screen.getAllByText("Work is a bit uneven").length).toBeGreaterThan(0);
+  });
+
+  it("applies to the leader too (21)", () => {
+    window.history.pushState({}, "", REPORT);
+    state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null } });
+    renderPage();
+    expect(screen.queryByText(/Gini/i)).toBeNull();
+    expect(screen.queryByText(/Moderate Risk|High Risk/)).toBeNull();
+    expect(screen.getAllByText("Work is a bit uneven").length).toBeGreaterThan(0);
+  });
 });
