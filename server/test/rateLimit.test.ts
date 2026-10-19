@@ -132,9 +132,9 @@ describe("rate limiting", () => {
       expect((await login("10.0.0.6", "guess-new@example.com")).status).toBe(401); // other visitors unaffected
     });
 
-    it("register allows 30 per hour per IP, then throttles", async () => {
+    it("register allows 100 per hour per IP, then throttles", async () => {
       const reg = () => request(proxied).post("/api/auth/register").set("X-Forwarded-For", "10.0.0.7").send({});
-      for (let i = 0; i < 30; i++) expect((await reg()).status).toBe(400);
+      for (let i = 0; i < 100; i++) expect((await reg()).status).toBe(400);
       expect((await reg()).status).toBe(429);
     });
 

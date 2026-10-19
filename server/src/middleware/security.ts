@@ -72,11 +72,11 @@ const loginIpBackstopLimiter = rateLimit({
   keyGenerator: (req) => `login-ip:${clientIp(req)}`,
 });
 
-/** 30 sign-ups per hour per IP (a lab registering together still fits). */
+/** 100 sign-ups per hour per IP (a lab registering together still fits). */
 const registerLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 60 * 60 * 1000,
-  max: 30,
+  max: 100,
   keyGenerator: (req) => `register:${clientIp(req)}`,
 });
 
