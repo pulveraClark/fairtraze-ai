@@ -3,7 +3,7 @@ import type * as YTypes from "yjs";
 import { EditEventType, EditType as PrismaEditType, EditSource } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { Y } from "./yjsCjs.js";
-import { wsUserId } from "./connectionRegistry.js";
+import { readOnlyWs, wsUserId } from "./connectionRegistry.js";
 import { computeAuthorshipMap } from "./authorshipMap.js";
 import { broadcastAuthorship } from "./authorshipBroadcast.js";
 import { classifyEdit } from "@shared/editClassifier.js";
@@ -352,7 +352,9 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     let userId: number | undefined;
     let source: EditSource = EditSource.LIVE;
     if (origin instanceof WebSocket) {
-      userId = wsUserId.get(origin);
+      // A read-only connection (instructor/admin, not a group member) never owns text. The gate in
+      // readOnlyGate.ts already drops its writes; this keeps any that slipped through unattributed.
+      userId = readOnlyWs.has(origin) ? undefined : wsUserId.get(origin);
     } else if (isImportOrigin(origin)) {
       userId = origin.userId;
       source = EditSource.IMPORT;

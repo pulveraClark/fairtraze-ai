@@ -8,6 +8,10 @@ export interface CollabAuthOk {
   room: string;
   groupId: number;
   userId: number;
+  // True only for a member of the group. The class instructor (or an admin who owns the class) may
+  // read the document and the authorship broadcast but never write: the collab server drops their
+  // document-changing messages (readOnlyGate.ts).
+  canWrite: boolean;
 }
 
 export interface CollabAuthFail {
@@ -85,5 +89,5 @@ export async function resolveCollabAuth(
     return { ok: false, status: 403 };
   }
 
-  return { ok: true, room, groupId, userId: payload.sub };
+  return { ok: true, room, groupId, userId: payload.sub, canWrite: isMember };
 }

@@ -5,6 +5,7 @@ import type { RawData } from "ws";
 import { docs, getYDoc, setPersistence, setupWSConnection } from "y-websocket/bin/utils";
 import { resolveCollabAuth, statusLine } from "./collabAuth.js";
 import { wsUserId } from "./connectionRegistry.js";
+import { makeReadOnly } from "./readOnlyGate.js";
 import { RoomUnavailableError, roomReady, yjsPersistence } from "./persistence.js";
 import { COLLAB_SCHEMA_VERSION, COLLAB_VERSION_CLOSE_CODE } from "@shared/collabVersion.js";
 
@@ -102,6 +103,8 @@ export function attachYjsCollabServer(httpServer: HttpServer): void {
           // Recorded before setupWSConnection so authorshipCapture.ts can attribute this
           // connection's future Yjs updates (whose `origin` is this exact ws) to auth.userId.
           wsUserId.set(ws, auth.userId);
+          // Before anything can be received (so before joinRoomWhenReady buffers messages).
+          if (!auth.canWrite) makeReadOnly(ws);
           void joinRoomWhenReady(ws, req, auth.room);
         });
       } catch (err) {
