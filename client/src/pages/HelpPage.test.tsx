@@ -3,6 +3,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DEFAULT_WEIGHTS, OVERLOAD_THRESHOLD, HEALTHY_GINI_THRESHOLD } from "@shared/scoring";
 import { COMMIT_IMPACT } from "@shared/commitClassifier";
+import { DOCUMENT_DEFAULT_WEIGHTS, MIN_ACTIVE_DAY_RETAINED_CHARS } from "@shared/documentScoring";
+import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
 import { RouterProvider } from "../router";
 import { HelpPage } from "./HelpPage";
 import { HELP_ANCHORS } from "../lib/helpText";
@@ -52,6 +54,19 @@ describe("HelpPage", () => {
     const exact = screen.getByText("Show the exact numbers").closest("details")!;
     expect(within(exact).getByText(new RegExp(`commits ${DEFAULT_WEIGHTS.commits}, lines ${DEFAULT_WEIGHTS.lines}`))).toBeInTheDocument();
     expect(within(exact).getByText(new RegExp(`structural ${COMMIT_IMPACT.structural.toFixed(1)}×`))).toBeInTheDocument();
+  });
+
+  it("describes the version-2 rules from the constants: Docs weights, line types, 30-character day, Philippine time", async () => {
+    const user = userEvent.setup();
+    renderAs("INSTRUCTOR");
+    expect(DOCUMENT_DEFAULT_WEIGHTS).toEqual({ retainedText: 0.6, sessions: 0.2, activeDays: 0.2 });
+    await user.click(screen.getByText("Show the exact numbers"));
+    const exact = screen.getByText("Show the exact numbers").closest("details")!;
+    expect(within(exact).getByText(/kept text 0\.6, sessions 0\.2, active days 0\.2/)).toBeInTheDocument();
+    expect(within(exact).getByText(new RegExp(`code ${LINE_TYPE_WEIGHTS.code}, comment ${LINE_TYPE_WEIGHTS.comment}, blank ${LINE_TYPE_WEIGHTS.blank}`))).toBeInTheDocument();
+    expect(document.body.textContent).toContain(`at least ${MIN_ACTIVE_DAY_RETAINED_CHARS} characters`);
+    expect(document.body.textContent).toContain("in Philippine time");
+    expect(document.body.textContent).not.toMatch(/Comment and blank lines are not discounted/);
   });
 
   it("uses student wording and never shows the Gini value or threshold list to students", () => {

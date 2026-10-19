@@ -10,7 +10,8 @@ import {
   HEALTHY_GINI_THRESHOLD,
   MODERATE_RISK_GINI_THRESHOLD,
 } from "@shared/scoring";
-import { DOCUMENT_DEFAULT_WEIGHTS } from "@shared/documentScoring";
+import { DOCUMENT_DEFAULT_WEIGHTS, MIN_ACTIVE_DAY_RETAINED_CHARS } from "@shared/documentScoring";
+import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
 import { FILE_WEIGHTS } from "@shared/fileWeights";
 import { COMMIT_IMPACT } from "@shared/commitClassifier";
 
@@ -292,7 +293,8 @@ function DataAccuracy() {
   const rules = [
     "Merge commits are excluded from line and impact analysis, so merging a teammate's branch does not credit the merger with that work.",
     `Generated files (lock files, build output, minified files, source maps) count ${num(FILE_WEIGHTS.generated)}.`,
-    "Every added line counts, whether it is code, a comment or blank. What a line is worth depends on its file type and on the commit it was in, and deleting your own lines lowers it by at most half.",
+    `Code lines count ${num(LINE_TYPE_WEIGHTS.code)}, comment lines ${num(LINE_TYPE_WEIGHTS.comment)} and blank lines ${num(LINE_TYPE_WEIGHTS.blank)}. What a line is worth also depends on its file type and on the commit it was in, and deleting your own lines lowers it by at most half.`,
+    `An active day is a day in Philippine time. In Docs it needs at least ${MIN_ACTIVE_DAY_RETAINED_CHARS} characters written that day that are still in the document.`,
     "Writing something and later deleting it yourself reduces credit by at most 50%. Deleting a teammate's lines is not penalized.",
     "Formatting changes do not count as authored text: toggling bold or changing a heading changes no characters, so it records no contribution.",
     "Inserted images and imported .docx content are disclosed on the report. Images are never scored; imports are scored with the adjustments described above.",

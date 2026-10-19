@@ -140,9 +140,9 @@ Processing is done **oldest-first** (`[...shas].reverse()`) so that self-churn t
 For each commit, for each file in the diff:
 1. `categorizeFile(filename)` → determines file category and weight
 2. Parse `file.patch`: collect `addedLines` (lines starting with `+`, not `++`) and count deleted lines (lines starting with `-`, not `--`)
-3. Accumulate `codeLinesAdded`, `commentLinesAdded`, `blankLinesAdded` via `classifyAddedLines()` (display counts; they do not enter `weightedAdditions`)
+3. Accumulate `codeLinesAdded`, `commentLinesAdded`, `blankLinesAdded` via `classifyAddedLines()` (display counts; the per-file counts also drive the line-type weight below)
 4. Accumulate self-churn tracking (see §4.4)
-5. Accumulate `commitWeightedRaw += addedLines.length × fileWeight` (all added lines, code, comment and blank alike), then `weightedAdditions += commitWeightedRaw × COMMIT_IMPACT[class]` per commit
+5. Accumulate `commitWeightedRaw += (code × 1.0 + comment × 0.25 + blank × 0) × fileWeight` (`LINE_TYPE_WEIGHTS`), then `weightedAdditions += commitWeightedRaw × COMMIT_IMPACT[class]` per commit
 6. Track file-type breakdown counts
 
 After all files, classify the commit via `classifyCommit()` and apply:
@@ -189,7 +189,7 @@ DEFAULT_WEIGHTS = { commits: 0.4, lines: 0.4, activeDays: 0.2 }
 
 ```
 meaningfulLines   = codeLinesAdded + 0.25 × commentLinesAdded
-                    (blank lines contribute 0; display / fallback only, see below)
+                    (blank lines contribute 0; the same line-type weights as weightedAdditions)
 
 logCommits        = Math.log(commits + 1)
                     (natural log; log(1) = 0 for 0-commit members)
@@ -198,10 +198,11 @@ effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)
                     (falls back to meaningfulLines when weightedAdditions is absent —
                      preserves compatibility with tests that predate significance scoring.
                      analyze.ts always supplies weightedAdditions, so in real runs the lines
-                     share is file-type weight x commit impact x self-churn discount, and
-                     comments / blanks are NOT discounted)
+                     share is line-type weight x file-type weight x commit impact x
+                     self-churn discount)
 
-activeDays        = count of distinct YYYY-MM-DD strings in commitDates[]
+activeDays        = count of distinct Asia/Manila YYYY-MM-DD days in commitDates[]
+                    (Docs: days with >= 30 retained characters written that day)
 ```
 
 ### 3.3 Team-level totals
@@ -232,7 +233,7 @@ All output fields are rounded to 3 decimal places via `round3(n) = Math.round(n 
 
 ### 3.6 Worked example
 
-3-member team, no significance data (the test-only fallback to meaningfulLines; real runs use weightedAdditions):
+3-member team, no significance data (the test-only fallback to meaningfulLines, which uses the same line-type weights; real runs use weightedAdditions). These numbers are unchanged by rules version 2:
 
 | Member | commits | codeLinesAdded | commentLinesAdded | activeDays |
 |---|---|---|---|---|
@@ -343,7 +344,7 @@ For unknown extensions, no markers are defined — all non-blank lines count as 
 
 `meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded`
 
-Blank lines contribute zero to `meaningfulLines`, and 4 comment lines equal 1 code line **in that figure**. `meaningfulLines` is shown on the report and used by `scoring.ts` only as a fallback when `weightedAdditions` is absent. It does not discount comments or blanks in a real analysis, where every added line is weighted by file type and commit impact (sections 3.1 and 4.2-4.3).
+Blank lines contribute zero to `meaningfulLines`, and 4 comment lines equal 1 code line **in that figure**. `meaningfulLines` is shown on the report and used by `scoring.ts` only as a fallback when `weightedAdditions` is absent. Real analyses apply the same line-type weights (code 1.0, comment 0.25, blank 0) inside `weightedAdditions`, together with file type and commit impact (sections 3.1 and 4.2-4.3).
 
 ### 4.5 Self-churn (`server/src/lib/github.ts`)
 
@@ -725,9 +726,13 @@ The `Report.content` column stores a JSON string with this shape:
 {
   "report": { ...TeamReport... },
   "narrative": "string or null",
-  "unmatchedLogins": ["login1", "login2"]
+  "unmatchedLogins": ["login1", "login2"],
+  "scoringConfig": { "...": "settings snapshot, or null for EDITOR" },
+  "scoringRulesVersion": 2
 }
 ```
+
+`scoringRulesVersion` is `SCORING_RULES_VERSION` at analysis time. A report without it (or lower) is reported as `rulesOutdated` at read time; nothing is recomputed. Version 2 = line-type weighting, Docs weights 0.6/0.2/0.2, a Docs active day needs 30 retained characters, active days in Asia/Manila time.
 
 `Report.gini` and `Report.teamHealth` are also stored as separate top-level columns (Float? and String?) for efficient querying by the summary endpoint without parsing JSON.
 

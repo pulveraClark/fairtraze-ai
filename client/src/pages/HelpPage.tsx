@@ -9,7 +9,8 @@ import {
   DEFAULT_WEIGHTS, FREE_RIDER_THRESHOLD, OVERLOAD_THRESHOLD, DEADLINE_DRIVEN_THRESHOLD,
   HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD,
 } from "@shared/scoring";
-import { DOCUMENT_DEFAULT_WEIGHTS, TYPICAL_SESSION_CHARS_DEFAULT } from "@shared/documentScoring";
+import { DOCUMENT_DEFAULT_WEIGHTS, TYPICAL_SESSION_CHARS_DEFAULT, MIN_ACTIVE_DAY_RETAINED_CHARS } from "@shared/documentScoring";
+import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
 import { DEFAULT_BLEND_WEIGHTS } from "@shared/combinedScoring";
 import { FILE_WEIGHTS } from "@shared/fileWeights";
 import {
@@ -145,8 +146,8 @@ export function HelpPage() {
           <p>Three things are measured. Each becomes your fraction of the group's total, and then they are blended.</p>
           <Rows rows={[
             ["Commits", <>How many commits you made, on a log scale, so 100 tiny commits are worth far less than 100 times one commit. Default weight {pct(gh.commits)}.</>],
-            ["Lines", <>Lines you added. Each line counts more or less depending on the file type and on the commit it was in (see below). If you later delete lines that you added yourself, this drops by up to half, never to zero. Default weight {pct(gh.lines)}.</>],
-            ["Active days", <>How many different calendar days you made at least one commit. Default weight {pct(gh.activeDays)}.</>],
+            ["Lines", <>Lines you added. Code lines count in full, comment lines count a quarter and blank lines count nothing; each is then worth more or less depending on the file type and on the commit it was in (see below). If you later delete lines that you added yourself, this drops by up to half, never to zero. Default weight {pct(gh.lines)}.</>],
+            ["Active days", <>How many different days (in Philippine time) you made at least one commit. Default weight {pct(gh.activeDays)}.</>],
           ]} />
           <p>
             Your share = {pct(gh.commits)} × commits share + {pct(gh.lines)} × lines share + {pct(gh.activeDays)} × active-days share.
@@ -164,7 +165,7 @@ export function HelpPage() {
           <Rows rows={[
             ["Kept text", <>Text you wrote that is still in the document. Text you typed and then deleted does not count, and writing then deleting your own text lowers this by up to half. Default weight {pct(docs.retainedText)}.</>],
             ["Editing sessions", <>A session is a stretch of editing that ends after 30 minutes without typing. Counted on a log scale, like commits. Default weight {pct(docs.sessions)}.</>],
-            ["Active days", <>How many different calendar days you edited. Default weight {pct(docs.activeDays)}.</>],
+            ["Active days", <>How many different days (in Philippine time) you wrote at least {MIN_ACTIVE_DAY_RETAINED_CHARS} characters that are still in the document. Default weight {pct(docs.activeDays)}.</>],
           ]} />
           <ul>
             <li>The colors in the document show who typed each part. Only the logged-in person is credited for typing.</li>
@@ -199,7 +200,7 @@ export function HelpPage() {
                 <li>Log scale = ln(count + 1). Self-churn discount = 1 − 0.5 × ratio, so at most half.</li>
                 <li>
                   File-type weight per added line: {Object.entries(FILE_WEIGHTS).map(([k, v]) => `${k} ${v}`).join(", ")}.
-                  Every added line counts, whether it is code, a comment or blank. Comment and blank lines are not discounted.
+                  Line type weight per added line: code {LINE_TYPE_WEIGHTS.code}, comment {LINE_TYPE_WEIGHTS.comment}, blank {LINE_TYPE_WEIGHTS.blank}. A line is worth its line type weight × file-type weight × commit impact.
                 </li>
                 <li>
                   Commit impact multiplier: structural {x1(COMMIT_IMPACT.structural)} (creates {STRUCTURAL_NEW_FILES_THRESHOLD}+ new files or touches {STRUCTURAL_FILES_TOUCHED_THRESHOLD}+ files),

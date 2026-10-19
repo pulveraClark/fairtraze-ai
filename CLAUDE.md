@@ -109,7 +109,7 @@ Mirrors the GitHub scoring structure. Implemented signals, grouped by category:
 - Editing sessions (`EditSession`, closed after 30 minutes idle) — the editor analog of commits, passed through the same log-scale diminishing-returns treatment
 
 ### Temporal
-- Active editing days (distinct calendar days across session start times)
+- Active editing days — Asia/Manila calendar days on which the member wrote at least `MIN_ACTIVE_DAY_RETAINED_CHARS` (30) characters that are still in the final document (`retainedCharsByDay`, bucketed from the `EditEvent` replay in `editReplay.ts`/`editStats.ts`; imports count on the upload day). Falls back to distinct session-start days only when per-day retention is not supplied (old test fixtures).
 - Edit-timing distribution — used for the `deadline-driven` flag, but currently computed the same way as GitHub's (data-derived 2/3 split of the observed activity span). **Not yet implemented:** anchoring this window to `Assignment.deadline` (see "Analysis & Fairness Logic" below) — there is no `startDate` field on `Assignment` yet.
 
 ### Structural / content-type weighting (`shared/src/editClassifier.ts` — IMPLEMENTED)
@@ -148,7 +148,7 @@ A member can resize an inserted image via a corner drag handle (aspect ratio loc
 Unlike Comments, a "suggestion" is provisional content that becomes real document content on accept — indistinguishable, once accepted, from a normal typed edit to `authorshipCapture.ts`'s diffing. That means accept/reject cannot avoid interacting with the same collab write path this project has needed four real rounds of hardening on (the writeState/bindState restore race, the authorshipCapture registration-lag race, the room-eviction limitation, the template-picker typing race) — either a new origin/`EditSource` variant would need to thread through `authorshipCapture.ts`'s origin-dispatch logic, or the existing origin-based attribution would silently (and very likely wrongly) credit whoever's WebSocket connection performs the accept transaction, not who wrote the suggested words. Separately, "who gets credit for an accepted suggestion — the suggester, the accepter, or a split" has no safe default and needs an explicit instructor-facing policy decision made outside of an implementation PR, the same way role-based score re-weighting is already treated as "optional and not the default... requires explicit instructor configuration" (see "Roles never change scores" above). Revisit only once both an explicit scoring policy exists and there's a specific reason to believe the collab pipeline has stopped surfacing new timing bugs — neither is true today. Edits-to-others'-text review credit is out of scope for the same reason: it's a variant of the same suggestion-acceptance problem, not a separate one.
 
 ### Default weights (`DOCUMENT_DEFAULT_WEIGHTS`)
-`retainedText: 0.4, sessions: 0.2, activeDays: 0.4` — note this differs from a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2); editor scoring weights active-days participation more heavily than session count.
+`retainedText: 0.6, sessions: 0.2, activeDays: 0.2` (rules version 2; was 0.4/0.2/0.4). Retained text is the primary signal; this is not a 1:1 mirror of the GitHub weights (0.4/0.4/0.2).
 
 ### GitHub → Editor signal mapping
 
@@ -381,11 +381,11 @@ A student team, the app they build, and the repository they use are three differ
 - `ScoringWeights`: commits (0.4), lines (0.4), activeDays (0.2) — `lines` was formerly `churn`
 
 ## Meaningful Contribution Analysis (`shared/src/lineClassifier.ts`)
-Added in `feature/meaningful-contribution`, **later superseded by significance scoring** (next section). `meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded` is still computed and displayed, but in real runs the scored line signal (weight 0.4) is `effectiveAdditions` = every added line × file-type weight × commit-impact multiplier × (1 − 0.5 × self-churn ratio). `meaningfulLines` feeds the score only as a fallback when `weightedAdditions` is absent (`shared` tests); `analyze.ts` always supplies it. See `ux-audit/LINES_WEIGHTING_CHECK.md`.
+Since scoring rules version 2 the scored line signal (weight 0.4) is `effectiveAdditions` = Σ added lines × **line-type weight** (`LINE_TYPE_WEIGHTS`: code 1.0, comment 0.25, blank 0) × file-type weight × commit-impact multiplier × (1 − 0.5 × self-churn ratio). `github.ts` applies the line-type weight in the real pipeline; `meaningfulLines = code + 0.25 × comment` (blank 0, same constants) remains the fallback when `weightedAdditions` is absent (`shared` tests). Before version 2 every added line counted equally. See `ux-audit/LINES_WEIGHTING_CHECK.md` (historical).
 
 - `classifyAddedLines(filename, addedLines)` in `shared/src/lineClassifier.ts` classifies each added line as `"code"`, `"comment"`, or `"blank"` using language-aware comment markers derived from the file extension. Supported: js/ts/jsx/tsx/java/c/cpp/cs/go/rs (`//`, `/*`), py/rb/sh/yaml (`#`), html/xml (`<!--`), sql/lua (`--`), css/scss/less (`/*`). Unknown extensions: all lines count as code.
 - The GitHub fetch (`server/src/lib/github.ts`) samples up to **100 commits per member** via `GET /repos/{owner}/{repo}/commits/{sha}`, parses the diff patch for lines starting with `+` (not `++`), and accumulates classified line totals.
-- Blank lines contribute **zero** to `meaningfulLines` (display / fallback only). They are **not** discounted in the real score: formatting-only commits are kept in check by file-type weights, commit-impact classes and the self-churn discount, not by the blank/comment rule.
+- Blank lines contribute **zero** and comment lines a quarter, both in the displayed `meaningfulLines` and in the real score (`weightedAdditions`); file-type weights, commit-impact classes and the self-churn discount apply on top.
 - The AI (Gemini) still only explains the already-computed numbers. It must never assess code quality.
 
 ## Contribution Significance Scoring (`shared/src/fileWeights.ts`, `shared/src/commitClassifier.ts`)
@@ -439,7 +439,10 @@ commitShare        = logCommits / Σ logCommits
 linesShare         = effectiveAdditions / Σ effectiveAdditions
 contributionShare  = 0.4 × commitShare + 0.4 × linesShare + 0.2 × activeDaysShare
 ```
-When `weightedAdditions` is absent (e.g. in existing tests), `effectiveAdditions` falls back to `meaningfulLines`, so all prior test expectations are preserved.
+When `weightedAdditions` is absent (e.g. in existing tests), `effectiveAdditions` falls back to `meaningfulLines`.
+
+### Scoring rules version 2 (approved change; `SCORING_RULES_VERSION = 2`)
+**Scoring rules version 2** (`SCORING_RULES_VERSION`, `shared/src/scoringRules.ts`) bundles: line-type weighting in real runs; Docs weights 0.6/0.2/0.2; a Docs active day needs 30+ retained characters written that day; and active days (GitHub and Docs) are **Asia/Manila** calendar days via one helper, `shared/src/analysisDay.ts` (`analysisDayOf`; the same time zone as the task due sweep). The deadline/last-third window uses exact timestamps, not days, so it is unchanged. Each new report stores `scoringRulesVersion` in `Report.content`; reports without it (or older) are flagged `rulesOutdated` **at read time** (never recomputed): instructors see "Scoring was updated. Re-analyze to apply the new rules."; students see one calm line "This report uses older scoring rules. It updates when your instructor re-analyzes." Bump the constant for any future change that alters scores.
 
 ## Audience and tone
 The user is an **instructor**. Both the UI and the AI report must be professional, factual, fair, and **non-accusatory** — describe patterns and cite evidence, never moralize or accuse. Privacy is a stated system value; demo data should use anonymized member names (e.g. "Member A").

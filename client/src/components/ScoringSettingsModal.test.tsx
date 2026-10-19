@@ -37,7 +37,7 @@ describe("ScoringSettingsModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "About lines added" }));
     const tip = screen.getByRole("group", { name: "About lines added" });
     expect(tip).toHaveTextContent(/file type/);
-    expect(tip).not.toHaveTextContent(/comment/i); // comments and blanks are not discounted in a real analysis
+    expect(tip).toHaveTextContent(/comments a quarter and blank lines nothing/); // line-type weighting (rules version 2)
     expect(within(tip).getByRole("link", { name: "More in Help" })).toHaveAttribute("href", "/help#shares");
   });
 

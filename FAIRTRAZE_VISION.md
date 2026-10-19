@@ -151,7 +151,7 @@ Every time a student pushes code to a GitHub repository, Git records who made th
 The system does not simply count commits or lines of code naively. It applies several layers of adjustment to ensure the score reflects genuine, sustained contribution rather than superficial activity:
 
 - **Log-scaling commits** neutralises commit-spam. A student who makes 100 tiny commits gains far less advantage over a student who makes 50 substantial commits than the raw numbers would suggest.
-- **Line classification** separates code, comment and blank lines for display (the report shows each count). It does not change the score: every added line is weighted by file type and commit impact, so a commit of blank lines in a source file still counts. What keeps formatting-only work from dominating is the file-type weight (generated files 0), the commit-impact class (cosmetic 0.5×, trivial 0.2×) and the self-churn discount.
+- **Line classification** separates code, comment and blank lines for display (the report shows each count). It also sets how much each line is worth in the score: code 1.0, comment 0.25, blank 0, then the file-type weight (generated files 0), the commit-impact class (cosmetic 0.5×, trivial 0.2×) and the self-churn discount, so padding with blank or comment lines gains little.
 - **File-type weighting** ensures that lines added to a generated lockfile (`package-lock.json`) or a configuration file contribute almost nothing, while lines added to actual source code contribute fully.
 - **Commit-impact classification** recognises that commits that add new files or touch many files at once are more structurally significant than a two-line cosmetic tweak.
 - **Self-churn penalty** discounts a student who writes and then deletes their own work in later commits, which otherwise inflates both their additions and deletions without representing lasting contribution.
@@ -179,7 +179,7 @@ The primary signal is **net retained text** — the text each member contributed
 
 Secondary signals include:
 - Characters and words inserted and deleted, with per-user attribution
-- Active editing days — how many distinct calendar days a student made edits
+- Active editing days — how many distinct days (Philippine time) a student wrote at least 30 characters that are still in the document
 - Edit-session timing — whether editing was spread across the project or concentrated near the deadline
 - Self-churn — writing text and then deleting it before it survives; penalised the same way as in the GitHub model
 
@@ -512,13 +512,13 @@ All scoring logic lives in `shared/src/scoring.ts`. Nothing outside this file co
 
 #### Line classification and weighting
 
-The scored line quantity is `effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)`, where `weightedAdditions` is every added line × its file-type weight × the commit-impact multiplier (below). Each added line is also classified as code, comment or blank for display:
+The scored line quantity is `effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)`, where `weightedAdditions` is every added line × its line-type weight (code 1.0, comment 0.25, blank 0) × its file-type weight × the commit-impact multiplier (below). Each added line is classified as code, comment or blank, and the counts are also shown on the report:
 
 ```
 meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded   (blank = 0)
 ```
 
-`meaningfulLines` is shown on the report and used by `scoring.ts` only as a fallback when `weightedAdditions` is absent. It does not discount comments or blanks in a real analysis.
+`meaningfulLines` is shown on the report and used by `scoring.ts` as a fallback when `weightedAdditions` is absent; it uses the same line-type weights as the real pipeline.
 
 #### File-type weights
 
@@ -578,7 +578,7 @@ contributionShare = 0.4 × commitShare + 0.4 × linesShare + 0.2 × activeDaysSh
 
 Default weights: commits 40%, effective lines 40%, active days 20%. All three are configurable in `ScoringWeights`; the scoring function accepts a weights parameter.
 
-`activeDays` is the count of distinct calendar dates on which the member made at least one commit, derived from commit timestamps.
+`activeDays` is the count of distinct calendar days, in Philippine time (Asia/Manila), on which the member made at least one commit, derived from commit timestamps.
 
 #### Flag thresholds
 
@@ -617,10 +617,10 @@ The FairTraze Docs scoring model mirrors the GitHub model's structure. The four 
 The same `contributionShare` formula applies within the editor source, via `DOCUMENT_DEFAULT_WEIGHTS`:
 
 ```
-editorShare = 0.4 × retainedTextShare + 0.2 × sessionShare + 0.4 × activeDaysShare
+editorShare = 0.6 × retainedTextShare + 0.2 × sessionShare + 0.2 × activeDaysShare
 ```
 
-Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — editor scoring deliberately weights active-days participation more heavily than session count.
+Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — retained text is the primary editor signal. An editor active day needs at least 30 characters written that day that are still in the final document (Philippine-time days).
 
 The editor is implemented using **TipTap** (rich-text editor framework) and **Yjs** (CRDT for real-time collaborative editing). The Yjs document tracks per-user operations with user attribution derived from the authenticated session.
 
@@ -671,7 +671,7 @@ Routes that require `INSTRUCTOR` role: all analysis, alert, assignment, class, a
 | Commit weight | 0.4 | `DEFAULT_WEIGHTS` in `scoring.ts` |
 | Lines weight | 0.4 | `DEFAULT_WEIGHTS` in `scoring.ts` |
 | Active-days weight | 0.2 | `DEFAULT_WEIGHTS` in `scoring.ts` |
-| Comment-to-code weight | 0.25× | `scoring.ts` (`meaningfulLines`: display / fallback only, not used in real runs) |
+| Comment-to-code weight | 0.25× (blank 0×) | `LINE_TYPE_WEIGHTS` in `lineClassifier.ts`, applied in `github.ts` (real runs) and `scoring.ts` (fallback) |
 | Free-rider threshold | 0.5× equal share | `FREE_RIDER_THRESHOLD` in `scoring.ts` |
 | Overload threshold | 1.75× equal share | `OVERLOAD_THRESHOLD` in `scoring.ts` |
 | Deadline-driven threshold | 0.60 lastPhaseRatio | `DEADLINE_DRIVEN_THRESHOLD` in `scoring.ts` |

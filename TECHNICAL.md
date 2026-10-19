@@ -62,7 +62,7 @@ The system has three packages that communicate in two ways: through shared TypeS
 4. The server looks up the project (name, repo URL) and its member roster from SQLite.
 5. The server calls the GitHub Stats API (`GET /repos/{owner}/{repo}/stats/contributors`) via Octokit to get per-contributor commit counts, additions, and deletions. This endpoint returns 202 while GitHub computes the data; the server retries up to 30 times with a 1-second delay.
 6. For each contributor, the server fetches all commit SHAs and dates (`GET /repos/{owner}/{repo}/commits`, paginated at 100 per page).
-7. The server samples the newest 100 non-merge SHAs per contributor and calls `GET /repos/{owner}/{repo}/commits/{sha}` for each, parses the diff patch, and classifies every added line as code, comment, or blank using `classifyAddedLines()` from `shared/src/lineClassifier.ts`.
+7. The server samples the newest 100 non-merge SHAs per contributor and calls `GET /repos/{owner}/{repo}/commits/{sha}` for each, parses the diff patch, and classifies every added line as code, comment, or blank using `classifyAddedLines()` from `shared/src/lineClassifier.ts`; the class decides how much the line is worth (`LINE_TYPE_WEIGHTS`).
 8. GitHub contributor logins are matched (case-insensitively) to the seeded member roster. Unmatched logins are collected separately.
 9. `computeTeamReport()` in `shared/src/scoring.ts` runs the deterministic scoring pipeline and returns a `TeamReport`.
 10. `generateFairnessNarrative()` in `server/src/lib/gemini.ts` sends the `TeamReport` JSON to Gemini and gets back a prose explanation.
@@ -138,23 +138,23 @@ linesShare     = member.effectiveAdditions / sum(all effectiveAdditions)
 activeDaysShare = member.activeDays / sum(all activeDays)
 ```
 
-- `activeDays` = count of distinct calendar days (YYYY-MM-DD) that appear in the member's commit timestamps.
+- `activeDays` = count of distinct Asia/Manila calendar days (YYYY-MM-DD, `analysisDayOf` in `shared/src/analysisDay.ts`) that appear in the member's commit timestamps. Docs: days with at least `MIN_ACTIVE_DAY_RETAINED_CHARS` (30) retained characters written that day (Docs weights are now 0.6 retained text / 0.2 sessions / 0.2 active days).
 - If a total is zero (e.g., no commits at all), the corresponding share is 0.
 
 ### Lines signal: what real runs score
 
 ```
 weightedAdditions  = Σ over the member's sampled commits of
-                       (Σ over files: addedLines × fileTypeWeight) × commitImpactMultiplier
+                       (Σ over files: lineTypeWeightedLines × fileTypeWeight) × commitImpactMultiplier
 effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)
 ```
 
-- **Every added line counts** (`+` lines of the patch), whether it is code, a comment or blank. A line is worth its file-type weight (`FILE_WEIGHTS`: source 1.0, test 0.8, style 0.7, docs 0.6, other 0.5, config 0.3, generated 0) times the multiplier of the commit it was in (`COMMIT_IMPACT`: structural 1.5, functional 1.0, cosmetic 0.5, trivial 0.2), and the total is discounted by up to 50% for lines the member later deleted themselves.
+- **Each added line is worth its line-type weight** (`LINE_TYPE_WEIGHTS`: code 1.0, comment 0.25, blank 0; `+` lines of the patch) times its file-type weight (`FILE_WEIGHTS`: source 1.0, test 0.8, style 0.7, docs 0.6, other 0.5, config 0.3, generated 0) times the multiplier of the commit it was in (`COMMIT_IMPACT`: structural 1.5, functional 1.0, cosmetic 0.5, trivial 0.2), and the total is discounted by up to 50% for lines the member later deleted themselves.
 - Lines come from the diff patches of the newest 100 authored, non-merge commits per member. A file whose patch GitHub omits adds nothing.
 - `analyze.ts` always supplies `weightedAdditions`, so the fallback in `scoring.ts` never fires in a real run.
-- **`meaningfulLines` is display / fallback only.** `meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded` (blank lines 0) is still computed, and `codeLinesAdded`, `commentLinesAdded`, `blankLinesAdded` and `codeToCommentRatio` are shown in the member details, but `scoring.ts` reads `meaningfulLines` only when `weightedAdditions` is absent (tests written before significance scoring). It does not discount comments or blanks in a real analysis. See `ux-audit/LINES_WEIGHTING_CHECK.md`.
+- `meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded` (blank lines 0, the same constants) is shown in the member details and is the fallback when `weightedAdditions` is absent (tests); real runs get the same weighting inside `weightedAdditions`. Before scoring rules version 2 (`SCORING_RULES_VERSION`) every added line counted equally; older reports are shown as outdated until re-analyzed. See `ux-audit/LINES_WEIGHTING_CHECK.md` (historical).
 
-**Why:** Raw additions + deletions (churn) counted generated and config files equally with source. File-type weights, commit impact and the self-churn discount make the line signal reflect the weight of the work. Comment and blank lines are not discounted separately.
+**Why:** Raw additions + deletions (churn) counted generated and config files equally with source. File-type weights, commit impact and the self-churn discount make the line signal reflect the weight of the work. Comment lines count a quarter and blank lines nothing, because they carry little of the work.
 
 ### Contribution Score
 
