@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -8,20 +9,6 @@ import type { EnrolledClass } from "../hooks/useStudentClassesQuery";
 import { QrScanner } from "../components/QrScanner";
 import { extractJoinCode } from "../lib/joinCodeFromQr";
 
-// ── Gradient palette ──────────────────────────────────────────────────────────
-const BAND_GRADIENTS = [
-  "linear-gradient(135deg, #4338ca 0%, #6366f1 100%)",
-  "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
-  "linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%)",
-  "linear-gradient(135deg, #be123c 0%, #f43f5e 100%)",
-  "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
-  "linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)",
-];
-function pickGradient(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return BAND_GRADIENTS[h % BAND_GRADIENTS.length];
-}
 
 const HEALTH_BADGE: Record<string, string> = {
   "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
@@ -184,7 +171,7 @@ function ClassCard({
 }) {
   const [copied, setCopied] = useState(false);
 
-  const gradient       = pickGradient(cls.subjectCode);
+  
   const joinedCount    = cls.assignments.filter((a) => a.myGroup !== null).length;
   const totalAssignments = cls.assignments.length;
   const bandLabel      = cls.edpCode || cls.subjectCode;
@@ -212,7 +199,7 @@ function ClassCard({
       {/* Colored band */}
       <div
         className="relative px-4 py-3 flex flex-col gap-2"
-        style={{ background: gradient }}
+        style={{ background: CLASS_BAND_BACKGROUND }}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">

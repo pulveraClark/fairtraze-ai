@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
 import { presentedHealth } from "../lib/groupActivity";
 import { classAtRiskCount } from "../components/ClassCard";
@@ -42,21 +43,6 @@ interface AssignmentGroup {
   isAnalyzed: boolean;
 }
 
-// ── Gradient palette (matches ClassCard) ─────────────────────────────────────
-const BAND_GRADIENTS = [
-  "linear-gradient(135deg, #4338ca 0%, #6366f1 100%)",
-  "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
-  "linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%)",
-  "linear-gradient(135deg, #be123c 0%, #f43f5e 100%)",
-  "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
-  "linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)",
-];
-
-function pickGradient(label: string): string {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
-  return BAND_GRADIENTS[h % BAND_GRADIENTS.length];
-}
 
 function fmtDeadline(iso: string | null): string {
   if (!iso) return "No deadline";
@@ -783,7 +769,7 @@ export function ClassPage({ classId }: Props) {
                       className="group cursor-pointer w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
                       {/* Colored band */}
-                      <div className="relative px-4 py-3 flex flex-col gap-2" style={{ background: pickGradient(a.title) }}>
+                      <div className="relative px-4 py-3 flex flex-col gap-2" style={{ background: CLASS_BAND_BACKGROUND }}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

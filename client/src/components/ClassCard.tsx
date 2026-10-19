@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CLASS_BAND_BACKGROUND } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
 import { presentedHealth, visibleFlags } from "../lib/groupActivity";
 
@@ -13,21 +14,6 @@ interface Props {
   joinCode?: string;
 }
 
-// Deterministic gradient based on label string — stable across renders
-const BAND_GRADIENTS = [
-  "linear-gradient(135deg, #4338ca 0%, #6366f1 100%)",
-  "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
-  "linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%)",
-  "linear-gradient(135deg, #be123c 0%, #f43f5e 100%)",
-  "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
-  "linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)",
-];
-
-function pickGradient(label: string): string {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
-  return BAND_GRADIENTS[h % BAND_GRADIENTS.length];
-}
 
 export function parseClassLabel(label: string): { code: string; subjectName: string } {
   const sep = label.indexOf(" — ");
@@ -65,7 +51,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
   const unanalyzed = items.filter((i) => !i.isAnalyzed).length;
   const atRisk     = classAtRiskCount(items);
 
-  const gradient = pickGradient(assignmentLabel);
+  
 
   return (
     <div
@@ -78,7 +64,7 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
       {/* Colored band */}
       <div
         className="relative px-4 py-3 flex flex-col gap-2"
-        style={{ background: gradient }}
+        style={{ background: CLASS_BAND_BACKGROUND }}
       >
         <div className="flex items-start justify-between gap-2">
           {/* Clipboard icon */}
