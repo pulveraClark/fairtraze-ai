@@ -161,6 +161,41 @@ groupsRouter.put("/api/groups/:id/repo", requireAuth, async (req: Request, res: 
   res.json({ repoUrl: checked.url, changed: true });
 });
 
+// GET /api/groups/:id/setup — what the "Set up your group" card needs, for members only.
+// Display only. Unlinked members are named by display name; their username and email are never sent
+// (GET /api/groups/:id already shows members to each other, but this card needs nothing more).
+groupsRouter.get("/api/groups/:id/setup", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const me = project.groupMemberships.find((m) => m.userId === req.user!.sub);
+  if (!me) { res.status(403).json({ error: "Only members of this group can see its setup." }); return; }
+
+  // Docs-only groups never need a repository or GitHub usernames.
+  const needsRepo = project.assignment?.sourceType !== "EDITOR";
+  const repoLinked = !!project.repoUrl;
+  const isLeader = me.role === "LEADER";
+  const unlinked = project.groupMemberships.filter((m) => !m.user.githubUsername?.trim());
+
+  res.json({
+    needsRepo,
+    repoUrl: project.repoUrl,
+    repoLinked,
+    isLeader,
+    canLinkRepo: needsRepo && !repoLinked,
+    canChangeRepo: needsRepo && repoLinked && isLeader,
+    viewerHasGithubUsername: !!me.user.githubUsername?.trim(),
+    usernames: {
+      linked: project.groupMemberships.length - unlinked.length,
+      total: project.groupMemberships.length,
+      missingNames: unlinked.map((m) => m.user.name),
+    },
+  });
+});
+
 // PATCH /api/groups/:id — rename the group (leader or instructor only)
 groupsRouter.patch("/api/groups/:id", requireAuth, async (req: Request, res: Response) => {
   const idResult = idParam.safeParse(req.params.id);
