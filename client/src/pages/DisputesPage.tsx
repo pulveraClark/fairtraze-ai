@@ -113,9 +113,9 @@ function ResolveModal({
         <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Respond to dispute</h2>
-            <p className="text-xs text-slate-400 mt-0.5">{dispute.memberName} · {context}</p>
+            <p className="text-xs text-slate-600 mt-0.5">{dispute.memberName} · {context}</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-700 transition-colors" aria-label="Close">
+          <button onClick={onClose} className="p-1 rounded text-slate-600 hover:text-slate-700 transition-colors" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -123,7 +123,7 @@ function ResolveModal({
         </div>
 
         <div className="px-6 pt-5">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Student's note</p>
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-2">Student's note</p>
           <p className="text-base text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
             {dispute.reason}
           </p>
@@ -131,7 +131,7 @@ function ResolveModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Resolution</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-2">Resolution</p>
             <div className="flex gap-3">
               {(["RESOLVED", "DISMISSED"] as const).map((opt) => (
                 <label key={opt} className="flex items-center gap-2 cursor-pointer">
@@ -146,10 +146,10 @@ function ResolveModal({
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Your response</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-2">Your response</p>
             <textarea ref={textareaRef} value={response} onChange={(e) => setResponse(e.target.value)}
               placeholder="Provide context or a decision for the student…" rows={4} maxLength={2000}
-              className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400" />
+              className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400" />
           </div>
 
           {error && <p className="text-xs text-red-600">{error}</p>}
@@ -231,9 +231,9 @@ export function DisputesPage() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-400">Student-raised score disputes awaiting your review</p>
+            <p className="text-sm text-slate-600">Student-raised score disputes awaiting your review</p>
           </div>
-          <button onClick={load} className="text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">Refresh</button>
+          <button onClick={load} className="text-xs text-slate-600 hover:text-slate-700 transition-colors font-medium">Refresh</button>
         </div>
       </div>
 
@@ -246,7 +246,7 @@ export function DisputesPage() {
             {(["open", "all"] as StatusFilter[]).map((f) => (
               <button key={f} onClick={() => { setFilter(f); setPage(1); }}
                 className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
-                  filter === f ? "border-indigo-500 text-indigo-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                  filter === f ? "border-indigo-500 text-indigo-600" : "border-transparent text-slate-600 hover:text-slate-600"
                 }`}
               >
                 {f === "open" ? `Open${openCount > 0 ? ` (${openCount})` : ""}` : "All"}
@@ -275,7 +275,7 @@ export function DisputesPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-20 text-slate-400 text-sm gap-2">
+          <div className="flex items-center justify-center py-20 text-slate-600 text-sm gap-2">
             <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
             Loading…
           </div>
@@ -300,7 +300,7 @@ export function DisputesPage() {
             <p className="text-base font-semibold text-slate-700">
               {filter === "open" ? "No open disputes" : "No disputes yet"}
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {filter === "open" ? "All disputes have been resolved." : "Students haven't raised any disputes."}
             </p>
           </div>
@@ -325,7 +325,7 @@ export function DisputesPage() {
                           <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_STYLE[d.status]}`}>
                             {d.status}
                           </span>
-                          <span className="text-xs text-slate-400">{timeAgo(d.createdAt)}</span>
+                          <span className="text-xs text-slate-600">{timeAgo(d.createdAt)}</span>
                         </div>
 
                         {d.disputedFlags.length > 0 && (
@@ -343,18 +343,18 @@ export function DisputesPage() {
                               edpClassName="text-slate-500 font-normal"
                             />
                           )}
-                          {cs && <span className="text-slate-300">·</span>}
+                          {cs && <span className="text-slate-600">·</span>}
                           {asgn && <span>{asgn.title}</span>}
-                          {asgn && <span className="text-slate-300">·</span>}
+                          {asgn && <span className="text-slate-600">·</span>}
                           <span>{d.project.groupName || `Group ${d.project.id}`}</span>
-                          {cs && <><span className="text-slate-300">·</span><span className="text-slate-400">{cs.subjectName}</span></>}
+                          {cs && <><span className="text-slate-600">·</span><span className="text-slate-600">{cs.subjectName}</span></>}
                         </div>
 
                         <p className="text-base text-slate-700 leading-relaxed">{d.reason}</p>
 
                         {d.instructorResponse && (
                           <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Your response</p>
+                            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-1">Your response</p>
                             <p className="text-xs text-slate-600 leading-relaxed">{d.instructorResponse}</p>
                           </div>
                         )}

@@ -76,11 +76,11 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             {checkbox}
             <div>
               <p className="text-sm font-semibold text-slate-600">{item.groupName}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+              <p className="text-xs text-slate-600 mt-0.5">{item.memberCount} members</p>
             </div>
           </div>
           {noRepo ? <RepoPill /> : (
-            <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
+            <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
               Not analyzed
             </span>
           )}
@@ -88,7 +88,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
         <div className="h-3 rounded-full bg-slate-100 w-full" />
         {tasks && <TaskCountLine tasks={tasks} />}
         <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
-          <p className="text-xs text-slate-400">No report yet</p>
+          <p className="text-xs text-slate-600">No report yet</p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {onTasks && (
               <button
@@ -136,7 +136,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">
               {item.groupName}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+            <p className="text-xs text-slate-600 mt-0.5">{item.memberCount} members</p>
           </div>
         </div>
         {health === "no-activity" ? (
@@ -165,7 +165,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           </span>
         ))}
         {item.memberShares.length > 4 && (
-          <span className="text-xs text-slate-400">+{item.memberShares.length - 4} more</span>
+          <span className="text-xs text-slate-600">+{item.memberShares.length - 4} more</span>
         )}
       </div>
 
@@ -229,7 +229,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
 
       {/* Footer: Gini + date + actions */}
       <div className="flex flex-wrap items-center justify-between mt-auto pt-2 border-t border-slate-100 gap-2">
-        <div className="flex items-center gap-3 text-xs text-slate-400">
+        <div className="flex items-center gap-3 text-xs text-slate-600">
           {item.gini !== null && (
             <span>
               Gini: <span className="font-semibold text-slate-600">{item.gini.toFixed(3)}</span>

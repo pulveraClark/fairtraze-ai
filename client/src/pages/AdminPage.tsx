@@ -285,7 +285,7 @@ export function AdminPage() {
             <div>
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">User Management</h2>
               {!usersLoading && !usersError && (
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-600 mt-0.5">
                   {usersMeta.total} total
                 </p>
               )}
@@ -296,7 +296,7 @@ export function AdminPage() {
                 placeholder="Search name or email…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-52"
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-52"
               />
               <select
                 value={roleFilter}
@@ -310,7 +310,7 @@ export function AdminPage() {
               </select>
               <button
                 onClick={loadUsers}
-                className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+                className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
               >
                 Refresh
               </button>
@@ -352,7 +352,7 @@ export function AdminPage() {
 
           {/* Loading */}
           {usersLoading && (
-            <div className="flex items-center justify-center gap-2 py-14 text-slate-400 text-sm">
+            <div className="flex items-center justify-center gap-2 py-14 text-slate-600 text-sm">
               <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
               Loading…
             </div>
@@ -368,7 +368,7 @@ export function AdminPage() {
 
           {/* Empty */}
           {!usersLoading && !usersError && displayedUsers.length === 0 && (
-            <p className="px-6 py-14 text-center text-sm text-slate-400">No users match your filters.</p>
+            <p className="px-6 py-14 text-center text-sm text-slate-600">No users match your filters.</p>
           )}
 
           {/* Table */}
@@ -378,12 +378,12 @@ export function AdminPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Name / Email</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Role</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Joined</th>
-                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-widest">Actions</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Name / Email</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Role</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Status</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden md:table-cell">Joined</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -396,7 +396,7 @@ export function AdminPage() {
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">
                           <p className="font-medium text-slate-800 leading-tight">{u.name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{u.email}</p>
+                          <p className="text-xs text-slate-600 mt-0.5">{u.email}</p>
                           {isSelf && (
                             <span className="text-xs text-indigo-500 font-semibold">you</span>
                           )}
@@ -413,7 +413,7 @@ export function AdminPage() {
                         <td className="px-5 py-3.5 hidden sm:table-cell">
                           {u.githubUsername
                             ? <span className="text-xs font-mono text-slate-600">{u.githubUsername}</span>
-                            : <span className="text-xs text-slate-300">—</span>}
+                            : <span className="text-xs text-slate-600">—</span>}
                         </td>
 
                         {/* Status */}
@@ -439,7 +439,7 @@ export function AdminPage() {
 
                         {/* Joined */}
                         <td className="px-5 py-3.5 hidden md:table-cell">
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-600">
                             {new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                           </span>
                         </td>
@@ -447,7 +447,7 @@ export function AdminPage() {
                         {/* Actions */}
                         <td className="px-5 py-3.5">
                           {isSelf ? (
-                            <span className="text-xs text-slate-300 block text-right">—</span>
+                            <span className="text-xs text-slate-600 block text-right">—</span>
                           ) : (
                             <div className="flex items-center justify-end gap-2 flex-wrap">
                               {/* Role select */}
@@ -521,7 +521,7 @@ export function AdminPage() {
             </h2>
             <button
               onClick={loadOverview}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -579,18 +579,18 @@ export function AdminPage() {
             <div>
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Browse Classes</h2>
               {!classesLoading && !classesError && (
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-600 mt-0.5">
                   {classes.length} class section{classes.length !== 1 ? "s" : ""} across all instructors
                 </p>
               )}
             </div>
-            <button onClick={loadClasses} className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors">
+            <button onClick={loadClasses} className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors">
               Refresh
             </button>
           </div>
 
           {classesLoading && (
-            <div className="flex items-center justify-center gap-2 py-14 text-slate-400 text-sm">
+            <div className="flex items-center justify-center gap-2 py-14 text-slate-600 text-sm">
               <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
               Loading…
             </div>
@@ -604,7 +604,7 @@ export function AdminPage() {
           )}
 
           {!classesLoading && !classesError && classes.length === 0 && (
-            <p className="px-6 py-14 text-center text-sm text-slate-400">No class sections found.</p>
+            <p className="px-6 py-14 text-center text-sm text-slate-600">No class sections found.</p>
           )}
 
           {!classesLoading && !classesError && classes.length > 0 && (
@@ -628,14 +628,14 @@ export function AdminPage() {
                       />
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
                       {cls.department && (
-                        <span className="text-xs text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
+                        <span className="text-xs text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
                       )}
-                      <span className="text-xs text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
+                      <span className="text-xs text-slate-600 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-slate-400">{cls.instructor.name}</span>
-                      <span className="text-xs text-slate-300">·</span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-600">{cls.instructor.name}</span>
+                      <span className="text-xs text-slate-600">·</span>
+                      <span className="text-xs text-slate-600">
                         {cls.assignments.length} assignment{cls.assignments.length !== 1 ? "s" : ""}
                         {" · "}
                         {cls.assignments.reduce((s, a) => s + a._count.projects, 0)} group{cls.assignments.reduce((s, a) => s + a._count.projects, 0) !== 1 ? "s" : ""}
@@ -654,7 +654,7 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">
             Hierarchy Management
           </h2>
-          <p className="text-xs text-slate-400 mb-5">
+          <p className="text-xs text-slate-600 mb-5">
             Create departments and approve new instructor accounts.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -668,7 +668,7 @@ export function AdminPage() {
                   {showDeptForm ? "Cancel" : "+ New"}
                 </button>
               </div>
-              <p className="text-xs text-slate-400 mb-3">Instructors pick from this list when creating a class section.</p>
+              <p className="text-xs text-slate-600 mb-3">Instructors pick from this list when creating a class section.</p>
 
               {showDeptForm && (
                 <form onSubmit={(e) => void createDepartment(e)} className="space-y-2 mb-3">
@@ -677,36 +677,36 @@ export function AdminPage() {
                     value={deptName}
                     onChange={(e) => setDeptName(e.target.value)}
                     placeholder="e.g. College of Computer Studies"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                   <input
                     required
                     value={deptCode}
                     onChange={(e) => setDeptCode(e.target.value)}
                     placeholder="e.g. CCS"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                   <button
                     type="submit"
                     disabled={deptSubmitting || !deptName.trim() || !deptCode.trim()}
-                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
                   >
                     {deptSubmitting ? "Creating…" : "Create"}
                   </button>
                 </form>
               )}
 
-              {departmentsLoading && <p className="text-xs text-slate-400">Loading…</p>}
+              {departmentsLoading && <p className="text-xs text-slate-600">Loading…</p>}
               {!departmentsLoading && departmentsError && <p className="text-xs text-red-600">{departmentsError}</p>}
               {!departmentsLoading && !departmentsError && departments.length === 0 && (
-                <p className="text-xs text-slate-400">No departments yet.</p>
+                <p className="text-xs text-slate-600">No departments yet.</p>
               )}
               {!departmentsLoading && !departmentsError && departments.length > 0 && (
                 <ul className="space-y-1 max-h-32 overflow-y-auto">
                   {departments.map((d) => (
                     <li key={d.id} className="flex items-center justify-between text-xs">
                       <span className="text-slate-700 truncate">{d.name}</span>
-                      <span className="text-slate-400 font-mono ml-2 shrink-0">{d.code}</span>
+                      <span className="text-slate-600 font-mono ml-2 shrink-0">{d.code}</span>
                     </li>
                   ))}
                 </ul>

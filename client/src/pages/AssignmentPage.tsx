@@ -337,14 +337,14 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               {assignment ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-semibold text-slate-900 truncate">{assignment.title}</h1>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                     {assignment.sourceType}
                   </span>
                 </div>
               ) : (
-                <h1 className="text-xl font-semibold text-slate-400">Loading…</h1>
+                <h1 className="text-xl font-semibold text-slate-600">Loading…</h1>
               )}
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-600 mt-0.5">
                 {classInfo && <span className="mr-1">{classFullLabel(classInfo)}{classInfo.subjectName ? ` · ${classInfo.subjectName}` : ""} ·</span>}
                 {summary.length} group{summary.length !== 1 ? "s" : ""}
                 {assignment?.deadline && <span className="ml-1">· Deadline: {fmtDeadline(assignment.deadline)}</span>}
@@ -424,7 +424,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
             {selectedIds.size > 0 && (
               <>
-                <span className="text-xs text-slate-400">{selectedIds.size} selected</span>
+                <span className="text-xs text-slate-600">{selectedIds.size} selected</span>
                 <button
                   onClick={() => void handleBulkAnalyze()}
                   disabled={bulkRunning || bulkExporting}
@@ -470,7 +470,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search groups…"
-              className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40"
+              className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40"
             />
           </div>
           <span className="text-slate-200 hidden sm:block">|</span>
@@ -498,7 +498,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         </div>
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading groups…
           </div>
@@ -509,7 +509,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         )}
 
         {!loading && !loadError && processed.length === 0 && (
-          <div className="text-center py-16 text-slate-400 text-sm">
+          <div className="text-center py-16 text-slate-600 text-sm">
             {search.trim() ? (
               <>
                 No groups match &ldquo;{search}&rdquo;.{" "}

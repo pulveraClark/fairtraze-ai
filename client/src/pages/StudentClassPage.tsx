@@ -88,12 +88,12 @@ function JoinCodeBadge({ code }: { code: string }) {
   }
   return (
     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-      <span className="text-xs text-slate-400 shrink-0">Class code:</span>
+      <span className="text-xs text-slate-600 shrink-0">Class code:</span>
       <span className="font-mono font-bold text-xs text-indigo-700 tracking-wider select-all">{code}</span>
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
-        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
       >
         {copied ? (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -198,13 +198,13 @@ export function ProjectCard({
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-slate-800 leading-snug">{asgn.title}</h3>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
                 {SOURCE_LABEL[asgn.sourceType] ?? asgn.sourceType}
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-600">
                 {fmtDeadline(asgn.deadline)}
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-600">
                 Max {asgn.maxGroupSize} per group
               </span>
             </div>
@@ -263,7 +263,7 @@ export function ProjectCard({
               </div>
 
               {!g.report && (
-                <p className="text-xs text-slate-400 italic">No analysis yet — awaiting instructor.</p>
+                <p className="text-xs text-slate-600 italic">No analysis yet — awaiting instructor.</p>
               )}
 
               <div className="flex items-center gap-3 pt-1 flex-wrap">
@@ -348,7 +348,7 @@ export function ProjectCard({
                   </button>
                 )}
                 {asgn.groups.length === 0 && (
-                  <p className="text-xs text-slate-400 italic">No groups yet — be the first to create one.</p>
+                  <p className="text-xs text-slate-600 italic">No groups yet — be the first to create one.</p>
                 )}
               </div>
             )}
@@ -361,14 +361,14 @@ export function ProjectCard({
                   onChange={(e) => { setGroupName(e.target.value); setError(""); }}
                   placeholder="Group name — e.g. Group 1"
                   disabled={submitting}
-                  className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
                 {error && <p className="text-xs text-red-600">{error}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleCreate()}
                     disabled={submitting}
-                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Creating…" : "Create Group"}
                   </button>
@@ -379,7 +379,7 @@ export function ProjectCard({
                     Cancel
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   Leadership is administrative only — it grants no contribution credit.
                 </p>
               </div>
@@ -389,7 +389,7 @@ export function ProjectCard({
             {mode === "join" && (
               <div className="space-y-2">
                 {asgn.groups.filter((g) => !g.isFull).length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">All groups are full.</p>
+                  <p className="text-xs text-slate-600 italic">All groups are full.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {asgn.groups.map((g) => (
@@ -414,11 +414,11 @@ export function ProjectCard({
                         />
                         <span className="flex-1 min-w-0">
                           <span className="text-xs font-medium text-slate-700">{g.groupName}</span>
-                          <span className="text-xs text-slate-400 ml-2">
+                          <span className="text-xs text-slate-600 ml-2">
                             {g.memberCount} / {asgn.maxGroupSize} members
                           </span>
                         </span>
-                        <span className="text-xs text-slate-400 shrink-0">
+                        <span className="text-xs text-slate-600 shrink-0">
                           {g.isFull ? "Full" : g.leaderName ? `Leader: ${g.leaderName}` : ""}
                         </span>
                       </label>
@@ -426,14 +426,14 @@ export function ProjectCard({
                   </div>
                 )}
                 {error && <p className="text-xs text-red-600">{error}</p>}
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   The group leader must approve your request before you are added.
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleRequest()}
                     disabled={submitting || !selectedId}
-                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Sending…" : "Send Request"}
                   </button>
@@ -520,7 +520,7 @@ export function StudentClassPage({ classId }: Props) {
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200">
             <div className="px-6 py-5 border-b border-slate-100">
               <h2 className="text-sm font-semibold text-slate-800">Leave class?</h2>
-              {cls && <p className="text-xs text-slate-400 mt-0.5">{cls.subjectName}</p>}
+              {cls && <p className="text-xs text-slate-600 mt-0.5">{cls.subjectName}</p>}
             </div>
             <div className="p-6 space-y-4">
               <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 leading-relaxed">
@@ -571,15 +571,15 @@ export function StudentClassPage({ classId }: Props) {
                     edpClassName="font-semibold text-indigo-400"
                   />
                   {cls.department && (
-                    <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {cls.department.code}
                     </span>
                   )}
                 </div>
               ) : (
-                <h1 className="text-xl font-semibold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
+                <h1 className="text-xl font-semibold text-slate-600">{loading ? "Loading…" : "Class"}</h1>
               )}
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-600 mt-0.5">
                 {assignments.length} project{assignments.length !== 1 ? "s" : ""}
                 {" · "}
                 {assignments.filter((a) => a.myGroup !== null).length} joined
@@ -603,7 +603,7 @@ export function StudentClassPage({ classId }: Props) {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading projects…
           </div>
@@ -624,7 +624,7 @@ export function StudentClassPage({ classId }: Props) {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-700">No projects yet</p>
-              <p className="text-xs text-slate-400 mt-1">Your instructor hasn't created any projects for this class.</p>
+              <p className="text-xs text-slate-600 mt-1">Your instructor hasn't created any projects for this class.</p>
             </div>
           </div>
         )}

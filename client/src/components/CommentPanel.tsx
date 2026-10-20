@@ -107,7 +107,7 @@ function ComposeBox({
           <button
             type="button"
             onClick={onCancel}
-            className="text-xs text-slate-400 hover:text-slate-600"
+            className="text-xs text-slate-600 hover:text-slate-600"
           >
             Cancel
           </button>
@@ -161,7 +161,7 @@ function Thread({
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5 flex-wrap">
                 <span className="text-xs font-semibold text-slate-700">{c.author.name}</span>
-                <span className="text-xs text-slate-400">{timeAgo(c.createdAt)}</span>
+                <span className="text-xs text-slate-600">{timeAgo(c.createdAt)}</span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5 whitespace-pre-wrap break-words">{c.text}</p>
             </div>
@@ -172,7 +172,7 @@ function Thread({
                   e.stopPropagation();
                   onDelete(c.id);
                 }}
-                className="text-slate-300 hover:text-red-500 text-xs shrink-0"
+                className="text-slate-500 hover:text-red-600 text-xs shrink-0"
                 aria-label="Delete comment"
               >
                 ✕
@@ -193,7 +193,7 @@ function Thread({
         <button
           type="button"
           onClick={() => onResolveToggle(root.id, !resolved)}
-          className={`text-xs font-medium ${resolved ? "text-slate-400 hover:text-slate-600" : "text-emerald-600 hover:text-emerald-700"}`}
+          className={`text-xs font-medium ${resolved ? "text-slate-600 hover:text-slate-600" : "text-emerald-600 hover:text-emerald-700"}`}
         >
           {resolved ? "Reopen" : "Resolve"}
         </button>
@@ -247,7 +247,7 @@ export function CommentPanel({
 
       {pendingSelection && (
         <div className="px-3 pt-3">
-          <p className="text-xs text-slate-400 mb-1">New comment on selected text</p>
+          <p className="text-xs text-slate-600 mb-1">New comment on selected text</p>
           <ComposeBox
             placeholder="Add a comment…"
             submitLabel="Comment"
@@ -259,7 +259,7 @@ export function CommentPanel({
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
         {roots.length === 0 && !pendingSelection && (
-          <p className="text-xs text-slate-400 text-center py-6">
+          <p className="text-xs text-slate-600 text-center py-6">
             No comments yet. Select some text to add one.
           </p>
         )}

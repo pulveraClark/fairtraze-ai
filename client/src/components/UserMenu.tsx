@@ -32,20 +32,20 @@ const DARK: Styles = {
   header:    "px-5 py-4 border-b border-slate-800 bg-slate-800/50",
   nameTitle: "text-sm font-semibold text-white truncate",
   item:      "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors text-left font-medium",
-  icon:      "w-4 h-4 text-slate-400",
+  icon:      "w-4 h-4 text-slate-600",
   divider:   "border-t border-slate-800 py-1.5",
-  signOut:   "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-medium",
+  signOut:   "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-medium",
 };
 
 const LIGHT: Styles = {
   trigger:   "flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors group",
   nameText:  "text-sm text-slate-700 max-w-[8rem] truncate font-medium group-hover:text-slate-900 transition-colors",
-  caret:     "w-3.5 h-3.5 text-slate-400 transition-transform duration-150",
+  caret:     "w-3.5 h-3.5 text-slate-600 transition-transform duration-150",
   dropdown:  "absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/60 overflow-hidden bg-white",
   header:    "px-5 py-4 border-b border-slate-100 bg-slate-50",
   nameTitle: "text-sm font-semibold text-slate-900 truncate",
   item:      "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors text-left font-medium",
-  icon:      "w-4 h-4 text-slate-400",
+  icon:      "w-4 h-4 text-slate-600",
   divider:   "border-t border-slate-100 py-1.5",
   signOut:   "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors text-left font-medium",
 };

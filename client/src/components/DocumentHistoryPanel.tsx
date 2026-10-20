@@ -101,7 +101,7 @@ export function DocumentHistoryPanel({ groupId }: Props) {
 
   if (snapshots === null) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-400">
+      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-600">
         Loading history…
       </div>
     );
@@ -135,7 +135,7 @@ export function DocumentHistoryPanel({ groupId }: Props) {
           <div>
             <p className="text-sm font-medium text-slate-700">{new Date(s.createdAt).toLocaleString()}</p>
             {s.reportId != null && (
-              <p className="text-xs text-slate-400 mt-0.5">Captured from a saved analysis report</p>
+              <p className="text-xs text-slate-600 mt-0.5">Captured from a saved analysis report</p>
             )}
           </div>
           <span className="text-xs text-indigo-600 font-medium shrink-0">View →</span>

@@ -33,8 +33,8 @@ interface RoleSuggestion {
 }
 
 const ROLE_META: Record<FunctionalRole, { label: string; activeClass: string; inactiveClass: string }> = {
-  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
-  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
+  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600" },
+  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-600 hover:border-teal-300 hover:text-teal-600" },
 };
 
 interface GroupMember {
@@ -395,7 +395,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   onClick={startEditName}
                   title="Rename group"
                   aria-label="Rename group"
-                  className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+                  className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-500 hover:text-indigo-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
                 >
                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
@@ -416,7 +416,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 {!canManage && " You can suggest a role for yourself from your project view."}
               </InfoTip>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {group.members.length}
               {group.maxGroupSize ? ` / ${group.maxGroupSize}` : ""} members
               {group.repoUrl && (
@@ -442,7 +442,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-semibold text-slate-800 truncate">
-                        {m.name}{isSelf && <span className="text-slate-400 font-normal"> (you)</span>}
+                        {m.name}{isSelf && <span className="text-slate-600 font-normal"> (you)</span>}
                       </span>
                       <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                         isThisLeader
@@ -453,7 +453,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                       </span>
                     </div>
                     {m.githubUsername && (
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
+                      <p className="text-xs text-slate-600 font-mono mt-0.5">@{m.githubUsername}</p>
                     )}
 
                     {/* Functional role chips — filtered by sourceType (Fix 1); at least one always required (Fix 3) */}
@@ -508,7 +508,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         );
                       })}
                       {roleBusy === m.userId && (
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-slate-600 flex items-center gap-1">
                           <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
                           saving…
                         </span>
@@ -557,7 +557,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
           {canManage && nonLeaderMembers.length === 0 && amLeader && (
             <div className="mt-5 pt-4 border-t border-slate-100">
-              <p className="text-xs text-slate-400 mb-2">
+              <p className="text-xs text-slate-600 mb-2">
                 You are the only member of this group.
               </p>
               <button
@@ -595,7 +595,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-slate-800 truncate">{r.student.name}</p>
                       {r.student.githubUsername && (
-                        <p className="text-xs text-slate-400 font-mono">@{r.student.githubUsername}</p>
+                        <p className="text-xs text-slate-600 font-mono">@{r.student.githubUsername}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -710,16 +710,16 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               <Initials name={m.name} leader={false} />
               <span className="text-xs font-medium text-slate-700">
                 {m.name}
-                {m.userId === currentUserId && <span className="text-slate-400"> (you)</span>}
+                {m.userId === currentUserId && <span className="text-slate-600"> (you)</span>}
               </span>
               {m.githubUsername && (
-                <span className="text-xs text-slate-400 font-mono ml-auto">@{m.githubUsername}</span>
+                <span className="text-xs text-slate-600 font-mono ml-auto">@{m.githubUsername}</span>
               )}
             </label>
           ))}
         </div>
 
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-600 mb-4">
           Leadership is administrative only. The new leader is scored on their actual work, the same as every other member.
         </p>
 
@@ -738,7 +738,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               if (target) setStep({ type: "confirm-reassign", userId: target.userId, name: target.name });
             }}
             disabled={!reassignTarget || busy}
-            className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:bg-slate-200 disabled:text-slate-400"
+            className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:bg-slate-200 disabled:text-slate-600"
           >
             Continue →
           </button>
@@ -886,12 +886,12 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           <div>
             <h2 className="text-sm font-semibold text-slate-800">{stepTitle()}</h2>
             {group && (
-              <p className="text-xs text-slate-400 mt-0.5">{group.groupName}</p>
+              <p className="text-xs text-slate-600 mt-0.5">{group.groupName}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded"
+            className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded"
             aria-label="Close"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -903,7 +903,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         {/* Body */}
         <div className="px-6 py-5">
           {loading && (
-            <div className="flex items-center gap-2 py-8 justify-center text-sm text-slate-400">
+            <div className="flex items-center gap-2 py-8 justify-center text-sm text-slate-600">
               <span className="h-4 w-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
               Loading members…
             </div>

@@ -110,7 +110,7 @@ function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; act
 const treeLinkClass = (active: boolean) =>
   [
     "flex min-h-10 min-w-0 flex-1 items-center rounded-lg px-3 text-sm",
-    active ? "bg-white/10 font-semibold text-white" : "font-medium text-slate-400 hover:bg-white/5 hover:text-white",
+    active ? "bg-white/10 font-semibold text-white" : "font-medium text-slate-600 hover:bg-white/5 hover:text-white",
     FOCUS_RING,
   ].join(" ");
 
@@ -143,7 +143,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
   useEffect(() => { setOverrides({}); }, [activeClassId]);
 
   const query = isInstructor ? classesQ : studentQ;
-  if (query.isLoading) return <p className="px-3 py-2 text-sm text-slate-400">Loading classes…</p>;
+  if (query.isLoading) return <p className="px-3 py-2 text-sm text-slate-600">Loading classes…</p>;
   if (query.isError)   return <p className="px-3 py-2 text-sm text-slate-300">Couldn't load classes.</p>;
 
   const tree = isInstructor
@@ -151,7 +151,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
     : buildStudentTree(studentQ.data ?? [], pathname, activeClassId, activeAssignmentId);
 
   if (tree.classes.length === 0) {
-    return <p className="px-3 py-2 text-sm text-slate-400">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
+    return <p className="px-3 py-2 text-sm text-slate-600">{isInstructor ? "No classes yet." : "You haven't joined a class yet."}</p>;
   }
 
   return (
@@ -182,7 +182,7 @@ function ClassTree({ role, onNavigate }: { role: SystemRole; onNavigate?: () => 
                 {c.projects.length === 0 && (
                   <li>
                     {isInstructor ? (
-                      <p className="px-3 py-2 text-sm text-slate-400">No projects yet.</p>
+                      <p className="px-3 py-2 text-sm text-slate-600">No projects yet.</p>
                     ) : (
                       <SidebarLink href={c.href} onNavigate={onNavigate} className={viewAllClass}>Find a group</SidebarLink>
                     )}

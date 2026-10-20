@@ -81,11 +81,11 @@ function JoinClassModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Join a Class</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               {done ? "Enrollment successful" : "Enter or scan the class join code from your instructor"}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -107,7 +107,7 @@ function JoinClassModal({
                     {enrolled.subjectCode} — {enrolled.subjectName}
                   </p>
                 )}
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-slate-600 mt-1">
                   Open the class to create or join a group.
                 </p>
               </div>
@@ -127,12 +127,12 @@ function JoinClassModal({
                   onKeyDown={(e) => { if (e.key === "Enter") void handleEnroll(); }}
                   disabled={loading}
                   placeholder="e.g. FT-APPS-2026"
-                  className="flex-1 min-w-0 rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:cursor-not-allowed disabled:text-slate-400"
+                  className="flex-1 min-w-0 rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:cursor-not-allowed disabled:text-slate-600"
                 />
                 <button
                   onClick={() => void handleEnroll()}
                   disabled={loading || !joinCode.trim()}
-                  className="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  className="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                 >
                   {loading ? "Enrolling…" : "Enroll →"}
                 </button>
@@ -224,7 +224,7 @@ export function ClassCard({
           <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors leading-snug">
             {cls.subjectName}
           </p>
-          {cls.department && <p className="text-xs text-slate-400 mt-0.5">{cls.department.name}</p>}
+          {cls.department && <p className="text-xs text-slate-600 mt-0.5">{cls.department.name}</p>}
         </div>
 
         {/* Class join code — always visible with copy button */}
@@ -233,12 +233,12 @@ export function ClassCard({
             className="flex items-center flex-wrap gap-1.5 self-start bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-xs text-slate-400 shrink-0">Class code:</span>
+            <span className="text-xs text-slate-600 shrink-0">Class code:</span>
             <span className="font-mono font-extrabold text-sm text-violet-700 tracking-wide select-all break-all">{cls.joinCode}</span>
             <button
               onClick={(e) => void handleCopy(e)}
               title={copied ? "Copied!" : "Copy class join code"}
-              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
             >
               {copied ? (
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -252,7 +252,7 @@ export function ClassCard({
             </button>
           </div>
         ) : (
-          <span className="text-xs text-slate-300 italic">No join code</span>
+          <span className="text-xs text-slate-600 italic">No join code</span>
         )}
 
         {/* Health — shown in addition to (not instead of) join code */}
@@ -265,22 +265,22 @@ export function ClassCard({
                 {studentHealthLabel(latestReport.teamHealth)}
               </span>
             )}
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
             </p>
           </div>
         ) : (
           joinedCount > 0 && (
-            <p className="text-xs text-slate-400 italic">Awaiting first analysis</p>
+            <p className="text-xs text-slate-600 italic">Awaiting first analysis</p>
           )
         )}
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-600">
             {totalAssignments} project{totalAssignments !== 1 ? "s" : ""}
           </span>
-          <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">
+          <span className="text-xs text-slate-600 group-hover:text-indigo-500 transition-colors">
             Open →
           </span>
         </div>
@@ -339,7 +339,7 @@ export function StudentPage() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8 space-y-8">
 
         {loading && (
-          <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+          <div className="flex items-center justify-center py-16 text-sm text-slate-600">
             Loading your classes…
           </div>
         )}
@@ -359,7 +359,7 @@ export function StudentPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-700">No classes yet</p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Join a class using the class join code your instructor provided.
               </p>
             </div>

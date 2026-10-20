@@ -75,7 +75,7 @@ export function MemberDrawer(props: Props) {
   return <DrawerBody {...props} member={member} />;
 }
 
-const NAV_BUTTON = `flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent ${FOCUS_LIGHT}`;
+const NAV_BUTTON = `flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent ${FOCUS_LIGHT}`;
 
 function NavArrow({ dir }: { dir: "prev" | "next" }) {
   return (

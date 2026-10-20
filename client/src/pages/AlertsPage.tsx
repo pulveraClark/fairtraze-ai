@@ -95,7 +95,7 @@ export function AlertsPage() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {user?.systemRole === "INSTRUCTOR" ? "Team health alerts and flag notifications" : "Updates about your groups and account"}
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>
@@ -111,7 +111,7 @@ export function AlertsPage() {
             )}
             <button
               onClick={load}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -123,7 +123,7 @@ export function AlertsPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-slate-400 text-sm">
+          <div className="flex items-center justify-center gap-2 py-20 text-slate-600 text-sm">
             <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
             Loading…
           </div>
@@ -146,7 +146,7 @@ export function AlertsPage() {
               </svg>
             </div>
             <p className="text-base font-semibold text-slate-700">No notifications</p>
-            <p className="text-sm text-slate-400">You're all caught up</p>
+            <p className="text-sm text-slate-600">You're all caught up</p>
           </div>
         )}
 
@@ -172,13 +172,13 @@ export function AlertsPage() {
                           <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.light}`}>
                             {typeMeta.label}
                           </span>
-                          <span className="text-xs text-slate-400">{timeAgo(alert.createdAt)}</span>
+                          <span className="text-xs text-slate-600">{timeAgo(alert.createdAt)}</span>
                         </div>
                         <p className={`text-sm leading-snug ${!alert.read ? "text-slate-800 font-semibold" : "text-slate-600"}`}>
                           {alert.message}
                         </p>
                         {alert.project?.groupName && (
-                          <p className="text-xs text-slate-400 mt-1 truncate">
+                          <p className="text-xs text-slate-600 mt-1 truncate">
                             {alert.project.groupName}
                             {alert.project.assignmentLabel ? ` · ${alert.project.assignmentLabel}` : ""}
                           </p>

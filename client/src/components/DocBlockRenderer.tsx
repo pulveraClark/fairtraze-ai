@@ -160,7 +160,7 @@ function DocBlockNode({ block }: { block: DocBlock }) {
 // anywhere — there is no editing capability to disable because none exists.
 export function DocBlockRenderer({ blocks }: { blocks: DocBlock[] }) {
   if (blocks.length === 0) {
-    return <p className="text-sm text-slate-400 italic">This snapshot has no content.</p>;
+    return <p className="text-sm text-slate-600 italic">This snapshot has no content.</p>;
   }
   return <div>{renderBlockList(blocks)}</div>;
 }

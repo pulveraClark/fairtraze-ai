@@ -156,7 +156,7 @@ export function JoinPage() {
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-6 pt-5 pb-4 border-b border-slate-100">
             <h1 className="text-xl font-semibold text-slate-900">Joining a Class</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
+            <p className="text-sm text-slate-600 mt-0.5">
               Code: <span className="font-mono font-bold text-indigo-600">{code}</span>
             </p>
           </div>
@@ -181,7 +181,7 @@ export function JoinPage() {
                   <p className="text-xs text-slate-500 mt-1">
                     {enrolled.subjectCode} — {enrolled.subjectName}
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">Open the class to create or join a group.</p>
+                  <p className="text-xs text-slate-600 mt-1">Open the class to create or join a group.</p>
                 </div>
                 <button
                   onClick={() => navigate("/student")}

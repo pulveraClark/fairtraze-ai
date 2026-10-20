@@ -178,11 +178,11 @@ function CreateClassModal({
             <h2 className="text-sm font-semibold text-slate-800">
               {createdCode ? "Class section created" : "Create Class Section"}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               {createdCode ? "Share the class join code with your students" : "Add a new subject to your dashboard"}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -226,7 +226,7 @@ function CreateClassModal({
                   )}
                 </button>
               </div>
-              <p className="text-xs text-slate-400 mt-2">
+              <p className="text-xs text-slate-600 mt-2">
                 Students enter this code once to enroll in the class. They can then create or join groups for each project.
               </p>
             </div>
@@ -242,7 +242,7 @@ function CreateClassModal({
                   bgColor="#f8fafc"
                   fgColor="#312e81"
                 />
-                <p className="text-xs text-slate-400 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
+                <p className="text-xs text-slate-600 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
               </div>
             </div>
 
@@ -269,7 +269,7 @@ function CreateClassModal({
                     value={subjectCode}
                     onChange={(e) => setSubjectCode(e.target.value)}
                     placeholder="e.g. CC-APPSDEV22"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                 </div>
                 <div>
@@ -279,7 +279,7 @@ function CreateClassModal({
                     value={edpCode}
                     onChange={(e) => setEdpCode(e.target.value)}
                     placeholder="e.g. 31400"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                 </div>
               </div>
@@ -290,7 +290,7 @@ function CreateClassModal({
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
                   placeholder="e.g. Applications Development"
-                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -306,7 +306,7 @@ function CreateClassModal({
                       value={departmentId}
                       onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : "")}
                       disabled={departmentsLoading}
-                      className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-600"
                     >
                       <option value="" disabled>{departmentsLoading ? "Loading…" : "Select a department"}</option>
                       {departments.map((d) => (
@@ -334,7 +334,7 @@ function CreateClassModal({
               <button
                 type="submit"
                 disabled={submitting || !subjectCode.trim() || !subjectName.trim() || !edpCode.trim() || !departmentId}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
               >
                 {submitting ? (
                   <>
@@ -401,7 +401,7 @@ function ConfirmDialog({
                 onChange={(e) => setTypedValue(e.target.value)}
                 placeholder={typeToConfirm}
                 autoFocus
-                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
               />
             </div>
           )}
@@ -420,7 +420,7 @@ function ConfirmDialog({
           <button
             onClick={onConfirm}
             disabled={busy || !canConfirm}
-            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
           >
             {busy ? (
               <span className="flex items-center gap-2">
@@ -578,7 +578,7 @@ export function InstructorDashboardPage() {
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Instructor Dashboard</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
+            <p className="text-sm text-slate-600 mt-0.5">
               Group contribution overview · GitHub and FairTraze Docs
             </p>
           </div>
@@ -623,10 +623,10 @@ export function InstructorDashboardPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search subjects or groups…"
-            className="w-full sm:w-80 pl-8 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors"
+            className="w-full sm:w-80 pl-8 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs leading-none" aria-label="Clear search">
+            <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-600 text-xs leading-none" aria-label="Clear search">
               ✕
             </button>
           )}
@@ -661,7 +661,7 @@ export function InstructorDashboardPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading dashboard…
           </div>
@@ -683,7 +683,7 @@ export function InstructorDashboardPage() {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-700">No classes yet</p>
-                <p className="text-xs text-slate-400 mt-1">Create your first class section to get started.</p>
+                <p className="text-xs text-slate-600 mt-1">Create your first class section to get started.</p>
               </div>
               <button
                 onClick={() => setShowClassModal(true)}
@@ -725,7 +725,7 @@ export function InstructorDashboardPage() {
               </button>
             </div>
             {atRiskGroups.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 text-sm">
+              <div className="text-center py-16 text-slate-600 text-sm">
                 No at-risk groups found.{" "}
                 <button onClick={() => setFilterMode("all")} className="underline hover:text-slate-600">Show all classes</button>
               </div>
@@ -733,7 +733,7 @@ export function InstructorDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {atRiskGroups.map((item) => (
                   <div key={item.projectId}>
-                    <p className="text-xs font-mono font-semibold text-slate-400 mb-1.5 truncate">
+                    <p className="text-xs font-mono font-semibold text-slate-600 mb-1.5 truncate">
                       {parseClassLabel(item.assignmentLabel).code}
                     </p>
                     <GroupSummaryCard item={item} onAnalyze={handleReanalyze} analyzing={analyzing.has(item.projectId)} />
@@ -748,7 +748,7 @@ export function InstructorDashboardPage() {
         {!loading && !loadError && isSearchMode && (
           <>
             {matchedClasses.length === 0 && matchedGroups.length === 0 && (
-              <div className="text-center py-16 text-slate-400 text-sm">
+              <div className="text-center py-16 text-slate-600 text-sm">
                 No subjects or groups match <span className="font-medium text-slate-600">"{searchQuery}"</span>.{" "}
                 <button onClick={() => setSearchQuery("")} className="underline hover:text-slate-600">Clear search</button>
               </div>
@@ -778,7 +778,7 @@ export function InstructorDashboardPage() {
                           </p>
                           <p className="text-xs text-slate-500 truncate">{cls.subjectName}</p>
                         </div>
-                        <span className="shrink-0 text-xs text-slate-400">
+                        <span className="shrink-0 text-xs text-slate-600">
                           {items.length} group{items.length !== 1 ? "s" : ""}
                         </span>
                         {atRisk > 0 && (

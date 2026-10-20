@@ -36,7 +36,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
                   {c.label}
                 </span>
               )}
-              {!last && <span aria-hidden="true" className="px-1 text-slate-400">/</span>}
+              {!last && <span aria-hidden="true" className="px-1 text-slate-600">/</span>}
             </li>
           );
         })}

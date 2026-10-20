@@ -122,7 +122,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
           </div>
 
           {alerts.length === 0 && loading ? (
-            <p className="px-4 py-10 text-center text-sm text-slate-400">Loading…</p>
+            <p className="px-4 py-10 text-center text-sm text-slate-600">Loading…</p>
           ) : alerts.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
               <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
@@ -131,7 +131,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
                 </svg>
               </div>
               <p className="text-base font-medium text-slate-200">No notifications</p>
-              <p className="text-sm text-slate-400">You're all caught up</p>
+              <p className="text-sm text-slate-600">You're all caught up</p>
             </div>
           ) : (
             <>
@@ -158,7 +158,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
                           <p className={`break-words text-sm leading-snug ${!alert.read ? "font-semibold text-slate-100" : "text-slate-300"}`}>
                             {alert.message}
                           </p>
-                          <p className="mt-1 text-sm text-slate-400">{timeAgo(alert.createdAt)}</p>
+                          <p className="mt-1 text-sm text-slate-600">{timeAgo(alert.createdAt)}</p>
                         </div>
                       </div>
                     </button>

@@ -20,7 +20,7 @@ export function TocPanel({ headings, onSelect }: Props) {
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
         {headings.length === 0 && (
-          <p className="text-xs text-slate-400 text-center py-6">
+          <p className="text-xs text-slate-600 text-center py-6">
             No headings yet. Use Heading 1 or Heading 2 to build a table of contents.
           </p>
         )}

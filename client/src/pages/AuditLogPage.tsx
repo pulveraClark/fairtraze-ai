@@ -80,7 +80,7 @@ export function AuditLogPage() {
           <div>
             <button
               onClick={() => navigate("/admin")}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
+              className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-600 transition-colors mb-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -88,7 +88,7 @@ export function AuditLogPage() {
               Back to Admin
             </button>
             <h1 className="text-xl font-semibold text-slate-900">Audit Log</h1>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               Admin actions recorded most-recent first
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>
@@ -105,7 +105,7 @@ export function AuditLogPage() {
             </select>
             <button
               onClick={load}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -116,7 +116,7 @@ export function AuditLogPage() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
 
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-slate-400 text-sm">
+          <div className="flex items-center justify-center gap-2 py-20 text-slate-600 text-sm">
             <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
             Loading…
           </div>
@@ -130,7 +130,7 @@ export function AuditLogPage() {
         )}
 
         {!loading && !error && entries.length === 0 && (
-          <p className="text-center py-20 text-sm text-slate-400">No audit log entries yet.</p>
+          <p className="text-center py-20 text-sm text-slate-600">No audit log entries yet.</p>
         )}
 
         {!loading && !error && entries.length > 0 && (
@@ -139,11 +139,11 @@ export function AuditLogPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Action</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest">Actor</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">Target</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Details</th>
-                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-widest">When</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Action</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Actor</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden sm:table-cell">Target</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden md:table-cell">Details</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-widest">When</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -164,7 +164,7 @@ export function AuditLogPage() {
                         <span className="text-xs text-slate-500">{e.details ?? "—"}</span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <span className="text-xs text-slate-400 whitespace-nowrap">{fmtDate(e.createdAt)}</span>
+                        <span className="text-xs text-slate-600 whitespace-nowrap">{fmtDate(e.createdAt)}</span>
                       </td>
                     </tr>
                   ))}

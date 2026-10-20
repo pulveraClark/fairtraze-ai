@@ -36,7 +36,7 @@ function getRollup(items: ProjectSummaryItem[]) {
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 transition-transform duration-200 text-slate-400 ${expanded ? "rotate-180" : ""}`}
+      className={`w-4 h-4 transition-transform duration-200 text-slate-600 ${expanded ? "rotate-180" : ""}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -79,11 +79,11 @@ export function ClassContainerCard({
             </span>
             {subjectName && (
               <>
-                <span className="text-slate-300 text-xs select-none">—</span>
+                <span className="text-slate-600 text-xs select-none">—</span>
                 <span className="text-sm font-semibold text-slate-700">{subjectName}</span>
               </>
             )}
-            <span className="text-xs text-slate-400 ml-1">
+            <span className="text-xs text-slate-600 ml-1">
               · {rollup.total} group{rollup.total !== 1 ? "s" : ""}
             </span>
           </div>
@@ -109,7 +109,7 @@ export function ClassContainerCard({
               </span>
             )}
             {rollup.unanalyzed > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1 text-xs text-slate-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-slate-300 inline-block" />
                 {rollup.unanalyzed} Not analyzed
               </span>

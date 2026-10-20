@@ -133,7 +133,7 @@ function ProductPreview() {
               <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
             </div>
             <div className="flex-1 max-w-[200px] mx-4 bg-white rounded border border-slate-200 py-1 text-center">
-              <span className="text-xs text-slate-400 font-mono">app.fairtraze.ai/report/cs101</span>
+              <span className="text-xs text-slate-600 font-mono">app.fairtraze.ai/report/cs101</span>
             </div>
             <div className="w-10" />
           </div>
@@ -144,7 +144,7 @@ function ProductPreview() {
             {/* Left: team health + bars */}
             <div className="flex-1 space-y-5">
               <div className="pb-4 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] mb-3">Team Health</p>
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-3">Team Health</p>
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
@@ -157,7 +157,7 @@ function ProductPreview() {
               </div>
 
               <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
                 <div className="space-y-3">
                   {PREVIEW_MEMBERS.map(({ name, pct, flag }) => (
                     <div key={name} className="flex items-center gap-3">
@@ -282,7 +282,7 @@ export function LandingPage() {
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-9 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
               FAIR <span className="text-indigo-600">TRAZE</span>{" "}
-              <span className="font-medium text-slate-400">AI</span>
+              <span className="font-medium text-slate-600">AI</span>
             </span>
           </button>
 
@@ -616,11 +616,11 @@ export function LandingPage() {
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-7 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
               FAIR <span className="text-indigo-600">TRAZE</span>{" "}
-              <span className="text-slate-400 font-medium">AI</span>
+              <span className="text-slate-600 font-medium">AI</span>
             </span>
           </button>
 
-          <p className="text-xs text-slate-400 text-center max-w-sm leading-relaxed">
+          <p className="text-xs text-slate-600 text-center max-w-sm leading-relaxed">
             Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
           </p>
 

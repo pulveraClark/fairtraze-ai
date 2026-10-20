@@ -1065,7 +1065,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
         </div>
       )}
       {awaitingInitialContent && synced && (
-        <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-400 font-medium">
+        <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-600 font-medium">
           Loading document…
         </div>
       )}

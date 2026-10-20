@@ -117,7 +117,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
 
   if (exists === null) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-400">
+      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-600">
         Loading…
       </div>
     );
@@ -174,7 +174,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6">
       <h3 className="text-sm font-semibold text-slate-700 mb-1">Start your document</h3>
-      <p className="text-xs text-slate-400 mb-4">
+      <p className="text-xs text-slate-600 mb-4">
         Choose a starting structure, or start blank. This is a one-time choice for the group.
       </p>
       {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
@@ -188,7 +188,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
             className="text-left border border-slate-200 rounded-lg p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors disabled:opacity-50"
           >
             <p className="text-sm font-semibold text-slate-700">{t.name}</p>
-            <p className="text-xs text-slate-400 mt-1">{t.description}</p>
+            <p className="text-xs text-slate-600 mt-1">{t.description}</p>
           </button>
         ))}
       </div>

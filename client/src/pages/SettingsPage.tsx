@@ -28,7 +28,7 @@ const ROLE_BADGE: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors";
+  "w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors";
 
 const readonlyClass =
   "w-full rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-500 cursor-not-allowed select-none";
@@ -112,9 +112,9 @@ function EditProfileModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Edit Profile</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Update your display name{isStudent ? " and GitHub username" : ""}</p>
+            <p className="text-xs text-slate-600 mt-0.5">Update your display name{isStudent ? " and GitHub username" : ""}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -149,7 +149,7 @@ function EditProfileModal({
                   placeholder="your-github-handle"
                   className={inputClass}
                 />
-                <p className="text-xs text-slate-400 mt-1">Used to match your commits in contribution reports.</p>
+                <p className="text-xs text-slate-600 mt-1">Used to match your commits in contribution reports.</p>
               </div>
             )}
           </div>
@@ -218,9 +218,9 @@ function ChangePasswordModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Change Password</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Enter your current password to set a new one</p>
+            <p className="text-xs text-slate-600 mt-0.5">Enter your current password to set a new one</p>
           </div>
-          <button onClick={() => onClose()} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={() => onClose()} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -364,7 +364,7 @@ export function SettingsPage() {
         {fetchErr && <ErrorBanner msg={fetchErr} />}
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading profile…
           </div>
@@ -399,7 +399,7 @@ export function SettingsPage() {
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-sm font-semibold text-slate-700">Profile</h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-600 mt-0.5">
                 {isStudent ? "Your display name and GitHub username." : "Your display name shown across the platform."}
               </p>
             </div>
@@ -433,14 +433,14 @@ export function SettingsPage() {
           {profile && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <p className="text-xs text-slate-400 mb-1">Full name</p>
+                <p className="text-xs text-slate-600 mb-1">Full name</p>
                 <div className={readonlyClass}>{profile.name}</div>
               </div>
               {isStudent && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">GitHub username</p>
+                  <p className="text-xs text-slate-600 mb-1">GitHub username</p>
                   <div className={`${readonlyClass} font-mono`}>
-                    {profile.githubUsername || <span className="text-slate-300 font-sans">Not set</span>}
+                    {profile.githubUsername || <span className="text-slate-600 font-sans">Not set</span>}
                   </div>
                 </div>
               )}
@@ -453,7 +453,7 @@ export function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-700">Password</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Change your login password.</p>
+              <p className="text-xs text-slate-600 mt-0.5">Change your login password.</p>
             </div>
             <button
               onClick={() => { setShowPwModal(true); setPwSuccess(null); }}
@@ -476,7 +476,7 @@ export function SettingsPage() {
         <PrivacySettingsCard />
 
         {/* ── Read-only note ────────────────────────────────────────────────── */}
-        <p className="text-xs text-slate-400 px-1">
+        <p className="text-xs text-slate-600 px-1">
           Email and role are managed by your institution and cannot be changed here.
         </p>
 

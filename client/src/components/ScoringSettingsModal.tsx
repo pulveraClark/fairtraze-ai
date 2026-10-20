@@ -127,7 +127,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors text-xl leading-none ml-4"
+            className="text-slate-600 hover:text-slate-600 transition-colors text-xl leading-none ml-4"
           >
             &times;
           </button>
@@ -256,7 +256,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
-          <p className="text-xs text-slate-400 max-w-xs">
+          <p className="text-xs text-slate-600 max-w-xs">
             Saving marks every group's report as outdated until you re-analyze.
           </p>
           <div className="flex gap-2 shrink-0">

@@ -463,7 +463,7 @@ function FormatMenu({ editor, inline = false, onOpenPageSetup }: { editor: Edito
                     title="Clear"
                     aria-label="Clear text color"
                     onClick={() => editor.chain().focus().unsetColor().run()}
-                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-xs shrink-0"
+                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 text-xs shrink-0"
                   >
                     ✕
                   </button>
@@ -491,7 +491,7 @@ function FormatMenu({ editor, inline = false, onOpenPageSetup }: { editor: Edito
                     title="Clear"
                     aria-label="Clear highlight"
                     onClick={() => editor.chain().focus().unsetHighlight().run()}
-                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 hover:bg-slate-50 text-xs shrink-0"
+                    className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50 text-xs shrink-0"
                   >
                     ✕
                   </button>

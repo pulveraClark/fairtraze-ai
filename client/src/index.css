@@ -60,7 +60,7 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   --brand-text-primary:   #0f172a; /* slate-900 */
   --brand-text-secondary: #334155; /* slate-700 */
   --brand-text-muted:     #64748b; /* slate-500 */
-  --brand-text-faint:     #94a3b8; /* slate-400 */
+  --brand-text-faint:     #475569; /* slate-600 - the one secondary-text colour, 7.6:1 on white; never lighter for text */
 
   /* Borders */
   --brand-border:         #e2e8f0; /* slate-200 */
