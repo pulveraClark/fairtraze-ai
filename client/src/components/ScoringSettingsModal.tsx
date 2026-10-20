@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { ProjectScoringConfig } from "@shared/types";
 import { useToast } from "./Toast";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
-import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { Modal } from "./ui/Modal";
+import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { balanceWeights } from "../lib/balanceWeights";
 import { InfoTip } from "./ui/InfoTip";
 import { SETTINGS_TIPS, helpLink } from "../lib/helpText";
@@ -49,16 +50,6 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
 
   const blendSum   = Math.round((wGitHub + wDocs) * 1000) / 1000;
   const blendSumOk = Math.abs(blendSum - 1.0) <= 0.001;
-
-  // Close on Escape
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      // While the reset confirmation is open, Esc closes only that.
-      if (e.key === "Escape" && !confirmingReset) onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, confirmingReset]);
 
   function balanceBase() {
     const [c, l, a] = balanceWeights([commits, lines, activeDays]);
@@ -111,29 +102,23 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-800">Scoring Settings</h2>
-            <p className="text-xs font-medium text-slate-600 mt-1">
-              Applies to all groups in this project. Re-analyze groups to apply new settings.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-600 hover:text-slate-600 transition-colors text-xl leading-none ml-4"
-          >
-            &times;
-          </button>
+    // While the reset confirmation is open, Esc / the scrim close only that, not this dialog.
+    <Modal
+      open
+      onClose={() => { if (!confirmingReset) onClose(); }}
+      title="Scoring settings"
+      size="md"
+      heading={
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">Scoring settings</h2>
+          <p className="text-xs font-medium text-slate-600 mt-1">
+            Applies to all groups in this project. Re-analyze groups to apply new settings.
+          </p>
         </div>
-
-        <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+      }
+    >
+      <div>
+        <div className="space-y-6">
 
           {/* ── Contribution Weights ─────────────────────────────────────────── */}
           <section>
@@ -255,21 +240,22 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
           <p className="text-xs text-slate-600 max-w-xs">
             Saving marks every group's report as outdated until you re-analyze.
           </p>
           <div className="flex gap-2 shrink-0">
             <button
+              type="button"
               onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              className={BUTTON_SECONDARY_COMPACT}
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={!sumOk || (isCombined && !blendSumOk) || saving}
-              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className={BUTTON_PRIMARY_COMPACT}
             >
               {saving ? "Saving…" : "Save settings"}
             </button>
@@ -287,7 +273,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
           Every weight and threshold on this screen goes back to its default value. Nothing is saved until you press Save settings.
         </ConfirmDialog>
       )}
-    </div>
+    </Modal>
   );
 }
 

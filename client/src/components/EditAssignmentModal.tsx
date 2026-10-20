@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../lib/apiBase";
 import { BriefEditor } from "./BriefEditor";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT } from "./ui/styles";
-import { useFocusTrap } from "./ui/useFocusTrap";
+import { Modal } from "./ui/Modal";
 import {
   draftFromAttachments, emptyDraft, retryUploads, syncBrief,
   type BriefAttachment, type BriefDraft, type DraftItem,
@@ -71,8 +71,6 @@ export function EditAssignmentModal({
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<DraftItem[] | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(true, ref, onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,20 +158,8 @@ export function EditAssignmentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-project-title"
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 id="edit-project-title" className="text-sm font-semibold text-slate-900">Edit project</h2>
-          <button type="button" onClick={onClose} className={`ft-hit rounded text-slate-600 hover:text-slate-900 ${FOCUS_LIGHT}`} aria-label="Close">✕</button>
-        </div>
-
+    <Modal open onClose={onClose} title="Edit project" size="md">
+      <div className="-mx-4 -my-4 sm:-mx-5">
         {failed ? (
           <UploadFailurePanel
             failed={failed}
@@ -223,6 +209,6 @@ export function EditAssignmentModal({
           </form>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -98,3 +98,28 @@ describe("ScoringSettingsModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe("ScoringSettingsModal dialog semantics", () => {
+  it("is a modal dialog; Esc closes it, but with the reset confirmation open Esc closes only that", async () => {
+    const onClose = vi.fn();
+    render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType="GITHUB" onClose={onClose} onSaved={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: "Scoring settings" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /reset to defaults/i }));
+    expect(screen.getByText(/Every weight and threshold on this screen/)).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Every weight and threshold on this screen/)).toBeNull();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("Cancel and Save are at least 32px buttons from the shared styles", () => {
+    render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType="GITHUB" onClose={() => {}} onSaved={() => {}} />);
+    expect(screen.getByRole("button", { name: "Cancel" }).className).toContain("min-h-8");
+    expect(screen.getByRole("button", { name: "Save settings" }).className).toContain("min-h-8");
+  });
+});
