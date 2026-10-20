@@ -21,6 +21,7 @@ const USER_SELECT = {
   active:         true,
   lockedUntil:    true,
   createdAt:      true,
+  lastLoginAt:    true,
   deletedAt:      true,
 } as const;
 

@@ -6,6 +6,7 @@ import type { SystemRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { authenticateToken, isEmailVerificationRequired } from "../middleware/auth.js";
+import { recordSignIn, recordSessionRefresh } from "../lib/lastLogin.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
@@ -228,6 +229,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
     return;
   }
 
+  await recordSignIn(user.id);
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
   const refreshToken = await issueRefreshToken(user.id);
   setRefreshCookie(res, refreshToken);
@@ -262,6 +264,7 @@ authRouter.post("/api/auth/refresh", async (req, res) => {
     return;
   }
 
+  await recordSessionRefresh(user.id);
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
   setRefreshCookie(res, rotated.newRawToken);
 

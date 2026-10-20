@@ -138,6 +138,8 @@ model User {
   approvalReviewedAt   DateTime?
   approvalReviewedById Int?
   createdAt        DateTime          @default(now())
+  // Last successful sign-in or session refresh (refresh writes are throttled, see lib/lastLogin.ts). NULL = never since this field was added.
+  lastLoginAt      DateTime?
   // Optional profile photo (256x256 WebP/JPEG, <=~200KB), stored in-DB because Render's disk is ephemeral.
   avatarData       Bytes?
   avatarMime       String?
