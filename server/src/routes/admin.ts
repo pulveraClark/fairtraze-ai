@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { notify, activeAdminIds, resolveNotifications } from "../lib/notify.js";
 import { anonymizeUser } from "../lib/anonymizeUser.js";
+import { parseAdminUsersFilters, buildUserFilters, buildUserOrderBy } from "../lib/adminUsersQuery.js";
 
 export const adminRouter = Router();
 
@@ -32,43 +33,33 @@ async function getActorName(actorId: number): Promise<string> {
 }
 
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
-// List all users with server-side pagination.
-// Query params: search, role, includeFormer (default false), page (default 1), pageSize (default 20).
+// List users with server-side pagination.
+// Query params: search, role, status (active|inactive), lastActive (7d|30d|never),
+// sort (name|joined|lastActive), dir (asc|desc), includeFormer (default false),
+// page (default 1), pageSize (default 20). See lib/adminUsersQuery.ts.
 
 adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) => {
-  const search    = typeof req.query.search === "string" ? req.query.search.trim() : "";
-  const roleRaw   = typeof req.query.role   === "string" ? req.query.role          : "";
-  const roleParsed = roleEnum.safeParse(roleRaw);
+  const filters = parseAdminUsersFilters(req.query);
 
   const page     = Math.max(1, parseInt(String(req.query.page     ?? "1"),  10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
 
   // Former members are anonymized tombstones (User.deletedAt, set by lib/anonymizeUser.ts).
   // Hidden unless includeFormer=true; total and pagination count only what is shown.
-  const includeFormer = req.query.includeFormer === "true";
-
-  const filters = {
-    ...(roleParsed.success ? { systemRole: roleParsed.data } : {}),
-    ...(search ? {
-      OR: [
-        { name:  { contains: search, mode: "insensitive" as const } },
-        { email: { contains: search, mode: "insensitive" as const } },
-      ],
-    } : {}),
-  };
-  const where = includeFormer ? filters : { ...filters, deletedAt: null };
+  const base  = buildUserFilters(filters);
+  const where = filters.includeFormer ? base : { AND: [base, { deletedAt: null }] };
 
   const [users, total, formerCount] = await Promise.all([
     prisma.user.findMany({
       where,
       select:  USER_SELECT,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: buildUserOrderBy(filters),
       skip:    (page - 1) * pageSize,
       take:    pageSize,
     }),
     prisma.user.count({ where }),
-    // For the "Show former members (n)" toggle; same search/role filters, regardless of includeFormer.
-    prisma.user.count({ where: { ...filters, deletedAt: { not: null } } }),
+    // For the "Show former members (n)" toggle; same filters, regardless of includeFormer.
+    prisma.user.count({ where: { AND: [base, { deletedAt: { not: null } }] } }),
   ]);
 
   res.json({ users, total, formerCount, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
