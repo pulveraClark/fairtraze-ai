@@ -18,8 +18,8 @@ vi.mock("../hooks/useGroupQueries", () => ({
     data: {
       id: 1, groupName: "Group 1", repoUrl: "", sourceType: "COMBINED", maxGroupSize: null,
       members: [
-        { userId: 1, name: "Ana Cruz", email: "a@x.t", githubUsername: null, role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "" },
-        { userId: 2, name: "Ben Lim", email: "b@x.t", githubUsername: null, role: "MEMBER", functionalRoles: ["DEVELOPER"], joinedAt: "" },
+        { userId: 1, name: "Ana Cruz", githubUsername: null, role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "" },
+        { userId: 2, name: "Ben Lim", githubUsername: null, role: "MEMBER", functionalRoles: ["DEVELOPER"], joinedAt: "" },
       ],
     },
     isLoading: false, error: null,

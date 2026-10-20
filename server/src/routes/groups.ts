@@ -66,6 +66,8 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     return;
   }
 
+  const seesEmails = isAdmin || isInstructorOf(req, project);
+
   res.json({
     id:          project.id,
     groupName:   project.groupName || `Group ${project.id}`,
@@ -75,7 +77,8 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     members: project.groupMemberships.map((m) => ({
       userId:          m.user.id,
       name:            m.user.name,
-      email:           m.user.email,
+      // Email is for the instructor/admin only; teammates see display names and GitHub usernames.
+      ...(seesEmails ? { email: m.user.email } : {}),
       githubUsername:  m.user.githubUsername,
       role:            m.role,
       functionalRoles: JSON.parse(m.functionalRoles) as string[],

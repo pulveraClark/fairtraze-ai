@@ -40,7 +40,8 @@ const ROLE_META: Record<FunctionalRole, { label: string; activeClass: string; in
 interface GroupMember {
   userId: number;
   name: string;
-  email: string;
+  /** Only sent to the instructor/admin; students never receive teammates' emails. */
+  email?: string;
   githubUsername: string | null;
   role: "LEADER" | "MEMBER";
   functionalRoles: FunctionalRole[];
