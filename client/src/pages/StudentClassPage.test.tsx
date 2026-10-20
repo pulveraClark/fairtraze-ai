@@ -70,3 +70,23 @@ describe("ProjectCard double submits", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("ProjectCard after a join request", () => {
+  const pending = (over: object = {}) => asgn({
+    myGroup: null,
+    myRequest: { id: 7, projectId: 5, groupName: "Group 5", status: "PENDING", createdAt: "2026-10-20T00:00:00Z" },
+    groups: [{ id: 5, groupName: "Group 5", memberCount: 1, leaderName: "Ana Cruz", isFull: false }],
+    ...over,
+  });
+
+  it("says the request was sent, names the leader, and offers Cancel request", () => {
+    renderCard(pending());
+    expect(screen.getByText("Request sent ✓, waiting for Ana Cruz to approve")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel request" })).toBeEnabled();
+  });
+
+  it("falls back to 'the group leader' when the leader's name is unknown", () => {
+    renderCard(pending({ groups: [] }));
+    expect(screen.getByText("Request sent ✓, waiting for the group leader to approve")).toBeInTheDocument();
+  });
+});

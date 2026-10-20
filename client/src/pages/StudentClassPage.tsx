@@ -132,6 +132,9 @@ export function ProjectCard({
   const [error, setError]           = useState("");
 
   const isPending   = asgn.myRequest?.status === "PENDING";
+  // The class payload already lists every group with its leader's name, so no extra field is needed.
+  const requestLeaderName =
+    asgn.groups.find((g) => g.id === asgn.myRequest?.projectId)?.leaderName ?? "the group leader";
 
   async function handleCreate() {
     if (!groupName.trim()) { setError("Enter a group name."); return; }
@@ -288,18 +291,18 @@ export function ProjectCard({
                 </svg>
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-amber-800">
-                  Request pending — {asgn.myRequest!.groupName}
+                <p className="text-xs font-semibold text-amber-800" role="status">
+                  Request sent ✓, waiting for {requestLeaderName} to approve
                 </p>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  Waiting for the group leader to respond. You will be notified when your request is accepted or declined.
+                <p className="text-xs text-amber-800 mt-0.5">
+                  {asgn.myRequest!.groupName}. You will be notified when your request is accepted or declined.
                 </p>
                 <button
                   onClick={handleCancelRequest}
                   disabled={submitting}
                   className="mt-2 text-xs font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
                 >
-                  Cancel request
+                  {submitting ? "Cancelling…" : "Cancel request"}
                 </button>
               </div>
             </div>
