@@ -4,6 +4,7 @@ import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { roleHome } from "../lib/roleHome";
 import { CARD, FOCUS_LIGHT } from "../components/ui";
+import { AppFooter } from "../components/AppFooter";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import {
   DEFAULT_WEIGHTS, FREE_RIDER_THRESHOLD, OVERLOAD_THRESHOLD, DEADLINE_DRIVEN_THRESHOLD,
@@ -66,9 +67,17 @@ export function HelpPage() {
 
   // The page loads after React mounts, so the browser cannot jump to #section by itself.
   useEffect(() => {
-    const id = window.location.hash.slice(1);
-    if (id) document.getElementById(id)?.scrollIntoView();
+    const jump = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      if (id) document.getElementById(id)?.scrollIntoView();
+    };
+    jump();
+    window.addEventListener("hashchange", jump);
+    return () => window.removeEventListener("hashchange", jump);
   }, []);
+
+  // Signed in: Help lives inside the app shell (sidebar, footer), so it drops its own page chrome.
+  const embedded = !!user;
 
   function goBack() {
     if (window.history.length > 1) window.history.back();
@@ -80,19 +89,21 @@ export function HelpPage() {
   const blend = DEFAULT_BLEND_WEIGHTS;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className={`${embedded ? "" : "min-h-screen "}bg-slate-50 flex flex-col`}>
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-4">
-          <button
-            type="button"
-            onClick={goBack}
-            className={`inline-flex items-center gap-1 min-h-9 text-sm text-slate-700 hover:text-slate-900 mb-1 rounded ${FOCUS_LIGHT}`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              onClick={goBack}
+              className={`inline-flex items-center gap-1 min-h-9 text-sm text-slate-700 hover:text-slate-900 mb-1 rounded ${FOCUS_LIGHT}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+          )}
           <h1 className="text-xl font-semibold text-slate-900">How FairTraze works</h1>
           <div role="group" aria-label="Show help for" className="mt-3 inline-flex rounded-lg border border-slate-300 bg-slate-50 p-0.5">
             {(["student", "instructor"] as const).map((v) => (
@@ -380,11 +391,15 @@ export function HelpPage() {
         </Section>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-4 sm:px-8 py-3 text-xs text-slate-700 text-center">
-          Outputs are evidence to support instructor judgment. They do not constitute grades or final assessments.
-        </div>
-      </footer>
+      {embedded ? (
+        <AppFooter hideHelpLink />
+      ) : (
+        <footer className="border-t border-slate-200 bg-white">
+          <div className="px-4 sm:px-8 py-3 text-xs text-slate-700 text-center">
+            Outputs are evidence to support instructor judgment. They do not constitute grades or final assessments.
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

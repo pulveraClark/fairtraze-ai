@@ -39,15 +39,20 @@ function RouteFallback() {
   );
 }
 
-function routeElement(pathname: string) {
+function routeElement(pathname: string, signedIn: boolean) {
   const page = pageElement(pathname);
   if (page === null) return <NotFoundPage />;
-  return usesShell(pathname) ? <AppShell>{page}</AppShell> : page;
+  return usesShell(pathname, signedIn) ? <AppShell>{page}</AppShell> : page;
 }
 
-/** Signed-in app routes get the sidebar; landing and auth pages never had the app chrome. */
-function usesShell(pathname: string): boolean {
-  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/help"].includes(pathname);
+/**
+ * Signed-in app routes get the sidebar; landing and auth pages never had the app chrome.
+ * /help is the one page that depends on who is looking: signed-in users get it inside the shell
+ * (sidebar, Help highlighted), visitors keep the standalone page.
+ */
+export function usesShell(pathname: string, signedIn = false): boolean {
+  if (pathname === "/help") return signedIn;
+  return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy"].includes(pathname);
 }
 
 /** The page for a known route, or null when nothing matches (rendered as "Page not found"). */
@@ -173,18 +178,19 @@ export default function App() {
   const { user, loading } = useAuth();
 
   // Everyone must accept the current Privacy Notice first (RA 10173). The public notice itself
-  // (/privacy) never uses the shell, so it stays readable from the consent screen.
+  // (/privacy) never uses the shell, so it stays readable from the consent screen; /help is
+  // exempt the same way (signedIn=false), so people can read Help before they accept.
   const consentGated = !loading && !!user && user.consentRequired === true && usesShell(pathname);
 
   // An instructor an admin has not approved yet sees only the approval notice, never the app
   // shell or any instructor page. The server enforces the same rule on every instructor API.
   const gated =
     !loading && user?.systemRole === "INSTRUCTOR" && user.instructorStatus !== undefined &&
-    user.instructorStatus !== "APPROVED" && usesShell(pathname);
+    user.instructorStatus !== "APPROVED" && usesShell(pathname, true);
 
   return (
     <Suspense fallback={<RouteFallback />}>
-      {consentGated ? <ConsentGatePage /> : gated ? <PendingApprovalPage /> : routeElement(pathname)}
+      {consentGated ? <ConsentGatePage /> : gated ? <PendingApprovalPage /> : routeElement(pathname, !loading && !!user)}
     </Suspense>
   );
 }

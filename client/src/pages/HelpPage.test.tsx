@@ -36,6 +36,30 @@ describe("HelpPage", () => {
     expect(screen.getByRole("button", { name: "For instructors" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("signed in: drops its own Back button and uses the shared footer without a self-link", () => {
+    renderAs("STUDENT");
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.getByRole("contentinfo")).toHaveTextContent(/do not constitute grades/);
+    expect(screen.queryByRole("link", { name: "How FairTraze works" })).toBeNull();
+  });
+
+  it("logged out: keeps the standalone page with a Back button", () => {
+    renderAs(null);
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+  });
+
+  it("scrolls to #section on load and when the hash changes", () => {
+    const scroll = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scroll;
+    window.location.hash = "#faq";
+    renderAs("STUDENT");
+    expect(scroll).toHaveBeenCalledTimes(1);
+    window.location.hash = "#flags";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(scroll.mock.calls.length).toBeGreaterThanOrEqual(2);
+    window.location.hash = "";
+  });
+
   it("has an element for every anchor the app links to, in both views", async () => {
     const user = userEvent.setup();
     renderAs("STUDENT");
