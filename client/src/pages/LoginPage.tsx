@@ -3,6 +3,7 @@ import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import logoUrl from "../assets/logo_transparent.png";
 import { useMinWidth } from "../lib/useMinWidth";
+import { useEmailEnabled } from "../lib/useEmailEnabled";
 
 // ── Left-panel illustration: stylized contribution dashboard ──────────────────
 function AuthIllustration() {
@@ -60,6 +61,7 @@ export function LoginPage() {
   // The sample artwork is decorative and only fits the desktop side panel (lg and up).
   const showArt = useMinWidth(1024);
   const { navigate } = useRouter();
+  const emailEnabled = useEmailEnabled();
   const { login, user, loading: authLoading } = useAuth();
 
   const [email,      setEmail]      = useState("");
@@ -202,13 +204,15 @@ export function LoginPage() {
                 <label htmlFor="login-password" className="block text-xs font-semibold text-slate-700">
                   Password
                 </label>
-                <button
-                  type="button"
-                  onClick={() => navigate("/forgot-password")}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-                >
-                  Forgot password?
-                </button>
+                {emailEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/forgot-password")}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
               <input
                 id="login-password"

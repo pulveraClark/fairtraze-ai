@@ -13,6 +13,8 @@ export interface AuthUser {
   githubUsername?: string | null;
   emailVerified?: boolean;
   emailVerificationRequired?: boolean;
+  /** False when the server runs with EMAIL_ENABLED=false (no email features). */
+  emailEnabled?: boolean;
   /** Only meaningful for INSTRUCTOR accounts; anyone else is effectively APPROVED. */
   instructorStatus?: "PENDING" | "APPROVED" | "REJECTED";
   /** Version of the optional profile photo; null/absent = initials fallback. */
@@ -174,10 +176,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...(privacyAccepted ? { acceptPrivacy: true, privacyVersion: PRIVACY_NOTICE_VERSION } : {}),
       }),
     });
-    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
+    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; emailEnabled?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Registration failed (${res.status})`);
-    storeSession(data.token!, data.user!);
-    return { ...data.user!, emailVerificationRequired: data.emailVerificationRequired ?? true };
+    const registered = { ...data.user!, emailEnabled: data.emailEnabled };
+    storeSession(data.token!, registered);
+    return { ...registered, emailVerificationRequired: data.emailVerificationRequired ?? true };
   }
 
   async function login(email: string, password: string): Promise<AuthUser> {
@@ -187,9 +190,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       credentials: "include",
       body:        JSON.stringify({ email, password }),
     });
-    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
+    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; emailEnabled?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Login failed (${res.status})`);
-    const user = { ...data.user!, emailVerificationRequired: data.emailVerificationRequired };
+    const user = { ...data.user!, emailVerificationRequired: data.emailVerificationRequired, emailEnabled: data.emailEnabled };
     storeSession(data.token!, user);
     return user;
   }

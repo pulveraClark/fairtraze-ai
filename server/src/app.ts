@@ -36,6 +36,7 @@ import {
   globalLimiter,
 } from "./middleware/security.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
+import { isEmailEnabled } from "./lib/emailConfig.js";
 
 // Builds the Express app without binding a port or attaching the collab
 // WebSocket servers — split out from index.ts so tests (supertest) and the
@@ -74,6 +75,11 @@ export function createApp() {
       collabSchemaVersion: COLLAB_SCHEMA_VERSION,
       build: (process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT ?? "dev").slice(0, 7),
     });
+  });
+
+  // Public runtime config the logged-out pages need (login's "Forgot password?" link).
+  app.get("/api/config", (_req, res) => {
+    res.json({ emailEnabled: isEmailEnabled() });
   });
 
   app.use(globalLimiter);

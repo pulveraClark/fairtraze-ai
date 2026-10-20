@@ -10,6 +10,7 @@ import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../li
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
+import { isEmailEnabled, effectiveEmailVerified } from "../lib/emailConfig.js";
 import { notify, activeAdminIds } from "../lib/notify.js";
 import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice.js";
 
@@ -117,8 +118,9 @@ authRouter.post("/api/auth/register", async (req, res) => {
       passwordHash,
       name,
       systemRole: (role ?? "STUDENT") as SystemRole,
-      emailVerified: false,
-      consentVersion:    PRIVACY_NOTICE_VERSION,
+      // Email off: nobody could ever verify, so sign-ups are verified up front.
+      emailVerified: !isEmailEnabled(),
+      consentVersion:   PRIVACY_NOTICE_VERSION,
       consentAcceptedAt: new Date(),
       // Instructor sign-ups need admin approval before any instructor feature works.
       ...(role === "INSTRUCTOR" ? { instructorStatus: "PENDING" as const } : {}),
@@ -154,8 +156,9 @@ authRouter.post("/api/auth/register", async (req, res) => {
 
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus, ...consentFields(user) },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: effectiveEmailVerified(user), instructorStatus: user.instructorStatus, ...consentFields(user) },
     emailVerificationRequired: isEmailVerificationRequired(),
+    emailEnabled: isEmailEnabled(),
   });
 });
 
@@ -231,8 +234,9 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified, instructorStatus: user.instructorStatus, ...consentFields(user) },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: effectiveEmailVerified(user), instructorStatus: user.instructorStatus, ...consentFields(user) },
     emailVerificationRequired: isEmailVerificationRequired(),
+    emailEnabled: isEmailEnabled(),
   });
 });
 
@@ -281,6 +285,12 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
   const result = forgotPasswordSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: "Invalid input", details: result.error.flatten() });
+    return;
+  }
+
+  // Email off: say so plainly (it is server-wide, so it reveals nothing about any account).
+  if (!isEmailEnabled()) {
+    res.status(503).json({ error: "Password reset by email is turned off. Contact your administrator.", code: "EMAIL_DISABLED" });
     return;
   }
 
@@ -362,12 +372,13 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
     name:                      user.name,
     systemRole:                user.systemRole,
     githubUsername:            user.githubUsername,
-    emailVerified:             user.emailVerified,
+    emailVerified:             effectiveEmailVerified(user),
     instructorStatus:          user.instructorStatus,
     ...consentFields(user),
     avatarUpdatedAt:          user.avatarUpdatedAt ? user.avatarUpdatedAt.toISOString() : null,
     createdAt:                 user.createdAt,
     emailVerificationRequired: isEmailVerificationRequired(),
+    emailEnabled: isEmailEnabled(),
   });
 });
 
@@ -405,7 +416,7 @@ authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, 
     return;
   }
 
-  if (user.emailVerified) {
+  if (effectiveEmailVerified(user)) {
     res.json({ message: "Your email is already verified." });
     return;
   }

@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { SystemRole } from "@prisma/client";
 import { verifyToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
+import { isEmailEnabled } from "../lib/emailConfig.js";
 
 export function authenticateToken(req: Request, _res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
@@ -86,8 +87,9 @@ export function requireRole(...roles: SystemRole[]) {
 // Read live (not cached at import time) so REQUIRE_EMAIL_VERIFICATION can be
 // flipped per-test via process.env without needing vi.resetModules().
 // Defaults to enforced: only the literal string "false" disables the gate.
+// EMAIL_ENABLED=false turns the gate off too (no email can be delivered).
 export function isEmailVerificationRequired(): boolean {
-  return process.env.REQUIRE_EMAIL_VERIFICATION !== "false";
+  return isEmailEnabled() && process.env.REQUIRE_EMAIL_VERIFICATION !== "false";
 }
 
 // Soft gate for the small set of state-changing routes (group creation/join,

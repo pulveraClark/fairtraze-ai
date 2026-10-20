@@ -3,6 +3,7 @@ import { useRouter } from "./router";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
 import { useAuth } from "./context/AuthContext";
+import { EmailOnlyRoute } from "./components/EmailOnlyRoute";
 
 const LandingPage = lazy(() => import("./pages/LandingPage").then((m) => ({ default: m.LandingPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
@@ -93,9 +94,9 @@ function pageElement(pathname: string) {
   if (pathname === "/join")      return <JoinPage />;
   if (pathname === "/login")     return <LoginPage />;
   if (pathname === "/register")  return <RegisterPage />;
-  if (pathname === "/forgot-password") return <ForgotPasswordPage />;
-  if (pathname === "/reset-password")  return <ResetPasswordPage />;
-  if (pathname === "/verify-email")    return <VerifyEmailPage />;
+  if (pathname === "/forgot-password") return <EmailOnlyRoute><ForgotPasswordPage /></EmailOnlyRoute>;
+  if (pathname === "/reset-password")  return <EmailOnlyRoute><ResetPasswordPage /></EmailOnlyRoute>;
+  if (pathname === "/verify-email")    return <EmailOnlyRoute><VerifyEmailPage /></EmailOnlyRoute>;
   if (pathname === "/overview")  return <OverviewPage />;
   if (pathname === "/privacy")   return <PrivacyPage />;
   if (pathname === "/help")      return <HelpPage />;
