@@ -62,6 +62,7 @@ function CreateStep({ step }: { step: SetupStep }) {
       <StepHeading step={step} />
       {!step.done && (
         <>
+          <p className="mt-1 text-sm text-slate-800">Any member can create the repository. The leader usually pastes the link.</p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-800">
             <li>Sign in to GitHub and start a new repository.</li>
             <li>Give it a name. Choose Public so the link can be checked.</li>

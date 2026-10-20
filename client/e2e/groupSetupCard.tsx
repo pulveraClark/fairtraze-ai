@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/geist";
 import "../src/index.css";
 import { GroupSetupCard } from "../src/components/GroupSetupCard";
+import { SetupNudgeBar } from "../src/components/SetupNudgeBar";
 import { NextStepLine } from "../src/components/NextStepLine";
 import type { GroupSetup } from "../src/lib/groupSetup";
 
@@ -23,6 +24,7 @@ const setups: Record<string, GroupSetup | null> = {
   "server-error": base,
   partial,
   "leader-partial": leaderPartial,
+  nudge: null,
   "next-step": null,
   "all-set": null,
 };
@@ -39,6 +41,7 @@ const setup = setups[state] ?? base;
 createRoot(document.getElementById("root")!).render(
   <main className="mx-auto w-full min-w-0 max-w-5xl px-6 py-8 sm:px-8">
     {setup && <GroupSetupCard projectId={1} setup={setup} token="t" onSaved={() => undefined} />}
+    {state === "nudge" && <SetupNudgeBar projectId={1} setup={leaderPartial} token="t" onSaved={() => undefined} />}
     {state === "next-step" && <NextStepLine text="You have 2 tasks due Friday" onOpenTasks={() => undefined} />}
     {state === "all-set" && <NextStepLine text="All set ✓" />}
   </main>,

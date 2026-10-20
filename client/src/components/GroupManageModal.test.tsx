@@ -124,7 +124,7 @@ describe("GroupManageModal Accept all", () => {
   });
 
   it("asks 'Accept 2 requests?' first, and only then calls the server", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ accepted: 2, skipped: 0 }), { status: 200 }));
+    const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ accepted: 2, skipped: 0 }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     q.requests = [req(1, "Cara"), req(2, "Dan")];
     renderModal();

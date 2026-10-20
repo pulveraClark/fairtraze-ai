@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveSetupProgress, repoFeedback, setupCardVisible, membersLinkedLine, type GroupSetup } from "./groupSetup";
+import { deriveSetupProgress, repoFeedback, setupCardVisible, membersLinkedLine, setupNudge, setupGateVisible, type GroupSetup } from "./groupSetup";
 
 const setup = (over: Partial<GroupSetup> = {}): GroupSetup => ({
   needsRepo: true, repoUrl: null, repoLinked: false, isLeader: false, canLinkRepo: true, canChangeRepo: false,
@@ -61,5 +61,46 @@ describe("repoFeedback (live format check)", () => {
 describe("membersLinkedLine", () => {
   it("reads 3 of 5 members linked", () => {
     expect(membersLinkedLine({ linked: 3, total: 5, missingNames: [] })).toBe("3 of 5 members linked");
+  });
+});
+
+describe("saved link marks the Create step done", () => {
+  it("steps 1 and 2 flip together when repoLinked", () => {
+    const p = deriveSetupProgress(setup({ repoLinked: true }));
+    expect(p.steps.find((x) => x.id === "create")?.done).toBe(true);
+    expect(p.steps.find((x) => x.id === "link")?.done).toBe(true);
+  });
+});
+
+describe("setupNudge matrix", () => {
+  const lead = { isLeader: true };
+  const linked = { repoLinked: true, repoUrl: "https://github.com/a/b" };
+  it("is null when complete or Docs-only", () => {
+    expect(setupNudge(setup({ needsRepo: false }))).toBeNull();
+    expect(setupNudge(setup({ ...linked, usernames: { linked: 5, total: 5, missingNames: [] } }))).toBeNull();
+  });
+  it("leader: link first, then own username, then waiting", () => {
+    expect(setupNudge(setup(lead))).toEqual({ label: "Setup 0 of 3", action: "Paste the repository link" });
+    expect(setupNudge(setup({ ...lead, ...linked }))).toEqual({ label: "Setup 2 of 3", action: "Add your GitHub username" });
+    expect(setupNudge(setup({ ...lead, ...linked, viewerHasGithubUsername: true }))?.action).toMatch(/^Waiting for other members/);
+  });
+  it("member: own username first, then waiting for the leader, then others", () => {
+    expect(setupNudge(setup())?.action).toBe("Add your GitHub username");
+    expect(setupNudge(setup({ viewerHasGithubUsername: true }))?.action).toBe("Waiting for your leader to link the repository");
+    expect(setupNudge(setup({ ...linked, viewerHasGithubUsername: true }))?.action).toMatch(/^Waiting for other members/);
+  });
+  it("a member never sees the leader's action", () => {
+    expect(setupNudge(setup({ canLinkRepo: true }))?.action).not.toMatch(/Paste/);
+  });
+});
+
+describe("setupGateVisible", () => {
+  it("only for a leader whose group needs a repo that is not linked and not skipped", () => {
+    expect(setupGateVisible(undefined, false)).toBe(false);
+    expect(setupGateVisible(setup({ isLeader: true }), false)).toBe(true);
+    expect(setupGateVisible(setup({ isLeader: true }), true)).toBe(false);
+    expect(setupGateVisible(setup({ isLeader: false }), false)).toBe(false);
+    expect(setupGateVisible(setup({ isLeader: true, needsRepo: false }), false)).toBe(false);
+    expect(setupGateVisible(setup({ isLeader: true, repoLinked: true }), false)).toBe(false);
   });
 });

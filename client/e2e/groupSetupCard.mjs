@@ -33,6 +33,7 @@ const STATES = [
   }],
   ["partial", async () => {}],
   ["leader-partial", async () => {}],
+  ["nudge", async () => {}],
   ["next-step", async () => {}],
   ["all-set", async () => {}],
 ];
@@ -81,6 +82,13 @@ try {
           return { tag: e.tagName, outline: cs.outlineStyle, w: parseFloat(cs.outlineWidth) };
         });
         check(focus.outline !== "none" && focus.w >= 2, `first Tab stop has a visible focus outline (${focus.tag}, ${focus.outline} ${focus.w}px)`);
+      }
+      if (state === "nudge") {
+        check(await page.getByText("Setup 2 of 3").isVisible(), "nudge bar shows progress");
+        await page.getByRole("button", { name: "Finish setup" }).click();
+        check(await page.getByRole("dialog", { name: "Finish group setup" }).isVisible(), "Finish setup opens the steps");
+        await page.keyboard.press("Escape");
+        check(!(await page.getByRole("dialog").count()), "Esc closes the steps");
       }
       if (state === "format-error") check(await page.getByText(/not a GitHub link/).isVisible(), "format error is shown in words");
       if (state === "server-error") {

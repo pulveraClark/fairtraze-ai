@@ -63,6 +63,38 @@ export function setupCardVisible(setup: GroupSetup | undefined): boolean {
   return !!setup && setup.needsRepo && !deriveSetupProgress(setup).complete;
 }
 
+export interface SetupNudge {
+  /** "Setup 2 of 3" */
+  label: string;
+  /** The one thing this viewer can do (or is waiting for) next. */
+  action: string;
+}
+
+/**
+ * The slim line shown above the tabs: progress plus the viewer's own next action. `null` when setup is complete
+ * or the group is Docs-only. A member only ever sees their own action; the leader sees the link first.
+ */
+export function setupNudge(setup: GroupSetup): SetupNudge | null {
+  const progress = deriveSetupProgress(setup);
+  if (!setup.needsRepo || progress.complete) return null;
+  const label = `Setup ${progress.doneCount} of ${progress.total}`;
+  const waitingForOthers = "Waiting for other members to add their GitHub username";
+
+  if (setup.isLeader) {
+    if (!setup.repoLinked) return { label, action: "Paste the repository link" };
+    if (!setup.viewerHasGithubUsername) return { label, action: "Add your GitHub username" };
+    return { label, action: waitingForOthers };
+  }
+  if (!setup.viewerHasGithubUsername) return { label, action: "Add your GitHub username" };
+  if (!setup.repoLinked) return { label, action: "Waiting for your leader to link the repository" };
+  return { label, action: waitingForOthers };
+}
+
+/** The leader's first-visit setup screen: only while a repository is needed but not linked, and not skipped. */
+export function setupGateVisible(setup: GroupSetup | undefined, skipped: boolean): boolean {
+  return !!setup && setup.isLeader && setup.needsRepo && !setup.repoLinked && !skipped;
+}
+
 export function membersLinkedLine(u: GroupSetup["usernames"]): string {
   return `${u.linked} of ${u.total} members linked`;
 }

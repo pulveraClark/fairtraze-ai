@@ -31,9 +31,11 @@ import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/grou
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { RULES_OUTDATED_STUDENT_NOTICE } from "@shared/scoringRules";
-import { GroupSetupCard } from "../components/GroupSetupCard";
+import { SetupNudgeBar } from "../components/SetupNudgeBar";
+import { SetupGate } from "../components/SetupGate";
+import { readSetupSkipped, storeSetupSkipped } from "../lib/setupSkip";
 import { NextStepLine } from "../components/NextStepLine";
-import { deriveSetupProgress, setupCardVisible } from "../lib/groupSetup";
+import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
@@ -290,6 +292,13 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     [tasksQuery.data, user?.id]
   );
 
+  // Leader's first-visit setup screen; "Do this later" is remembered per user and group.
+  const [setupSkipped, setSetupSkipped] = useState(() => readSetupSkipped(uid, projectId));
+  const refreshSetup = () => {
+    void queryClient.invalidateQueries({ queryKey: groupKeys.setup(uid, projectId) });
+    void queryClient.invalidateQueries({ queryKey: groupKeys.detail(uid, projectId) });
+  };
+
   // "All set" is for the visit in which this group finished its setup, not for every later visit.
   const [sawSetupIncomplete, setSawSetupIncomplete] = useState(false);
   useEffect(() => {
@@ -413,6 +422,20 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const sourceType = assignment.sourceType;
   const visibleTabs: Tab[] = groupTabs("student", sourceType);
   const effectiveTab: Tab = resolveTab(activeTab, visibleTabs);
+
+  if (setupQuery.data && setupGateVisible(setupQuery.data, setupSkipped)) {
+    return (
+      <SetupGate
+        groupName={project.groupName}
+        projectId={projectId}
+        setup={setupQuery.data}
+        token={token}
+        onSaved={refreshSetup}
+        onSkip={() => { storeSetupSkipped(uid, projectId); setSetupSkipped(true); }}
+        onBack={() => navigate("/student")}
+      />
+    );
+  }
 
 
   return (
@@ -562,6 +585,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           </div>
         </div>
 
+        {/* Setup nudge: one slim line above the tabs on every tab while setup is incomplete */}
+        <div className={`${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} mx-auto px-6 sm:px-8`}>
+          <SetupNudgeBar projectId={projectId} setup={setupQuery.data} token={token} onSaved={refreshSetup} />
+        </div>
+
         {/* Tab bar */}
         {visibleTabs.length > 1 && (
           <div role="tablist" aria-label="Group sections" className={`${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} mx-auto px-6 sm:px-8 flex border-t border-slate-100`}>
@@ -586,19 +614,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       </div>
 
       <main className={`flex-1 ${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} w-full mx-auto px-6 sm:px-8 py-8 min-w-0`}>
-
-        {/* ── Set up your group (only while GitHub setup is incomplete) ───────── */}
-        {setupQuery.data && (
-          <GroupSetupCard
-            projectId={projectId}
-            setup={setupQuery.data}
-            token={token}
-            onSaved={() => {
-              void queryClient.invalidateQueries({ queryKey: groupKeys.setup(uid, projectId) });
-              void queryClient.invalidateQueries({ queryKey: groupKeys.detail(uid, projectId) });
-            }}
-          />
-        )}
 
         {/* Setup done: the same slot becomes one calm line (hidden when there is nothing useful to say) */}
         {effectiveTab !== "tasks" && <NextStepLine text={nextStep} onOpenTasks={nextStep?.startsWith("You have") ? () => selectTab("tasks") : undefined} />}

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { StudentGroupPage } from "./StudentGroupPage";
@@ -251,17 +252,46 @@ describe("StudentGroupPage - Set up your group", () => {
     window.history.pushState({}, "", "/student/group/1");
   });
 
-  it("shows the card at the top while setup is incomplete", () => {
-    state.setup = setup();
+  it("shows one slim nudge line (not the card) while setup is incomplete", () => {
+    state.setup = setup({ viewerHasGithubUsername: true });
     renderPage();
-    expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();
-    expect(screen.getByText("0 of 3 done")).toBeInTheDocument();
+    expect(screen.getByText("Setup 0 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for your leader to link the repository")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
   });
-  it("is on every tab, not only the report", () => {
+  it("the nudge is on every tab, and Finish setup opens the steps", async () => {
     state.setup = setup();
     window.history.pushState({}, "", "/student/group/1?tab=tasks");
     renderPage();
+    expect(screen.getByText("Add your GitHub username")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Finish setup" }));
+    expect(screen.getByRole("dialog", { name: "Finish group setup" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();
+  });
+  it("a leader without a repo link sees the setup screen first; Do this later is remembered and Finish setup still reopens it", async () => {
+    window.localStorage.clear();
+    state.setup = setup({ isLeader: true });
+    const { unmount } = renderPage();
+    expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Do this later" }));
+    expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
+    expect(screen.getByText("Paste the repository link")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Finish setup" }));
+    expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();
+    unmount();
+
+    // A later visit: the skip is remembered, so no setup screen.
+    renderPage();
+    expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Finish setup" })).toBeInTheDocument();
+    window.localStorage.clear();
+  });
+  it("a member never gets the setup screen", () => {
+    window.localStorage.clear();
+    state.setup = setup({ isLeader: false });
+    renderPage();
+    expect(screen.queryByRole("button", { name: "Do this later" })).toBeNull();
   });
   it("is gone once all three steps are done", () => {
     state.setup = setup({ repoLinked: true, repoUrl: "https://github.com/a/b", canLinkRepo: false, usernames: { linked: 3, total: 3, missingNames: [] } });
