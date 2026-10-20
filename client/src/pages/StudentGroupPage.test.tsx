@@ -5,7 +5,7 @@ import { RouterProvider } from "../router";
 import { StudentGroupPage } from "./StudentGroupPage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const state: { data: any; notes: any[]; setup: any } = { data: null, notes: [], setup: undefined };
+const state: { data: any; notes: any[]; setup: any; tasks: any[] } = { data: null, notes: [], setup: undefined, tasks: [] };
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ token: "t", user: { id: 1, name: "Ana Cruz", role: "STUDENT" } }),
@@ -17,7 +17,7 @@ vi.mock("../hooks/useGroupQueries", () => ({
   disputeKeys: { mine: () => ["d"] },
   groupKeys: { all: () => ["g"], detail: () => ["g", 1], setup: () => ["g", "setup", 1] },
   useGroupSetupQuery: () => ({ data: state.setup }),
-  useGroupTasksQuery: () => ({ data: [] }),
+  useGroupTasksQuery: () => ({ data: state.tasks }),
   useMyDisputesQuery: () => ({ data: state.notes, isPending: false }),
   useStudentGroupQuery: () => ({ data: state.data, isLoading: false, error: null }),
 }));
@@ -61,6 +61,7 @@ describe("StudentGroupPage", () => {
     state.data = groupFixture();
     state.notes = [];
     state.setup = undefined;
+    state.tasks = [];
     window.history.pushState({}, "", "/student/group/1");
   });
 
@@ -272,5 +273,30 @@ describe("StudentGroupPage - Set up your group", () => {
     renderPage();
     expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
     expect(screen.queryByText(/GitHub repository/)).toBeNull();
+  });
+
+  const done = () => setup({ repoLinked: true, repoUrl: "https://github.com/a/b", canLinkRepo: false, usernames: { linked: 3, total: 3, missingNames: [] } });
+  const task = (dueDate: string | null) => ({ id: 1, key: "FT-1", title: "Write intro", assignedToUserId: 1, status: "TODO", dueDate });
+
+  it("setup done: the card becomes one calm Next step line from existing task data", () => {
+    state.setup = done();
+    const soon = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+    state.tasks = [task(soon)];
+    renderPage();
+    expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
+    expect(screen.getByText("Next step")).toBeInTheDocument();
+    expect(screen.getByText("You have 1 task due tomorrow")).toBeInTheDocument();
+  });
+  it("setup done and nothing useful to say: no line at all", () => {
+    state.setup = done();
+    state.tasks = [task(null)];
+    renderPage();
+    expect(screen.queryByText("Next step")).toBeNull();
+  });
+  it("while setup is incomplete there is no Next step line", () => {
+    state.setup = setup();
+    state.tasks = [task("2099-01-01")];
+    renderPage();
+    expect(screen.queryByText("Next step")).toBeNull();
   });
 });

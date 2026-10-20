@@ -32,6 +32,9 @@ import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { RULES_OUTDATED_STUDENT_NOTICE } from "@shared/scoringRules";
 import { GroupSetupCard } from "../components/GroupSetupCard";
+import { NextStepLine } from "../components/NextStepLine";
+import { deriveSetupProgress, setupCardVisible } from "../lib/groupSetup";
+import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
 
@@ -286,6 +289,16 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     () => (tasksQuery.data ?? []).filter((t) => t.assignedToUserId === user?.id && t.status !== "DONE"),
     [tasksQuery.data, user?.id]
   );
+
+  // "All set" is for the visit in which this group finished its setup, not for every later visit.
+  const [sawSetupIncomplete, setSawSetupIncomplete] = useState(false);
+  useEffect(() => {
+    if (setupCardVisible(setupQuery.data)) setSawSetupIncomplete(true);
+  }, [setupQuery.data]);
+  const setupComplete = !!setupQuery.data && deriveSetupProgress(setupQuery.data).complete;
+  const nextStep = setupComplete
+    ? nextStepText({ tasks: tasksQuery.data ?? [], userId: user?.id ?? null, setupJustCompleted: sawSetupIncomplete })
+    : null;
 
   // Not a member / group gone → back to the class list.
   useEffect(() => {
@@ -586,6 +599,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             }}
           />
         )}
+
+        {/* Setup done: the same slot becomes one calm line (hidden when there is nothing useful to say) */}
+        {effectiveTab !== "tasks" && <NextStepLine text={nextStep} onOpenTasks={nextStep?.startsWith("You have") ? () => selectTab("tasks") : undefined} />}
 
         {/* ── Your tasks widget ───────────────────────────────────────────────── */}
         {myTasks.length > 0 && effectiveTab !== "tasks" && (
