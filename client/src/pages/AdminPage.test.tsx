@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -15,9 +15,12 @@ vi.mock("../context/AuthContext", () => ({
 }));
 const former = { id: 3, name: "Former member", email: "deleted-3@deleted.invalid", systemRole: "STUDENT", githubUsername: null, active: false, lockedUntil: null, createdAt: "2026-08-03T00:00:00Z", deletedAt: "2026-09-01T00:00:00Z" };
 const usersQueryCalls: Array<{ includeFormer: boolean }> = [];
+let lastParams: Record<string, unknown> = {};
 
-vi.mock("../hooks/useAdminQueries", () => ({
+vi.mock("../hooks/useAdminQueries", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../hooks/useAdminQueries")>()),
   useAdminUsersQuery: (_token: string | null, params: { includeFormer: boolean }) => {
+    lastParams = params;
     usersQueryCalls.push({ includeFormer: params.includeFormer });
     const shown = params.includeFormer ? [...users, former] : users;
     return { data: { users: shown, total: shown.length, formerCount: 1, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
@@ -27,6 +30,9 @@ vi.mock("../hooks/useAdminQueries", () => ({
 }));
 vi.mock("../components/InstructorApprovals", () => ({ InstructorApprovals: () => null }));
 vi.mock("../components/DeletionRequests", () => ({ DeletionRequests: () => null }));
+
+// The list keeps its filters in the URL, so each test starts from a clean one.
+beforeEach(() => window.history.replaceState({}, "", "/"));
 
 function renderPage() {
   return render(
@@ -127,5 +133,53 @@ describe("AdminPage role and status changes ask in a dialog", () => {
     await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Deactivate" }));
     await waitFor(() => expect(fetchFn).toHaveBeenCalledWith("/api/admin/users/2/status", expect.objectContaining({ method: "PATCH" })));
     expect(confirmSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("AdminPage filters, sort and URL", () => {
+  afterEach(() => { window.history.replaceState({}, "", "/"); vi.unstubAllGlobals(); });
+
+  it("status and last-active filters reach the query and the URL; the page resets to 1", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by status" }), "inactive");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by last active" }), "30d");
+    expect(lastParams).toMatchObject({ status: "inactive", lastActive: "30d", page: 1 });
+    await waitFor(() => expect(window.location.search).toBe("?status=inactive&active=30d"));
+  });
+
+  it("starts from the URL (shared link / reload)", () => {
+    window.history.replaceState({}, "", "/admin?role=STUDENT&status=active&sort=name&dir=asc&section=instructor-approvals");
+    renderPage();
+    expect(lastParams).toMatchObject({ roleFilter: "STUDENT", status: "active", sort: "name", dir: "asc" });
+    expect(screen.getByRole("combobox", { name: "Filter by role" })).toHaveValue("STUDENT");
+    expect(window.location.search).toContain("section=instructor-approvals");
+  });
+
+  it("column headers sort, flip direction, and expose aria-sort", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    const lastActiveTh = () => screen.getByRole("columnheader", { name: /Last active/ });
+    expect(screen.getByRole("columnheader", { name: /Joined/ })).toHaveAttribute("aria-sort", "descending");
+    await user.click(within(lastActiveTh()).getByRole("button"));
+    expect(lastParams).toMatchObject({ sort: "lastActive", dir: "desc" });
+    expect(lastActiveTh()).toHaveAttribute("aria-sort", "descending");
+    await user.click(within(lastActiveTh()).getByRole("button"));
+    expect(lastParams).toMatchObject({ sort: "lastActive", dir: "asc" });
+    await user.click(within(screen.getByRole("columnheader", { name: /Name/ })).getByRole("button"));
+    expect(lastParams).toMatchObject({ sort: "name", dir: "asc" });
+  });
+
+  it("pressing / focuses search, but not while typing in a field or with a dialog open", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    const search = screen.getByRole("searchbox", { name: /Search users/ });
+    await user.keyboard("/");
+    expect(search).toHaveFocus();
+    expect(search).toHaveValue("");
+
+    screen.getByRole("combobox", { name: "Filter by role" }).focus();
+    await user.keyboard("/");
+    expect(search).not.toHaveFocus();
   });
 });

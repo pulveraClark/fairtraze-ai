@@ -8,11 +8,15 @@ import { InstructorApprovals } from "../components/InstructorApprovals";
 import { DeletionRequests } from "../components/DeletionRequests";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { parseAdminUsersView, serializeAdminUsersView, defaultDir } from "../lib/adminUsersUrl";
+import type { AdminUsersView, UserSort } from "../lib/adminUsersUrl";
 import {
+  adminUsersKey,
   useAdminUsersQuery,
   useAdminOverviewQuery,
   useAdminDepartmentsQuery,
 } from "../hooks/useAdminQueries";
+import type { AdminUsersParams } from "../hooks/useAdminQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface UserRecord {
@@ -24,6 +28,7 @@ interface UserRecord {
   active:         boolean;
   lockedUntil:    string | null;
   createdAt:      string;
+  lastLoginAt?:   string | null;
   deletedAt?:     string | null;
 }
 
@@ -48,17 +53,37 @@ const ROLE_LABEL: Record<string, string> = {
   STUDENT:    "Student",
 };
 
+/** Column header that sorts the list: aria-sort on the th, a real button inside so it works from the keyboard. */
+function SortHeader({ label, sort, view, onSort, className = "" }: {
+  label: string; sort: UserSort; view: AdminUsersView; onSort: (s: UserSort) => void; className?: string;
+}) {
+  const active = view.sort === sort;
+  const ariaSort = active ? (view.dir === "asc" ? "ascending" : "descending") : "none";
+  return (
+    <th aria-sort={ariaSort} className={`px-5 py-1 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sort)}
+        className="inline-flex min-h-8 items-center gap-1 rounded uppercase tracking-widest hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      >
+        {label}
+        <span aria-hidden="true">{active ? (view.dir === "asc" ? "▲" : "▼") : ""}</span>
+      </button>
+    </th>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function AdminPage() {
   const { user, token }  = useAuth();
   const { navigate }     = useRouter();
 
   // ── User management state ──────────────────────────────────────────────────
-  const [searchInput,    setSearchInput]    = useState("");
-  const [search,         setSearch]         = useState("");
-  const [roleFilter,    setRoleFilter]     = useState("");
-  const [usersPage,      setUsersPage]      = useState(1);
-  const [includeFormer,  setIncludeFormer]  = useState(false);
+  // Filters, sort and page live in the URL (lib/adminUsersUrl.ts) so reload and the back button keep the view.
+  const [view,           setView]           = useState<AdminUsersView>(() => parseAdminUsersView(window.location.search));
+  const [searchInput,    setSearchInput]    = useState(view.q);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const updateView = (patch: Partial<AdminUsersView>) => setView((v) => ({ ...v, page: 1, ...patch }));
   const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -66,14 +91,31 @@ export function AdminPage() {
   // page resets to 1 only when that settled value actually changes.
   useEffect(() => {
     const t = setTimeout(() => {
-      setSearch((prev) => {
-        if (prev === searchInput) return prev;
-        setUsersPage(1);
-        return searchInput;
-      });
+      setView((v) => (v.q === searchInput ? v : { ...v, q: searchInput, page: 1 }));
     }, 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    const next = serializeAdminUsersView(view, window.location.search);
+    if (next !== window.location.search) {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${next}${window.location.hash}`);
+    }
+  }, [view]);
+
+  // "/" jumps to the search box, unless the person is already typing or a dialog is open.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   function showToast(type: "success" | "error", msg: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -82,7 +124,10 @@ export function AdminPage() {
   }
 
   const queryClient = useQueryClient();
-  const usersQueryParams = { page: usersPage, search, roleFilter, includeFormer };
+  const usersQueryParams: AdminUsersParams = {
+    page: view.page, search: view.q, roleFilter: view.role, status: view.status,
+    lastActive: view.lastActive, sort: view.sort, dir: view.dir, includeFormer: view.former,
+  };
   const usersQuery = useAdminUsersQuery(token, usersQueryParams);
   const displayedUsers = usersQuery.data?.users ?? [];
   const usersMeta = {
@@ -95,7 +140,7 @@ export function AdminPage() {
   const usersError = usersQuery.isError
     ? (usersQuery.error instanceof Error ? usersQuery.error.message : "Could not load users.")
     : "";
-  const usersQueryKey = ["admin-users", usersQueryParams.page, usersQueryParams.search, usersQueryParams.roleFilter, usersQueryParams.includeFormer] as const;
+  const usersQueryKey = adminUsersKey(usersQueryParams);
 
   function loadUsers() {
     void usersQuery.refetch();
@@ -238,6 +283,11 @@ export function AdminPage() {
 
   const selfId = user?.id ?? -1;
 
+  /** Clicking the active column flips the direction; a new column starts in its natural direction. */
+  function sortBy(sort: UserSort) {
+    updateView(view.sort === sort ? { dir: view.dir === "asc" ? "desc" : "asc" } : { sort, dir: defaultDir(sort) });
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-8">
@@ -273,12 +323,12 @@ export function AdminPage() {
                   <p className="text-xs text-slate-600">
                     {usersMeta.total} {usersMeta.total === 1 ? "user" : "users"}
                   </p>
-                  {(usersMeta.formerCount > 0 || includeFormer) && (
+                  {(usersMeta.formerCount > 0 || view.former) && (
                     <label className="ft-hit inline-flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={includeFormer}
-                        onChange={(e) => { setIncludeFormer(e.target.checked); setUsersPage(1); }}
+                        checked={view.former}
+                        onChange={(e) => updateView({ former: e.target.checked })}
                       />
                       Show former members ({usersMeta.formerCount})
                     </label>
@@ -288,21 +338,45 @@ export function AdminPage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <input
+                ref={searchRef}
                 type="search"
-                placeholder="Search name or email…"
+                aria-label="Search users (press / to focus)"
+                placeholder="Search name or email…  ( / )"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-52"
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-56 min-h-8"
               />
               <select
-                value={roleFilter}
-                onChange={(e) => { setRoleFilter(e.target.value); setUsersPage(1); }}
-                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
+                aria-label="Filter by role"
+                value={view.role}
+                onChange={(e) => updateView({ role: e.target.value as AdminUsersView["role"] })}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer min-h-8"
               >
                 <option value="">All roles</option>
                 <option value="ADMIN">Admin</option>
                 <option value="INSTRUCTOR">Instructor</option>
                 <option value="STUDENT">Student</option>
+              </select>
+              <select
+                aria-label="Filter by status"
+                value={view.status}
+                onChange={(e) => updateView({ status: e.target.value as AdminUsersView["status"] })}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer min-h-8"
+              >
+                <option value="">Any status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <select
+                aria-label="Filter by last active"
+                value={view.lastActive}
+                onChange={(e) => updateView({ lastActive: e.target.value as AdminUsersView["lastActive"] })}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer min-h-8"
+              >
+                <option value="">Any last active</option>
+                <option value="7d">Active in last 7 days</option>
+                <option value="30d">Active in last 30 days</option>
+                <option value="never">Never signed in</option>
               </select>
               <button
                 onClick={loadUsers}
@@ -396,11 +470,12 @@ export function AdminPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Name / Email</th>
+                    <SortHeader label="Name / Email" sort="name" view={view} onSort={sortBy} />
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Role</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Status</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden md:table-cell">Joined</th>
+                    <SortHeader label="Joined" sort="joined" view={view} onSort={sortBy} className="hidden md:table-cell" />
+                    <SortHeader label="Last active" sort="lastActive" view={view} onSort={sortBy} className="hidden lg:table-cell" />
                     <th className="px-5 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
@@ -469,6 +544,13 @@ export function AdminPage() {
                           </span>
                         </td>
 
+                        {/* Last active */}
+                        <td className="px-5 py-3.5 hidden lg:table-cell">
+                          <span className="text-xs text-slate-600">
+                            {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Never"}
+                          </span>
+                        </td>
+
                         {/* Actions */}
                         <td className="px-5 py-3.5">
                           {isSelf || isFormer ? (
@@ -526,11 +608,11 @@ export function AdminPage() {
             </div>
             <div className="px-6 pb-4">
               <PaginationBar
-                page={usersPage}
+                page={view.page}
                 totalPages={usersMeta.totalPages}
                 total={usersMeta.total}
                 pageSize={usersMeta.pageSize}
-                onPage={setUsersPage}
+                onPage={(page) => setView((v) => ({ ...v, page }))}
                 label="users"
               />
             </div>

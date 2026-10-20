@@ -9,6 +9,7 @@ interface UserRecord {
   active:         boolean;
   lockedUntil:    string | null;
   createdAt:      string;
+  lastLoginAt:    string | null;
   deletedAt:      string | null;
 }
 
@@ -32,18 +33,41 @@ interface DepartmentItem {
   _count:    { classSections: number };
 }
 
-/** Admin users list, keyed on the current page/search/role filter (mirrors the query string sent to the API). */
-export function useAdminUsersQuery(
-  token: string | null,
-  params: { page: number; search: string; roleFilter: string; includeFormer: boolean }
-) {
+export interface AdminUsersParams {
+  page:          number;
+  search:        string;
+  roleFilter:    string;
+  status:        string;
+  lastActive:    string;
+  sort:          string;
+  dir:           string;
+  includeFormer: boolean;
+}
+
+export const adminUsersKey = (p: AdminUsersParams) =>
+  ["admin-users", p.page, p.search, p.roleFilter, p.status, p.lastActive, p.sort, p.dir, p.includeFormer] as const;
+
+/** Query string for the users list and the CSV export (everything except paging). */
+export function adminUsersFilterQuery(p: Omit<AdminUsersParams, "page">): URLSearchParams {
+  const qs = new URLSearchParams();
+  if (p.search)     qs.set("search", p.search);
+  if (p.roleFilter) qs.set("role", p.roleFilter);
+  if (p.status)     qs.set("status", p.status);
+  if (p.lastActive) qs.set("lastActive", p.lastActive);
+  qs.set("sort", p.sort);
+  qs.set("dir", p.dir);
+  if (p.includeFormer) qs.set("includeFormer", "true");
+  return qs;
+}
+
+/** Admin users list, keyed on every filter, the sort and the page (mirrors the query string sent to the API). */
+export function useAdminUsersQuery(token: string | null, params: AdminUsersParams) {
   return useQuery({
-    queryKey: ["admin-users", params.page, params.search, params.roleFilter, params.includeFormer],
+    queryKey: adminUsersKey(params),
     queryFn: async () => {
-      const qs = new URLSearchParams({ page: String(params.page), pageSize: "10" });
-      if (params.search)    qs.set("search", params.search);
-      if (params.roleFilter) qs.set("role", params.roleFilter);
-      if (params.includeFormer) qs.set("includeFormer", "true");
+      const qs = adminUsersFilterQuery(params);
+      qs.set("page", String(params.page));
+      qs.set("pageSize", "10");
       const res  = await fetch(`/api/admin/users?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = (await res.json()) as Partial<UsersPage> & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Could not load users.");
