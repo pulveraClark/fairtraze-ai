@@ -121,10 +121,20 @@ export function Board({ board, tasks, today, onOpen, onMove, onDenied, onQuickAd
     if (!start || !cols || e === null) { setLiveColumns(null); return; }
     const task = tasksById.get(start.id);
 
-    if (e.over && task) {
+    // The card was removed by someone else (a poll) while it was in the air: say so instead of snapping back.
+    if (!task) {
+      setLiveColumns(null);
+      if (e.over) onDenied("This task changed while you were moving it. Check the board and try again.");
+      return;
+    }
+
+    if (e.over) {
       const targetStatus = containerOf(e.over.id, cols);
       if (targetStatus && !allowed(task, targetStatus)) {
+        // Dropped on a column that is not allowed: nothing moves, not even to the last allowed column it passed over.
+        setLiveColumns(null);
         onDenied(denyMessage(task, targetStatus, isLeader, assigneeName(task)) || "You cannot move this task there.");
+        return;
       } else {
         // Reorder inside the same column: the sortable strategy only previews it, so apply it now.
         const current = statusOfTask(cols, start.id);

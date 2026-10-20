@@ -430,7 +430,7 @@ describe("moving a task: optimistic, toast with Undo, conflicts", () => {
     const { server, user } = await setup();
     server.conflictOnNextMove = true;
     await user.selectOptions(screen.getByLabelText("Status"), "IN_REVIEW");
-    expect(await screen.findByText("Someone else changed this task. The latest version is shown.")).toBeInTheDocument();
+    expect(await screen.findByText("Your move was not saved: FT-15 was changed by someone else. It is in To do now.")).toBeInTheDocument();
     await waitFor(() => expect(within(column("TODO")).getByText("Changed by someone else")).toBeInTheDocument());
     expect(within(column("IN_REVIEW")).queryByText("Changed by someone else")).not.toBeInTheDocument();
   });

@@ -173,6 +173,32 @@ describe("keyboard drag and drop", () => {
     expect(onDenied).toHaveBeenCalledWith("Only the group leader can mark a task Done.");
   });
 
+  it("dropping on a column that is not allowed does not leave the card in the last allowed column", () => {
+    const tasks = [mkTask({ id: 1, title: "Mine", status: "TODO", assignedToUserId: 2, permissions: ASSIGNEE_PERMS })];
+    const board = mkBoard({ viewer: { userId: 2, isLeader: false, isMember: true, readOnly: false, canCreate: true, canManageBoard: false } }, tasks);
+    const { onMove, onDenied } = renderBoard(board, tasks);
+    drag.start(1);
+    drag.over(1, "col:IN_PROGRESS"); // allowed: the card follows the pointer
+    drag.over(1, "col:DONE");        // not allowed
+    drag.end(1, "col:DONE");
+    expect(onMove).not.toHaveBeenCalled(); // not a surprise move to In progress
+    expect(onDenied).toHaveBeenCalledWith("Only the group leader can mark a task Done.");
+  });
+
+  it("says so when the task disappeared from the board while it was being dragged", () => {
+    const tasks = [mkTask({ id: 1, title: "Gone soon" })];
+    const board = mkBoard({}, tasks);
+    const onMove = vi.fn();
+    const onDenied = vi.fn();
+    const props = { today: "2026-10-16", onOpen: vi.fn(), onMove, onDenied };
+    const { rerender } = render(<Board board={board} tasks={tasks} {...props} />);
+    drag.start(1);
+    rerender(<Board board={{ ...board, tasks: [] }} tasks={[]} {...props} />);
+    drag.end(1, "col:IN_PROGRESS");
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onDenied).toHaveBeenCalledWith(expect.stringMatching(/changed while you were moving it/i));
+  });
+
   it("cancelling a drag puts the card back and reports nothing", () => {
     const tasks = [mkTask({ id: 1, title: "First" })];
     const { onMove } = renderBoard(mkBoard({}, tasks), tasks);

@@ -71,7 +71,14 @@ export function useTaskActions(projectId: number) {
     } catch (err) {
       clearMovePending(uid, projectId, task.id);
       setBoard((b) => replaceTaskIn(b, before));
-      handleFailure(err);
+      if (err instanceof TaskApiError && err.isConflict && err.task) {
+        // Say what happened to the move and where the card is now, not just that something changed.
+        setBoard((b) => replaceTaskIn(b, err.task!));
+        showToast({ tone: "error", message: `Your move was not saved: ${err.task.key} was changed by someone else. It is in ${statusLabel(err.task.status)} now.` });
+        void refresh();
+      } else {
+        handleFailure(err);
+      }
       return null;
     }
   }, [getBoard, setBoard, queryClient, key, uid, token, projectId, refresh, showToast, showSuccessToast, handleFailure]);
