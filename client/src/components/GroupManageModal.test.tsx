@@ -28,10 +28,10 @@ vi.mock("../hooks/useGroupQueries", () => ({
   useRoleSuggestionsQuery: () => ({ data: q.suggestions, isLoading: false, error: null }),
 }));
 
-function renderModal() {
+function renderModal(onClose: () => void = () => {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <RouterProvider><GroupManageModal projectId={1} isInstructor={false} onClose={() => {}} onChanged={() => {}} /></RouterProvider>
+      <RouterProvider><GroupManageModal projectId={1} isInstructor={false} onClose={onClose} onChanged={() => {}} /></RouterProvider>
     </QueryClientProvider>,
   );
 }
@@ -71,5 +71,40 @@ describe("GroupManageModal empty sections (R7)", () => {
     expect(screen.getByText("Pending Join Requests")).toBeTruthy();
     expect(screen.getByText("Cy Tan")).toBeTruthy();
     expect(screen.getByText("Pending Role Suggestions")).toBeTruthy();
+  });
+});
+
+describe("GroupManageModal dialog semantics", () => {
+  it("is a modal dialog with a trapped focus, Esc to close, and focus back on the opener", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const { rerender } = render(<button type="button">Manage Group</button>);
+    const opener = screen.getByRole("button", { name: "Manage Group" });
+    opener.focus();
+    rerender(
+      <>
+        <button type="button">Manage Group</button>
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider><GroupManageModal projectId={1} isInstructor={false} onClose={onClose} onChanged={() => {}} /></RouterProvider>
+        </QueryClientProvider>
+      </>,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveAccessibleName(/members|manage/i);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    for (let i = 0; i < 40; i++) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    rerender(<button type="button">Manage Group</button>);
+    expect(screen.getByRole("button", { name: "Manage Group" })).toHaveFocus();
+  });
+
+  it("the close button is at least 40px (ui/Modal), not the old 24px icon", () => {
+    renderModal();
+    expect(screen.getByRole("button", { name: "Close" }).className).toContain("h-10");
   });
 });

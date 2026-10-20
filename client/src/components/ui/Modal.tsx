@@ -23,10 +23,14 @@ interface Props {
   restoreFocusTo?: HTMLElement | null;
   /** When this changes the body scrolls back to the top (e.g. another member is shown). */
   scrollKey?: string | number;
+  /** Panel width from sm up: sm 28rem (forms, confirmations), md 36rem, lg 1040px (default; detail views). Full screen below sm. */
+  size?: "sm" | "md" | "lg";
 }
 
+const SIZE_CLASS = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-[1040px]" } as const;
+
 /** Centered dialog (full screen under 640px): Esc and backdrop close it, Tab is trapped, focus returns to the opener. */
-export function Modal({ open, onClose, title, heading, actions, children, sidebar, restoreFocusTo, scrollKey }: Props) {
+export function Modal({ open, onClose, title, heading, actions, children, sidebar, restoreFocusTo, scrollKey, size = "lg" }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   useFocusTrap(open, panelRef, onClose, restoreFocusTo);
@@ -40,7 +44,7 @@ export function Modal({ open, onClose, title, heading, actions, children, sideba
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[min(92vh,56rem)] sm:max-w-[1040px] sm:rounded-xl"
+        className={`relative flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[min(92vh,56rem)] ${SIZE_CLASS[size]} sm:rounded-xl`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
           <div className="min-w-0 flex-1">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
@@ -7,6 +7,7 @@ import {
   groupKeys, useGroupManageQuery, useGroupRequestsQuery, useRoleSuggestionsQuery,
 } from "../hooks/useGroupQueries";
 import { InfoTip } from "./ui/InfoTip";
+import { Modal } from "./ui/Modal";
 import { TIPS, helpLink } from "../lib/helpText";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -130,13 +131,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const refreshGroup = () => queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
   const refreshRequests = () => queryClient.invalidateQueries({ queryKey: groupKeys.requests(uid, projectId) });
   const refreshSuggestions = () => queryClient.invalidateQueries({ queryKey: groupKeys.roleSuggestions(uid, projectId) });
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const myMembership = group?.members.find((m) => m.userId === currentUserId);
   const amLeader     = myMembership?.role === "LEADER";
@@ -873,35 +867,21 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const needsGitHub    = githubRequired && !!myMembership && !myMembership.githubUsername;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-800">{stepTitle()}</h2>
-            {group && (
-              <p className="text-xs text-slate-600 mt-0.5">{group.groupName}</p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="ft-hit text-slate-600 hover:text-slate-700 transition-colors rounded"
-            aria-label="Close"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      open
+      onClose={onClose}
+      title={stepTitle()}
+      size="sm"
+      heading={
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">{stepTitle()}</h2>
+          {group && <p className="mt-0.5 text-xs text-slate-600">{group.groupName}</p>}
         </div>
-
+      }
+    >
+      <div>
         {/* Body */}
-        <div className="px-6 py-5">
+        <div>
           {loading && (
             <div className="flex items-center gap-2 py-8 justify-center text-sm text-slate-600">
               <span className="h-4 w-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
@@ -940,6 +920,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
