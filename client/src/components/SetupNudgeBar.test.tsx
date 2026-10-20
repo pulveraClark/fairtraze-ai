@@ -38,6 +38,7 @@ describe("SetupNudgeBar", () => {
 
   it("a member sees only their own action", () => {
     render(<SetupNudgeBar projectId={7} setup={setup({ isLeader: false, canLinkRepo: true, viewerHasGithubUsername: true })} token="t" onSaved={vi.fn()} />);
-    expect(screen.getByText("Waiting for your leader to link the repository")).toBeTruthy();
+    expect(screen.getByText("Paste the repository link")).toBeTruthy();
+    expect(screen.queryByText(/leader/i)).toBeNull();
   });
 });

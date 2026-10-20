@@ -72,7 +72,7 @@ export interface SetupNudge {
 
 /**
  * The slim line shown above the tabs: progress plus the viewer's own next action. `null` when setup is complete
- * or the group is Docs-only. A member only ever sees their own action; the leader sees the link first.
+ * or the group is Docs-only. With no repo linked every member's action is to paste the link; the server lets any member add the first one.
  */
 export function setupNudge(setup: GroupSetup): SetupNudge | null {
   const progress = deriveSetupProgress(setup);
@@ -80,13 +80,9 @@ export function setupNudge(setup: GroupSetup): SetupNudge | null {
   const label = `Setup ${progress.doneCount} of ${progress.total}`;
   const waitingForOthers = "Waiting for other members to add their GitHub username";
 
-  if (setup.isLeader) {
-    if (!setup.repoLinked) return { label, action: "Paste the repository link" };
-    if (!setup.viewerHasGithubUsername) return { label, action: "Add your GitHub username" };
-    return { label, action: waitingForOthers };
-  }
+  // Any member can add the first link (the server allows it), so with no repo everyone's action is the same.
+  if (!setup.repoLinked) return { label, action: "Paste the repository link" };
   if (!setup.viewerHasGithubUsername) return { label, action: "Add your GitHub username" };
-  if (!setup.repoLinked) return { label, action: "Waiting for your leader to link the repository" };
   return { label, action: waitingForOthers };
 }
 

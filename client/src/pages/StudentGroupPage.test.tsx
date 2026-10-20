@@ -256,14 +256,14 @@ describe("StudentGroupPage - Set up your group", () => {
     state.setup = setup({ viewerHasGithubUsername: true });
     renderPage();
     expect(screen.getByText("Setup 0 of 3")).toBeInTheDocument();
-    expect(screen.getByText("Waiting for your leader to link the repository")).toBeInTheDocument();
+    expect(screen.getByText("Paste the repository link")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
   });
   it("the nudge is on every tab, and Finish setup opens the steps", async () => {
     state.setup = setup();
     window.history.pushState({}, "", "/student/group/1?tab=tasks");
     renderPage();
-    expect(screen.getByText("Add your GitHub username")).toBeInTheDocument();
+    expect(screen.getByText("Paste the repository link")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Finish setup" }));
     expect(screen.getByRole("dialog", { name: "Finish group setup" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();

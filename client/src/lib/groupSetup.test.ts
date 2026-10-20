@@ -79,18 +79,21 @@ describe("setupNudge matrix", () => {
     expect(setupNudge(setup({ needsRepo: false }))).toBeNull();
     expect(setupNudge(setup({ ...linked, usernames: { linked: 5, total: 5, missingNames: [] } }))).toBeNull();
   });
-  it("leader: link first, then own username, then waiting", () => {
+  it("no repo linked: everyone's action is to paste the link, even before adding their username", () => {
     expect(setupNudge(setup(lead))).toEqual({ label: "Setup 0 of 3", action: "Paste the repository link" });
-    expect(setupNudge(setup({ ...lead, ...linked }))).toEqual({ label: "Setup 2 of 3", action: "Add your GitHub username" });
-    expect(setupNudge(setup({ ...lead, ...linked, viewerHasGithubUsername: true }))?.action).toMatch(/^Waiting for other members/);
+    expect(setupNudge(setup())).toEqual({ label: "Setup 0 of 3", action: "Paste the repository link" });
+    expect(setupNudge(setup({ viewerHasGithubUsername: true }))?.action).toBe("Paste the repository link");
   });
-  it("member: own username first, then waiting for the leader, then others", () => {
-    expect(setupNudge(setup())?.action).toBe("Add your GitHub username");
-    expect(setupNudge(setup({ viewerHasGithubUsername: true }))?.action).toBe("Waiting for your leader to link the repository");
+  it("repo linked: own username first, then waiting for the others (leader and member alike)", () => {
+    expect(setupNudge(setup({ ...lead, ...linked }))).toEqual({ label: "Setup 2 of 3", action: "Add your GitHub username" });
+    expect(setupNudge(setup({ ...linked }))?.action).toBe("Add your GitHub username");
+    expect(setupNudge(setup({ ...lead, ...linked, viewerHasGithubUsername: true }))?.action).toMatch(/^Waiting for other members/);
     expect(setupNudge(setup({ ...linked, viewerHasGithubUsername: true }))?.action).toMatch(/^Waiting for other members/);
   });
-  it("a member never sees the leader's action", () => {
-    expect(setupNudge(setup({ canLinkRepo: true }))?.action).not.toMatch(/Paste/);
+  it("never tells anyone to wait for the leader", () => {
+    for (const s of [setup(), setup(lead), setup(linked), setup({ viewerHasGithubUsername: true })]) {
+      expect(setupNudge(s)?.action).not.toMatch(/leader/i);
+    }
   });
 });
 
