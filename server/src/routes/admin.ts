@@ -305,125 +305,25 @@ adminRouter.post("/api/admin/deletion-requests/:id/reject", ...requireRole("ADMI
 });
 
 // ── GET /api/admin/overview ───────────────────────────────────────────────────
-// Institution-wide aggregates from stored DB data only. No GitHub/Gemini calls.
+// Account counts only. The admin's job is accounts and the system: no class, group,
+// report or dispute figures are returned here. Former (anonymized) members are not counted.
 
 adminRouter.get("/api/admin/overview", ...requireRole("ADMIN"), async (_req, res) => {
-  const [roleCounts, classSectionCount, openDisputesCount, projects] = await Promise.all([
-    prisma.user.groupBy({ by: ["systemRole"], _count: { id: true } }),
-    prisma.classSection.count(),
-    prisma.dispute.count({ where: { status: "OPEN" } }),
-    prisma.project.findMany({
-      select: {
-        id:              true,
-        groupName:       true,
-        assignmentLabel: true,
-        assignmentId:    true,
-        reports: {
-          select:  { gini: true, teamHealth: true, content: true, generatedAt: true },
-          orderBy: { generatedAt: "desc" },
-          take:    1,
-        },
-        assignment: {
-          select: {
-            classSection: {
-              select: {
-                subjectCode: true,
-                edpCode:     true,
-                subjectName: true,
-                instructor:  { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
+  const [roleCounts, inactive] = await Promise.all([
+    prisma.user.groupBy({ by: ["systemRole"], where: { deletedAt: null }, _count: { id: true } }),
+    prisma.user.count({ where: { deletedAt: null, active: false } }),
   ]);
 
-  const users = { total: 0, admins: 0, instructors: 0, students: 0 };
+  const users = { total: 0, admins: 0, instructors: 0, students: 0, active: 0, inactive };
   for (const rc of roleCounts) {
     users.total += rc._count.id;
     if (rc.systemRole === "ADMIN")      users.admins      = rc._count.id;
     if (rc.systemRole === "INSTRUCTOR") users.instructors = rc._count.id;
     if (rc.systemRole === "STUDENT")    users.students    = rc._count.id;
   }
+  users.active = users.total - inactive;
 
-  const totalProjects = projects.length;
-  const totalGroups   = projects.filter((p) => p.assignmentId !== null).length;
-  let   analyzedGroups = 0;
-
-  const healthDist = { healthy: 0, moderateRisk: 0, highRisk: 0 };
-  const flagTotals = { inactive: 0, freeRider: 0, overload: 0, deadlineDriven: 0 };
-
-  interface AtRiskGroup {
-    projectId:      number;
-    groupName:      string;
-    classDisplay:   string;
-    subjectName:    string;
-    instructorName: string;
-    teamHealth:     string;
-    gini:           number | null;
-    analyzedAt:     Date;
-  }
-
-  const atRiskGroups: AtRiskGroup[] = [];
-
-  for (const project of projects) {
-    const report = project.reports[0];
-    if (!report) continue;
-    analyzedGroups++;
-
-    if      (report.teamHealth === "Healthy")       healthDist.healthy++;
-    else if (report.teamHealth === "Moderate Risk") healthDist.moderateRisk++;
-    else if (report.teamHealth === "High Risk")     healthDist.highRisk++;
-
-    let hasFlags = false;
-    if (report.content) {
-      try {
-        const parsed = JSON.parse(report.content) as { members?: Array<{ flags?: string[] }> };
-        for (const member of parsed.members ?? []) {
-          for (const flag of member.flags ?? []) {
-            hasFlags = true;
-            if      (flag === "inactive")       flagTotals.inactive++;
-            else if (flag === "free-rider")     flagTotals.freeRider++;
-            else if (flag === "overload")       flagTotals.overload++;
-            else if (flag === "deadline-driven") flagTotals.deadlineDriven++;
-          }
-        }
-      } catch { /* malformed content — skip */ }
-    }
-
-    if (report.teamHealth === "High Risk" || report.teamHealth === "Moderate Risk" || hasFlags) {
-      const cs = project.assignment?.classSection;
-      const classDisplay = cs
-        ? [cs.subjectCode, cs.edpCode].filter(Boolean).join(" ")
-        : project.assignmentLabel.split("—")[0]?.trim() ?? "";
-
-      atRiskGroups.push({
-        projectId:      project.id,
-        groupName:      project.groupName || `Group ${project.id}`,
-        classDisplay,
-        subjectName:    cs?.subjectName ?? "",
-        instructorName: cs?.instructor?.name ?? "Unknown",
-        teamHealth:     report.teamHealth ?? "Unknown",
-        gini:           report.gini,
-        analyzedAt:     report.generatedAt,
-      });
-    }
-  }
-
-  atRiskGroups.sort((a, b) => b.analyzedAt.getTime() - a.analyzedAt.getTime());
-
-  res.json({
-    users,
-    classSections:      classSectionCount,
-    totalProjects,
-    totalGroups,
-    analyzedGroups,
-    healthDistribution: healthDist,
-    flagTotals,
-    atRiskGroups,
-    openDisputesCount,
-  });
+  res.json({ users });
 });
 
 // ── GET /api/admin/departments ────────────────────────────────────────────────

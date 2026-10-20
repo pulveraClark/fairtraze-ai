@@ -35,15 +35,6 @@ interface DepartmentItem {
   _count:    { classSections: number };
 }
 
-interface OverviewData {
-  users:              { total: number; admins: number; instructors: number; students: number };
-  classSections:      number;
-  totalProjects:      number;
-  totalGroups:        number;
-  analyzedGroups:     number;
-  openDisputesCount:  number;
-}
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 const ROLE_BADGE: Record<string, string> = {
   ADMIN:      "text-violet-700 bg-violet-50 border-violet-200",
@@ -256,7 +247,7 @@ export function AdminPage() {
           <div>
             <h1 className="text-xl font-semibold text-slate-800">Admin Panel</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              User management and institution overview.
+              User accounts and system settings.
             </p>
           </div>
           <button
@@ -551,7 +542,7 @@ export function AdminPage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
-              Institution Overview
+              Accounts overview
             </h2>
             <button
               onClick={loadOverview}
@@ -563,8 +554,8 @@ export function AdminPage() {
 
           {/* Stat cards */}
           {overviewLoading && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 text-center animate-pulse">
                   <div className="h-7 bg-slate-100 rounded mb-2" />
                   <div className="h-3 bg-slate-100 rounded w-2/3 mx-auto" />
@@ -582,27 +573,20 @@ export function AdminPage() {
 
           {!overviewLoading && !overviewError && overview && (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
-                  { label: "Instructors", value: overview.users.instructors, textCls: "text-indigo-600", borderCls: "border-indigo-200" },
-                  { label: "Students",    value: overview.users.students,    textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Classes",     value: overview.classSections,     textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Projects",    value: overview.totalProjects,     textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Groups",      value: overview.totalGroups,       textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Analyzed",    value: overview.analyzedGroups,    textCls: "text-emerald-700", borderCls: "border-emerald-200" },
+                  { label: "Admins",      value: overview.users.admins,      textCls: "text-violet-700",  borderCls: "border-violet-200" },
+                  { label: "Instructors", value: overview.users.instructors, textCls: "text-indigo-700",  borderCls: "border-indigo-200" },
+                  { label: "Students",    value: overview.users.students,    textCls: "text-slate-700",   borderCls: "border-slate-200"  },
+                  { label: "Active",      value: overview.users.active,      textCls: "text-emerald-700", borderCls: "border-emerald-200" },
+                  { label: "Inactive",    value: overview.users.inactive,    textCls: "text-slate-700",   borderCls: "border-slate-200"  },
                 ].map(({ label, value, textCls, borderCls }) => (
                   <div key={label} className={`bg-white border ${borderCls} rounded-xl p-4 text-center`}>
                     <p className={`text-3xl font-bold ${textCls}`}>{value}</p>
-                    <p className="text-xs text-slate-500 mt-1">{label}</p>
+                    <p className="text-xs text-slate-600 mt-1">{label}</p>
                   </div>
                 ))}
               </div>
-
-              {overview.openDisputesCount > 0 && (
-                <p className="text-xs text-amber-800 mt-3 px-1">
-                  {overview.openDisputesCount} open dispute{overview.openDisputesCount !== 1 ? "s" : ""} institution-wide
-                </p>
-              )}
             </>
           )}
         </section>

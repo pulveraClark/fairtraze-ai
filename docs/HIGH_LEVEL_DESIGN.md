@@ -251,7 +251,7 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 | Logic | Detail |
 |---|---|
 | State | `displayedUsers`, `search`, `roleFilter`, `usersPage`, `usersLoading`, `usersError`, `usersMeta`, `overview`, `classes`, `toast` |
-| APIs | `GET /api/admin/users?page=&search=&role=`; `PATCH /api/admin/users/:userId/role`; `GET /api/admin/overview` (feeds overview stats only); `GET`/`POST /api/admin/departments` |
+| APIs | `GET /api/admin/users?page=&search=&role=`; `PATCH /api/admin/users/:userId/role`; `GET /api/admin/overview` (account counts only); `GET`/`POST /api/admin/departments` |
 | Navigation | Audit Log → `/admin/audit` |
 | Conditional | Role dropdown triggers confirmation before applying; toast auto-hides; overview stats gated on data load |
 

@@ -20,27 +20,8 @@ interface UsersPage {
   pageSize:   number;
 }
 
-interface AtRiskGroup {
-  projectId:      number;
-  groupName:      string;
-  classDisplay:   string;
-  subjectName:    string;
-  instructorName: string;
-  teamHealth:     string;
-  gini:           number | null;
-  analyzedAt:     string;
-}
-
 interface OverviewData {
-  users:              { total: number; admins: number; instructors: number; students: number };
-  classSections:      number;
-  totalProjects:      number;
-  totalGroups:        number;
-  analyzedGroups:     number;
-  healthDistribution: { healthy: number; moderateRisk: number; highRisk: number };
-  flagTotals:         { inactive: number; freeRider: number; overload: number; deadlineDriven: number };
-  atRiskGroups:       AtRiskGroup[];
-  openDisputesCount:  number;
+  users: { total: number; admins: number; instructors: number; students: number; active: number; inactive: number };
 }
 
 interface DepartmentItem {
