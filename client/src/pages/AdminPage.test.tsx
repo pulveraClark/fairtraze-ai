@@ -13,8 +13,15 @@ const users = [
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ token: "t", user: { id: 1, name: "Admin Self", systemRole: "ADMIN" } }),
 }));
+const former = { id: 3, name: "Former member", email: "deleted-3@deleted.invalid", systemRole: "STUDENT", githubUsername: null, active: false, lockedUntil: null, createdAt: "2026-08-03T00:00:00Z", deletedAt: "2026-09-01T00:00:00Z" };
+const usersQueryCalls: Array<{ includeFormer: boolean }> = [];
+
 vi.mock("../hooks/useAdminQueries", () => ({
-  useAdminUsersQuery: () => ({ data: { users, total: 2, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false, refetch: vi.fn() }),
+  useAdminUsersQuery: (_token: string | null, params: { includeFormer: boolean }) => {
+    usersQueryCalls.push({ includeFormer: params.includeFormer });
+    const shown = params.includeFormer ? [...users, former] : users;
+    return { data: { users: shown, total: shown.length, formerCount: 1, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
+  },
   useAdminOverviewQuery: () => ({ data: null, isLoading: false, isError: false }),
   useAdminClassesQuery: () => ({ data: { classes: [], total: 0, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false }),
   useAdminDepartmentsQuery: () => ({ data: [], isLoading: false, isError: false }),
@@ -60,6 +67,31 @@ describe("AdminPage user rows (16)", () => {
   it("the signed-in admin's own row has no menu", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: "More actions for Admin Self" })).not.toBeInTheDocument();
+  });
+});
+
+describe("AdminPage former members", () => {
+  it("hides them by default, shows the count toggle, and requests includeFormer when switched on", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    expect(screen.getByText("2 users")).toBeInTheDocument();
+    expect(screen.queryByText("Deleted account")).not.toBeInTheDocument();
+    expect(usersQueryCalls.at(-1)).toEqual({ includeFormer: false });
+
+    await user.click(screen.getByRole("checkbox", { name: "Show former members (1)" }));
+    expect(usersQueryCalls.at(-1)).toEqual({ includeFormer: true });
+    expect(screen.getByText("3 users")).toBeInTheDocument();
+  });
+
+  it("shows a former member as 'Deleted account' with no role select, Activate button or menu", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Show former members (1)" }));
+    const row = screen.getByText("Former member").closest("tr")!;
+    expect(within(row).getByText("Deleted account")).toBeInTheDocument();
+    expect(within(row).queryByTitle("Change role")).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Activate" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
   });
 });
 

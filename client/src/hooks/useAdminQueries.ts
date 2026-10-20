@@ -9,11 +9,13 @@ interface UserRecord {
   active:         boolean;
   lockedUntil:    string | null;
   createdAt:      string;
+  deletedAt:      string | null;
 }
 
 interface UsersPage {
-  users:      UserRecord[];
-  total:      number;
+  users:       UserRecord[];
+  total:       number;
+  formerCount: number;
   totalPages: number;
   pageSize:   number;
 }
@@ -64,20 +66,22 @@ interface DepartmentItem {
 /** Admin users list, keyed on the current page/search/role filter (mirrors the query string sent to the API). */
 export function useAdminUsersQuery(
   token: string | null,
-  params: { page: number; search: string; roleFilter: string }
+  params: { page: number; search: string; roleFilter: string; includeFormer: boolean }
 ) {
   return useQuery({
-    queryKey: ["admin-users", params.page, params.search, params.roleFilter],
+    queryKey: ["admin-users", params.page, params.search, params.roleFilter, params.includeFormer],
     queryFn: async () => {
       const qs = new URLSearchParams({ page: String(params.page), pageSize: "10" });
       if (params.search)    qs.set("search", params.search);
       if (params.roleFilter) qs.set("role", params.roleFilter);
+      if (params.includeFormer) qs.set("includeFormer", "true");
       const res  = await fetch(`/api/admin/users?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = (await res.json()) as Partial<UsersPage> & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Could not load users.");
       return {
         users:      json.users ?? [],
         total:      json.total ?? 0,
+        formerCount: json.formerCount ?? 0,
         totalPages: json.totalPages ?? 1,
         pageSize:   json.pageSize ?? 10,
       } satisfies UsersPage;

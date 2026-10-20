@@ -26,6 +26,7 @@ interface UserRecord {
   active:         boolean;
   lockedUntil:    string | null;
   createdAt:      string;
+  deletedAt?:     string | null;
 }
 
 interface ClassSectionItem {
@@ -80,6 +81,7 @@ export function AdminPage() {
   const [search,         setSearch]         = useState("");
   const [roleFilter,    setRoleFilter]     = useState("");
   const [usersPage,      setUsersPage]      = useState(1);
+  const [includeFormer,  setIncludeFormer]  = useState(false);
   const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -103,11 +105,12 @@ export function AdminPage() {
   }
 
   const queryClient = useQueryClient();
-  const usersQueryParams = { page: usersPage, search, roleFilter };
+  const usersQueryParams = { page: usersPage, search, roleFilter, includeFormer };
   const usersQuery = useAdminUsersQuery(token, usersQueryParams);
   const displayedUsers = usersQuery.data?.users ?? [];
   const usersMeta = {
     total:      usersQuery.data?.total ?? 0,
+    formerCount: usersQuery.data?.formerCount ?? 0,
     totalPages: usersQuery.data?.totalPages ?? 1,
     pageSize:   usersQuery.data?.pageSize ?? 10,
   };
@@ -115,7 +118,7 @@ export function AdminPage() {
   const usersError = usersQuery.isError
     ? (usersQuery.error instanceof Error ? usersQuery.error.message : "Could not load users.")
     : "";
-  const usersQueryKey = ["admin-users", usersQueryParams.page, usersQueryParams.search, usersQueryParams.roleFilter] as const;
+  const usersQueryKey = ["admin-users", usersQueryParams.page, usersQueryParams.search, usersQueryParams.roleFilter, usersQueryParams.includeFormer] as const;
 
   function loadUsers() {
     void usersQuery.refetch();
@@ -298,9 +301,21 @@ export function AdminPage() {
             <div>
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">User Management</h2>
               {!usersLoading && !usersError && (
-                <p className="text-xs text-slate-600 mt-0.5">
-                  {usersMeta.total} total
-                </p>
+                <div className="mt-0.5 flex items-center gap-3 flex-wrap">
+                  <p className="text-xs text-slate-600">
+                    {usersMeta.total} {usersMeta.total === 1 ? "user" : "users"}
+                  </p>
+                  {(usersMeta.formerCount > 0 || includeFormer) && (
+                    <label className="ft-hit inline-flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeFormer}
+                        onChange={(e) => { setIncludeFormer(e.target.checked); setUsersPage(1); }}
+                      />
+                      Show former members ({usersMeta.formerCount})
+                    </label>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -425,8 +440,9 @@ export function AdminPage() {
                   {displayedUsers.map((u, i) => {
                     const isSelf = u.id === selfId;
                     const stripe = i % 2 === 0 ? "bg-white" : "bg-gray-50";
+                    const isFormer = !!u.deletedAt;
                     return (
-                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-100 ${stripe} ${!u.active ? "opacity-50" : ""}`}>
+                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-100 ${stripe} ${isFormer ? "text-slate-500" : !u.active ? "opacity-50" : ""}`}>
 
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">
@@ -454,13 +470,19 @@ export function AdminPage() {
                         {/* Status */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
-                              u.active
-                                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                                : "text-slate-500 bg-slate-100 border-slate-200"
-                            }`}>
-                              {u.active ? "Active" : "Inactive"}
-                            </span>
+                            {isFormer ? (
+                              <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-600 bg-slate-100 border-slate-300">
+                                Deleted account
+                              </span>
+                            ) : (
+                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
+                                u.active
+                                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                  : "text-slate-500 bg-slate-100 border-slate-200"
+                              }`}>
+                                {u.active ? "Active" : "Inactive"}
+                              </span>
+                            )}
                             {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
                               <span
                                 className="text-xs font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
@@ -481,7 +503,7 @@ export function AdminPage() {
 
                         {/* Actions */}
                         <td className="px-5 py-3.5">
-                          {isSelf ? (
+                          {isSelf || isFormer ? (
                             <span className="text-xs text-slate-600 block text-right">—</span>
                           ) : (
                             <div className="flex items-center justify-end gap-2 flex-wrap">

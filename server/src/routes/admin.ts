@@ -21,6 +21,7 @@ const USER_SELECT = {
   active:         true,
   lockedUntil:    true,
   createdAt:      true,
+  deletedAt:      true,
 } as const;
 
 // Fetch the requesting actor's display name for audit entries.
@@ -31,7 +32,7 @@ async function getActorName(actorId: number): Promise<string> {
 
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 // List all users with server-side pagination.
-// Query params: search, role, page (default 1), pageSize (default 20).
+// Query params: search, role, includeFormer (default false), page (default 1), pageSize (default 20).
 
 adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) => {
   const search    = typeof req.query.search === "string" ? req.query.search.trim() : "";
@@ -41,7 +42,11 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
   const page     = Math.max(1, parseInt(String(req.query.page     ?? "1"),  10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
 
-  const where = {
+  // Former members are anonymized tombstones (User.deletedAt, set by lib/anonymizeUser.ts).
+  // Hidden unless includeFormer=true; total and pagination count only what is shown.
+  const includeFormer = req.query.includeFormer === "true";
+
+  const filters = {
     ...(roleParsed.success ? { systemRole: roleParsed.data } : {}),
     ...(search ? {
       OR: [
@@ -50,8 +55,9 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
       ],
     } : {}),
   };
+  const where = includeFormer ? filters : { ...filters, deletedAt: null };
 
-  const [users, total] = await Promise.all([
+  const [users, total, formerCount] = await Promise.all([
     prisma.user.findMany({
       where,
       select:  USER_SELECT,
@@ -60,9 +66,11 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
       take:    pageSize,
     }),
     prisma.user.count({ where }),
+    // For the "Show former members (n)" toggle; same search/role filters, regardless of includeFormer.
+    prisma.user.count({ where: { ...filters, deletedAt: { not: null } } }),
   ]);
 
-  res.json({ users, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+  res.json({ users, total, formerCount, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
 });
 
 // ── PATCH /api/admin/users/:id/role ──────────────────────────────────────────
