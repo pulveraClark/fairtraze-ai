@@ -10,6 +10,8 @@ import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/Clas
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
+import { joinInviteUrl } from "../lib/joinInvite";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectsSummaryQuery, useClassesListQuery } from "../hooks/useSharedQueries";
 
@@ -236,12 +238,13 @@ function CreateClassModal({
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Scan to join instantly</label>
               <div className="flex flex-col items-center gap-2.5 py-5 px-4 bg-slate-50 border border-slate-100 rounded-xl">
                 <QRCodeSVG
-                  value={`${window.location.origin}/join?code=${encodeURIComponent(createdCode)}`}
+                  value={joinInviteUrl(createdCode)}
                   size={148}
                   level="M"
                   bgColor="#f8fafc"
                   fgColor="#312e81"
                 />
+                <CopyInviteLinkButton code={createdCode} />
                 <p className="text-xs text-slate-600 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
               </div>
             </div>

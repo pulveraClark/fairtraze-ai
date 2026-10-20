@@ -12,6 +12,8 @@ import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
+import { joinInviteUrl } from "../lib/joinInvite";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { BriefEditor } from "../components/BriefEditor";
 import { EditAssignmentModal, UploadFailurePanel } from "../components/EditAssignmentModal";
@@ -387,6 +389,8 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
         )}
       </button>
 
+      <CopyInviteLinkButton code={code} className="ml-1" />
+
       {/* QR reveal button */}
       <button
         onClick={() => setShowQR((v) => !v)}
@@ -405,7 +409,7 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
       {showQR && (
         <div className="absolute top-full left-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col items-center gap-2.5 min-w-[188px]">
           <QRCodeSVG
-            value={`${window.location.origin}/join?code=${encodeURIComponent(code)}`}
+            value={joinInviteUrl(code)}
             size={148}
             level="M"
             bgColor="#ffffff"

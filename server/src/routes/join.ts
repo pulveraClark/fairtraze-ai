@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
-import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
+import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify } from "../lib/notify.js";
 import type {
@@ -15,6 +15,25 @@ import { contentHasNoRecordedActivity, hasNoRecordedActivity, quietSource } from
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const joinRouter = Router();
+
+// ─── GET /api/join/class/:code ────────────────────────────────────────────────
+// Preview for an invite link: which class the code belongs to and whether the caller is already in it.
+// Read-only (never enrolls); any signed-in role may ask, only a student can be "already enrolled".
+joinRouter.get("/api/join/class/:code", requireAuth, async (req, res) => {
+  const code = String(req.params.code ?? "").trim().toUpperCase();
+  const cls = code
+    ? await prisma.classSection.findUnique({ where: { joinCode: code }, select: { id: true, subjectCode: true, subjectName: true } })
+    : null;
+  if (!cls) {
+    res.status(404).json({ error: "Invalid join code. Check the code and try again." });
+    return;
+  }
+  const enrollment = await prisma.classEnrollment.findUnique({
+    where: { userId_classSectionId: { userId: req.user!.sub, classSectionId: cls.id } },
+    select: { id: true },
+  });
+  res.json({ classId: cls.id, className: `${cls.subjectCode} — ${cls.subjectName}`, alreadyEnrolled: !!enrollment });
+});
 
 // ─── POST /api/join/class ──────────────────────────────────────────────────────
 // Enroll a student in a class using the class-level join code.

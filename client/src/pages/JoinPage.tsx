@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { roleHome } from "../lib/roleHome";
-import { BUTTON_PRIMARY } from "../components/ui/styles";
+import { BUTTON_PRIMARY, BUTTON_SECONDARY } from "../components/ui/styles";
+import { useSubmitGuard } from "../hooks/useSubmitGuard";
 
 function Spinner() {
   return (
@@ -50,19 +51,40 @@ export function NoCodeView({ onSubmit, onHome, homeLabel }: { onSubmit: (code: s
   );
 }
 
+interface JoinPreview { classId: number; className: string; alreadyEnrolled: boolean }
+
+function Shell({ title, code, children }: { title: string; code: string; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+            <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+            <p className="text-sm text-slate-600 mt-0.5">
+              Code: <span className="font-mono font-bold text-indigo-700">{code}</span>
+            </p>
+          </div>
+          <div className="px-6 py-6">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function JoinPage() {
   const { user, token, loading: authLoading } = useAuth();
   const { navigate } = useRouter();
 
   const code = new URLSearchParams(window.location.search).get("code") ?? "";
 
-  const [enrolling, setEnrolling] = useState(false);
-  const [done,      setDone]      = useState(false);
-  const [enrolled,  setEnrolled]  = useState<{ subjectCode: string; subjectName: string } | null>(null);
-  const [error,     setError]     = useState<string | null>(null);
+  const [preview, setPreview] = useState<JoinPreview | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [enrolled, setEnrolled] = useState<{ subjectCode: string; subjectName: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const { submitting: enrolling, run } = useSubmitGuard();
 
-  const enrollAttempted = useRef(false);
+  const isStudent = user?.systemRole === "STUDENT";
 
   useEffect(() => {
     if (authLoading) return;
@@ -77,33 +99,45 @@ export function JoinPage() {
       return;
     }
 
-    if (user.systemRole !== "STUDENT") return; // handled in render
-    if (!code || enrollAttempted.current) return;
+    if (!isStudent || !code) return; // instructors and admins get a message in render
 
-    enrollAttempted.current = true;
-    setEnrolling(true);
-
+    // Look the class up. This never enrolls: the student confirms below.
     let cancelled = false;
-    fetch("/api/join/class", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body:    JSON.stringify({ joinCode: code.trim() }),
-    })
+    setLoadingPreview(true);
+    fetch(`/api/join/class/${encodeURIComponent(code.trim())}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (res) => {
         if (cancelled) return;
-        const data = await res.json() as { error?: string; subjectCode?: string; subjectName?: string };
+        const data = await res.json().catch(() => ({})) as Partial<JoinPreview> & { error?: string };
+        if (!res.ok) { setError(data.error ?? "Could not check this code. Try again."); return; }
+        if (data.alreadyEnrolled) { navigate(`/student/class/${data.classId}`); return; }
+        setPreview(data as JoinPreview);
+      })
+      .catch(() => { if (!cancelled) setError("We couldn't reach the server. Check your connection and try again."); })
+      .finally(() => { if (!cancelled) setLoadingPreview(false); });
+
+    return () => { cancelled = true; };
+  }, [authLoading, user, isStudent, code, token, navigate]);
+
+  async function handleJoin() {
+    await run(async () => {
+      setError(null);
+      try {
+        const res = await fetch("/api/join/class", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ joinCode: code.trim() }),
+        });
+        const data = await res.json().catch(() => ({})) as { error?: string; subjectCode?: string; subjectName?: string };
         if (!res.ok) {
           setError(data.error ?? "Could not enroll. The code may be invalid or already used.");
         } else {
           setEnrolled({ subjectCode: data.subjectCode!, subjectName: data.subjectName! });
-          setDone(true);
         }
-      })
-      .catch(() => { if (!cancelled) setError("Network error — is the server running?"); })
-      .finally(() => { if (!cancelled) setEnrolling(false); });
-
-    return () => { cancelled = true; };
-  }, [authLoading, user, code, token, navigate]);
+      } catch {
+        setError("We couldn't reach the server. Check your connection and try again.");
+      }
+    });
+  }
 
   // Loading / about to redirect
   if (authLoading || redirecting) return <Spinner />;
@@ -119,95 +153,59 @@ export function JoinPage() {
     );
   }
 
-  // Instructor / Admin — informational message only
+  // Instructor / Admin — informational message only, never joins
   if (user && (user.systemRole === "INSTRUCTOR" || user.systemRole === "ADMIN")) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto">
-              <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">This is a student join link</p>
-              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Code <span className="font-mono font-bold text-indigo-600">{code}</span> lets students enroll in your class.
-                You're signed in as {user.systemRole === "INSTRUCTOR" ? "an instructor" : "an admin"} — share this QR with your students.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate(user.systemRole === "ADMIN" ? "/admin" : "/dashboard")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              Go to Dashboard
-            </button>
-          </div>
+      <Shell title="This is a student join link" code={code}>
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-slate-800 leading-relaxed">
+            This link lets students join a class. You're signed in as {user.systemRole === "INSTRUCTOR" ? "an instructor" : "an admin"}, so nothing was joined.
+          </p>
+          <button onClick={() => navigate(user.systemRole === "ADMIN" ? "/admin" : "/dashboard")} className={BUTTON_PRIMARY}>
+            Go to dashboard
+          </button>
         </div>
-      </div>
+      </Shell>
     );
   }
 
-  // Student — enrolling / success / error
+  // Student
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-6 pt-5 pb-4 border-b border-slate-100">
-            <h1 className="text-xl font-semibold text-slate-900">Joining a Class</h1>
-            <p className="text-sm text-slate-600 mt-0.5">
-              Code: <span className="font-mono font-bold text-indigo-600">{code}</span>
-            </p>
-          </div>
+    <Shell title={enrolled ? "You're enrolled" : "Join a class"} code={code}>
+      {loadingPreview && !error && (
+        <div className="text-center space-y-3 py-4" role="status">
+          <span className="h-8 w-8 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin inline-block" />
+          <p className="text-sm text-slate-800">Checking the code…</p>
+        </div>
+      )}
 
-          <div className="px-6 py-6">
-            {enrolling && (
-              <div className="text-center space-y-3 py-4">
-                <span className="h-8 w-8 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin inline-block" />
-                <p className="text-sm text-slate-600">Enrolling you in this class…</p>
-              </div>
-            )}
-
-            {done && enrolled && (
-              <div className="text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-                  <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">You're enrolled!</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {enrolled.subjectCode} — {enrolled.subjectName}
-                  </p>
-                  <p className="text-xs text-slate-600 mt-1">Open the class to create or join a group.</p>
-                </div>
-                <button
-                  onClick={() => navigate("/student")}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
-                >
-                  Go to My Classes
-                </button>
-              </div>
-            )}
-
-            {error && !enrolling && (
-              <div className="space-y-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
-                  {error}
-                </div>
-                <button
-                  onClick={() => navigate("/student")}
-                  className="w-full py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
-                >
-                  Go to My Classes
-                </button>
-              </div>
-            )}
+      {preview && !enrolled && (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-900">Join <span className="font-semibold">{preview.className}</span>?</p>
+          {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void handleJoin()} disabled={enrolling} className={BUTTON_PRIMARY}>
+              {enrolling ? "Joining…" : "Join"}
+            </button>
+            <button type="button" onClick={() => navigate("/student")} disabled={enrolling} className={BUTTON_SECONDARY}>Not now</button>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {enrolled && (
+        <div className="space-y-4 text-center">
+          <p className="text-sm font-semibold text-slate-900">{enrolled.subjectCode} — {enrolled.subjectName}</p>
+          <p className="text-sm text-slate-800">Open the class to create or join a group.</p>
+          <button onClick={() => navigate("/student")} className={BUTTON_PRIMARY}>Go to my classes</button>
+        </div>
+      )}
+
+      {error && !preview && !loadingPreview && (
+        <div className="space-y-4">
+          <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</p>
+          <button onClick={() => navigate("/student")} className={BUTTON_PRIMARY}>Go to my classes</button>
+        </div>
+      )}
+    </Shell>
   );
 }
