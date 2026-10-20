@@ -33,6 +33,17 @@ async function getActorName(actorId: number): Promise<string> {
   return actor?.name ?? `Admin #${actorId}`;
 }
 
+// A deleted account is an anonymised "Former member" tombstone: it can no longer be changed.
+// Sends the 409 and returns true when the target is one.
+function rejectFormerMember(target: { deletedAt: Date | null }, res: Response): boolean {
+  if (!target.deletedAt) return false;
+  res.status(409).json({
+    error: "This account was deleted and can no longer be changed.",
+    code: "FORMER_MEMBER",
+  });
+  return true;
+}
+
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 // List users with server-side pagination.
 // Query params: search, role, status (active|inactive), lastActive (7d|30d|never),
@@ -159,9 +170,10 @@ adminRouter.patch("/api/admin/users/:id/role", ...requireRole("ADMIN"), async (r
 
   const target = await prisma.user.findUnique({
     where:  { id: targetId },
-    select: { id: true, name: true, systemRole: true },
+    select: { id: true, name: true, systemRole: true, deletedAt: true },
   });
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   const [updated, actorName] = await Promise.all([
     prisma.user.update({ where: { id: targetId }, data: { systemRole: role }, select: USER_SELECT }),
@@ -201,9 +213,10 @@ adminRouter.patch("/api/admin/users/:id/status", ...requireRole("ADMIN"), async 
 
   const target = await prisma.user.findUnique({
     where:  { id: targetId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, deletedAt: true },
   });
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   const [updated, actorName] = await Promise.all([
     prisma.user.update({ where: { id: targetId }, data: { active: bodyResult.data.active }, select: USER_SELECT }),
@@ -293,9 +306,10 @@ adminRouter.post("/api/admin/users/:id/unlock", ...requireRole("ADMIN"), async (
 
   const target = await prisma.user.findUnique({
     where:  { id: targetId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, deletedAt: true },
   });
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   const [updated, actorName] = await Promise.all([
     prisma.user.update({
@@ -336,10 +350,11 @@ adminRouter.delete("/api/admin/users/:id", ...requireRole("ADMIN"), async (req, 
   }
 
   const [target, actorName] = await Promise.all([
-    prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true } }),
+    prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, deletedAt: true } }),
     getActorName(req.user!.sub),
   ]);
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   // Deletion is anonymization (lib/anonymizeUser.ts): the account is scrubbed and kept as a
   // "Former member" tombstone so FK-linked rows and teammates' stored reports stay intact.

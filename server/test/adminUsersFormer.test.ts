@@ -47,6 +47,36 @@ describe("GET /api/admin/users former members", () => {
     expect(row.deletedAt).toBeTruthy();
   });
 
+  it("answers 409 FORMER_MEMBER for role, status, unlock and delete, and changes nothing", async () => {
+    const { admin, former } = await setup();
+    const auth = authHeaderFor(admin);
+    const before = await prisma.user.findUnique({ where: { id: former.id } });
+
+    const responses = [
+      await request(app).patch(`/api/admin/users/${former.id}/role`).set("Authorization", auth).send({ role: "INSTRUCTOR" }),
+      await request(app).patch(`/api/admin/users/${former.id}/status`).set("Authorization", auth).send({ active: true }),
+      await request(app).post(`/api/admin/users/${former.id}/unlock`).set("Authorization", auth),
+      await request(app).delete(`/api/admin/users/${former.id}`).set("Authorization", auth),
+    ];
+    for (const res of responses) {
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("FORMER_MEMBER");
+    }
+
+    const after = await prisma.user.findUnique({ where: { id: former.id } });
+    expect(after?.systemRole).toBe(before?.systemRole);
+    expect(after?.active).toBe(before?.active);
+  });
+
+  it("still changes a current member", async () => {
+    const { admin, current } = await setup();
+    const res = await request(app)
+      .patch(`/api/admin/users/${current.id}/status`)
+      .set("Authorization", authHeaderFor(admin))
+      .send({ active: false });
+    expect(res.status).toBe(200);
+  });
+
   it("never removes the rows", async () => {
     const { admin, former } = await setup();
     await request(app).get("/api/admin/users").set("Authorization", authHeaderFor(admin));
