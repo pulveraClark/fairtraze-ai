@@ -572,3 +572,9 @@ body {
   max-width: 36%;
   text-align: center;
 }
+
+/* Help search: matched words (CSS Custom Highlight API; set in HelpPage.tsx). */
+::highlight(ft-help-match) {
+  background-color: #fde68a;
+  color: #111827;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
@@ -21,6 +21,8 @@ import {
   EDIT_TYPE_WEIGHT, SUBSTANTIVE_MIN_CHARS, TRIVIAL_MAX_CHARS,
 } from "@shared/editClassifier";
 import { HELP_ANCHORS } from "../lib/helpText";
+import { HELP_FAQ } from "../lib/helpFaq";
+import { findRanges, matches, queryWords } from "../lib/helpSearch";
 
 type View = "student" | "instructor";
 
@@ -30,9 +32,13 @@ const x1 = (x: number) => `${x.toFixed(1)}×`;
 /** Every anchor id the app links to must exist here; HelpPage.test.tsx checks it. */
 export const HELP_PAGE_ANCHORS = HELP_ANCHORS;
 
+/** Section ids hidden by the current search; empty when the box is empty. */
+const HiddenSections = createContext<ReadonlySet<string>>(new Set());
+
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  const hidden = useContext(HiddenSections).has(id);
   return (
-    <section aria-labelledby={id} className={`${CARD} scroll-mt-4 p-4`}>
+    <section aria-labelledby={id} hidden={hidden} data-help-section={id} className={`${CARD} scroll-mt-4 p-4`}>
       <h2 id={id} className="scroll-mt-4 text-lg font-semibold text-slate-900">{title}</h2>
       <div className="mt-2 space-y-3 text-sm leading-normal text-slate-800 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
         {children}
@@ -75,6 +81,57 @@ export function HelpPage() {
     window.addEventListener("hashchange", jump);
     return () => window.removeEventListener("hashchange", jump);
   }, []);
+
+  const [query, setQuery] = useState("");
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
+  const [sectionCount, setSectionCount] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
+  const words = useMemo(() => queryWords(query), [query]);
+  const faqShown = useMemo(() => HELP_FAQ.filter((f) => matches(`${f.q} ${f.a}`, query)), [query]);
+
+  // A section matches when it contains every typed word (JSX bodies are searched through the DOM,
+  // so the text is read once from what is actually rendered; hidden sections keep their ids).
+  useLayoutEffect(() => {
+    const next = new Set<string>();
+    const all = mainRef.current?.querySelectorAll<HTMLElement>("[data-help-section]") ?? [];
+    setSectionCount(all.length);
+    if (words.length > 0) {
+      all.forEach((el) => {
+        if (!matches(el.textContent ?? "", query)) next.add(el.dataset.helpSection!);
+      });
+    }
+    setHiddenIds((prev) => (prev.size === next.size && [...next].every((id) => prev.has(id)) ? prev : next));
+  }, [query, view, words.length, faqShown]);
+
+  // Highlight the typed words with the CSS Custom Highlight API: no DOM changes, so React is untouched.
+  useEffect(() => {
+    const registry = typeof CSS !== "undefined" ? (CSS as unknown as { highlights?: Map<string, unknown> }).highlights : undefined;
+    const HighlightCtor = (globalThis as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight;
+    const root = mainRef.current;
+    if (!registry || !HighlightCtor || !root) return;
+    const ranges: Range[] = [];
+    if (words.length > 0) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if ((n.parentElement as HTMLElement | null)?.closest("[hidden]")) continue;
+        for (const [a, b] of findRanges(n.nodeValue ?? "", words)) {
+          const r = document.createRange();
+          r.setStart(n, a);
+          r.setEnd(n, b);
+          ranges.push(r);
+        }
+      }
+    }
+    if (ranges.length > 0) registry.set("ft-help-match", new HighlightCtor(...ranges));
+    else registry.delete("ft-help-match");
+    return () => { registry.delete("ft-help-match"); };
+  }, [words, hiddenIds, view, faqShown]);
+
+  const searching = words.length > 0;
+  const visibleSections = Math.max(0, sectionCount - hiddenIds.size);
+  const noResults = searching && sectionCount > 0 && visibleSections === 0;
+  const resultsText = !searching ? "" : noResults ? "No results. Try 'flags' or 'tasks'."
+    : `${visibleSections} ${visibleSections === 1 ? "section" : "sections"} and ${faqShown.length} ${faqShown.length === 1 ? "question" : "questions"} match.`;
 
   // Signed in: Help lives inside the app shell (sidebar, footer), so it drops its own page chrome.
   const embedded = !!user;
@@ -120,18 +177,33 @@ export function HelpPage() {
               </button>
             ))}
           </div>
+          <div className="mt-3">
+            <label htmlFor="help-search" className="sr-only">Search help</label>
+            <input
+              id="help-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
+              placeholder="Search help…"
+              autoComplete="off"
+              className={`min-h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-600 ${FOCUS_LIGHT}`}
+            />
+            <p role="status" aria-live="polite" className={searching ? "mt-1.5 text-xs text-slate-700" : "sr-only"}>{resultsText}</p>
+          </div>
         </div>
       </div>
 
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-8 py-6 space-y-4 break-words">
-        <nav aria-label="On this page" className={`${CARD} p-4`}>
+      <main ref={mainRef} className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-8 py-6 space-y-4 break-words">
+        <HiddenSections.Provider value={hiddenIds}>
+        <nav aria-label="On this page" hidden={noResults} className={`${CARD} p-4`}>
           <p className="text-sm font-semibold text-slate-900">On this page</p>
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {[
               ["what", "What it does"], ["shares", "How shares are calculated"], ["flags", "What flags mean"],
               ["ai", "The AI"], ["tasks", "Tasks"], ["github-link", "Linking GitHub"], ["roles", "Roles and leaders"], ["notes", "Your notes"],
               ["privacy", "Privacy"], ["faq", "Questions"],
-            ].map(([id, label]) => (
+            ].filter(([id]) => !hiddenIds.has(id)).map(([id, label]) => (
               <li key={id}><a className={LINK} href={`#${id}`}>{label}</a></li>
             ))}
           </ul>
@@ -365,30 +437,15 @@ export function HelpPage() {
 
         <Section id="faq" title="Questions students ask">
           <dl className="space-y-3">
-            {[
-              ["My share looks small although I worked a lot. Why?",
-                "Your share compares you with the recorded work of the whole group. Work done offline, in meetings, on someone else's computer or in a tool FairTraze cannot see is invisible. Add a note and your instructor can take it into account."],
-              ["Does making lots of commits or many small edits raise my share?",
-                "Only a little. Commits and editing sessions are counted on a log scale, so extra tiny ones add little. Lines and kept text are worth more or less by file type and edit type, and writing then deleting your own work lowers your score."],
-              ["Does the group leader get extra credit?",
-                "No. Leadership is an administrative label. The leader is scored on their own activity only."],
-              ["I only wrote in the document (or only coded). Is that a problem?",
-                "No. In a project that uses both, the part you did not use counts as zero and the other part still counts. A soft note may appear if your role and your activity do not match."],
-              ["Do tasks count toward my score?", "No. Tasks are planning only."],
-              ["Does the AI decide my grade or my flags?",
-                "No. A formula sets every number and flag. The AI only describes them for your instructor, and only when your instructor asks for it. Your instructor makes the final assessment."],
-              ["When does my report update?",
-                "When your instructor runs the analysis. The report shows the date it was last analyzed, and activity after that appears at the next analysis."],
-              ["Who can see my report and my writing?",
-                "You and your instructor see your report. A leader also sees team shares. Everyone in the group can see the shared document, including who wrote which part, and its comments."],
-            ].map(([q, a]) => (
-              <div key={q}>
+            {faqShown.map(({ id, q, a }) => (
+              <div key={id}>
                 <dt className="font-semibold text-slate-900">{q}</dt>
                 <dd className="mt-0.5 text-slate-800">{a}</dd>
               </div>
             ))}
           </dl>
         </Section>
+        </HiddenSections.Provider>
       </main>
 
       {embedded ? (

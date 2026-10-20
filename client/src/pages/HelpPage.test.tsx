@@ -106,4 +106,53 @@ describe("HelpPage", () => {
     expect(screen.getByText(/The AI never grades/)).toBeInTheDocument();
     expect(screen.getByText(/never change any share, flag or health label/)).toBeInTheDocument();
   });
+
+  describe("search", () => {
+    const visibleSections = () => [...document.querySelectorAll<HTMLElement>("[data-help-section]")].filter((e) => !e.hidden).map((e) => e.dataset.helpSection);
+
+    it("has an accessible label and filters sections and questions as you type", async () => {
+      const user = userEvent.setup();
+      renderAs("STUDENT");
+      const box = screen.getByRole("searchbox", { name: "Search help" });
+      expect(box).toHaveAttribute("placeholder", "Search help…");
+      await user.type(box, "offline");
+      expect(visibleSections()).toContain("faq");
+      expect(visibleSections().length).toBeLessThan(HELP_ANCHORS.length);
+      expect(screen.getByText(/My share looks small/)).toBeInTheDocument();
+      expect(screen.queryByText("Do tasks count toward my score?")).toBeNull();
+    });
+
+    it("is case-insensitive and treats 'free rider' like 'free-rider'", async () => {
+      const user = userEvent.setup();
+      renderAs("INSTRUCTOR");
+      const box = screen.getByRole("searchbox", { name: "Search help" });
+      await user.type(box, "FREE RIDER");
+      expect(visibleSections()).toContain("flags");
+    });
+
+    it("shows the empty message, keeps the toggle, and Esc clears", async () => {
+      const user = userEvent.setup();
+      renderAs("STUDENT");
+      const box = screen.getByRole("searchbox", { name: "Search help" });
+      await user.type(box, "zzzzqq");
+      expect(screen.getByRole("status")).toHaveTextContent("No results. Try 'flags' or 'tasks'.");
+      expect(visibleSections()).toEqual([]);
+      expect(screen.getByRole("button", { name: "For instructors" })).toBeInTheDocument();
+      await user.keyboard("{Escape}");
+      expect(box).toHaveValue("");
+      expect(visibleSections().length).toBe(document.querySelectorAll("[data-help-section]").length);
+    });
+
+    it("finds the new questions and never shows Gini to students", async () => {
+      const user = userEvent.setup();
+      renderAs("STUDENT");
+      const box = screen.getByRole("searchbox", { name: "Search help" });
+      await user.type(box, "images");
+      expect(screen.getByText("Do images count?")).toBeInTheDocument();
+      expect(screen.queryByText(/Gini/)).toBeNull();
+      await user.clear(box);
+      await user.type(box, "link github");
+      expect(screen.getByText("How do I link GitHub?")).toBeInTheDocument();
+    });
+  });
 });
