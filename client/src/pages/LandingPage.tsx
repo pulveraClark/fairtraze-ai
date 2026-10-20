@@ -162,32 +162,27 @@ function ProductPreview() {
                 <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
                 <div className="space-y-3">
                   {PREVIEW_MEMBERS.map(({ name, pct, flag }) => (
-                    <div key={name} className="flex items-center gap-3">
-                      <span className="text-xs text-slate-700 w-16 shrink-0 font-semibold">{name}</span>
-                      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            flag === "free-rider" ? "bg-red-400" :
-                            flag === "overload"   ? "bg-amber-500" :
-                            "bg-indigo-500"
-                          }`}
-                          style={{ width: `${pct * 2.6}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800 w-8 text-right shrink-0">
-                        <AnimatedPercent value={pct} />
-                      </span>
-                      {flag ? (
-                        <span className={`text-xs px-2 py-0.5 rounded-md font-bold uppercase tracking-wide shrink-0 ${
-                          flag === "free-rider"
-                            ? "bg-red-50 text-red-600 border border-red-200"
-                            : "bg-amber-50 text-amber-600 border border-amber-200"
-                        }`}>
-                          {flag}
+                    <div key={name}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-700 flex-1 whitespace-nowrap font-semibold">{name}</span>
+                        <span className="text-xs font-bold text-slate-800 w-9 text-right shrink-0 tabular-nums">
+                          <AnimatedPercent value={pct} />
                         </span>
-                      ) : (
-                        <span className="w-16 shrink-0" />
-                      )}
+                        <span className="w-24 shrink-0 flex">
+                          {flag && (
+                            <span className={`text-xs px-2 py-0.5 rounded-md font-bold uppercase tracking-wide whitespace-nowrap ${
+                              flag === "free-rider"
+                                ? "bg-red-50 text-red-600 border border-red-200"
+                                : "bg-amber-50 text-amber-600 border border-amber-200"
+                            }`}>
+                              {flag}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
                   ))}
                 </div>
