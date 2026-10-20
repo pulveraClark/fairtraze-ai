@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, StatusPill } from "./ui";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 
 interface RequestRow {
   id: number;
@@ -68,11 +69,10 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
     }
   }, []);
 
+  const [approving, setApproving] = useState<RequestRow | null>(null);
+  /** Asks first (ConfirmDialog below); the decision is sent from its confirm button. */
   function approve(row: RequestRow) {
-    const ok = window.confirm(
-      `Anonymize ${row.user.name}'s account?\n\nTheir profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates' reports are unchanged. This cannot be undone.`,
-    );
-    if (ok) review.mutate({ id: row.id, decision: "approve" });
+    setApproving(row);
   }
 
   const data = query.data;
@@ -156,6 +156,17 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
             ))}
           </ul>
         </>
+      )}
+      {approving && (
+        <ConfirmDialog
+          title={`Anonymize ${approving.user.name}'s account?`}
+          confirmLabel="Anonymize account"
+          onCancel={() => setApproving(null)}
+          onConfirm={() => { review.mutate({ id: approving.id, decision: "approve" }); setApproving(null); }}
+        >
+          Their profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates'
+          reports are unchanged. This cannot be undone.
+        </ConfirmDialog>
       )}
     </section>
   );

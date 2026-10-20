@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
@@ -60,5 +60,41 @@ describe("AdminPage user rows (16)", () => {
   it("the signed-in admin's own row has no menu", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: "More actions for Admin Self" })).not.toBeInTheDocument();
+  });
+});
+
+describe("AdminPage role and status changes ask in a dialog", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("role change: ConfirmDialog, no window.confirm; Cancel sends nothing, Confirm PATCHes", async () => {
+    const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], systemRole: "INSTRUCTOR" }) }));
+    vi.stubGlobal("fetch", fetchFn);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    renderPage();
+    const user = userEvent.setup();
+    const selects = screen.getAllByTitle("Change role");
+    await user.selectOptions(selects[selects.length - 1], "INSTRUCTOR");
+    expect(screen.getByRole("alertdialog", { name: "Change Pat Lee's role?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(fetchFn).not.toHaveBeenCalledWith("/api/admin/users/2/role", expect.anything());
+
+    await user.selectOptions(screen.getAllByTitle("Change role").at(-1)!, "INSTRUCTOR");
+    await user.click(screen.getByRole("button", { name: "Change role" }));
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledWith("/api/admin/users/2/role", expect.objectContaining({ method: "PATCH" })));
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("deactivate: ConfirmDialog first, then PATCH", async () => {
+    const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], active: false }) }));
+    vi.stubGlobal("fetch", fetchFn);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getAllByTitle("Deactivate account").at(-1)!);
+    expect(screen.getByRole("alertdialog", { name: "Deactivate Pat Lee?" })).toBeInTheDocument();
+    expect(fetchFn).not.toHaveBeenCalledWith("/api/admin/users/2/status", expect.anything());
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledWith("/api/admin/users/2/status", expect.objectContaining({ method: "PATCH" })));
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 });

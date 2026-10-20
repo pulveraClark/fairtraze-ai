@@ -121,9 +121,17 @@ export function AdminPage() {
     void usersQuery.refetch();
   }
 
-  async function changeRole(u: UserRecord, newRole: string) {
+  const [roleChange, setRoleChange] = useState<{ user: UserRecord; newRole: string } | null>(null);
+  const [statusTarget, setStatusTarget] = useState<UserRecord | null>(null);
+
+  /** Asks first (ConfirmDialog below); the change itself runs in performRoleChange. */
+  function changeRole(u: UserRecord, newRole: string) {
     if (newRole === u.systemRole) return;
-    if (!window.confirm(`Change ${u.name}'s role from ${ROLE_LABEL[u.systemRole]} to ${ROLE_LABEL[newRole]}?`)) return;
+    setRoleChange({ user: u, newRole });
+  }
+
+  async function performRoleChange(u: UserRecord, newRole: string) {
+    setRoleChange(null);
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/role`, {
         method:  "PATCH",
@@ -141,9 +149,14 @@ export function AdminPage() {
     }
   }
 
-  async function toggleStatus(u: UserRecord) {
+  /** Asks first (ConfirmDialog below); the change itself runs in performToggleStatus. */
+  function toggleStatus(u: UserRecord) {
+    setStatusTarget(u);
+  }
+
+  async function performToggleStatus(u: UserRecord) {
     const action = u.active ? "deactivate" : "activate";
-    if (!window.confirm(`${u.active ? "Deactivate" : "Activate"} ${u.name}?\n\n${u.active ? "They will not be able to log in until reactivated." : "They will be able to log in again."}`)) return;
+    setStatusTarget(null);
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/status`, {
         method:  "PATCH",
@@ -350,6 +363,28 @@ export function AdminPage() {
             </ConfirmDialog>
           )}
 
+          {roleChange && (
+            <ConfirmDialog
+              title={`Change ${roleChange.user.name}'s role?`}
+              confirmLabel="Change role"
+              onConfirm={() => void performRoleChange(roleChange.user, roleChange.newRole)}
+              onCancel={() => setRoleChange(null)}
+            >
+              <p>From {ROLE_LABEL[roleChange.user.systemRole]} to {ROLE_LABEL[roleChange.newRole]}.</p>
+            </ConfirmDialog>
+          )}
+
+          {statusTarget && (
+            <ConfirmDialog
+              title={`${statusTarget.active ? "Deactivate" : "Activate"} ${statusTarget.name}?`}
+              confirmLabel={statusTarget.active ? "Deactivate" : "Activate"}
+              onConfirm={() => void performToggleStatus(statusTarget)}
+              onCancel={() => setStatusTarget(null)}
+            >
+              <p>{statusTarget.active ? "They will not be able to log in until reactivated." : "They will be able to log in again."}</p>
+            </ConfirmDialog>
+          )}
+
           {/* Loading */}
           {usersLoading && (
             <div className="flex items-center justify-center gap-2 py-14 text-slate-600 text-sm">
@@ -453,7 +488,7 @@ export function AdminPage() {
                               {/* Role select */}
                               <select
                                 value={u.systemRole}
-                                onChange={(e) => { void changeRole(u, e.target.value); }}
+                                onChange={(e) => changeRole(u, e.target.value)}
                                 className="text-xs rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
                                 title="Change role"
                               >
@@ -464,7 +499,7 @@ export function AdminPage() {
 
                               {/* Activate / Deactivate */}
                               <button
-                                onClick={() => { void toggleStatus(u); }}
+                                onClick={() => toggleStatus(u)}
                                 className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
                                   u.active
                                     ? "border-slate-200 text-slate-500 hover:border-red-200 hover:text-red-600 hover:bg-red-50"

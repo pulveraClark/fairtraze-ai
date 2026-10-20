@@ -1,5 +1,6 @@
 import { CHANGE_TEMPLATE_HINT } from "../lib/docActionHints";
 import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { DocumentEditor } from "./DocumentEditor";
@@ -34,6 +35,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
   const [resettable, setResettable] = useState(false);
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [confirmingChange, setConfirmingChange] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set only when THIS browser session just created the document via handleChoose below — never
   // on the initial /status load. Tells DocumentEditor how many top-level nodes to wait for before
@@ -135,17 +137,23 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
             <button
               type="button"
               disabled={resetting}
-              onClick={() => {
-                if (window.confirm("Change the starting template? This only works because nobody has added any content yet.")) {
-                  handleReset();
-                }
-              }}
+              onClick={() => setConfirmingChange(true)}
               title={CHANGE_TEMPLATE_HINT}
               className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}
             >
               {resetting ? "Changing template…" : "Change template"}
             </button>
           </div>
+        )}
+        {confirmingChange && (
+          <ConfirmDialog
+            title="Change the starting template?"
+            confirmLabel="Change template"
+            onCancel={() => setConfirmingChange(false)}
+            onConfirm={() => { setConfirmingChange(false); handleReset(); }}
+          >
+            This only works because nobody has added any content yet.
+          </ConfirmDialog>
         )}
         <DocumentEditor
           groupId={groupId}
