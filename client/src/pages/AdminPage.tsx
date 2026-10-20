@@ -153,6 +153,56 @@ export function AdminPage() {
     : "";
   const usersQueryKey = adminUsersKey(usersQueryParams);
 
+  // Bulk deactivate: only active accounts that are not the signed-in admin and not former members can be picked.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => { setSelected(new Set()); }, [view]);
+  const canSelect = (u: UserRecord) => u.id !== selfId && !u.deletedAt && u.active;
+  const selectable = displayedUsers.filter(canSelect);
+  const selectedUsers = selectable.filter((u) => selected.has(u.id));
+  function toggleSelected(id: number) {
+    setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  }
+
+  async function bulkSetActive(ids: number[], active: boolean): Promise<number[] | null> {
+    try {
+      const res = await fetch("/api/admin/users/bulk-status", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ ids, active }),
+      });
+      const json = await res.json() as { updated?: number[]; error?: string };
+      if (!res.ok) { showToast("error", json.error ?? "Could not update the selected users."); return null; }
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      return json.updated ?? [];
+    } catch {
+      showToast("error", "Network error.");
+      return null;
+    }
+  }
+
+  async function performBulkDeactivate() {
+    setBulkBusy(true);
+    const updated = await bulkSetActive(selectedUsers.map((u) => u.id), false);
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    if (updated === null) return;
+    setSelected(new Set());
+    if (updated.length === 0) { showToast("error", "Nothing changed. Those accounts were already inactive."); return; }
+    toastApi.showToast({
+      message:     `${updated.length} ${updated.length === 1 ? "user" : "users"} deactivated.`,
+      actionLabel: "Undo",
+      durationMs:  UNDO_WINDOW_MS,
+      onAction:    () => {
+        void bulkSetActive(updated, true).then((back) => {
+          if (back) showToast("success", `${back.length} ${back.length === 1 ? "user is" : "users are"} active again.`);
+        });
+      },
+    });
+  }
+
   function loadUsers() {
     void usersQuery.refetch();
   }
@@ -435,6 +485,42 @@ export function AdminPage() {
             </ConfirmDialog>
           )}
 
+          {selectedUsers.length > 0 && (
+            <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-3 border-b border-indigo-200 bg-indigo-50 px-6 py-2">
+              <p className="text-sm font-semibold text-indigo-900" aria-live="polite">{selectedUsers.length} selected</p>
+              <button
+                type="button"
+                onClick={() => setBulkConfirm(true)}
+                className="min-h-8 rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-800 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
+              >
+                Deactivate
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="min-h-8 rounded-lg px-3 text-xs font-medium text-slate-800 hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
+          {bulkConfirm && (
+            <ConfirmDialog
+              title={`Deactivate ${selectedUsers.length} ${selectedUsers.length === 1 ? "user" : "users"}?`}
+              confirmLabel="Deactivate"
+              busyLabel="Deactivating…"
+              busy={bulkBusy}
+              onConfirm={() => void performBulkDeactivate()}
+              onCancel={() => setBulkConfirm(false)}
+            >
+              <p>They will not be able to sign in until reactivated. You can undo this for 10 seconds afterwards.</p>
+              <ul className="mt-2 max-h-32 list-disc space-y-0.5 overflow-y-auto pl-5">
+                {selectedUsers.map((u) => <li key={u.id}>{u.name}</li>)}
+              </ul>
+            </ConfirmDialog>
+          )}
+
           {/* Loading */}
           {usersLoading && (
             <div className="flex items-center justify-center gap-2 py-14 text-slate-600 text-sm">
@@ -463,6 +549,18 @@ export function AdminPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
+                    <th className="w-10 pl-5 py-1">
+                      <label className="ft-hit inline-flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all active users on this page"
+                          disabled={selectable.length === 0}
+                          checked={selectable.length > 0 && selectedUsers.length === selectable.length}
+                          ref={(el) => { if (el) el.indeterminate = selectedUsers.length > 0 && selectedUsers.length < selectable.length; }}
+                          onChange={(e) => setSelected(e.target.checked ? new Set(selectable.map((u) => u.id)) : new Set())}
+                        />
+                      </label>
+                    </th>
                     <SortHeader label="Name / Email" sort="name" view={view} onSort={sortBy} />
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Role</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
@@ -486,6 +584,22 @@ export function AdminPage() {
                         }}
                         className={`cursor-pointer text-sm transition-colors hover:bg-slate-100 ${stripe} ${isFormer ? "text-slate-500" : !u.active ? "opacity-50" : ""}`}
                       >
+
+                        {/* Select */}
+                        <td className="w-10 pl-5 py-3.5">
+                          <label
+                            className="ft-hit inline-flex items-center justify-center"
+                            title={canSelect(u) ? undefined : isSelf ? "You cannot deactivate yourself" : isFormer ? "Former members cannot be changed" : "Already inactive"}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${u.name}`}
+                              disabled={!canSelect(u)}
+                              checked={selected.has(u.id)}
+                              onChange={() => toggleSelected(u.id)}
+                            />
+                          </label>
+                        </td>
 
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">

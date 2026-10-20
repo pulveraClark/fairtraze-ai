@@ -259,3 +259,57 @@ describe("AdminPage details panel", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("AdminPage bulk deactivate", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("never lets the signed-in admin or a former member be selected", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    expect(screen.getByRole("checkbox", { name: "Select Admin Self" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Select Pat Lee" })).toBeEnabled();
+    await user.click(screen.getByRole("checkbox", { name: "Show former members (1)" }));
+    expect(screen.getByRole("checkbox", { name: "Select Former member" })).toBeDisabled();
+
+    // "Select all" picks only the selectable row.
+    await user.click(screen.getByRole("checkbox", { name: "Select all active users on this page" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+
+  it("shows n selected, asks first, sends only the chosen ids, then offers Undo for exactly those", async () => {
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({ updated: JSON.parse(String(init?.body)).ids, skipped: [] }),
+    }));
+    vi.stubGlobal("fetch", fetchFn);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Select Pat Lee" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    await user.click(within(screen.getByRole("region", { name: "Bulk actions" })).getByRole("button", { name: "Deactivate" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Deactivate 1 user?" });
+    expect(dialog).toHaveTextContent("Pat Lee");
+    expect(fetchFn).not.toHaveBeenCalledWith("/api/admin/users/bulk-status", expect.anything());
+
+    await user.click(within(dialog).getByRole("button", { name: "Deactivate" }));
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledWith("/api/admin/users/bulk-status", expect.objectContaining({ body: JSON.stringify({ ids: [2], active: false }) })));
+    expect(await screen.findByText("1 user deactivated.")).toBeInTheDocument();
+    expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(fetchFn).toHaveBeenLastCalledWith("/api/admin/users/bulk-status", expect.objectContaining({ body: JSON.stringify({ ids: [2], active: true }) })));
+  });
+
+  it("Cancel in the confirmation sends nothing and keeps the selection", async () => {
+    const fetchFn = vi.fn();
+    vi.stubGlobal("fetch", fetchFn);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Select Pat Lee" }));
+    await user.click(within(screen.getByRole("region", { name: "Bulk actions" })).getByRole("button", { name: "Deactivate" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+});

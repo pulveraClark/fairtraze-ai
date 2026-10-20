@@ -171,6 +171,63 @@ adminRouter.patch("/api/admin/users/:id/status", ...requireRole("ADMIN"), async 
   res.json(updated);
 });
 
+// ── POST /api/admin/users/bulk-status ─────────────────────────────────────────
+// Deactivate (or, for Undo, reactivate) several accounts at once. Never touches the caller's own
+// account or former (anonymized) members, and skips accounts already in the requested state.
+// One audit entry per account, all in one transaction. Returns what changed so Undo can reverse exactly that.
+
+const BULK_STATUS_MAX = 100;
+
+adminRouter.post("/api/admin/users/bulk-status", ...requireRole("ADMIN"), async (req, res) => {
+  const bodyResult = z.object({
+    ids:    z.array(idParam).min(1).max(BULK_STATUS_MAX),
+    active: z.boolean(),
+  }).safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: `Choose between 1 and ${BULK_STATUS_MAX} users.` });
+    return;
+  }
+  const { active } = bodyResult.data;
+  const ids = [...new Set(bodyResult.data.ids)];
+  const selfId = req.user!.sub;
+
+  const rows = await prisma.user.findMany({
+    where:  { id: { in: ids } },
+    select: { id: true, name: true, active: true, deletedAt: true },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const eligible: Array<{ id: number; name: string }> = [];
+  const skipped: Array<{ id: number; reason: "self" | "former" | "unchanged" | "not_found" }> = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (id === selfId)              skipped.push({ id, reason: "self" });
+    else if (!row)                  skipped.push({ id, reason: "not_found" });
+    else if (row.deletedAt)         skipped.push({ id, reason: "former" });
+    else if (row.active === active) skipped.push({ id, reason: "unchanged" });
+    else                            eligible.push({ id, name: row.name });
+  }
+
+  if (eligible.length > 0) {
+    const actorName = await getActorName(selfId);
+    await prisma.$transaction([
+      prisma.user.updateMany({ where: { id: { in: eligible.map((e) => e.id) } }, data: { active } }),
+      prisma.auditLog.createMany({
+        data: eligible.map((e) => ({
+          actorId:    selfId,
+          actorName,
+          action:     active ? "USER_ACTIVATED" : "USER_DEACTIVATED",
+          targetType: "USER",
+          targetId:   String(e.id),
+          details:    `${e.name} (bulk)`,
+        })),
+      }),
+    ]);
+  }
+
+  res.json({ updated: eligible.map((e) => e.id), skipped });
+});
+
 // ── POST /api/admin/users/:id/unlock ──────────────────────────────────────────
 // Clear a login lockout (failedLoginAttempts/lockedUntil) before its 15-minute
 // auto-expiry — see MAX_FAILED_LOGIN_ATTEMPTS/LOCKOUT_DURATION_MS in auth.ts.
