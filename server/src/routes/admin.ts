@@ -426,25 +426,6 @@ adminRouter.get("/api/admin/overview", ...requireRole("ADMIN"), async (_req, res
   });
 });
 
-// ── GET /api/admin/classes ────────────────────────────────────────────────────
-// List ALL class sections across all instructors (admin oversight browsing).
-
-adminRouter.get("/api/admin/classes", ...requireRole("ADMIN"), async (_req, res) => {
-  const classes = await prisma.classSection.findMany({
-    orderBy: [{ instructorId: "asc" }, { createdAt: "asc" }],
-    include: {
-      instructor:  { select: { id: true, name: true, email: true } },
-      department:  { select: { id: true, name: true, code: true } },
-      assignments: {
-        orderBy: { createdAt: "asc" },
-        select:  { id: true, title: true, _count: { select: { projects: true } } },
-      },
-    },
-  });
-
-  res.json({ classes });
-});
-
 // ── GET /api/admin/departments ────────────────────────────────────────────────
 // List all departments (institutional taxonomy — pre-created by admins).
 

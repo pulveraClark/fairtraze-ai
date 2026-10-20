@@ -23,7 +23,6 @@ vi.mock("../hooks/useAdminQueries", () => ({
     return { data: { users: shown, total: shown.length, formerCount: 1, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
   },
   useAdminOverviewQuery: () => ({ data: null, isLoading: false, isError: false }),
-  useAdminClassesQuery: () => ({ data: { classes: [], total: 0, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false }),
   useAdminDepartmentsQuery: () => ({ data: [], isLoading: false, isError: false }),
 }));
 vi.mock("../components/InstructorApprovals", () => ({ InstructorApprovals: () => null }));

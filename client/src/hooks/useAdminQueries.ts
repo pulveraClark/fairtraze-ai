@@ -43,18 +43,6 @@ interface OverviewData {
   openDisputesCount:  number;
 }
 
-interface ClassSectionItem {
-  id:          number;
-  subjectCode: string;
-  subjectName: string;
-  edpCode:     string;
-  department:  { id: number; name: string; code: string } | null;
-  type:        string;
-  createdAt:   string;
-  instructor:  { id: number; name: string; email: string };
-  assignments: Array<{ id: number; title: string; _count: { projects: number } }>;
-}
-
 interface DepartmentItem {
   id:        number;
   name:      string;
@@ -98,19 +86,6 @@ export function useAdminOverviewQuery(token: string | null) {
       const json = (await res.json()) as OverviewData & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Could not load overview.");
       return json;
-    },
-    enabled: !!token,
-  });
-}
-
-export function useAdminClassesQuery(token: string | null) {
-  return useQuery({
-    queryKey: ["admin-classes"],
-    queryFn: async () => {
-      const res  = await fetch("/api/admin/classes", { headers: { Authorization: `Bearer ${token}` } });
-      const json = (await res.json()) as { classes?: ClassSectionItem[]; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Could not load classes.");
-      return json.classes ?? [];
     },
     enabled: !!token,
   });

@@ -243,7 +243,6 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 | Section | Items |
 |---|---|
 | Overview stats | Total users; breakdown by role (Admin / Instructor / Student); class section count; total groups; analyzed-group count; open disputes count |
-| Browse Classes | Cross-instructor list of every class section in the institution (not just the admin's own); each row links to class detail |
 | User management | Search input; role filter dropdown; user table (Name · Email · Role dropdown · GitHub username · Status · Created date); pagination |
 | Departments | Department list with create form (name, code) |
 | Audit Log link | Button / link → `/admin/audit` |
@@ -252,8 +251,8 @@ Screen and modal inventory with UI elements, data, navigation, and access contro
 | Logic | Detail |
 |---|---|
 | State | `displayedUsers`, `search`, `roleFilter`, `usersPage`, `usersLoading`, `usersError`, `usersMeta`, `overview`, `classes`, `toast` |
-| APIs | `GET /api/admin/users?page=&search=&role=`; `PATCH /api/admin/users/:userId/role`; `GET /api/admin/overview` (feeds overview stats only); `GET /api/admin/classes` (feeds Browse Classes); `GET`/`POST /api/admin/departments` |
-| Navigation | Browse Classes row → `/class/:id`; Audit Log → `/admin/audit` |
+| APIs | `GET /api/admin/users?page=&search=&role=`; `PATCH /api/admin/users/:userId/role`; `GET /api/admin/overview` (feeds overview stats only); `GET`/`POST /api/admin/departments` |
+| Navigation | Audit Log → `/admin/audit` |
 | Conditional | Role dropdown triggers confirmation before applying; toast auto-hides; overview stats gated on data load |
 
 ---

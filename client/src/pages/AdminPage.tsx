@@ -1,4 +1,3 @@
-import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { AppFooter } from "../components/AppFooter";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,7 +11,6 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import {
   useAdminUsersQuery,
   useAdminOverviewQuery,
-  useAdminClassesQuery,
   useAdminDepartmentsQuery,
 } from "../hooks/useAdminQueries";
 
@@ -27,18 +25,6 @@ interface UserRecord {
   lockedUntil:    string | null;
   createdAt:      string;
   deletedAt?:     string | null;
-}
-
-interface ClassSectionItem {
-  id:          number;
-  subjectCode: string;
-  subjectName: string;
-  edpCode:     string;
-  department:  { id: number; name: string; code: string } | null;
-  type:        string;
-  createdAt:   string;
-  instructor:  { id: number; name: string; email: string };
-  assignments: Array<{ id: number; title: string; _count: { projects: number } }>;
 }
 
 interface DepartmentItem {
@@ -224,15 +210,6 @@ export function AdminPage() {
     ? (overviewQuery.error instanceof Error ? overviewQuery.error.message : "Could not load overview.")
     : "";
   function loadOverview() { void overviewQuery.refetch(); }
-
-  // ── Browse Classes state ───────────────────────────────────────────────────
-  const classesQuery = useAdminClassesQuery(token);
-  const classes = classesQuery.data ?? [];
-  const classesLoading = classesQuery.isLoading;
-  const classesError = classesQuery.isError
-    ? (classesQuery.error instanceof Error ? classesQuery.error.message : "Could not load classes.")
-    : "";
-  function loadClasses() { void classesQuery.refetch(); }
 
   // ── Departments state ──────────────────────────────────────────────────────
   const departmentsQuery = useAdminDepartmentsQuery(token);
@@ -627,82 +604,6 @@ export function AdminPage() {
                 </p>
               )}
             </>
-          )}
-        </section>
-
-        {/* ── Browse Classes ───────────────────────────────────────────────────── */}
-        <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Browse Classes</h2>
-              {!classesLoading && !classesError && (
-                <p className="text-xs text-slate-600 mt-0.5">
-                  {classes.length} class section{classes.length !== 1 ? "s" : ""} across all instructors
-                </p>
-              )}
-            </div>
-            <button onClick={loadClasses} className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors">
-              Refresh
-            </button>
-          </div>
-
-          {classesLoading && (
-            <div className="flex items-center justify-center gap-2 py-14 text-slate-600 text-sm">
-              <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
-              Loading…
-            </div>
-          )}
-
-          {!classesLoading && classesError && (
-            <div className="px-6 py-10 text-center">
-              <p className="text-sm text-red-600 mb-2">{classesError}</p>
-              <button onClick={loadClasses} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
-            </div>
-          )}
-
-          {!classesLoading && !classesError && classes.length === 0 && (
-            <p className="px-6 py-14 text-center text-sm text-slate-600">No class sections found.</p>
-          )}
-
-          {!classesLoading && !classesError && classes.length > 0 && (
-            <div className="divide-y divide-slate-50">
-              {classes.map((cls) => (
-                <div
-                  key={cls.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(`/class/${cls.id}`)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/class/${cls.id}`); }}
-                  className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <ClassCodeLabel
-                        subjectCode={cls.subjectCode}
-                        edpCode={cls.edpCode}
-                        className="text-xs font-mono font-bold text-indigo-600"
-                        edpClassName="font-semibold text-indigo-700"
-                      />
-                      <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
-                      {cls.department && (
-                        <span className="text-xs text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
-                      )}
-                      <span className="text-xs text-slate-600 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-slate-600">{cls.instructor.name}</span>
-                      <span className="text-xs text-slate-600">·</span>
-                      <span className="text-xs text-slate-600">
-                        {cls.assignments.length} assignment{cls.assignments.length !== 1 ? "s" : ""}
-                        {" · "}
-                        {cls.assignments.reduce((s, a) => s + a._count.projects, 0)} group{cls.assignments.reduce((s, a) => s + a._count.projects, 0) !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-xs text-indigo-700 font-medium">View →</span>
-                </div>
-              ))}
-            </div>
           )}
         </section>
 
