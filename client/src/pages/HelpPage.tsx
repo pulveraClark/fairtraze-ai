@@ -278,7 +278,7 @@ export function HelpPage() {
 
           {!student && (
             <details className="rounded-lg border border-slate-300 p-3">
-              <summary className={`cursor-pointer font-semibold text-slate-900 rounded ${FOCUS_LIGHT}`}>Show the exact numbers</summary>
+              <summary className={`cursor-pointer py-1.5 font-semibold text-slate-900 rounded ${FOCUS_LIGHT}`}>Show the exact numbers</summary>
               <ul className="mt-2">
                 <li>GitHub weights: commits {gh.commits}, lines {gh.lines}, active days {gh.activeDays}. Docs weights: kept text {docs.retainedText}, sessions {docs.sessions}, active days {docs.activeDays}. Blend: GitHub {blend.wGitHub}, Docs {blend.wDocs}.</li>
                 <li>Log scale = ln(count + 1). Self-churn discount = 1 − 0.5 × ratio, so at most half.</li>

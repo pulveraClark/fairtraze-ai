@@ -30,7 +30,7 @@ export function StudentNoteCard({ note, groupName, onOpenGroup, highlighted = fa
         <span className="text-xs text-slate-700">Filed {fmt(note.createdAt)}</span>
         {groupName && (
           onOpenGroup
-            ? <button type="button" onClick={onOpenGroup} className="text-xs font-medium text-indigo-700 underline">{groupName}</button>
+            ? <button type="button" onClick={onOpenGroup} className="ft-hit rounded px-1 text-xs font-medium text-indigo-700 underline">{groupName}</button>
             : <span className="text-xs text-slate-700">{groupName}</span>
         )}
       </div>

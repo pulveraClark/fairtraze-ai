@@ -666,7 +666,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                       href={stored.repoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`break-all font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
+                      className={`inline-flex min-h-8 items-center break-all font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
                     >
                       {stored.repoUrl.replace("https://github.com/", "")}
                     </a>

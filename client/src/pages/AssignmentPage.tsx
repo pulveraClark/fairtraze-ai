@@ -417,7 +417,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 type="checkbox"
                 checked={processed.length > 0 && processed.every((i) => selectedIds.has(i.projectId))}
                 onChange={() => toggleSelectAll(processed.map((i) => i.projectId))}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0"
+                className="h-6 w-6 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0"
               />
               Select all
             </label>

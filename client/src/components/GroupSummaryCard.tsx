@@ -64,7 +64,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
       onChange={() => onToggleSelect?.(item.projectId)}
       onClick={(e) => e.stopPropagation()}
       aria-label={`Select ${item.groupName}`}
-      className="shrink-0 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0 mt-0.5"
+      className="shrink-0 h-6 w-6 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0 mt-0.5"
     />
   );
 

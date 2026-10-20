@@ -41,7 +41,7 @@ export function NoCodeView({ onSubmit, onHome, homeLabel }: { onSubmit: (code: s
             </div>
             <button type="submit" disabled={!trimmed} className={`${BUTTON_PRIMARY} w-full`}>Join class</button>
           </form>
-          <button type="button" onClick={onHome} className="text-sm text-indigo-700 hover:text-indigo-800 font-medium">
+          <button type="button" onClick={onHome} className="ft-hit rounded px-2 text-sm text-indigo-700 hover:text-indigo-800 font-medium">
             ← {homeLabel}
           </button>
         </div>

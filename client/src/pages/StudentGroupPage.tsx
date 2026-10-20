@@ -615,7 +615,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               </h2>
               <button
                 onClick={() => selectTab("tasks")}
-                className="text-xs text-indigo-600 hover:underline font-medium shrink-0"
+                className="ft-hit rounded px-2 text-xs text-indigo-700 hover:underline font-medium shrink-0"
               >
                 Open Tasks tab
               </button>
@@ -955,7 +955,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   <section aria-labelledby="your-notes-heading" className="mt-6">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <h2 id="your-notes-heading" className="text-xs font-semibold uppercase tracking-widest text-slate-700">Your notes ({myNotes.length})</h2>
-                      <button type="button" onClick={() => navigate("/disputes")} className="text-xs font-medium text-indigo-700 underline">See all your notes</button>
+                      <button type="button" onClick={() => navigate("/disputes")} className="ft-hit rounded px-2 text-xs font-medium text-indigo-700 underline">See all your notes</button>
                     </div>
                     <div className="space-y-3">
                       {myNotes.map((n) => <StudentNoteCard key={n.id} note={n} />)}

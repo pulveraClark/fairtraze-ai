@@ -36,6 +36,9 @@ describe("tap targets", () => {
     ["pages/StudentGroupPage.tsx", "Rename group"],
     ["pages/AlertsPage.tsx", "Refresh"],
     ["pages/DisputesPage.tsx", "View group report"],
+    ["pages/StudentGroupPage.tsx", "See all your notes"],
+    ["pages/StudentGroupPage.tsx", "Open Tasks tab"],
+    ["components/StudentNoteCard.tsx", "{groupName}</button>"],
   ])("%s: %s carries ft-hit", (file, label) => {
     const lines = read(file).split(/\r?\n/);
     const hits = lines.map((l, i) => (l.includes(label) ? i : -1)).filter((i) => i >= 0);
