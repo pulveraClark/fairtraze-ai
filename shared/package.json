@@ -18,6 +18,7 @@
     "./editClassifier": "./src/editClassifier.ts",
     "./pageSizes": "./src/pageSizes.ts",
     "./linkUrl": "./src/linkUrl.ts",
+    "./repoUrl": "./src/repoUrl.ts",
     "./collabVersion": "./src/collabVersion.ts",
     "./taskTypes": "./src/taskTypes.ts"
   },

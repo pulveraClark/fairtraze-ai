@@ -17,6 +17,11 @@ vi.mock("../src/lib/githubCommitMessages.js", () => ({
   fetchRepoCommitMessages: vi.fn().mockResolvedValue([]),
 }));
 
+// Repo link checks ask GitHub whether a repository exists; tests set the answer per case.
+vi.mock("../src/lib/githubRepoCheck.js", () => ({
+  checkRepoReachable: vi.fn().mockResolvedValue({ status: "ok" }),
+}));
+
 vi.mock("../src/lib/email.js", () => ({
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
   sendVerificationEmail: vi.fn().mockResolvedValue(undefined),

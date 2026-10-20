@@ -286,6 +286,10 @@ export interface ProjectSummaryItem {
   // True when the latest report was scored with older scoring rules (SCORING_RULES_VERSION). Computed
   // at read time; also covers EDITOR reports, which store no settings snapshot.
   rulesOutdated: boolean;
+  /** A GitHub/Combined group with a linked repository. Display only. */
+  hasRepo?: boolean;
+  /** The repository was changed after the latest report (that report is outdated). Display only. */
+  repoChanged?: boolean;
 }
 
 // Stored report — returned by GET /api/projects/:id/report.
@@ -315,6 +319,8 @@ export interface StoredReportResponse {
   docsDataApproximate?: boolean;
   // Computed at read time (never stored): the report was scored with older scoring rules.
   rulesOutdated?: boolean;
+  // Computed at read time: the linked repository was changed after this report was generated.
+  repoChanged?: boolean;
   docsDataFixedAt?: string; // ISO date of the fix, for the notice text
 }
 

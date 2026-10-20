@@ -66,6 +66,7 @@ enum AlertType {
   TASK_IN_REVIEW
   TASK_DUE_SOON
   TASK_OVERDUE
+  GROUP_REPO_CHANGED
 }
 
 enum DeletionRequestStatus {

@@ -144,6 +144,15 @@ export const taskWriteLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Linking or changing a group's repository makes one GitHub call per attempt: 10 per minute per user.
+export const repoLinkLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: "You're checking repositories too quickly. Please wait a minute and try again." },
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 // Task comments (and the @mentions inside them): 30 per minute per user, its own bucket so a burst of
 // comments never eats the task-creation allowance. Needs authenticateToken first (see app.ts).
 export const taskCommentLimiter = rateLimit({

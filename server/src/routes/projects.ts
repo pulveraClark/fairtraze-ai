@@ -6,6 +6,7 @@ import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix
 import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
+import { projectsWithRepoChangedSince } from "../lib/repoChange.js";
 
 export const projectsRouter = Router();
 
@@ -98,6 +99,10 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     orderBy: { id: "asc" },
   });
 
+  const repoChanged = await projectsWithRepoChangedSince(
+    new Map(projects.filter((p) => p.reports[0]).map((p) => [p.id, p.reports[0]!.generatedAt])),
+  );
+
   const summary: ProjectSummaryItem[] = projects.map((p) => {
     const latestReport = p.reports[0] ?? null;
     const stored = latestReport?.content
@@ -144,6 +149,8 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
       scoringConfigChangedAt: p.scoringConfigChangedAt?.toISOString() ?? null,
       settingsOutdated,
       rulesOutdated,
+      hasRepo: !!p.repoUrl,
+      repoChanged: repoChanged.has(p.id),
     };
   });
 
@@ -295,6 +302,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     memberRoles,
     docsDataApproximate: await docsDataApproximateFor(projectId, project.assignment?.sourceType),
     rulesOutdated: isRulesOutdated(stored),
+    repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
   };
 

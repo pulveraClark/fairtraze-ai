@@ -31,6 +31,7 @@ import {
   analysisLimiter,
   exportLimiter,
   taskWriteLimiter,
+  repoLinkLimiter,
   taskCommentLimiter,
   globalLimiter,
 } from "./middleware/security.js";
@@ -93,6 +94,7 @@ export function createApp() {
   app.use("/api/privacy/export", authenticateToken, exportLimiter);
   // Task creation bursts (30/min per user); comments have their own 30/min bucket.
   app.post("/api/groups/:id/tasks", authenticateToken, taskWriteLimiter);
+  app.put("/api/groups/:id/repo", authenticateToken, repoLinkLimiter);
   app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
 
   app.use(projectsRouter);

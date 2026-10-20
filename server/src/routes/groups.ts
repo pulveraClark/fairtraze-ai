@@ -6,6 +6,9 @@ import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/au
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify, resolveNotifications } from "../lib/notify.js";
 import { loadGroup, isInstructorOf, canManage } from "../lib/groupAccess.js";
+import { checkRepoUrl, sameRepo } from "@shared/repoUrl.js";
+import { checkRepoReachable } from "../lib/githubRepoCheck.js";
+import { REPO_CHANGED_ACTION } from "../lib/repoChange.js";
 
 export const groupsRouter = Router();
 
@@ -79,6 +82,83 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
       joinedAt:        m.joinedAt.toISOString(),
     })),
   });
+});
+
+// What to tell the student when the repository check fails; each ends with the one thing to do next.
+const REPO_NOT_FOUND_MESSAGE =
+  "We couldn't find that repository, or it is private. Make the repository public, or ask your instructor how to share it.";
+
+// PUT /api/groups/:id/repo — link or change the group's GitHub repository.
+// Any member may add the FIRST link; once one is linked only the leader may change it. The instructor
+// is view-only. Every link/change is audit-logged and tells the rest of the group. A change after a
+// report exists marks that report outdated through the existing membershipChangedAt marker.
+groupsRouter.put("/api/groups/:id/repo", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const userId = req.user!.sub;
+  const membership = project.groupMemberships.find((m) => m.userId === userId);
+  if (!membership) {
+    res.status(403).json({ error: "Only members of this group can link its repository." });
+    return;
+  }
+  if (project.assignment?.sourceType === "EDITOR") {
+    res.status(400).json({ error: "This project uses FairTraze Docs only, so its groups have no GitHub repository." });
+    return;
+  }
+  if (project.repoUrl && membership.role !== "LEADER") {
+    res.status(403).json({ error: "Only the group leader can change the repository once it is linked." });
+    return;
+  }
+
+  const body = z.object({ repoUrl: z.string() }).safeParse(req.body);
+  const checked = checkRepoUrl(body.success ? body.data.repoUrl : "");
+  if (!checked.ok) { res.status(400).json({ code: "REPO_FORMAT", error: checked.message }); return; }
+
+  // Same repository again: nothing to save, nothing to log, no report marked outdated.
+  if (sameRepo(project.repoUrl, checked.url)) { res.json({ repoUrl: project.repoUrl, changed: false }); return; }
+
+  const reach = await checkRepoReachable(checked.owner, checked.repo, process.env.GITHUB_TOKEN);
+  if (reach.status === "not-found") { res.status(422).json({ code: "REPO_NOT_FOUND", error: REPO_NOT_FOUND_MESSAGE }); return; }
+  if (reach.status === "rate-limited") { res.status(429).json({ code: "REPO_CHECK_BUSY", error: "GitHub is busy right now. Wait a minute, then try again." }); return; }
+  if (reach.status === "no-token") { res.status(503).json({ code: "REPO_CHECK_UNAVAILABLE", error: "Repository checks are not available right now. Try again later, or ask your instructor." }); return; }
+  if (reach.status === "unreachable") { res.status(502).json({ code: "REPO_CHECK_FAILED", error: "We couldn't reach GitHub. Check your connection and try again." }); return; }
+
+  const previous = project.repoUrl;
+  const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const hasReport = !!previous && (await prisma.report.count({ where: { projectId: project.id } })) > 0;
+
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { repoUrl: checked.url, ...(hasReport ? { membershipChangedAt: new Date() } : {}) },
+  });
+  await prisma.auditLog.create({
+    data: {
+      actorId:    userId,
+      actorName:  actor?.name ?? `User ${userId}`,
+      action:     previous ? REPO_CHANGED_ACTION : "GROUP_REPO_LINKED",
+      targetType: "GROUP",
+      targetId:   String(project.id),
+      details:    previous ? `${previous} -> ${checked.url}` : checked.url,
+    },
+  });
+
+  const label = groupLabel(project);
+  const who = actor?.name ?? "A member";
+  const message = previous
+    ? `${who} changed the GitHub repository of ${label}`
+    : `${who} linked the GitHub repository of ${label}`;
+  const common = { actorId: userId, type: "GROUP_REPO_CHANGED" as const, message, projectId: project.id, refType: "GROUP_REPO", refId: project.id, collapse: true };
+  await notify({ ...common, recipientIds: project.groupMemberships.map((m) => m.userId), link: `/student/group/${project.id}` });
+  // The instructor hears about a change, not about the first link; their link opens the instructor page.
+  if (previous && project.assignment) {
+    await notify({ ...common, recipientIds: project.assignment.classSection.instructorId, link: `/project/${project.id}` });
+  }
+
+  res.json({ repoUrl: checked.url, changed: true });
 });
 
 // PATCH /api/groups/:id — rename the group (leader or instructor only)
