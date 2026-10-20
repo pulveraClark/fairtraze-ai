@@ -7,6 +7,7 @@ import { PaginationBar } from "../components/PaginationBar";
 import { InstructorApprovals } from "../components/InstructorApprovals";
 import { DeletionRequests } from "../components/DeletionRequests";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { useToast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { parseAdminUsersView, serializeAdminUsersView, defaultDir } from "../lib/adminUsersUrl";
 import type { AdminUsersView, UserSort } from "../lib/adminUsersUrl";
@@ -41,6 +42,9 @@ interface DepartmentItem {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+/** How long the Undo button stays after a deactivation. */
+const UNDO_WINDOW_MS = 10_000;
+
 const ROLE_BADGE: Record<string, string> = {
   ADMIN:      "text-violet-700 bg-violet-50 border-violet-200",
   INSTRUCTOR: "text-indigo-700 bg-indigo-50 border-indigo-200",
@@ -84,8 +88,8 @@ export function AdminPage() {
   const [searchInput,    setSearchInput]    = useState(view.q);
   const searchRef = useRef<HTMLInputElement>(null);
   const updateView = (patch: Partial<AdminUsersView>) => setView((v) => ({ ...v, page: 1, ...patch }));
-  const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastApi = useToast();
+  const selfId = user?.id ?? -1;
 
   // Debounce the search box; the query only sees the settled value, and the
   // page resets to 1 only when that settled value actually changes.
@@ -118,9 +122,7 @@ export function AdminPage() {
   }, []);
 
   function showToast(type: "success" | "error", msg: string) {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ type, msg });
-    toastTimer.current = setTimeout(() => setToast(null), 4000);
+    toastApi.showToast({ message: msg, tone: type });
   }
 
   const queryClient = useQueryClient();
@@ -147,11 +149,11 @@ export function AdminPage() {
   }
 
   const [roleChange, setRoleChange] = useState<{ user: UserRecord; newRole: string } | null>(null);
-  const [statusTarget, setStatusTarget] = useState<UserRecord | null>(null);
 
   /** Asks first (ConfirmDialog below); the change itself runs in performRoleChange. */
   function changeRole(u: UserRecord, newRole: string) {
     if (newRole === u.systemRole) return;
+    if (u.id === selfId) { showToast("error", "You cannot change your own role. Ask another admin to do it."); return; }
     setRoleChange({ user: u, newRole });
   }
 
@@ -174,26 +176,34 @@ export function AdminPage() {
     }
   }
 
-  /** Asks first (ConfirmDialog below); the change itself runs in performToggleStatus. */
-  function toggleStatus(u: UserRecord) {
-    setStatusTarget(u);
-  }
-
-  async function performToggleStatus(u: UserRecord) {
-    const action = u.active ? "deactivate" : "activate";
-    setStatusTarget(null);
+  /**
+   * Deactivating is instant and reversible: the toast offers Undo for 10 s (it just sets the account active
+   * again; deactivation revokes nothing else, so nothing needs restoring). Activating needs no undo.
+   */
+  async function setActive(u: UserRecord, active: boolean, isUndo = false) {
+    if (u.id === selfId) { showToast("error", "You cannot deactivate your own account."); return; }
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/status`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ active: !u.active }),
+        body:    JSON.stringify({ active }),
       });
       const json = await res.json() as UserRecord & { error?: string };
-      if (!res.ok) { showToast("error", json.error ?? `Could not ${action} user.`); return; }
+      if (!res.ok) { showToast("error", json.error ?? `Could not ${active ? "activate" : "deactivate"} user.`); return; }
       queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
         ...old, users: old.users.map((x) => x.id === u.id ? { ...x, active: json.active } : x),
       });
-      showToast("success", `${u.name} ${json.active ? "activated" : "deactivated"}.`);
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      if (active) {
+        showToast("success", isUndo ? `${u.name} is active again.` : `${u.name} activated.`);
+      } else {
+        toastApi.showToast({
+          message:     `${u.name} deactivated.`,
+          actionLabel: "Undo",
+          durationMs:  UNDO_WINDOW_MS,
+          onAction:    () => { void setActive(u, true, true); },
+        });
+      }
     } catch {
       showToast("error", "Network error.");
     }
@@ -280,8 +290,6 @@ export function AdminPage() {
       setDeptSubmitting(false);
     }
   }
-
-  const selfId = user?.id ?? -1;
 
   /** Clicking the active column flips the direction; a new column starts in its natural direction. */
   function sortBy(sort: UserSort) {
@@ -387,21 +395,6 @@ export function AdminPage() {
             </div>
           </div>
 
-          {/* Toast feedback */}
-          {toast && (
-            <div className={`px-6 py-2.5 text-xs font-medium border-b flex items-center gap-2 ${
-              toast.type === "success"
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-red-50 text-red-700 border-red-200"
-            }`}>
-              {toast.type === "success"
-                ? <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                : <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              }
-              {toast.msg}
-            </div>
-          )}
-
           {deleteTarget && (
             <ConfirmDialog
               title={`Delete ${deleteTarget.name}?`}
@@ -413,9 +406,11 @@ export function AdminPage() {
             >
               <p>{deleteTarget.email}</p>
               <p className="mt-2">
-                Their profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates'
-                reports are unchanged. A group leader or an instructor who owns classes must be handed over first.
-                This cannot be undone.
+                The account is anonymised: their name, email, photo and sign-in are removed and cannot be recovered.
+                Their work stays in the reports it already appears in, shown as "Former member", so teammates' results do not change.
+              </p>
+              <p className="mt-2">
+                A group leader or an instructor who owns classes must be handed over first. This cannot be undone.
               </p>
             </ConfirmDialog>
           )}
@@ -428,17 +423,6 @@ export function AdminPage() {
               onCancel={() => setRoleChange(null)}
             >
               <p>From {ROLE_LABEL[roleChange.user.systemRole]} to {ROLE_LABEL[roleChange.newRole]}.</p>
-            </ConfirmDialog>
-          )}
-
-          {statusTarget && (
-            <ConfirmDialog
-              title={`${statusTarget.active ? "Deactivate" : "Activate"} ${statusTarget.name}?`}
-              confirmLabel={statusTarget.active ? "Deactivate" : "Activate"}
-              onConfirm={() => void performToggleStatus(statusTarget)}
-              onCancel={() => setStatusTarget(null)}
-            >
-              <p>{statusTarget.active ? "They will not be able to log in until reactivated." : "They will be able to log in again."}</p>
             </ConfirmDialog>
           )}
 
@@ -571,7 +555,7 @@ export function AdminPage() {
 
                               {/* Activate / Deactivate */}
                               <button
-                                onClick={() => toggleStatus(u)}
+                                onClick={() => void setActive(u, !u.active)}
                                 className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
                                   u.active
                                     ? "border-slate-200 text-slate-700 hover:border-red-200 hover:text-red-700 hover:bg-red-50"

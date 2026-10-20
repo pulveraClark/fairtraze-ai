@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
+import { ToastProvider } from "../components/Toast";
 import { AdminPage } from "./AdminPage";
 
 const users = [
@@ -37,7 +38,7 @@ beforeEach(() => window.history.replaceState({}, "", "/"));
 function renderPage() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <RouterProvider><AdminPage /></RouterProvider>
+      <ToastProvider><RouterProvider><AdminPage /></RouterProvider></ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -121,18 +122,60 @@ describe("AdminPage role and status changes ask in a dialog", () => {
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 
-  it("deactivate: ConfirmDialog first, then PATCH", async () => {
-    const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], active: false }) }));
+  it("deactivate: applies at once with no dialog, then offers Undo, which sets the account active again", async () => {
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({ ...users[1], active: JSON.parse(String(init?.body)).active }),
+    }));
     vi.stubGlobal("fetch", fetchFn);
     const confirmSpy = vi.spyOn(window, "confirm");
     renderPage();
     const user = userEvent.setup();
     await user.click(screen.getAllByTitle("Deactivate account").at(-1)!);
-    expect(screen.getByRole("alertdialog", { name: "Deactivate Pat Lee?" })).toBeInTheDocument();
-    expect(fetchFn).not.toHaveBeenCalledWith("/api/admin/users/2/status", expect.anything());
-    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Deactivate" }));
-    await waitFor(() => expect(fetchFn).toHaveBeenCalledWith("/api/admin/users/2/status", expect.objectContaining({ method: "PATCH" })));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledWith("/api/admin/users/2/status", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ active: false }) })));
+    expect(await screen.findByText("Pat Lee deactivated.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(fetchFn).toHaveBeenLastCalledWith("/api/admin/users/2/status", expect.objectContaining({ body: JSON.stringify({ active: true }) })));
+    expect(await screen.findByText("Pat Lee is active again.")).toBeInTheDocument();
     expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("the Undo toast stays for 10 seconds", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], active: false }) })));
+      renderPage();
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      await user.click(screen.getAllByTitle("Deactivate account").at(-1)!);
+      await screen.findByRole("button", { name: "Undo" });
+      await act(async () => { vi.advanceTimersByTime(9_000); });
+      expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+      await act(async () => { vi.advanceTimersByTime(1_500); });
+      expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("delete explains that the account is anonymised and the work stays in reports", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "More actions for Pat Lee" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete user…" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete Pat Lee?" });
+    expect(dialog).toHaveTextContent(/anonymised/);
+    expect(dialog).toHaveTextContent(/stays in the reports/);
+    expect(dialog).toHaveTextContent(/Former member/);
+  });
+
+  it("offers no role, deactivate or delete controls on the signed-in admin's own row", () => {
+    renderPage();
+    const row = screen.getByText("Admin Self", { selector: "p" }).closest("tr")!;
+    expect(within(row).queryByTitle("Change role")).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Deactivate" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
   });
 });
 
