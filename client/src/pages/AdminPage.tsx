@@ -433,7 +433,7 @@ export function AdminPage() {
                           <p className="font-medium text-slate-800 leading-tight">{u.name}</p>
                           <p className="text-xs text-slate-600 mt-0.5">{u.email}</p>
                           {isSelf && (
-                            <span className="text-xs text-indigo-500 font-semibold">you</span>
+                            <span className="text-xs text-indigo-700 font-semibold">you</span>
                           )}
                         </td>
 
@@ -502,8 +502,8 @@ export function AdminPage() {
                                 onClick={() => toggleStatus(u)}
                                 className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
                                   u.active
-                                    ? "border-slate-200 text-slate-500 hover:border-red-200 hover:text-red-600 hover:bg-red-50"
-                                    : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:text-emerald-600 hover:bg-emerald-50"
+                                    ? "border-slate-200 text-slate-700 hover:border-red-200 hover:text-red-700 hover:bg-red-50"
+                                    : "border-slate-200 text-slate-700 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50"
                                 }`}
                                 title={u.active ? "Deactivate account" : "Activate account"}
                               >
@@ -514,7 +514,7 @@ export function AdminPage() {
                               {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
                                 <button
                                   onClick={() => { void unlockUser(u); }}
-                                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-amber-200 hover:text-amber-600 hover:bg-amber-50 font-medium transition-colors"
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:border-amber-200 hover:text-amber-800 hover:bg-amber-50 font-medium transition-colors"
                                   title="Clear login lockout now"
                                 >
                                   Unlock
@@ -590,7 +590,7 @@ export function AdminPage() {
                   { label: "Classes",     value: overview.classSections,     textCls: "text-slate-700",  borderCls: "border-slate-200"  },
                   { label: "Projects",    value: overview.totalProjects,     textCls: "text-slate-700",  borderCls: "border-slate-200"  },
                   { label: "Groups",      value: overview.totalGroups,       textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Analyzed",    value: overview.analyzedGroups,    textCls: "text-emerald-600", borderCls: "border-emerald-200" },
+                  { label: "Analyzed",    value: overview.analyzedGroups,    textCls: "text-emerald-700", borderCls: "border-emerald-200" },
                 ].map(({ label, value, textCls, borderCls }) => (
                   <div key={label} className={`bg-white border ${borderCls} rounded-xl p-4 text-center`}>
                     <p className={`text-3xl font-bold ${textCls}`}>{value}</p>
@@ -600,7 +600,7 @@ export function AdminPage() {
               </div>
 
               {overview.openDisputesCount > 0 && (
-                <p className="text-xs text-amber-600 mt-3 px-1">
+                <p className="text-xs text-amber-800 mt-3 px-1">
                   {overview.openDisputesCount} open dispute{overview.openDisputesCount !== 1 ? "s" : ""} institution-wide
                 </p>
               )}
@@ -659,7 +659,7 @@ export function AdminPage() {
                         subjectCode={cls.subjectCode}
                         edpCode={cls.edpCode}
                         className="text-xs font-mono font-bold text-indigo-600"
-                        edpClassName="font-semibold text-indigo-400"
+                        edpClassName="font-semibold text-indigo-700"
                       />
                       <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
                       {cls.department && (
@@ -677,7 +677,7 @@ export function AdminPage() {
                       </span>
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs text-indigo-500 font-medium">View →</span>
+                  <span className="shrink-0 text-xs text-indigo-700 font-medium">View →</span>
                 </div>
               ))}
             </div>

@@ -93,7 +93,7 @@ function JoinCodeBadge({ code }: { code: string }) {
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
-        className={`ft-hit rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
+        className={`ft-hit rounded transition-colors ${copied ? "text-emerald-700" : "text-slate-500 hover:text-indigo-600"}`}
       >
         {copied ? (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -568,7 +568,7 @@ export function StudentClassPage({ classId }: Props) {
                     subjectCode={cls.subjectCode}
                     edpCode={cls.edpCode}
                     className="text-xs font-mono font-bold text-indigo-600"
-                    edpClassName="font-semibold text-indigo-400"
+                    edpClassName="font-semibold text-indigo-700"
                   />
                   {cls.department && (
                     <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">

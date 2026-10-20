@@ -22,9 +22,9 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_BADGE: Record<string, string> = {
-  INSTRUCTOR: "text-amber-400 border-amber-400/20 bg-amber-400/[0.06]",
-  ADMIN:      "text-amber-400 border-amber-400/20 bg-amber-400/[0.06]",
-  STUDENT:    "text-indigo-400 border-indigo-400/20 bg-indigo-400/[0.06]",
+  INSTRUCTOR: "text-amber-800 border-amber-400/20 bg-amber-400/[0.06]",
+  ADMIN:      "text-amber-800 border-amber-400/20 bg-amber-400/[0.06]",
+  STUDENT:    "text-indigo-700 border-indigo-400/20 bg-indigo-400/[0.06]",
 };
 
 const inputClass =

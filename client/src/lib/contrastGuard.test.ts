@@ -55,4 +55,35 @@ describe("secondary text contrast", () => {
     expect(ratio(hex!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
     expect(ratio(hex!, "#f8fafc")).toBeGreaterThanOrEqual(4.5);
   });
+
+  // Coloured text on a light surface: these shades are under 4.5:1 on white (amber/emerald/orange/teal/sky/cyan/lime 600 and lighter,
+  // indigo/red/rose/violet/blue/purple 500 and lighter). Use the -700 or -800 shade of the same colour. Checked in the components
+  // that carry meaning through colour: health/flag/status pills, the class cards' health counts, EDP codes and the role badge.
+  it("meaning-carrying components use -700/-800 coloured text, not lighter shades", () => {
+    const FAILING = /\b(?:hover:|group-hover:)?text-(?:(?:amber|emerald|green|orange|yellow|teal|sky|cyan|lime)-(?:100|200|300|400|500|600)|(?:indigo|red|rose|violet|blue|purple|fuchsia|pink)-(?:100|200|300|400|500))\b/;
+    const FILES = [
+      "components/ui/StatusPill.tsx", "components/FlagTag.tsx", "components/NoActivityPill.tsx",
+      "components/ClassCard.tsx", "components/ClassContainerCard.tsx", "components/ClassCodeLabel.tsx",
+      "pages/SettingsPage.tsx", "pages/StudentClassPage.tsx", "pages/AdminPage.tsx", "pages/ClassPage.tsx",
+    ];
+    const offenders: string[] = [];
+    for (const rel of FILES) {
+      fs.readFileSync(path.join(SRC, rel), "utf8").split(/\r?\n/).forEach((line, i) => {
+        if (line.includes("<svg") || !FAILING.test(line)) return; // decorative icons may stay lighter
+        offenders.push(`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`);
+      });
+    }
+    expect(offenders, `Use the -700/-800 shade:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("the -700/-800 text shades used for these components are at least 4.5:1 on white and on their light tint", () => {
+    const lum = (h: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+    const shades: Record<string, string> = { "amber-800": "#92400e", "emerald-700": "#047857", "indigo-700": "#4338ca", "red-700": "#b91c1c", "slate-700": "#334155" };
+    const surfaces = ["#ffffff", "#f8fafc", "#fffbeb", "#ecfdf5", "#eef2ff", "#fef2f2"]; // white, slate-50, amber-50, emerald-50, indigo-50, red-50
+    for (const [name, hex] of Object.entries(shades)) for (const bg of surfaces) expect(ratio(hex, bg), `${name} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+  });
 });

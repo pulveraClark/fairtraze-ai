@@ -137,7 +137,7 @@ export function ClassCard({ classId, assignmentLabel, items, onClick, edpCode, c
             <button
               onClick={handleCopyJoinCode}
               title={copied ? "Copied!" : "Copy join code"}
-              className={`ft-hit rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
+              className={`ft-hit rounded transition-colors ${copied ? "text-emerald-700" : "text-slate-500 hover:text-indigo-600"}`}
             >
               {copied ? (
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -161,13 +161,13 @@ export function ClassCard({ classId, assignmentLabel, items, onClick, edpCode, c
             </span>
           )}
           {moderate > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-medium">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
               {moderate} Moderate
             </span>
           )}
           {healthy > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
               {healthy} Healthy
             </span>
@@ -183,7 +183,7 @@ export function ClassCard({ classId, assignmentLabel, items, onClick, edpCode, c
 
         {/* Footer arrow */}
         <div className="flex justify-end">
-          <span className="text-xs text-slate-600 group-hover:text-indigo-500 transition-colors">
+          <span className="text-xs text-slate-600 group-hover:text-indigo-700 transition-colors">
             View groups →
           </span>
         </div>

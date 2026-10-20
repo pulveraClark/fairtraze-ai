@@ -97,13 +97,13 @@ export function ClassContainerCard({
               </span>
             )}
             {rollup.moderate > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />
                 {rollup.moderate} Moderate Risk
               </span>
             )}
             {rollup.healthy > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
                 {rollup.healthy} Healthy
               </span>
