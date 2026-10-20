@@ -108,3 +108,19 @@ export function useAdminDepartmentsQuery(token: string | null) {
     enabled: !!token,
   });
 }
+
+export interface AdminUserDetails { classCount: number; groupCount: number }
+
+/** Counts for the user details panel; only fetched while the panel is open. */
+export function useAdminUserDetailsQuery(token: string | null, userId: number | null) {
+  return useQuery({
+    queryKey: ["admin-user-details", userId],
+    queryFn: async () => {
+      const res  = await fetch(`/api/admin/users/${userId}/details`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = (await res.json()) as Partial<AdminUserDetails> & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not load details.");
+      return { classCount: json.classCount ?? 0, groupCount: json.groupCount ?? 0 } satisfies AdminUserDetails;
+    },
+    enabled: !!token && userId !== null,
+  });
+}

@@ -7,6 +7,7 @@ import { PaginationBar } from "../components/PaginationBar";
 import { InstructorApprovals } from "../components/InstructorApprovals";
 import { DeletionRequests } from "../components/DeletionRequests";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { AdminUserDetails } from "../components/AdminUserDetails";
 import { useToast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { parseAdminUsersView, serializeAdminUsersView, defaultDir } from "../lib/adminUsersUrl";
@@ -90,6 +91,14 @@ export function AdminPage() {
   const updateView = (patch: Partial<AdminUsersView>) => setView((v) => ({ ...v, page: 1, ...patch }));
   const toastApi = useToast();
   const selfId = user?.id ?? -1;
+
+  // Details panel: opened from the name button or by clicking the row (not from its own controls).
+  const [detailsUser, setDetailsUser] = useState<UserRecord | null>(null);
+  const [detailsOpener, setDetailsOpener] = useState<HTMLElement | null>(null);
+  function openDetails(u: UserRecord) {
+    setDetailsOpener(document.querySelector<HTMLElement>(`[data-open-details="${u.id}"]`));
+    setDetailsUser(u);
+  }
 
   // Debounce the search box; the query only sees the settled value, and the
   // page resets to 1 only when that settled value actually changes.
@@ -469,11 +478,27 @@ export function AdminPage() {
                     const stripe = i % 2 === 0 ? "bg-white" : "bg-gray-50";
                     const isFormer = !!u.deletedAt;
                     return (
-                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-100 ${stripe} ${isFormer ? "text-slate-500" : !u.active ? "opacity-50" : ""}`}>
+                      <tr
+                        key={u.id}
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest("button, select, input, a, label, [role='menu']")) return;
+                          openDetails(u);
+                        }}
+                        className={`cursor-pointer text-sm transition-colors hover:bg-slate-100 ${stripe} ${isFormer ? "text-slate-500" : !u.active ? "opacity-50" : ""}`}
+                      >
 
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">
-                          <p className="font-medium text-slate-800 leading-tight">{u.name}</p>
+                          <p className="font-medium text-slate-800 leading-tight">
+                            <button
+                              type="button"
+                              data-open-details={u.id}
+                              onClick={() => openDetails(u)}
+                              className="min-h-6 rounded text-left font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            >
+                              {u.name}
+                            </button>
+                          </p>
                           <p className="text-xs text-slate-600 mt-0.5">{u.email}</p>
                           {isSelf && (
                             <span className="text-xs text-indigo-700 font-semibold">you</span>
@@ -726,6 +751,8 @@ export function AdminPage() {
         </section>
 
       </main>
+
+      <AdminUserDetails user={detailsUser} onClose={() => setDetailsUser(null)} restoreFocusTo={detailsOpener} />
 
       <AppFooter />
     </div>

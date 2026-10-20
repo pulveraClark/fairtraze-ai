@@ -28,6 +28,7 @@ vi.mock("../hooks/useAdminQueries", async (importOriginal) => ({
   },
   useAdminOverviewQuery: () => ({ data: null, isLoading: false, isError: false }),
   useAdminDepartmentsQuery: () => ({ data: [], isLoading: false, isError: false }),
+  useAdminUserDetailsQuery: (_t: unknown, id: number | null) => ({ data: id === null ? undefined : { classCount: 3, groupCount: 2 }, isLoading: false, isError: false }),
 }));
 vi.mock("../components/InstructorApprovals", () => ({ InstructorApprovals: () => null }));
 vi.mock("../components/DeletionRequests", () => ({ DeletionRequests: () => null }));
@@ -172,7 +173,7 @@ describe("AdminPage role and status changes ask in a dialog", () => {
 
   it("offers no role, deactivate or delete controls on the signed-in admin's own row", () => {
     renderPage();
-    const row = screen.getByText("Admin Self", { selector: "p" }).closest("tr")!;
+    const row = screen.getByRole("button", { name: "Admin Self" }).closest("tr")!;
     expect(within(row).queryByTitle("Change role")).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: "Deactivate" })).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
@@ -224,5 +225,37 @@ describe("AdminPage filters, sort and URL", () => {
     screen.getByRole("combobox", { name: "Filter by role" }).focus();
     await user.keyboard("/");
     expect(search).not.toHaveFocus();
+  });
+});
+
+describe("AdminPage details panel", () => {
+  it("opens from the name button or a row click, shows account facts and counts only, and closes with Esc", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Pat Lee" }));
+    const dialog = screen.getByRole("dialog", { name: "Pat Lee - account details" });
+    expect(within(dialog).getByText("pat@x.t")).toBeInTheDocument();
+    expect(within(dialog).getByText("Student")).toBeInTheDocument();
+    expect(within(dialog).getByText("Never")).toBeInTheDocument();
+    expect(within(dialog).getByText("Not set")).toBeInTheDocument();
+    const classes = within(dialog).getByText("Classes").nextElementSibling!;
+    const groups = within(dialog).getByText("Groups").nextElementSibling!;
+    expect(classes).toHaveTextContent("3");
+    expect(groups).toHaveTextContent("2");
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("pat@x.t"));
+    expect(screen.getByRole("dialog", { name: "Pat Lee - account details" })).toBeInTheDocument();
+  });
+
+  it("does not open when a control inside the row is used", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], active: false }) })));
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getAllByTitle("Deactivate account").at(-1)!);
+    expect(screen.queryByRole("dialog", { name: /account details/ })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });

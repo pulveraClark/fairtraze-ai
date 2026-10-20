@@ -65,6 +65,27 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
   res.json({ users, total, formerCount, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
 });
 
+// ── GET /api/admin/users/:id/details ──────────────────────────────────────────
+// Counts only, for the details panel: how many classes the person owns or is enrolled in, and how many
+// groups they belong to. No class, group or report content is returned.
+
+adminRouter.get("/api/admin/users/:id/details", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid user id" }); return; }
+  const userId = idResult.data;
+
+  const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!exists) { res.status(404).json({ error: "User not found" }); return; }
+
+  const [owned, enrolled, groupCount] = await Promise.all([
+    prisma.classSection.count({ where: { instructorId: userId } }),
+    prisma.classEnrollment.count({ where: { userId } }),
+    prisma.groupMembership.count({ where: { userId } }),
+  ]);
+
+  res.json({ classCount: owned + enrolled, groupCount });
+});
+
 // ── PATCH /api/admin/users/:id/role ──────────────────────────────────────────
 // Change a user's systemRole. An admin cannot demote their own account.
 
