@@ -6,13 +6,13 @@ vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t", user: {
 
 const asgn = (over: object = {}, group: object = {}) => ({
   id: 9, title: "Project", deadline: null, sourceType: "COMBINED", maxGroupSize: 4, description: null, attachments: [],
-  myGroup: { id: 3, groupName: "Group 1", repoUrl: "", role: "MEMBER", pendingRequestCount: 0, report: null, ...group },
+  myGroup: { id: 3, groupName: "Group 1", repoUrl: null, role: "MEMBER", pendingRequestCount: 0, report: null, ...group },
   myRequest: null, groups: [], ...over,
 });
 
 function renderCard(a: ReturnType<typeof asgn>) {
   const onNavigate = vi.fn(); const onManage = vi.fn();
-  render(<ProjectCard asgn={a as never} token="t" user={{ githubUsername: "x" }} onNavigate={onNavigate} onManage={onManage} onChanged={vi.fn()} refreshUser={async () => null} />);
+  render(<ProjectCard asgn={a as never} token="t" onNavigate={onNavigate} onManage={onManage} onChanged={vi.fn()} />);
   return { onNavigate, onManage };
 }
 

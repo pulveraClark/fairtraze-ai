@@ -583,13 +583,6 @@ groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), r
     return;
   }
 
-  // GitHub username required for GitHub / Combined assignments
-  const needsGitHub = project.assignment.sourceType === "GITHUB" || project.assignment.sourceType === "COMBINED";
-  if (needsGitHub && !user?.githubUsername) {
-    res.status(400).json({ error: "Set your GitHub username in Settings before requesting to join this group." });
-    return;
-  }
-
   // Already a member of a group in this assignment?
   const alreadyIn = await prisma.groupMembership.findFirst({
     where: { userId, project: { assignmentId: project.assignmentId } },

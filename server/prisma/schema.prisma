@@ -318,7 +318,7 @@ model Project {
   id                       Int               @id @default(autoincrement())
   groupName                String            @default("")   // student team name, e.g. "Group 1"
   name                     String                            // app/project name, e.g. "FairTraze AI"
-  repoUrl                  String                            // GitHub repository URL
+  repoUrl                  String?                           // GitHub repository URL; null until the group links one (Docs-only groups never do)
   assignmentLabel          String            @default("")   // fallback display string, e.g. "CC-APPSDEV22 — Applications Development"
   assignmentId             Int?
   membershipChangedAt      DateTime?                         // updated when members join or leave; used to detect stale reports

@@ -42,7 +42,7 @@ interface ClassInfo {
 interface AssignmentGroup {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   memberCount: number;
   lastAnalyzedAt: string | null;
   isAnalyzed: boolean;

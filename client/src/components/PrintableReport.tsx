@@ -70,7 +70,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel, showFooter
     year: "numeric", month: "long", day: "numeric",
   });
 
-  const repoDisplay = repoUrl.replace("https://github.com/", "github.com/");
+  const repoDisplay = repoUrl ? repoUrl.replace("https://github.com/", "github.com/") : "Not linked";
 
   const summary = [
     { label: "Group",          value: groupName },

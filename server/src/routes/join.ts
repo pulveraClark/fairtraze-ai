@@ -353,13 +353,13 @@ joinRouter.get("/api/student/requests", ...requireRole("STUDENT"), async (req, r
 
 // ─── POST /api/join/create-group ─────────────────────────────────────────────
 // Student creates a new group for an assignment, becoming the leader.
-// Body: { projectId (the assignment id), groupName, repoUrl }
+// Body: { assignmentId, groupName }. A repository is linked afterwards from the group's setup card
+// (PUT /api/groups/:id/repo); the creator's GitHub username is likewise added there, not required here.
 // Requires enrollment in the assignment's class.
 joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVerifiedEmail, async (req, res) => {
   const result = z.object({
     assignmentId: z.number().int().positive(),
     groupName:    z.string().min(1, "Group name is required"),
-    repoUrl:      z.string().default(""),
   }).safeParse(req.body);
 
   if (!result.success) {
@@ -394,17 +394,6 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVeri
     return;
   }
 
-  // GitHub username + repo URL only required for GitHub-tracked assignments
-  const needsGitHub = assignment.sourceType === "GITHUB" || assignment.sourceType === "COMBINED";
-  if (needsGitHub && !user?.githubUsername) {
-    res.status(400).json({ error: "Set your GitHub username in Settings before creating this group." });
-    return;
-  }
-  if (needsGitHub && !result.data.repoUrl.trim()) {
-    res.status(400).json({ error: "GitHub repository URL is required for this project." });
-    return;
-  }
-
   // One group per student per assignment
   const alreadyIn = await prisma.groupMembership.findFirst({
     where: { userId, project: { assignmentId: assignment.id } },
@@ -427,7 +416,7 @@ joinRouter.post("/api/join/create-group", ...requireRole("STUDENT"), requireVeri
     data: {
       groupName:    trimmedName,
       name:         trimmedName, // legacy column, kept in sync with groupName — not surfaced anywhere
-      repoUrl:      result.data.repoUrl.trim(),
+      repoUrl:      null, // linked later from the setup card; Docs-only groups never link one
       assignmentId: assignment.id,
     },
   });

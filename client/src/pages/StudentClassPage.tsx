@@ -31,7 +31,7 @@ const SOURCE_LABEL: Record<string, string> = {
 interface MyGroup {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
   report: { gini: number | null; teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
@@ -113,48 +113,34 @@ function JoinCodeBadge({ code }: { code: string }) {
 export function ProjectCard({
   asgn,
   token,
-  user,
   onNavigate,
   onManage,
   onChanged,
-  refreshUser,
 }: {
   asgn: AssignmentDetail;
   token: string | null;
-  user: { githubUsername?: string | null } | null;
   onNavigate: (projectId: number, tab?: string) => void;
   onManage:   (projectId: number) => void;
   onChanged:  () => void;
-  refreshUser: () => Promise<{ githubUsername?: string | null } | null>;
 }) {
   const [mode, setMode]             = useState<"idle" | "create" | "join">("idle");
   const [showBrief, setShowBrief]   = useState(false);
   const [groupName, setGroupName]   = useState("");
-  const [repoUrl, setRepoUrl]       = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState("");
 
-  const needsGitHub = asgn.sourceType === "GITHUB" || asgn.sourceType === "COMBINED";
-  const noGithub    = needsGitHub && !user?.githubUsername;
   const isPending   = asgn.myRequest?.status === "PENDING";
 
   async function handleCreate() {
     if (!groupName.trim()) { setError("Enter a group name."); return; }
-    if (needsGitHub && !repoUrl.trim()) { setError("Enter the GitHub repository URL."); return; }
-    const fresh = await refreshUser();
-    const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
-    if (needsGitHub && !githubUsername) {
-      setError("Add your GitHub username in Settings before creating a group.");
-      return;
-    }
     setSubmitting(true);
     setError("");
     try {
       const res = await fetch("/api/join/create-group", {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim(), repoUrl: repoUrl.trim() }),
+        body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim() }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? "Could not create group."); return; }
@@ -166,12 +152,6 @@ export function ProjectCard({
 
   async function handleRequest() {
     if (!selectedId) { setError("Select a group to request."); return; }
-    const fresh = await refreshUser();
-    const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
-    if (needsGitHub && !githubUsername) {
-      setError("Add your GitHub username in Settings before requesting to join a group.");
-      return;
-    }
     setSubmitting(true);
     setError("");
     try {
@@ -347,14 +327,6 @@ export function ProjectCard({
               </div>
             )}
 
-            {/* GitHub warning if needed */}
-            {noGithub && mode !== "idle" && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
-                <strong>GitHub username required for this project.</strong>{" "}
-                <a href="/settings" className="underline font-semibold hover:text-amber-900">Add it in Settings</a> first.
-              </div>
-            )}
-
             {/* Idle: action buttons */}
             {mode === "idle" && (
               <div className="flex items-center gap-2 flex-wrap">
@@ -391,26 +363,17 @@ export function ProjectCard({
                   disabled={submitting}
                   className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
-                {needsGitHub && (
-                  <input
-                    value={repoUrl}
-                    onChange={(e) => { setRepoUrl(e.target.value); setError(""); }}
-                    placeholder="GitHub repo URL — e.g. github.com/org/repo"
-                    disabled={submitting}
-                    className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                )}
                 {error && <p className="text-xs text-red-600">{error}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleCreate()}
-                    disabled={submitting || noGithub}
+                    disabled={submitting}
                     className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Creating…" : "Create Group"}
                   </button>
                   <button
-                    onClick={() => { setMode("idle"); setError(""); setGroupName(""); setRepoUrl(""); }}
+                    onClick={() => { setMode("idle"); setError(""); setGroupName(""); }}
                     className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
                   >
                     Cancel
@@ -469,7 +432,7 @@ export function ProjectCard({
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleRequest()}
-                    disabled={submitting || !selectedId || noGithub}
+                    disabled={submitting || !selectedId}
                     className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Sending…" : "Send Request"}
@@ -494,7 +457,7 @@ export function ProjectCard({
 interface Props { classId: number }
 
 export function StudentClassPage({ classId }: Props) {
-  const { user, token, refreshUser } = useAuth();
+  const { user, token } = useAuth();
   const { navigate }                 = useRouter();
 
   const queryClient = useQueryClient();
@@ -677,11 +640,9 @@ export function StudentClassPage({ classId }: Props) {
                   key={asgn.id}
                   asgn={asgn}
                   token={token}
-                  user={user}
                   onNavigate={(projectId, tab) => navigate(`/student/group/${projectId}${tab ? `?tab=${tab}` : ""}`)}
                   onManage={(projectId) => setManagingProjectId(projectId)}
                   onChanged={refresh}
-                  refreshUser={refreshUser}
                 />
               ))}
             </div>

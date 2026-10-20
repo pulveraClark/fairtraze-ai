@@ -86,12 +86,12 @@ export async function createAssignment(
   });
 }
 
-export async function createProject(overrides: { assignmentId?: number | null; groupName?: string } = {}) {
+export async function createProject(overrides: { assignmentId?: number | null; groupName?: string; repoUrl?: string | null } = {}) {
   return prisma.project.create({
     data: {
       groupName: overrides.groupName ?? "Test Group",
       name: "Test Project",
-      repoUrl: "https://github.com/example/repo",
+      repoUrl: overrides.repoUrl === undefined ? "https://github.com/example/repo" : overrides.repoUrl,
       assignmentId: overrides.assignmentId ?? null,
     },
   });

@@ -294,6 +294,13 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
   const sourceType = project.assignment?.sourceType ?? null;
   const deadlineMs = project.assignment?.deadline ? project.assignment.deadline.getTime() : null;
 
+  // A GitHub or Combined group can exist before it links a repository. Say so plainly instead of
+  // letting the GitHub fetch fail with a parse error. Plain JSON, like the other pre-stream errors.
+  if ((sourceType === "GITHUB" || sourceType === "COMBINED") && !project.repoUrl) {
+    res.status(409).json({ code: "REPO_NOT_LINKED", error: "Link a GitHub repository first." });
+    return;
+  }
+
   // Validation/ownership errors above stay plain JSON; from here on a streaming client
   // gets stage events and a terminal done/error event.
   progress.open();
@@ -374,7 +381,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     const resolveName = githubNameResolver(project.members);
     progress.emit("github", { contributors: 0, commits: 0, files: 0 });
     const [githubResult, docsResult] = await Promise.allSettled([
-      fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName)),
+      fetchRepoStats(project.repoUrl ?? "", githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName)),
       computeDocumentRawStats(project.document?.id ?? null, roster).then((raw) => {
         emitDocsProgress(progress, raw);
         return raw;
@@ -487,7 +494,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
   let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
   try {
     progress.emit("github", { contributors: 0, commits: 0, files: 0 });
-    rawData = await fetchRepoStats(project.repoUrl, githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName));
+    rawData = await fetchRepoStats(project.repoUrl ?? "", githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName));
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
     if (e.status === 404) {

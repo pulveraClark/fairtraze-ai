@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 export interface MyGroup {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   role: "LEADER" | "MEMBER";
   report: { gini: number | null; teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
 }

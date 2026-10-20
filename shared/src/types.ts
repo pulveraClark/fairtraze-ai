@@ -2,7 +2,7 @@
 export interface Project {
   id: number;
   name: string;
-  repoUrl: string;
+  repoUrl: string | null;
   createdAt: Date;
 }
 
@@ -238,7 +238,7 @@ export type AnyScoredMember = ScoredMember | DocumentScoredMember | CombinedScor
 
 export interface AnalyzeResponse {
   projectId: number;
-  repoUrl: string;
+  repoUrl: string | null;
   analyzedAt: string;
   unmatchedGitHubLogins: string[];
   report: TeamReport<AnyScoredMember>;
@@ -294,7 +294,7 @@ export interface StoredReportResponse {
   projectId: number;
   assignmentId: number | null; // the project (Assignment) whose scoring settings apply to this group
   groupName: string;  // student team name — the group's single name
-  repoUrl: string;
+  repoUrl: string | null;
   analyzedAt: string;
   report: TeamReport<AnyScoredMember>;
   narrative: string | null;

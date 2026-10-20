@@ -1,7 +1,7 @@
 interface ProjectOption {
   id: number;
   name: string;
-  repoUrl: string;
+  repoUrl: string | null;
 }
 
 interface Props {

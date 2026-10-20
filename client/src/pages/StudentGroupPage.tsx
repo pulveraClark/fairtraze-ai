@@ -45,7 +45,7 @@ interface RoleSuggestionData {
 interface GroupDetail {
   classSection: { id: number; subjectCode: string; subjectName: string; department: { id: number; name: string; code: string } | null; edpCode: string; };
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; description: string | null; attachments: BriefAttachment[]; };
-  project:      { id: number; groupName: string; repoUrl: string; };
+  project:      { id: number; groupName: string; repoUrl: string | null; };
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
   hasReport:    boolean;
   docsDataApproximate?: boolean;

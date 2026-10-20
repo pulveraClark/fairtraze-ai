@@ -39,7 +39,7 @@ async function main() {
     // ── 1. Fetch GitHub data ──────────────────────────────────────────────
     let rawData: Awaited<ReturnType<typeof fetchRepoStats>>;
     try {
-      rawData = await fetchRepoStats(project.repoUrl, githubToken);
+      rawData = await fetchRepoStats(project.repoUrl ?? "", githubToken);
     } catch (err) {
       console.error(`  ✗ GitHub fetch failed: ${(err as { message?: string }).message ?? String(err)}`);
       continue;

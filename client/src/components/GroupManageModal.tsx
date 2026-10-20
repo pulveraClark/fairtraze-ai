@@ -50,7 +50,7 @@ interface GroupMember {
 interface GroupDetail {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   sourceType: "GITHUB" | "EDITOR" | "COMBINED" | null;
   maxGroupSize: number | null;
   members: GroupMember[];
