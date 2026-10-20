@@ -16,6 +16,7 @@ vi.mock("../context/AuthContext", () => ({
 }));
 const former = { id: 3, name: "Former member", email: "deleted-3@deleted.invalid", systemRole: "STUDENT", githubUsername: null, active: false, lockedUntil: null, createdAt: "2026-08-03T00:00:00Z", deletedAt: "2026-09-01T00:00:00Z" };
 const usersQueryCalls: Array<{ includeFormer: boolean }> = [];
+let emptyResult = false;
 let lastParams: Record<string, unknown> = {};
 
 vi.mock("../hooks/useAdminQueries", async (importOriginal) => ({
@@ -23,7 +24,7 @@ vi.mock("../hooks/useAdminQueries", async (importOriginal) => ({
   useAdminUsersQuery: (_token: string | null, params: { includeFormer: boolean }) => {
     lastParams = params;
     usersQueryCalls.push({ includeFormer: params.includeFormer });
-    const shown = params.includeFormer ? [...users, former] : users;
+    const shown = emptyResult ? [] : params.includeFormer ? [...users, former] : users;
     return { data: { users: shown, total: shown.length, formerCount: 1, totalPages: 1, pageSize: 10 }, isLoading: false, isError: false, refetch: vi.fn() };
   },
   useAdminOverviewQuery: () => ({ data: null, isLoading: false, isError: false }),
@@ -339,5 +340,28 @@ describe("AdminPage export CSV", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Export CSV" }));
     expect(await screen.findByText("Too many users to export at once.")).toBeInTheDocument();
+  });
+});
+
+describe("AdminPage empty state", () => {
+  afterEach(() => { emptyResult = false; });
+
+  it("offers Clear filters when filters hide everyone, and clears search, filters and the URL", async () => {
+    emptyResult = true;
+    window.history.replaceState({}, "", "/admin?q=zzz&role=STUDENT&status=inactive&sort=name&dir=asc");
+    renderPage();
+    const user = userEvent.setup();
+    expect(screen.getByText("No users match these filters")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(lastParams).toMatchObject({ search: "", roleFilter: "", status: "", lastActive: "", sort: "name" });
+    expect(screen.getByRole("searchbox", { name: /Search users/ })).toHaveValue("");
+    await waitFor(() => expect(window.location.search).toBe("?sort=name&dir=asc"));
+  });
+
+  it("with no filters set, does not show Clear filters", () => {
+    emptyResult = true;
+    renderPage();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+    expect(screen.getByText("No users yet.")).toBeInTheDocument();
   });
 });

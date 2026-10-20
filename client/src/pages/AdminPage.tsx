@@ -10,7 +10,7 @@ import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { AdminUserDetails } from "../components/AdminUserDetails";
 import { useToast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
-import { parseAdminUsersView, serializeAdminUsersView, defaultDir } from "../lib/adminUsersUrl";
+import { parseAdminUsersView, serializeAdminUsersView, defaultDir, hasActiveFilters, clearFilters } from "../lib/adminUsersUrl";
 import type { AdminUsersView, UserSort } from "../lib/adminUsersUrl";
 import {
   adminUsersKey,
@@ -581,7 +581,34 @@ export function AdminPage() {
 
           {/* Empty */}
           {!usersLoading && !usersError && displayedUsers.length === 0 && (
-            <p className="px-6 py-14 text-center text-sm text-slate-600">No users match your filters.</p>
+            <div className="px-6 py-14 text-center">
+              {hasActiveFilters(view) ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-900">No users match these filters</p>
+                  <p className="mt-1 text-sm text-slate-700">Try a different search, or remove a filter.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setSearchInput(""); setView((v) => clearFilters(v)); }}
+                    className="mt-4 min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              ) : view.page > 1 ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-900">There is nothing on this page</p>
+                  <button
+                    type="button"
+                    onClick={() => setView((v) => ({ ...v, page: 1 }))}
+                    className="mt-4 min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  >
+                    Back to the first page
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-slate-700">No users yet.</p>
+              )}
+            </div>
           )}
 
           {/* Table */}
