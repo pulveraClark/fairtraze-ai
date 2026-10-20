@@ -11,7 +11,7 @@ import type {
   TeamReport, AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember,
 } from "@shared/types.js";
 
-import { contentHasNoRecordedActivity, hasNoRecordedActivity } from "../lib/reportActivity.js";
+import { contentHasNoRecordedActivity, hasNoRecordedActivity, quietSource } from "../lib/reportActivity.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const joinRouter = Router();
@@ -745,6 +745,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       teamHealth:  teamReport.teamHealth,
       analyzedAt:  latestReport.generatedAt.toISOString(),
       noActivity:  hasNoRecordedActivity(teamReport.members),
+      quietSource: hasNoRecordedActivity(teamReport.members) ? null : quietSource(teamReport.members),
       memberCount: teamReport.memberCount,
       deadlineWindowBasis: teamReport.deadlineWindowBasis,
       myContribution,

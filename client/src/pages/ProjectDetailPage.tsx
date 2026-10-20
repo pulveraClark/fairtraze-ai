@@ -25,7 +25,7 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { groupCrumbLabels } from "../lib/groupCrumbs";
-import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth } from "../lib/groupActivity";
+import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth, quietSource, quietSourceText } from "../lib/groupActivity";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
@@ -365,6 +365,19 @@ export function ProjectDetailPage({ projectId }: Props) {
       id: "docs-approximate",
       priority: NOTICE_PRIORITY.docsApproximate,
       node: <DocsDataApproximateNotice fixedAt={stored.docsDataFixedAt} />,
+    });
+  }
+
+  const quiet = stored && !noActivity ? quietSource(storedMembers as Parameters<typeof quietSource>[0]) : null;
+  if (quiet) {
+    reportNotices.push({
+      id: "quiet-source",
+      priority: NOTICE_PRIORITY.quietSource,
+      node: (
+        <div role="note" className="rounded-xl border border-slate-300 bg-slate-100 p-4 text-base leading-normal text-slate-900">
+          {quietSourceText(quiet)}
+        </div>
+      ),
     });
   }
 

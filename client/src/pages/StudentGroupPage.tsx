@@ -15,6 +15,7 @@ import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { StudentNoteCard } from "../components/StudentNoteCard";
 import { NoActivityPill } from "../components/NoActivityPill";
+import { quietSourceText } from "../lib/groupActivity";
 import { NOTE_STATUS, sortNotes } from "../lib/notes";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
@@ -63,6 +64,7 @@ interface GroupDetail {
     teamHealth:  string;
     /** Server flag: no member has any recorded activity yet (display only). */
     noActivity?: boolean;
+    quietSource?: "GitHub" | "Docs" | null;
     analyzedAt:  string;
     memberCount: number;
     deadlineWindowBasis: "assignment-deadline" | "activity-span";
@@ -820,6 +822,12 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     </p>
                     <p className="mt-1 text-xs text-slate-700">Last analyzed {new Date(report.analyzedAt).toLocaleDateString()}</p>
                   </div>
+                )}
+
+                {report.quietSource && !report.noActivity && (
+                  <p role="note" className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-900">
+                    {quietSourceText(report.quietSource)}
+                  </p>
                 )}
 
                 {/* Members see their own overall share in one compact tile; the leader's is the "You" row below */}

@@ -47,3 +47,32 @@ export function noActivityCount(items: ReadonlyArray<Pick<ProjectSummaryItem, "i
 export function noActivityRollupText(count: number): string {
   return `${count} group${count !== 1 ? "s" : ""}: no activity yet`;
 }
+
+export type QuietSource = "GitHub" | "Docs";
+
+interface CombinedActivityMember {
+  githubContributionShare?: number | null;
+  documentContributionShare?: number | null;
+  github?: { commits?: number | null } | null;
+  document?: { sessionCount?: number | null } | null;
+}
+
+/**
+ * For a Combined report: the one source (GitHub or Docs) in which nobody has any recorded activity while the
+ * other has some. Null for non-Combined members, when both sources are quiet (the no-activity card covers that),
+ * or when both have activity. Display only.
+ */
+export function quietSource(members: ReadonlyArray<CombinedActivityMember>): QuietSource | null {
+  const isCombined = members.length > 0 && members.every((m) => "githubContributionShare" in m && "documentContributionShare" in m);
+  if (!isCombined) return null;
+  const githubQuiet = members.every((m) => !m.githubContributionShare && !m.github?.commits);
+  const docsQuiet = members.every((m) => !m.documentContributionShare && !m.document?.sessionCount);
+  if (githubQuiet === docsQuiet) return null;
+  return githubQuiet ? "GitHub" : "Docs";
+}
+
+/** "No Docs activity yet. Shares only cover GitHub so far." */
+export function quietSourceText(source: QuietSource): string {
+  const other = source === "GitHub" ? "Docs" : "GitHub";
+  return `No ${source} activity yet. Shares only cover ${other} so far.`;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { noActivityFromShares, summaryHasNoActivity, visibleFlags, presentedHealth, isAtRiskGroup, noActivityCount, noActivityRollupText } from "./groupActivity";
+import { noActivityFromShares, summaryHasNoActivity, visibleFlags, presentedHealth, isAtRiskGroup, noActivityCount, noActivityRollupText, quietSource, quietSourceText } from "./groupActivity";
 
 const item = (shares: number[], over: Record<string, unknown> = {}) => ({
   isAnalyzed: true,
@@ -41,5 +41,30 @@ describe("group activity (display only)", () => {
     expect(noActivityCount([item([0, 0]), item([0.5, 0.5]), item([0], { isAnalyzed: false })])).toBe(1);
     expect(noActivityRollupText(1)).toBe("1 group: no activity yet");
     expect(noActivityRollupText(3)).toBe("3 groups: no activity yet");
+  });
+});
+
+describe("quietSource (Combined)", () => {
+  const m = (gh: number, doc: number, commits = 0, sessions = 0) => ({
+    githubContributionShare: gh, documentContributionShare: doc, github: { commits }, document: { sessionCount: sessions },
+  });
+  it("names the source with no activity while the other has some", () => {
+    expect(quietSource([m(0, 0.6, 0, 3), m(0, 0.4, 0, 2)])).toBe("GitHub");
+    expect(quietSource([m(0.5, 0, 4, 0), m(0.5, 0, 2, 0)])).toBe("Docs");
+  });
+  it("is null when both have activity, or when both are quiet (the no-activity card covers that)", () => {
+    expect(quietSource([m(0.5, 0.5, 2, 2), m(0.5, 0.5, 1, 1)])).toBeNull();
+    expect(quietSource([m(0, 0), m(0, 0)])).toBeNull();
+  });
+  it("one member with a commit or session keeps that source active even at share 0", () => {
+    expect(quietSource([m(0, 0.5, 1, 1), m(0, 0.5, 0, 1)])).toBeNull();
+  });
+  it("is null for GitHub-only or Editor-only members and for an empty list", () => {
+    expect(quietSource([{ contributionShare: 0.5 } as never])).toBeNull();
+    expect(quietSource([])).toBeNull();
+  });
+  it("words it as requested", () => {
+    expect(quietSourceText("Docs")).toBe("No Docs activity yet. Shares only cover GitHub so far.");
+    expect(quietSourceText("GitHub")).toBe("No GitHub activity yet. Shares only cover Docs so far.");
   });
 });
