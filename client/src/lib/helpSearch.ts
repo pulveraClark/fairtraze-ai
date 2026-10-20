@@ -11,12 +11,42 @@ export function queryWords(query: string): string[] {
   return n ? n.split(" ") : [];
 }
 
-/** True when every typed word appears somewhere in the text. An empty query matches everything. */
+/**
+ * Staff-side words and their student-view wording, so a search finds the page's plain-language text
+ * (e.g. students never see "free-rider" or "Gini"). Keys and targets are normalized phrases.
+ */
+export const SYNONYMS: ReadonlyArray<readonly [string, string]> = [
+  ["free rider", "low contribution"],
+  ["inactive", "low contribution"],
+  ["gini", "how evenly work is shared"],
+  ["inequality", "how evenly work is shared"],
+  ["dispute", "note"],
+];
+
+/** The synonyms whose key appears as whole words in the query, as [key, target]. */
+function synonymsIn(query: string): [string, string][] {
+  const padded = ` ${normalize(query)} `;
+  return SYNONYMS.filter(([key]) => padded.includes(` ${key} `)).map(([k, t]) => [k, t]);
+}
+
+/** The query as typed plus one rewritten copy per synonym it contains. */
+function variants(query: string): string[] {
+  const n = normalize(query);
+  const out = [n];
+  for (const [key, target] of synonymsIn(query)) out.push(normalize(` ${n} `.replace(` ${key} `, ` ${target} `)));
+  return out;
+}
+
+/** True when the text has every typed word, or every word of a synonym-rewritten query. An empty query matches everything. */
 export function matches(text: string, query: string): boolean {
-  const words = queryWords(query);
-  if (words.length === 0) return true;
+  if (queryWords(query).length === 0) return true;
   const haystack = normalize(text);
-  return words.every((w) => haystack.includes(w));
+  return variants(query).some((v) => v.split(" ").every((w) => haystack.includes(w)));
+}
+
+/** What to highlight: the typed words plus the student wording of any synonym used. */
+export function highlightTerms(query: string): string[] {
+  return [...new Set([...queryWords(query), ...synonymsIn(query).map(([, t]) => t)])];
 }
 
 /** [start, end) offsets of every typed word inside one piece of text (for highlighting). */

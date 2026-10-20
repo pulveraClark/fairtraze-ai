@@ -143,6 +143,18 @@ describe("HelpPage", () => {
       expect(visibleSections().length).toBe(document.querySelectorAll("[data-help-section]").length);
     });
 
+    it("student searches for staff wording find the student wording", async () => {
+      const user = userEvent.setup();
+      renderAs("STUDENT");
+      const box = screen.getByRole("searchbox", { name: "Search help" });
+      for (const term of ["free-rider", "inactive", "gini", "inequality"]) {
+        await user.clear(box);
+        await user.type(box, term);
+        expect(visibleSections(), term).toContain("flags");
+      }
+      expect(screen.queryByText(/Gini/)).toBeNull();
+    });
+
     it("finds the new questions and never shows Gini to students", async () => {
       const user = userEvent.setup();
       renderAs("STUDENT");

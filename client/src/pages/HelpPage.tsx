@@ -22,7 +22,7 @@ import {
 } from "@shared/editClassifier";
 import { HELP_ANCHORS } from "../lib/helpText";
 import { HELP_FAQ } from "../lib/helpFaq";
-import { findRanges, matches, queryWords } from "../lib/helpSearch";
+import { findRanges, highlightTerms, matches, queryWords } from "../lib/helpSearch";
 
 type View = "student" | "instructor";
 
@@ -87,6 +87,7 @@ export function HelpPage() {
   const [sectionCount, setSectionCount] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const words = useMemo(() => queryWords(query), [query]);
+  const terms = useMemo(() => highlightTerms(query), [query]);
   const faqShown = useMemo(() => HELP_FAQ.filter((f) => matches(`${f.q} ${f.a}`, query)), [query]);
 
   // A section matches when it contains every typed word (JSX bodies are searched through the DOM,
@@ -114,7 +115,7 @@ export function HelpPage() {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         if ((n.parentElement as HTMLElement | null)?.closest("[hidden]")) continue;
-        for (const [a, b] of findRanges(n.nodeValue ?? "", words)) {
+        for (const [a, b] of findRanges(n.nodeValue ?? "", terms)) {
           const r = document.createRange();
           r.setStart(n, a);
           r.setEnd(n, b);
@@ -125,7 +126,7 @@ export function HelpPage() {
     if (ranges.length > 0) registry.set("ft-help-match", new HighlightCtor(...ranges));
     else registry.delete("ft-help-match");
     return () => { registry.delete("ft-help-match"); };
-  }, [words, hiddenIds, view, faqShown]);
+  }, [words, terms, hiddenIds, view, faqShown]);
 
   const searching = words.length > 0;
   const visibleSections = Math.max(0, sectionCount - hiddenIds.size);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matches, normalize, queryWords, findRanges } from "./helpSearch";
+import { matches, normalize, queryWords, findRanges, highlightTerms } from "./helpSearch";
 import { HELP_FAQ } from "./helpFaq";
 
 describe("helpSearch", () => {
@@ -18,6 +18,22 @@ describe("helpSearch", () => {
     expect(matches("flags and shares", "flags shares")).toBe(true);
     expect(matches("flags only", "flags shares")).toBe(false);
     expect(matches("anything", "  ")).toBe(true);
+  });
+
+  it("maps staff wording to the student wording", () => {
+    expect(matches("Low contribution: your share is under half", "free rider")).toBe(true);
+    expect(matches("Low contribution: your share is under half", "free-rider")).toBe(true);
+    expect(matches("Low contribution", "Inactive")).toBe(true);
+    expect(matches("How evenly work is shared in your group", "gini")).toBe(true);
+    expect(matches("How evenly work is shared in your group", "inequality")).toBe(true);
+    expect(matches("Add a note to a flag", "dispute")).toBe(true);
+    expect(matches("Add a note to a flag", "free rider")).toBe(false);
+    expect(matches("Add a note", "disputed")).toBe(false);
+  });
+
+  it("highlights the student wording of a synonym", () => {
+    expect(highlightTerms("gini")).toEqual(["gini", "how evenly work is shared"]);
+    expect(highlightTerms("flags")).toEqual(["flags"]);
   });
 
   it("finds highlight ranges per word", () => {
