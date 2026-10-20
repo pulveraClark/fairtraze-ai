@@ -88,7 +88,7 @@ export function formatSeconds(seconds: number): string {
 
 /** A failure the server reported (as an `error` event or a plain JSON error body). */
 export class AnalyzeError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(message: string, readonly status?: number, readonly code?: string) {
     super(message);
     this.name = "AnalyzeError";
   }
@@ -181,8 +181,8 @@ export async function streamAnalyze(
   });
 
   if (!(res.headers.get("content-type") ?? "").includes("text/event-stream") || !res.body) {
-    const body = (await res.json().catch(() => ({}))) as Partial<AnalyzeResponse> & { error?: string };
-    if (!res.ok) throw new AnalyzeError(body.error ?? `Server error ${res.status}`, res.status);
+    const body = (await res.json().catch(() => ({}))) as Partial<AnalyzeResponse> & { error?: string; code?: string };
+    if (!res.ok) throw new AnalyzeError(body.error ?? `Server error ${res.status}`, res.status, body.code);
     return body as AnalyzeResponse;
   }
 

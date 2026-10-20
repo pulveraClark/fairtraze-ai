@@ -9,6 +9,7 @@ import type { GroupTaskSummary } from "@shared/taskTypes";
 import { TaskCountLine } from "./TaskCountLine";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
+import { REPO_CHANGED_NOTICE, REPO_NOT_LINKED_MESSAGE, REPO_NOT_LINKED_PILL, repoNotLinked } from "../lib/repoNotice";
 
 const HEALTH_BADGE: Record<TeamHealth, string> = {
   Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
@@ -36,9 +37,18 @@ function isMembershipStale(item: ProjectSummaryItem): boolean {
   return new Date(item.membershipChangedAt) > new Date(item.lastAnalyzedAt);
 }
 
+function RepoPill() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+      {REPO_NOT_LINKED_PILL}
+    </span>
+  );
+}
+
 export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, tasks, selectable, selected, onToggleSelect }: Props) {
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
+  const noRepo = repoNotLinked(item);
   const memberLabels = shortMemberNames(item.memberShares.map((m) => m.studentName));
   const health = presentedHealth(item);
   const flags = visibleFlags(item);
@@ -69,9 +79,11 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
               <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
             </div>
           </div>
-          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
-            Not analyzed
-          </span>
+          {noRepo ? <RepoPill /> : (
+            <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
+              Not analyzed
+            </span>
+          )}
         </div>
         <div className="h-3 rounded-full bg-slate-100 w-full" />
         {tasks && <TaskCountLine tasks={tasks} />}
@@ -100,7 +112,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
               onClick={openDetail}
               className={BUTTON_PRIMARY_COMPACT}
             >
-              {onAnalyze ? "Analyze →" : "View →"}
+              {onAnalyze && !noRepo ? "Analyze →" : "View →"}
             </button>
           </div>
         </div>
@@ -139,6 +151,8 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           )
         )}
       </div>
+
+      {noRepo && <div><RepoPill /></div>}
 
       {/* Contribution mini bar */}
       <ContributionMiniBar memberShares={item.memberShares} />
@@ -196,7 +210,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-amber-800 font-medium leading-snug">
-              Membership changed — re-analyze to update the report
+              {item.repoChanged ? REPO_CHANGED_NOTICE : "Membership changed — re-analyze to update the report"}
             </p>
           </div>
           {onAnalyze && (
@@ -247,9 +261,9 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           {onAnalyze && (
             <button
               onClick={(e) => { e.stopPropagation(); onAnalyze?.(item.projectId); }}
-              disabled={analyzing}
+              disabled={analyzing || noRepo}
               className={BUTTON_SECONDARY_COMPACT}
-              title="Run the analysis again for this group"
+              title={noRepo ? REPO_NOT_LINKED_MESSAGE : "Run the analysis again for this group"}
             >
               {analyzing ? "Analyzing…" : "Re-analyze"}
             </button>

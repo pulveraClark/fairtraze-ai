@@ -18,6 +18,7 @@ import { BriefCard } from "../components/BriefCard";
 import { classCrumb, classFullLabel } from "../lib/classLabel";
 import { EditAssignmentModal } from "../components/EditAssignmentModal";
 import type { BriefAttachment } from "../lib/briefAttachments";
+import { REPO_NOT_LINKED_MESSAGE, repoNotLinked } from "../lib/repoNotice";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface AssignmentMeta {
@@ -112,6 +113,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkFailures, setBulkFailures] = useState<string[]>([]);
+  const [bulkNotice, setBulkNotice]     = useState<string | null>(null);
   const [bulkExporting, setBulkExporting] = useState(false);
   const [exportItems, setExportItems] = useState<PrintableReportBundleItem[] | null>(null);
 
@@ -157,6 +159,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   useEffect(() => { void fetchData(); }, [fetchData]);
 
   async function handleReanalyze(projectId: number) {
+    const item = summary.find((s) => s.projectId === projectId);
+    if (item && repoNotLinked(item)) { setBulkNotice(`${item.groupName}: ${REPO_NOT_LINKED_MESSAGE}`); return; }
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
       await fetch(`/api/projects/${projectId}/analyze`, {
@@ -197,7 +201,13 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   // instructor navigates away partway through, everything analyzed so far
   // is already saved, and a failed project doesn't stop the rest.
   async function handleBulkAnalyze() {
-    const ids = Array.from(selectedIds);
+    const all = Array.from(selectedIds);
+    // Groups with no repository are skipped up front and named, instead of failing one by one.
+    const skipped = all.filter((id) => { const s = summary.find((x) => x.projectId === id); return !!s && repoNotLinked(s); });
+    const ids = all.filter((id) => !skipped.includes(id));
+    setBulkNotice(skipped.length
+      ? `Not analyzed, no repository linked yet: ${skipped.map((id) => summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`).join(", ")}.`
+      : null);
     if (ids.length === 0) return;
     setBulkRunning(true);
     setBulkFailures([]);
@@ -433,6 +443,13 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {bulkNotice && (
+          <div role="status" className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+            <button onClick={() => setBulkNotice(null)} aria-label="Dismiss" className="float-right text-amber-700 hover:text-amber-900 ml-2">✕</button>
+            {bulkNotice}
           </div>
         )}
 

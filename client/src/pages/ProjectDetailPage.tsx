@@ -30,6 +30,7 @@ import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
 import { helpLink } from "../lib/helpText";
 import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
+import { REPO_CHANGED_NOTICE, REPO_NOT_LINKED_HINT, REPO_NOT_LINKED_MESSAGE, REPO_NOT_LINKED_PILL, repoNotLinked } from "../lib/repoNotice";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -59,6 +60,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   // Real collection counts/stage streamed from the server while an analysis runs
   const [progress, setProgress]           = useState<AnalyzeProgress>(INITIAL_PROGRESS);
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+  // "Link a GitHub repository first" is guidance, not a failure: shown as a notice, not "Analysis failed".
+  const [repoMissingFromServer, setRepoMissingFromServer] = useState(false);
   const [showScoringModal, setShowScoringModal] = useState(false);
   // Tracks whether scoring config or membership changed after the last analysis (stale report warning)
   const [reportStale, setReportStale]           = useState(false);
@@ -207,6 +210,7 @@ export function ProjectDetailPage({ projectId }: Props) {
     setStepperDone(false);
     setProgress(startProgress());
     setReanalyzeError(null);
+    setRepoMissingFromServer(false);
     try {
       await streamAnalyze(projectId, token, (ev) => setProgress((prev) => applyStreamEvent(prev, ev)));
       // The analyze call itself is finished: release the button right away. The panel shows its
@@ -223,9 +227,13 @@ export function ProjectDetailPage({ projectId }: Props) {
       ]);
       setNotFound(false);
     } catch (err) {
-      setReanalyzeError(
-        err instanceof AnalyzeError ? err.message : "Network error — could not reach the server."
-      );
+      if (err instanceof AnalyzeError && err.code === "REPO_NOT_LINKED") {
+        setRepoMissingFromServer(true);
+      } else {
+        setReanalyzeError(
+          err instanceof AnalyzeError ? err.message : "Network error — could not reach the server."
+        );
+      }
     } finally {
       setReanalyzing(false);
       setLoadingReport(false);
@@ -239,6 +247,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [selectedName, setSelectedName]     = useState<string | null>(null);
   const [drawerOpener, setDrawerOpener]     = useState<HTMLElement | null>(null);
   const [openedName, setOpenedName]         = useState<string | null>(null);
+
+  const noRepo = repoMissingFromServer || (!!projectMeta && repoNotLinked(projectMeta));
 
   const isAdmin = user?.systemRole === "ADMIN";
   const dashboardUrl = isAdmin ? "/admin" : "/dashboard";
@@ -417,7 +427,13 @@ export function ProjectDetailPage({ projectId }: Props) {
 
                 {/* Re-analyze / Analyze — hidden for admin */}
                 {!isAdmin && (
-                  <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY_COMPACT}>
+                  <button
+                    type="button"
+                    onClick={handleAnalyze}
+                    disabled={reanalyzing || noRepo}
+                    title={noRepo ? REPO_NOT_LINKED_MESSAGE : undefined}
+                    className={BUTTON_PRIMARY_COMPACT}
+                  >
                     {reanalyzing ? (
                       <>
                         <span aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full border-2 border-white/40 border-t-white motion-safe:animate-spin" />
@@ -465,6 +481,14 @@ export function ProjectDetailPage({ projectId }: Props) {
         {/* Analysis panel: live while running, completed state while the report reloads */}
         {(reanalyzing || loadingReport) && (
           <AnalysisStepper progress={progress} done={stepperDone} sourceType={sourceType} />
+        )}
+
+        {/* No repository yet: guidance with the one next step, not an error */}
+        {noRepo && !reanalyzing && (
+          <div role="status" className="bg-amber-100 border-2 border-amber-400 rounded-xl px-4 py-3">
+            <p className="text-base font-semibold leading-normal text-amber-950">{REPO_NOT_LINKED_PILL}</p>
+            <p className="text-base leading-normal text-amber-950">{REPO_NOT_LINKED_MESSAGE} {REPO_NOT_LINKED_HINT}</p>
+          </div>
         )}
 
         {/* Re-analyze error */}
@@ -515,6 +539,8 @@ export function ProjectDetailPage({ projectId }: Props) {
             <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
               {stored.rulesOutdated
                 ? RULES_OUTDATED_INSTRUCTOR_NOTICE
+                : stored.repoChanged
+                ? REPO_CHANGED_NOTICE
                 : "Report may be outdated — membership or settings have changed. Re-analyze to update."}
             </p>
             <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY_COMPACT}>

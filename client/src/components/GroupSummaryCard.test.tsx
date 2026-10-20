@@ -108,3 +108,26 @@ describe("GroupSummaryCard footer actions (I14)", () => {
     }
   });
 });
+
+describe("GroupSummaryCard repository state", () => {
+  it("says 'Repo not linked yet' and disables Re-analyze for a GitHub group with no repository", () => {
+    renderCard(["A", "B"], { hasRepo: false, sourceType: "GITHUB" });
+    expect(screen.getByText("Repo not linked yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toHaveAttribute("title", "Link a GitHub repository first.");
+  });
+  it("offers View, not Analyze, on a not-yet-analyzed group with no repository", () => {
+    renderCard(["A"], { hasRepo: false, isAnalyzed: false, lastAnalyzedAt: null, memberShares: [] });
+    expect(screen.getByText("Repo not linked yet")).toBeInTheDocument();
+    expect(screen.queryByText("Analyze →")).toBeNull();
+    expect(screen.getByText("View →")).toBeInTheDocument();
+  });
+  it("never shows it for a Docs-only group, or when the repository is linked", () => {
+    renderCard(["A"], { hasRepo: false, sourceType: "EDITOR" });
+    expect(screen.queryByText("Repo not linked yet")).toBeNull();
+  });
+  it("shows 'Repository changed. Re-analyze to update.' when the repository changed after the report", () => {
+    renderCard(["A", "B"], { hasRepo: true, repoChanged: true, membershipChangedAt: "2026-10-20T00:00:00Z" });
+    expect(screen.getByText("Repository changed. Re-analyze to update.")).toBeInTheDocument();
+  });
+});
