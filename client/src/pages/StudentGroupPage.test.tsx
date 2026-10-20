@@ -5,7 +5,7 @@ import { RouterProvider } from "../router";
 import { StudentGroupPage } from "./StudentGroupPage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const state: { data: any; notes: any[] } = { data: null, notes: [] };
+const state: { data: any; notes: any[]; setup: any } = { data: null, notes: [], setup: undefined };
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ token: "t", user: { id: 1, name: "Ana Cruz", role: "STUDENT" } }),
@@ -15,7 +15,8 @@ vi.mock("../hooks/useGroupQueries", () => ({
   ApiError: class ApiError extends Error { status = 0; },
   classKeys: { all: () => ["c"] },
   disputeKeys: { mine: () => ["d"] },
-  groupKeys: { all: () => ["g"], detail: () => ["g", 1] },
+  groupKeys: { all: () => ["g"], detail: () => ["g", 1], setup: () => ["g", "setup", 1] },
+  useGroupSetupQuery: () => ({ data: state.setup }),
   useGroupTasksQuery: () => ({ data: [] }),
   useMyDisputesQuery: () => ({ data: state.notes, isPending: false }),
   useStudentGroupQuery: () => ({ data: state.data, isLoading: false, error: null }),
@@ -59,6 +60,7 @@ describe("StudentGroupPage", () => {
   beforeEach(() => {
     state.data = groupFixture();
     state.notes = [];
+    state.setup = undefined;
     window.history.pushState({}, "", "/student/group/1");
   });
 
@@ -234,5 +236,41 @@ describe("StudentGroupPage", () => {
     expect(crumbs.textContent).toContain("IT-ELEC 2");
     expect(crumbs.textContent).not.toContain("UXA634062");
     expect(screen.getByRole("link", { name: "IT-ELEC 2" })).toHaveAttribute("title", "IT-ELEC 2 · EDP UXA634062");
+  });
+});
+
+describe("StudentGroupPage - Set up your group", () => {
+  const setup = (over = {}) => ({
+    needsRepo: true, repoUrl: null, repoLinked: false, isLeader: false, canLinkRepo: true, canChangeRepo: false,
+    viewerHasGithubUsername: false, usernames: { linked: 0, total: 3, missingNames: ["Ana Cruz", "Ben Lim", "Cy Dee"] }, ...over,
+  });
+  beforeEach(() => {
+    state.data = groupFixture();
+    state.notes = [];
+    window.history.pushState({}, "", "/student/group/1");
+  });
+
+  it("shows the card at the top while setup is incomplete", () => {
+    state.setup = setup();
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();
+    expect(screen.getByText("0 of 3 done")).toBeInTheDocument();
+  });
+  it("is on every tab, not only the report", () => {
+    state.setup = setup();
+    window.history.pushState({}, "", "/student/group/1?tab=tasks");
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Set up your group" })).toBeInTheDocument();
+  });
+  it("is gone once all three steps are done", () => {
+    state.setup = setup({ repoLinked: true, repoUrl: "https://github.com/a/b", canLinkRepo: false, usernames: { linked: 3, total: 3, missingNames: [] } });
+    renderPage();
+    expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
+  });
+  it("never shows for a Docs-only group", () => {
+    state.setup = setup({ needsRepo: false, canLinkRepo: false });
+    renderPage();
+    expect(screen.queryByRole("heading", { name: "Set up your group" })).toBeNull();
+    expect(screen.queryByText(/GitHub repository/)).toBeNull();
   });
 });

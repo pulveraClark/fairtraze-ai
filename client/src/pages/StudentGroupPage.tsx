@@ -9,7 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import { DocsDataApproximateNotice } from "../components/DocsDataApproximateNotice";
 import {
   ApiError, classKeys, disputeKeys, groupKeys,
-  useGroupTasksQuery, useMyDisputesQuery, useStudentGroupQuery,
+  useGroupSetupQuery, useGroupTasksQuery, useMyDisputesQuery, useStudentGroupQuery,
 } from "../hooks/useGroupQueries";
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
@@ -31,6 +31,7 @@ import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/grou
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { RULES_OUTDATED_STUDENT_NOTICE } from "@shared/scoringRules";
+import { GroupSetupCard } from "../components/GroupSetupCard";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
 
@@ -215,6 +216,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const groupQuery    = useStudentGroupQuery<GroupDetail>(projectId);
   const tasksQuery    = useGroupTasksQuery(projectId);
   const disputesQuery = useMyDisputesQuery<DisputeRecord>();
+  const setupQuery    = useGroupSetupQuery(projectId);
   // A notification (join accepted, role response, task assigned, report ready, dispute response…)
   // changes the unread count → refresh this user's group data and own disputes.
   useInvalidateOnAlertCount([groupKeys.all(uid), disputeKeys.mine(uid)]);
@@ -571,6 +573,19 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
       </div>
 
       <main className={`flex-1 ${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-5xl"} w-full mx-auto px-6 sm:px-8 py-8 min-w-0`}>
+
+        {/* ── Set up your group (only while GitHub setup is incomplete) ───────── */}
+        {setupQuery.data && (
+          <GroupSetupCard
+            projectId={projectId}
+            setup={setupQuery.data}
+            token={token}
+            onSaved={() => {
+              void queryClient.invalidateQueries({ queryKey: groupKeys.setup(uid, projectId) });
+              void queryClient.invalidateQueries({ queryKey: groupKeys.detail(uid, projectId) });
+            }}
+          />
+        )}
 
         {/* ── Your tasks widget ───────────────────────────────────────────────── */}
         {myTasks.length > 0 && effectiveTab !== "tasks" && (

@@ -61,11 +61,14 @@ function EditProfileModal({
   token,
   onClose,
   onSaved,
+  focusGithub = false,
 }: {
   profile: FullProfile;
   token: string | null;
   onClose: () => void;
   onSaved: (updated: Partial<FullProfile>) => void;
+  /** Opened from the group setup card: put the cursor in the GitHub username field. */
+  focusGithub?: boolean;
 }) {
   const isStudent = profile.systemRole === "STUDENT";
   const [name, setName]                   = useState(profile.name);
@@ -129,15 +132,17 @@ function EditProfileModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                autoFocus
+                autoFocus={!(focusGithub && isStudent)}
                 className={inputClass}
               />
             </div>
 
             {isStudent && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">GitHub username</label>
+                <label htmlFor="settings-github-username" className="block text-xs font-medium text-slate-600 mb-1.5">GitHub username</label>
                 <input
+                  id="settings-github-username"
+                  autoFocus={focusGithub}
                   type="text"
                   value={githubUsername}
                   onChange={(e) => setGithubUsername(e.target.value)}
@@ -290,7 +295,9 @@ export function SettingsPage() {
   const [profile, setProfile]     = useState<FullProfile | null>(null);
   const [loading, setLoading]     = useState(true);
   const [fetchErr, setFetchErr]   = useState<string | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // /settings?edit=github (the group setup card's link) opens the profile editor on the GitHub field.
+  const openGithubEdit = new URLSearchParams(window.location.search).get("edit") === "github";
+  const [showEditModal, setShowEditModal] = useState(openGithubEdit);
   const [showPwModal,   setShowPwModal]   = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [pwSuccess,      setPwSuccess]      = useState<string | null>(null);
@@ -333,6 +340,7 @@ export function SettingsPage() {
           token={token}
           onClose={() => setShowEditModal(false)}
           onSaved={(u) => void handleProfileSaved(u)}
+          focusGithub={openGithubEdit}
         />
       )}
 

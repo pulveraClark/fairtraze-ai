@@ -118,7 +118,7 @@ export function HelpPage() {
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {[
               ["what", "What it does"], ["shares", "How shares are calculated"], ["flags", "What flags mean"],
-              ["ai", "The AI"], ["tasks", "Tasks"], ["roles", "Roles and leaders"], ["notes", "Your notes"],
+              ["ai", "The AI"], ["tasks", "Tasks"], ["github-link", "Linking GitHub"], ["roles", "Roles and leaders"], ["notes", "Your notes"],
               ["privacy", "Privacy"], ["faq", "Questions"],
             ].map(([id, label]) => (
               <li key={id}><a className={LINK} href={`#${id}`}>{label}</a></li>
@@ -286,6 +286,20 @@ export function HelpPage() {
             Putting a task's key, such as FT-12, in a commit message links that commit to the task. Only the message is
             read, never the code.
           </p>
+        </Section>
+
+        <Section id="github-link" title="Linking your GitHub repository">
+          <p>
+            You can create a group first and link GitHub afterwards. The "Set up your group" card on the group page
+            walks through it: create a repository, paste its link, and make sure every member has added their GitHub
+            username in Settings.
+          </p>
+          <p>
+            Any member can add the first link. After that only the leader can change it. Every change is logged and the
+            group is told. FairTraze checks that the repository exists and can be read, so it must be public or shared
+            with your instructor. A group cannot be analyzed until a repository is linked.
+          </p>
+          {!student && <p>If a group changes its repository after a report, that report is marked outdated until you re-analyze.</p>}
         </Section>
 
         <Section id="roles" title="Roles and the group leader">

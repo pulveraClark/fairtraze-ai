@@ -36,6 +36,13 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText("Download my data")).toHaveLength(1);
   });
 
+  it("opens the profile editor on the GitHub username field for /settings?edit=github", async () => {
+    window.history.pushState({}, "", "/settings?edit=github");
+    renderPage();
+    const field = await screen.findByLabelText("GitHub username");
+    expect(field).toHaveFocus();
+  });
+
   it("has no Dashboard back button; the sidebar and breadcrumb remain (R6)", async () => {
     renderPage();
     await screen.findAllByText("Ana Cruz");

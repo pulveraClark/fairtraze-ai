@@ -5,7 +5,7 @@
 /** Anchors on the /help page. HelpPage renders an element with each of these ids. */
 export const HELP_ANCHORS = [
   "what", "shares", "shares-github", "shares-docs", "combined", "settings",
-  "flags", "gini", "ai", "tasks", "roles", "leader", "notes", "privacy", "faq",
+  "flags", "gini", "ai", "tasks", "github-link", "roles", "leader", "notes", "privacy", "faq",
 ] as const;
 export type HelpAnchor = (typeof HELP_ANCHORS)[number];
 
@@ -21,6 +21,8 @@ export const TIPS = {
   roles: "Roles are labels for context. They never change anyone's score.",
   rolesLeader: "Roles are labels for context and never change anyone's score. Set them in Manage Group.",
   leaderBadge: "The leader is the group's contact. It gives no extra credit; everyone is scored on their own activity.",
+  repoLink: "FairTraze reads commit activity from this repository. Make it public so the link can be checked.",
+  githubUsername: "Your username is how FairTraze matches commits to you. Add it once in Settings.",
   tasksPlanning: "Tasks are for planning. They are never counted in anyone's score.",
   shortcuts: "Press ? on the board to see every keyboard shortcut. Shortcuts pause while you type.",
   leaderTeam: "This view helps your group share the work. Shares come from recorded activity, are not grades, and your instructor makes the final assessment.",

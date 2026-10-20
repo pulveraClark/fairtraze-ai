@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import type { BoardResponse, BoardTask } from "@shared/taskTypes";
 import { POLL_10S } from "./pollingOptions";
+import type { GroupSetup } from "../lib/groupSetup";
 
 /**
  * Query keys for the student/group surfaces. userId is the second element of every key so a
@@ -11,6 +12,7 @@ import { POLL_10S } from "./pollingOptions";
 export const groupKeys = {
   all:             (uid: number | null) => ["group", uid] as const,
   detail:          (uid: number | null, pid: number) => ["group", uid, "detail", pid] as const,
+  setup:           (uid: number | null, pid: number) => ["group", uid, "setup", pid] as const,
   manage:          (uid: number | null, pid: number) => ["group", uid, "manage", pid] as const,
   requests:        (uid: number | null, pid: number) => ["group", uid, "requests", pid] as const,
   roleSuggestions: (uid: number | null, pid: number) => ["group", uid, "role-suggestions", pid] as const,
@@ -44,6 +46,19 @@ async function getJson<T>(url: string, token: string | null, fallback: string): 
   const json = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new ApiError(res.status, json.error ?? fallback);
   return json;
+}
+
+/** GET /api/groups/:id/setup — the "Set up your group" card. Refetches on focus: usernames are added in Settings. */
+export function useGroupSetupQuery(projectId: number) {
+  const { token, user } = useAuth();
+  const uid = user?.id ?? null;
+  return useQuery({
+    queryKey: groupKeys.setup(uid, projectId),
+    queryFn:  () => getJson<GroupSetup>(`/api/groups/${projectId}/setup`, token, "Could not load group setup."),
+    enabled:  !!token && uid !== null,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
 }
 
 /** GET /api/student/group/:id — reads the stored report only (never recomputes). */
