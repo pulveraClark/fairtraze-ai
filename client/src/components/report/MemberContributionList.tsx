@@ -64,7 +64,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                 onClick={(el) => onOpen(m, el)}
                 ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? m.flags.join(", ") : "no flags"}. Open details`}
               >
-                <span className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto_minmax(8rem,auto)]">
+                <span className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 sm:grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1.4fr)_4rem_12rem]">
                   <Avatar
                     userId={info?.userId}
                     name={m.studentName}

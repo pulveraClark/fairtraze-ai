@@ -41,22 +41,24 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
       <p className="mt-1 text-xs leading-normal text-slate-700">Equal share: {equalPct.toFixed(1)}% each.</p>
       <ul className="mt-3 divide-y divide-slate-200">
         {team.map((m) => (
-          <li key={m.userId} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 py-3 sm:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,1.6fr)_auto]">
-            <Avatar
-              userId={m.userId}
-              name={m.name}
-              avatarUpdatedAt={m.avatarUpdatedAt}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
-            />
-            <div className="min-w-0">
-              <p className="break-words text-sm font-semibold text-slate-900">
-                {m.name}{m.userId === currentUserId ? <span className="ml-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-900">You</span> : null}{m.isLeader ? <span className="ml-2 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-900">Leader</span> : null}
-              </p>
-              <p className="text-xs text-slate-700">
-                {m.functionalRoles.map((r) => (r === "DOCUMENTATION" ? "Documentation" : "Developer")).join(" · ") || "No role set"}
-              </p>
+          <li key={m.userId} className="grid grid-cols-1 items-start gap-x-4 gap-y-2 py-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_7.5rem]">
+            <div className="flex min-w-0 items-start gap-3">
+              <Avatar
+                userId={m.userId}
+                name={m.name}
+                avatarUpdatedAt={m.avatarUpdatedAt}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
+              />
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold text-slate-900">
+                  {m.name}{m.userId === currentUserId ? <span className="ml-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-900">You</span> : null}{m.isLeader ? <span className="ml-2 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-900">Leader</span> : null}
+                </p>
+                <p className="text-xs text-slate-700">
+                  {m.functionalRoles.map((r) => (r === "DOCUMENTATION" ? "Documentation" : "Developer")).join(" · ") || "No role set"}
+                </p>
+              </div>
             </div>
-            <div className="col-span-2 min-w-0 sm:col-span-1">
+            <div className="min-w-0">
               {noActivity ? (
                 <NoActivityPill />
               ) : (
@@ -79,7 +81,7 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
                 </>
               )}
             </div>
-            <p className="col-span-2 text-xs tabular-nums text-slate-700 sm:col-span-1 sm:text-right">
+            <p className="text-xs tabular-nums text-slate-700 sm:text-right">
               {m.tasks.open + m.tasks.done === 0 ? "No tasks" : `Tasks: ${taskCountLabel(m.tasks.done, m.tasks.open + m.tasks.done)}`}
             </p>
           </li>
