@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { TrendChart } from "../components/TrendChart";
 import { DocsDataApproximateNotice } from "../components/DocsDataApproximateNotice";
+import { ReportNotices } from "../components/report/ReportNotices";
+import { NOTICE_PRIORITY, type ReportNotice } from "../lib/reportNotices";
 import { PageHeader, StatTile, InfoTip, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT, CARD } from "../components/ui";
 import { MemberContributionList } from "../components/report/MemberContributionList";
 import { MemberDrawer } from "../components/report/MemberDrawer";
@@ -313,6 +315,55 @@ export function ProjectDetailPage({ projectId }: Props) {
     ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
     : "neutral";
 
+  const reportNotices: ReportNotice[] = [];
+  if (stored && reportStale) {
+    reportNotices.push({
+      id: "stale",
+      priority: NOTICE_PRIORITY.stale,
+      node: (
+        <div className="bg-amber-100 border-2 border-amber-400 rounded-xl px-4 py-3 flex items-center gap-x-4 gap-y-1 flex-wrap">
+          <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
+            {stored.rulesOutdated
+              ? RULES_OUTDATED_INSTRUCTOR_NOTICE
+              : stored.repoChanged
+              ? REPO_CHANGED_NOTICE
+              : "Report may be outdated — membership or settings have changed. Re-analyze to update."}
+          </p>
+          {!isAdmin && (
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={reanalyzing || noRepo}
+              className={`ft-hit rounded px-2 text-sm font-semibold text-indigo-800 underline underline-offset-2 hover:text-indigo-900 disabled:cursor-not-allowed disabled:text-slate-600 ${FOCUS_LIGHT}`}
+            >
+              Re-analyze now
+            </button>
+          )}
+        </div>
+      ),
+    });
+  }
+  if (stored && sourceType !== "EDITOR" && stored.unmatchedGitHubLogins.length > 0) {
+    reportNotices.push({
+      id: "unmatched",
+      priority: NOTICE_PRIORITY.unmatchedLogins,
+      node: (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-base leading-normal text-amber-950">
+          <span className="font-semibold">Unmatched GitHub contributors: </span>
+          {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
+          repository but are not in the team member list.
+        </div>
+      ),
+    });
+  }
+  if (stored?.docsDataApproximate) {
+    reportNotices.push({
+      id: "docs-approximate",
+      priority: NOTICE_PRIORITY.docsApproximate,
+      node: <DocsDataApproximateNotice fixedAt={stored.docsDataFixedAt} />,
+    });
+  }
+
   const switchBtn = `flex h-8 w-8 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
 
   return (
@@ -533,21 +584,8 @@ export function ProjectDetailPage({ projectId }: Props) {
           </div>
         )}
 
-        {/* Stale report — membership changed and/or scoring config changed after last analysis */}
-        {reportStale && stored && !reanalyzing && (
-          <div className="bg-amber-100 border-2 border-amber-400 rounded-xl px-4 py-3 flex items-center gap-4 flex-wrap">
-            <p className="flex-1 min-w-[14rem] text-base font-semibold leading-normal text-amber-950">
-              {stored.rulesOutdated
-                ? RULES_OUTDATED_INSTRUCTOR_NOTICE
-                : stored.repoChanged
-                ? REPO_CHANGED_NOTICE
-                : "Report may be outdated — membership or settings have changed. Re-analyze to update."}
-            </p>
-            <button type="button" onClick={handleAnalyze} disabled={reanalyzing} className={BUTTON_PRIMARY_COMPACT}>
-              Re-analyze
-            </button>
-          </div>
-        )}
+        {/* One notices region: the most important banner, the rest behind "n more notices" */}
+        {stored && !reanalyzing && <ReportNotices notices={reportNotices} />}
 
         {/* Not analyzed yet */}
         {notFound && !reanalyzing && !reanalyzeError && (
@@ -573,12 +611,14 @@ export function ProjectDetailPage({ projectId }: Props) {
             )}
 
             {/* Summary row */}
-            <section aria-label="Summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <section aria-label="Summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {/* Team health is the one main number: double width, larger text. Flags, Members and Analysis are meta. */}
+              <div className="h-full min-w-0 sm:col-span-2">
               <StatTile
-                compact
+                hero
                 label="Team health"
                 tone={healthTone}
-                value={noActivity ? <NoActivityPill className="!text-base" /> : <StatusPill kind="health" value={stored.report.teamHealth} className="!text-base" />}
+                value={noActivity ? <NoActivityPill className="!text-lg" /> : <StatusPill kind="health" value={stored.report.teamHealth} className="!text-lg" />}
                 detail={noActivity ? "Scores appear once members have recorded activity." : (
                   <span className="flex items-center gap-1">
                     Gini {stored.report.gini.toFixed(3)}
@@ -599,6 +639,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                   </span>
                 )}
               />
+              </div>
               <StatTile
                 compact
                 label="Flags"
@@ -636,10 +677,6 @@ export function ProjectDetailPage({ projectId }: Props) {
               />
             </section>
 
-            {stored.docsDataApproximate && (
-              <DocsDataApproximateNotice fixedAt={stored.docsDataFixedAt} className="mb-4" />
-            )}
-
             {/* Member contributions — replaces the old bar chart and table */}
             <MemberContributionList
               members={stored.report.members}
@@ -648,15 +685,6 @@ export function ProjectDetailPage({ projectId }: Props) {
               resolvedFlagOutcomes={resolvedFlagOutcomes}
               onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
             />
-
-            {/* Unmatched logins (GitHub-based sources only) */}
-            {sourceType !== "EDITOR" && stored.unmatchedGitHubLogins.length > 0 && (
-              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-base leading-normal text-amber-950">
-                <span className="font-semibold">Unmatched GitHub contributors: </span>
-                {stored.unmatchedGitHubLogins.join(", ")} — these logins contributed to the
-                repository but are not in the team member list.
-              </div>
-            )}
 
             {/* AI report + Imbalance trend (equal height) */}
             <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">

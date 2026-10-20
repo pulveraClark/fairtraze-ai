@@ -63,7 +63,7 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
           <p className="text-sm leading-normal text-slate-700">
             The computed scores are ready. Generate an AI explanation when you need it.
           </p>
-          <button type="button" onClick={() => generate(false)} className={BUTTON_PRIMARY}>
+          <button type="button" onClick={() => generate(false)} className={BUTTON_SECONDARY}>
             Generate explanation
           </button>
           {error && (
