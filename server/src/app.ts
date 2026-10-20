@@ -32,6 +32,7 @@ import {
   exportLimiter,
   taskWriteLimiter,
   repoLinkLimiter,
+  joinCodeLimiter,
   taskCommentLimiter,
   globalLimiter,
 } from "./middleware/security.js";
@@ -101,6 +102,9 @@ export function createApp() {
   // Task creation bursts (30/min per user); comments have their own 30/min bucket.
   app.post("/api/groups/:id/tasks", authenticateToken, taskWriteLimiter);
   app.put("/api/groups/:id/repo", authenticateToken, repoLinkLimiter);
+  // Class join codes: the preview and the enrol share one bucket.
+  app.get("/api/join/class/:code", authenticateToken, joinCodeLimiter);
+  app.post("/api/join/class", authenticateToken, joinCodeLimiter);
   app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
 
   app.use(projectsRouter);

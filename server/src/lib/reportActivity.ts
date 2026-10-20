@@ -23,6 +23,7 @@ export function contentHasNoRecordedActivity(content: string | null | undefined)
   }
 }
 
+// Keep in sync with client/src/lib/groupActivity.ts (the same quietSource rule runs there for the instructor report).
 export type QuietSource = "GitHub" | "Docs";
 
 interface CombinedActivityMember {

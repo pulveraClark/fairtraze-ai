@@ -153,6 +153,16 @@ export const repoLinkLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Class join codes: the lookup (GET /api/join/class/:code) and the enrol (POST /api/join/class) share one bucket,
+// 20 per minute per user, so a code cannot be guessed quickly through either. Needs authenticateToken first (app.ts).
+export const joinCodeLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: "You're trying join codes too quickly. Please wait a minute and try again." },
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 // Task comments (and the @mentions inside them): 30 per minute per user, its own bucket so a burst of
 // comments never eats the task-creation allowance. Needs authenticateToken first (see app.ts).
 export const taskCommentLimiter = rateLimit({

@@ -48,6 +48,7 @@ export function noActivityRollupText(count: number): string {
   return `${count} group${count !== 1 ? "s" : ""}: no activity yet`;
 }
 
+// Keep in sync with server/src/lib/reportActivity.ts (the same quietSource rule runs there for the student report).
 export type QuietSource = "GitHub" | "Docs";
 
 interface CombinedActivityMember {
