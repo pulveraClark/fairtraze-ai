@@ -156,7 +156,7 @@ function LinkStep({
               className={`${INPUT} mt-1 ${feedback.kind === "error" || serverError ? "border-red-700" : "border-slate-400"}`}
             />
             <p id={hintId} className="mt-1 text-xs text-slate-700" aria-live="polite">
-              {feedback.kind === "ok" && <span className="font-medium text-emerald-800">✓ Looks right: {feedback.shown}</span>}
+              {feedback.kind === "ok" && !serverError && <span className="font-medium text-emerald-800">✓ Looks right: {feedback.shown}</span>}
               {feedback.kind === "error" && <span className="font-medium text-red-800">{feedback.message}</span>}
               {feedback.kind === "empty" && "Example: https://github.com/owner/repo"}
             </p>
