@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { notify, activeAdminIds, resolveNotifications } from "../lib/notify.js";
 import { anonymizeUser } from "../lib/anonymizeUser.js";
+import { toCsv } from "../lib/csv.js";
 import { parseAdminUsersFilters, buildUserFilters, buildUserOrderBy } from "../lib/adminUsersQuery.js";
 
 export const adminRouter = Router();
@@ -63,6 +64,58 @@ adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) =>
   ]);
 
   res.json({ users, total, formerCount, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+});
+
+// ── GET /api/admin/users/export.csv ───────────────────────────────────────────
+// The current filtered, sorted list (same query string as the list, no paging) as a CSV download.
+// Columns: name, email, role, status, joined, last active. Admin only; writes one audit entry (counts only).
+
+const EXPORT_MAX_ROWS = 5000;
+
+adminRouter.get("/api/admin/users/export.csv", ...requireRole("ADMIN"), async (req, res) => {
+  const filters = parseAdminUsersFilters(req.query);
+  const base    = buildUserFilters(filters);
+  const where   = filters.includeFormer ? base : { AND: [base, { deletedAt: null }] };
+
+  const users = await prisma.user.findMany({
+    where,
+    select:  { name: true, email: true, systemRole: true, active: true, createdAt: true, lastLoginAt: true, deletedAt: true },
+    orderBy: buildUserOrderBy(filters),
+    take:    EXPORT_MAX_ROWS + 1,
+  });
+  if (users.length > EXPORT_MAX_ROWS) {
+    res.status(413).json({ error: `Too many users to export at once (over ${EXPORT_MAX_ROWS}). Narrow the filters and try again.` });
+    return;
+  }
+
+  const csv = toCsv(
+    ["Name", "Email", "Role", "Status", "Joined", "Last active"],
+    users.map((u) => [
+      u.name,
+      u.email,
+      u.systemRole,
+      u.deletedAt ? "Deleted account" : u.active ? "Active" : "Inactive",
+      u.createdAt.toISOString(),
+      u.lastLoginAt ? u.lastLoginAt.toISOString() : "Never",
+    ]),
+  );
+
+  const actorName = await getActorName(req.user!.sub);
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     "USERS_EXPORTED",
+      targetType: "USER",
+      targetId:   "list",
+      details:    `${users.length} ${users.length === 1 ? "user" : "users"} exported to CSV`,
+    },
+  });
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="fairtraze-users-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.send(csv);
 });
 
 // ── GET /api/admin/users/:id/details ──────────────────────────────────────────

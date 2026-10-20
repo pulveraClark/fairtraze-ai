@@ -313,3 +313,31 @@ describe("AdminPage bulk deactivate", () => {
     expect(screen.getByText("1 selected")).toBeInTheDocument();
   });
 });
+
+describe("AdminPage export CSV", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("requests the export with the current filters and sort, without paging", async () => {
+    window.history.replaceState({}, "", "/admin?role=STUDENT&status=active&active=30d&sort=name&dir=asc&q=pat");
+    const fetchFn = vi.fn(async () => ({ ok: true, blob: async () => new Blob(["x"]) }));
+    vi.stubGlobal("fetch", fetchFn);
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+    await waitFor(() => expect(fetchFn).toHaveBeenCalled());
+    const url = new URL((fetchFn.mock.calls[0] as unknown as [string])[0], "http://x");
+    expect(url.pathname).toBe("/api/admin/users/export.csv");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ search: "pat", role: "STUDENT", status: "active", lastActive: "30d", sort: "name", dir: "asc" });
+    expect(await screen.findByText("Exported the current list.")).toBeInTheDocument();
+  });
+
+  it("shows the server's message when the export is refused", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({ error: "Too many users to export at once." }) })));
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+    expect(await screen.findByText("Too many users to export at once.")).toBeInTheDocument();
+  });
+});

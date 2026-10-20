@@ -21,6 +21,7 @@ const ACTION_BADGE: Record<string, string> = {
   USER_ACTIVATED:   "text-emerald-700 bg-emerald-50 border-emerald-200",
   USER_DEACTIVATED: "text-amber-700  bg-amber-50  border-amber-200",
   USER_DELETED:     "text-red-700    bg-red-50    border-red-200",
+  USERS_EXPORTED:   "text-slate-700  bg-slate-50  border-slate-200",
   INSTRUCTOR_APPROVED: "text-emerald-700 bg-emerald-50 border-emerald-200",
   INSTRUCTOR_REJECTED: "text-red-700    bg-red-50    border-red-200",
 };
@@ -31,6 +32,7 @@ const ACTION_OPTIONS = [
   { value: "USER_ACTIVATED", label: "User Activated" },
   { value: "USER_DEACTIVATED", label: "User Deactivated" },
   { value: "USER_DELETED",   label: "User Deleted" },
+  { value: "USERS_EXPORTED", label: "Users Exported" },
   { value: "INSTRUCTOR_APPROVED", label: "Instructor Approved" },
   { value: "INSTRUCTOR_REJECTED", label: "Instructor Rejected" },
 ];

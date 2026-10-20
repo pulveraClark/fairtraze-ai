@@ -14,6 +14,7 @@ import { parseAdminUsersView, serializeAdminUsersView, defaultDir } from "../lib
 import type { AdminUsersView, UserSort } from "../lib/adminUsersUrl";
 import {
   adminUsersKey,
+  adminUsersFilterQuery,
   useAdminUsersQuery,
   useAdminOverviewQuery,
   useAdminDepartmentsQuery,
@@ -91,6 +92,38 @@ export function AdminPage() {
   const updateView = (patch: Partial<AdminUsersView>) => setView((v) => ({ ...v, page: 1, ...patch }));
   const toastApi = useToast();
   const selfId = user?.id ?? -1;
+
+  // Export CSV: the same filters and sort as the list, all pages, built by the server (admin only).
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const { page: _page, ...filterParams } = usersQueryParams;
+      void _page;
+      const res = await fetch(`/api/admin/users/export.csv?${adminUsersFilterQuery(filterParams)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        showToast("error", json.error ?? "Could not export the list.");
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url;
+      a.download = `fairtraze-users-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("success", "Exported the current list.");
+    } catch {
+      showToast("error", "Network error.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Details panel: opened from the name button or by clicking the row (not from its own controls).
   const [detailsUser, setDetailsUser] = useState<UserRecord | null>(null);
@@ -445,6 +478,15 @@ export function AdminPage() {
                 <option value="30d">Active in last 30 days</option>
                 <option value="never">Never signed in</option>
               </select>
+              <button
+                type="button"
+                onClick={() => void exportCsv()}
+                disabled={exporting || usersLoading || usersMeta.total === 0}
+                title="Download the current filtered list as a CSV file"
+                className="min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                {exporting ? "Exporting…" : "Export CSV"}
+              </button>
               <button
                 onClick={loadUsers}
                 className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
