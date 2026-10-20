@@ -710,30 +710,49 @@ groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), r
     return;
   }
 
-  // Already have a PENDING request for any group in this assignment?
-  const pendingExists = await prisma.groupJoinRequest.findFirst({
-    where: {
-      userId,
-      status: "PENDING",
-      project: { assignmentId: project.assignmentId },
-    },
+  // Check-then-create runs under a per-(user, assignment) advisory lock, so two quick clicks (or two tabs)
+  // cannot both pass the duplicate check. A repeat request for the same group returns the one that exists.
+  const assignmentId = project.assignmentId;
+  const maxGroupSize = project.assignment.maxGroupSize;
+  const outcome = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${userId}::int, ${assignmentId}::int)`;
+
+    const pending = await tx.groupJoinRequest.findFirst({
+      where:   { userId, status: "PENDING", project: { assignmentId } },
+      orderBy: { id: "asc" },
+    });
+    if (pending?.projectId === projectId) return { kind: "existing" as const, request: pending };
+    if (pending) return { kind: "other-group" as const };
+
+    if (project.members.length >= maxGroupSize) return { kind: "full" as const };
+
+    const created = await tx.groupJoinRequest.create({ data: { userId, projectId, status: "PENDING" } });
+    return { kind: "created" as const, request: created };
   });
-  if (pendingExists) {
+
+  if (outcome.kind === "other-group") {
     res.status(409).json({
       error: "You already have a pending request for this project. Wait for a response before requesting another group.",
     });
     return;
   }
-
-  // Block if group is already full
-  if (project.members.length >= project.assignment.maxGroupSize) {
+  if (outcome.kind === "full") {
     res.status(409).json({ error: "This group is full." });
     return;
   }
 
-  const joinRequest = await prisma.groupJoinRequest.create({
-    data: { userId, projectId, status: "PENDING" },
-  });
+  const joinRequest = outcome.request;
+  if (outcome.kind === "existing") {
+    res.status(200).json({
+      id:        joinRequest.id,
+      projectId: project.id,
+      groupName: project.groupName || `Group ${project.id}`,
+      status:    "PENDING",
+      createdAt: joinRequest.createdAt.toISOString(),
+      existing:  true,
+    });
+    return;
+  }
 
   // Tell the group's leader — the message carries only the requester's name.
   await notify({
