@@ -238,7 +238,7 @@ export function ClassCard({
             <button
               onClick={(e) => void handleCopy(e)}
               title={copied ? "Copied!" : "Copy class join code"}
-              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
+              className={`ft-hit rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
             >
               {copied ? (
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

@@ -374,7 +374,7 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
-        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
+        className={`ft-hit rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
       >
         {copied ? (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -391,7 +391,7 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
       <button
         onClick={() => setShowQR((v) => !v)}
         title={showQR ? "Hide QR code" : "Show QR code"}
-        className={`p-0.5 rounded transition-colors ${showQR ? "text-indigo-600" : "text-slate-500 hover:text-indigo-600"}`}
+        className={`ft-hit rounded transition-colors ${showQR ? "text-indigo-600" : "text-slate-500 hover:text-indigo-600"}`}
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -797,7 +797,7 @@ export function ClassPage({ classId }: Props) {
                               <button
                                 onClick={(e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
                                 title="Delete project"
-                                className="p-1 rounded text-white/50 hover:text-white hover:bg-red-500/40 transition-colors"
+                                className="ft-hit rounded text-white/50 hover:text-white hover:bg-red-500/40 transition-colors"
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

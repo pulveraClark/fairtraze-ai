@@ -242,7 +242,7 @@ function DayCell({ date, inMonth, isToday, isDeadline, milestones, tasks, today,
     >
       <div className="flex items-center justify-between gap-1">
         <span
-          className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
+          data-no-coarse="" className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
             isToday ? "bg-indigo-700 text-white" : inMonth ? "text-slate-900" : "text-slate-700"
           }`}
         >
@@ -289,7 +289,7 @@ function TaskChip({ task, today, onOpen, tabbable, overlay }: { task: BoardTask;
       aria-label={`${task.key} ${task.title}, ${state}${canDrag ? ". Drag to another day to change the due date." : ""}`}
       title={canDrag ? "Drag to another day to change the due date" : undefined}
       onClick={() => onOpen?.(task.id)}
-      className={`flex min-h-6 w-full items-center gap-1 rounded border px-1 py-0.5 text-left text-xs font-medium ${tone} ${canDrag ? "cursor-grab touch-none" : ""} ${isDragging ? "opacity-40" : ""} ${FOCUS_LIGHT}`}
+      data-no-coarse="" className={`flex min-h-6 w-full items-center gap-1 rounded border px-1 py-0.5 text-left text-xs font-medium ${tone} ${canDrag ? "cursor-grab touch-none" : ""} ${isDragging ? "opacity-40" : ""} ${FOCUS_LIGHT}`}
     >
       <Icon className="h-3 w-3 shrink-0" />
       <span className={`truncate ${done ? "line-through" : ""}`}>{task.title}</span>

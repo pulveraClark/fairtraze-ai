@@ -105,7 +105,7 @@ export function AuditLogPage() {
             </select>
             <button
               onClick={load}
-              className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -125,7 +125,7 @@ export function AuditLogPage() {
         {!loading && error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
             <p className="text-sm text-red-600 mb-2">{error}</p>
-            <button onClick={load} className="text-xs text-indigo-600 hover:underline">Retry</button>
+            <button onClick={load} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
           </div>
         )}
 

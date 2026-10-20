@@ -137,7 +137,7 @@ export function ClassCard({ classId, assignmentLabel, items, onClick, edpCode, c
             <button
               onClick={handleCopyJoinCode}
               title={copied ? "Copied!" : "Copy join code"}
-              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
+              className={`ft-hit rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
             >
               {copied ? (
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

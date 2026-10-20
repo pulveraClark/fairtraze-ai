@@ -578,3 +578,22 @@ body {
   background-color: #fde68a;
   color: #111827;
 }
+
+/* ── Tap targets ───────────────────────────────────────────────────────────────
+   .ft-hit: icon and text-only buttons that would otherwise be smaller than 32px. Always at least 32x32.
+   Coarse pointers (touch): every control in the app shell is at least 40px tall. Plain CSS (not a Tailwind variant) so one
+   rule covers every page. Left alone: the document writing area, the calendar chips (a 24px grid cell, WCAG 2.2 minimum),
+   print and the public landing page. Fine pointers (mouse) are not affected by the media query, so desktop heights are unchanged. */
+.ft-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+}
+@media (pointer: coarse) {
+  .ft-hit { min-width: 2.5rem; min-height: 2.5rem; }
+  .ft-app-content :where(button, [role="tab"], select, input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"], [type="file"])):not(.ft-doc-content *, .ft-legacy-scale *, [data-no-coarse]) {
+    min-height: 2.5rem;
+  }
+}

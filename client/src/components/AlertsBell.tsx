@@ -114,7 +114,7 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
               <button
                 type="button"
                 onClick={markAllRead}
-                className={`min-h-10 rounded-md px-2 text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
+                className={`ft-hit rounded-md px-2 text-sm font-medium text-indigo-300 hover:text-indigo-200 ${FOCUS_RING}`}
               >
                 Mark all as read
               </button>

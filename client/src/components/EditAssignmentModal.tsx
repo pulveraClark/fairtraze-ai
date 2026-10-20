@@ -171,7 +171,7 @@ export function EditAssignmentModal({
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <h2 id="edit-project-title" className="text-sm font-semibold text-slate-900">Edit project</h2>
-          <button type="button" onClick={onClose} className={`rounded p-1 text-slate-600 hover:text-slate-900 ${FOCUS_LIGHT}`} aria-label="Close">✕</button>
+          <button type="button" onClick={onClose} className={`ft-hit rounded text-slate-600 hover:text-slate-900 ${FOCUS_LIGHT}`} aria-label="Close">✕</button>
         </div>
 
         {failed ? (

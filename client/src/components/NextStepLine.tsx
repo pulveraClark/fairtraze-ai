@@ -14,7 +14,7 @@ export function NextStepLine({ text, onOpenTasks }: { text: string | null; onOpe
         <button
           type="button"
           onClick={onOpenTasks}
-          className={`font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
+          className={`ft-hit rounded px-1 font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
         >
           Open tasks
         </button>

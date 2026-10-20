@@ -395,7 +395,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   onClick={startEditName}
                   title="Rename group"
                   aria-label="Rename group"
-                  className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-500 hover:text-indigo-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+                  className="ft-hit shrink-0 w-3.5 h-3.5 rounded-full text-slate-500 hover:text-indigo-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
                 >
                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
@@ -499,7 +499,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                               void handleSetRoles(m.userId, next);
                             }}
                             title={isLastRemaining ? "At least one role must be assigned." : undefined}
-                            className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
+                            className={`ft-hit text-xs px-2 rounded border font-medium transition-colors disabled:opacity-50 ${
                               active ? meta.activeClass : meta.inactiveClass
                             }`}
                           >
@@ -891,7 +891,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
           <button
             onClick={onClose}
-            className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded"
+            className="ft-hit text-slate-600 hover:text-slate-700 transition-colors rounded"
             aria-label="Close"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

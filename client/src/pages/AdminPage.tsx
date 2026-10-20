@@ -310,7 +310,7 @@ export function AdminPage() {
               </select>
               <button
                 onClick={loadUsers}
-                className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
+                className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
               >
                 Refresh
               </button>
@@ -362,7 +362,7 @@ export function AdminPage() {
           {!usersLoading && usersError && (
             <div className="px-6 py-14 text-center space-y-2">
               <p className="text-sm text-red-600">{usersError}</p>
-              <button onClick={loadUsers} className="text-xs text-indigo-600 hover:underline">Retry</button>
+              <button onClick={loadUsers} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
             </div>
           )}
 
@@ -521,7 +521,7 @@ export function AdminPage() {
             </h2>
             <button
               onClick={loadOverview}
-              className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -542,7 +542,7 @@ export function AdminPage() {
           {!overviewLoading && overviewError && (
             <div className="bg-white border border-red-200 rounded-xl p-6 text-center">
               <p className="text-sm text-red-600 mb-2">{overviewError}</p>
-              <button onClick={loadOverview} className="text-xs text-indigo-600 hover:underline">Retry</button>
+              <button onClick={loadOverview} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
             </div>
           )}
 
@@ -584,7 +584,7 @@ export function AdminPage() {
                 </p>
               )}
             </div>
-            <button onClick={loadClasses} className="text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors">
+            <button onClick={loadClasses} className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors">
               Refresh
             </button>
           </div>
@@ -599,7 +599,7 @@ export function AdminPage() {
           {!classesLoading && classesError && (
             <div className="px-6 py-10 text-center">
               <p className="text-sm text-red-600 mb-2">{classesError}</p>
-              <button onClick={loadClasses} className="text-xs text-indigo-600 hover:underline">Retry</button>
+              <button onClick={loadClasses} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
             </div>
           )}
 

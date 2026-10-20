@@ -24,7 +24,7 @@ export function AppFooter({ children, printHidden = false, className = "", hideH
                 router.navigate("/help");
               }
             }}
-            className={`rounded text-xs font-medium text-indigo-700 underline underline-offset-2 ${FOCUS_LIGHT}`}
+            className={`ft-hit rounded px-1 text-xs font-medium text-indigo-700 underline underline-offset-2 ${FOCUS_LIGHT}`}
           >
             How FairTraze works
           </a>

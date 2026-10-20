@@ -93,7 +93,7 @@ function JoinCodeBadge({ code }: { code: string }) {
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
-        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
+        className={`ft-hit rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-500 hover:text-indigo-600"}`}
       >
         {copied ? (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -592,7 +592,7 @@ export function StudentClassPage({ classId }: Props) {
             {cls?.joinCode && <JoinCodeBadge code={cls.joinCode} />}
             <button
               onClick={() => setShowLeaveModal(true)}
-              className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-red-700 hover:text-red-900 font-medium transition-colors"
             >
               Leave class
             </button>

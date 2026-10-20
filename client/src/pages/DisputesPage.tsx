@@ -233,7 +233,7 @@ export function DisputesPage() {
             </div>
             <p className="text-sm text-slate-600">Student-raised score disputes awaiting your review</p>
           </div>
-          <button onClick={load} className="text-xs text-slate-600 hover:text-slate-700 transition-colors font-medium">Refresh</button>
+          <button onClick={load} className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 transition-colors font-medium">Refresh</button>
         </div>
       </div>
 
@@ -367,7 +367,7 @@ export function DisputesPage() {
                             </button>
                           )}
                           <button onClick={() => navigate(`/project/${d.project.id}`)}
-                            className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors font-medium">
+                            className="ft-hit rounded px-2 text-xs text-indigo-700 hover:text-indigo-900 transition-colors font-medium">
                             View group report →
                           </button>
                         </div>
