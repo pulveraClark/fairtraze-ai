@@ -77,7 +77,7 @@ export function ListView({ board, tasks, today, sort, onSortChange, onOpen, sele
                   aria-label={`Select all ${rows.length} tasks`}
                   checked={ticked === rows.length}
                   onChange={() => selection.onSetAll(ticked === rows.length ? null : rows.map((t) => t.id))}
-                  className="h-4 w-4"
+                  className="h-6 w-6"
                 />
               </th>
             )}
@@ -122,7 +122,7 @@ function Row({ task, board, today, onOpen, selection }: { task: BoardTask; board
     <tr data-testid={`task-row-${task.id}`} className={checked ? "bg-indigo-50" : "hover:bg-slate-50"}>
       {selection && (
         <td className="px-3">
-          <input type="checkbox" aria-label={`Select ${task.key}`} checked={checked} onChange={() => selection.onToggle(task.id)} className="h-4 w-4" />
+          <input type="checkbox" aria-label={`Select ${task.key}`} checked={checked} onChange={() => selection.onToggle(task.id)} className="h-6 w-6" />
         </td>
       )}
       <td className="whitespace-nowrap px-3 text-xs font-semibold tabular-nums text-slate-700">{task.key}</td>

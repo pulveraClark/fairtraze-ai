@@ -698,7 +698,7 @@ export function AdminPage() {
                 <p className="text-xs font-semibold text-slate-600">Departments</p>
                 <button
                   onClick={() => setShowDeptForm((v) => !v)}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  className="ft-hit rounded px-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
                 >
                   {showDeptForm ? "Cancel" : "+ New"}
                 </button>

@@ -539,7 +539,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             <div className="mt-5 pt-4 border-t border-slate-100">
               <button
                 onClick={() => { setStep("reassign-select"); setReassignTarget(null); setActionErr(""); }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                className="ft-hit gap-1.5 rounded px-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
