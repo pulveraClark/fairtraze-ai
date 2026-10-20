@@ -32,22 +32,22 @@ function AuthIllustration() {
       {/* Member A — overload, indigo full */}
       <rect x="40" y="128" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
       <rect x="70" y="128" width="158" height="9" rx="2.5" fill="rgba(165,180,252,0.65)" />
-      <text x="236" y="137" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">36%</text>
+      <text x="236" y="137" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">46%</text>
 
       {/* Member B */}
       <rect x="40" y="143" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
-      <rect x="70" y="143" width="110" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
-      <text x="236" y="152" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">26%</text>
+      <rect x="70" y="143" width="75" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
+      <text x="236" y="152" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">22%</text>
 
       {/* Member C */}
       <rect x="40" y="158" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
-      <rect x="70" y="158" width="105" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
-      <text x="236" y="167" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">25%</text>
+      <rect x="70" y="158" width="75" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
+      <text x="236" y="167" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">22%</text>
 
       {/* Member D — free-rider, red */}
       <rect x="40" y="173" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
-      <rect x="70" y="173" width="54" height="9" rx="2.5" fill="rgba(248,113,113,0.6)" />
-      <text x="236" y="182" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">13%</text>
+      <rect x="70" y="173" width="34" height="9" rx="2.5" fill="rgba(248,113,113,0.6)" />
+      <text x="236" y="182" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">10%</text>
 
       {/* Free-rider badge */}
       <rect x="130" y="171" width="56" height="13" rx="3.5" fill="rgba(248,113,113,0.2)" stroke="rgba(248,113,113,0.4)" strokeWidth="1" />

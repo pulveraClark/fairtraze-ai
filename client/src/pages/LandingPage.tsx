@@ -6,15 +6,17 @@ import { UserMenu } from "../components/UserMenu";
 import logoUrl from "../assets/logo_transparent.png";
 
 // ── Static preview data ───────────────────────────────────────────────────────
-const PREVIEW_MEMBERS = [
-  { name: "Member A", pct: 36, flag: "overload"   as const },
-  { name: "Member B", pct: 26, flag: null },
-  { name: "Member C", pct: 25, flag: null },
-  { name: "Member D", pct: 13, flag: "free-rider" as const },
+export const PREVIEW_MEMBERS = [
+  { name: "Member A", pct: 46, flag: "overload"   as const },
+  { name: "Member B", pct: 22, flag: null },
+  { name: "Member C", pct: 22, flag: null },
+  { name: "Member D", pct: 10, flag: "free-rider" as const },
 ] as const;
 
-const AI_NARRATIVE_TEXT =
-  "Member A's contribution share (36%) is well above the team's equal share, indicating a workload concentration. Member D's share (13%) falls significantly below the expected minimum…";
+export const PREVIEW_GINI = 0.27;
+
+export const AI_NARRATIVE_TEXT =
+  "Member A's contribution share (46%) is well above the team's equal share, indicating a workload concentration. Member D's share (10%) falls significantly below the expected minimum…";
 
 // ── Count-up stat number (animates 0 → value once it enters the viewport) ─────
 function AnimatedPercent({ value }: { value: number }) {
@@ -151,7 +153,7 @@ function ProductPreview() {
                     Moderate Risk
                   </span>
                   <span className="text-slate-500 text-sm">
-                    Gini: <span className="font-bold text-slate-800">0.21</span>
+                    Gini: <span className="font-bold text-slate-800">{PREVIEW_GINI.toFixed(2)}</span>
                   </span>
                 </div>
               </div>
