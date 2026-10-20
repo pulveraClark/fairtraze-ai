@@ -97,4 +97,32 @@ describe("a pending move is not overwritten by a poll", () => {
     await act(async () => { server.gets.forEach((g) => g.resolve(after)); await Promise.resolve(); });
     await waitFor(() => expect(statusOf(result, 1)).toBe("IN_PROGRESS"));
   });
+
+  it("a refused move (403) puts only that card back and shows the server's reason; another pending move stays", async () => {
+    const a = mkTask({ id: 1, status: "TODO", permissions: LEADER_PERMS });
+    const b = mkTask({ id: 2, status: "TODO", permissions: LEADER_PERMS });
+    const { server, result } = setup(mkBoard({}, [a, b]));
+    await waitFor(() => expect(result.current.query.data).toBeDefined());
+
+    let first!: Promise<BoardTask | null>;
+    let second!: Promise<BoardTask | null>;
+    act(() => { first = result.current.actions.moveTask(a, { status: "DONE", afterId: null, beforeId: null }); });
+    await waitFor(() => expect(server.posts).toHaveLength(1));
+    act(() => { second = result.current.actions.moveTask(b, { status: "IN_PROGRESS", afterId: null, beforeId: null }); });
+    await waitFor(() => expect(server.posts).toHaveLength(2));
+
+    await act(async () => {
+      server.posts[0].resolve({ status: 403, body: { error: "Only the group leader can mark a task Done." } });
+      await first;
+    });
+    expect(statusOf(result, 1)).toBe("TODO");
+    expect(statusOf(result, 2)).toBe("IN_PROGRESS");
+    expect(document.body.textContent).toContain("Only the group leader can mark a task Done.");
+
+    await act(async () => {
+      server.posts[1].resolve({ status: 200, body: { ...b, status: "IN_PROGRESS", version: 2 } });
+      await second;
+    });
+    expect(statusOf(result, 2)).toBe("IN_PROGRESS");
+  });
 });
