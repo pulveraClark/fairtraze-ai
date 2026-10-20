@@ -108,3 +108,34 @@ describe("GroupManageModal dialog semantics", () => {
     expect(screen.getByRole("button", { name: "Close" }).className).toContain("h-10");
   });
 });
+
+describe("GroupManageModal Accept all", () => {
+  const req = (id: number, name: string) => ({ id, student: { id: 10 + id, name, email: "", githubUsername: null }, status: "PENDING", createdAt: "" });
+  beforeEach(() => { q.suggestions = []; });
+
+  it("is hidden for a single request and shown for two or more", () => {
+    q.requests = [req(1, "Cara")];
+    const { unmount } = renderModal();
+    expect(screen.queryByRole("button", { name: "Accept all" })).toBeNull();
+    unmount();
+    q.requests = [req(1, "Cara"), req(2, "Dan")];
+    renderModal();
+    expect(screen.getByRole("button", { name: "Accept all" })).toBeTruthy();
+  });
+
+  it("asks 'Accept 2 requests?' first, and only then calls the server", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ accepted: 2, skipped: 0 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    q.requests = [req(1, "Cara"), req(2, "Dan")];
+    renderModal();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept all" }));
+    expect(screen.getByText("Accept 2 requests?")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept 2" }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/groups/1/requests/accept-all");
+    vi.unstubAllGlobals();
+  });
+});

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { planAcceptAll } from "../lib/acceptAll";
 import { useRouter } from "../router";
 import { useToast } from "./Toast";
 import {
@@ -63,7 +64,8 @@ type Step =
   | "reassign-select"
   | { type: "confirm-reassign"; userId: number; name: string }
   | { type: "confirm-remove";   userId: number; name: string }
-  | { type: "confirm-disband" };
+  | { type: "confirm-disband" }
+  | { type: "confirm-accept-all" };
 
 interface Props {
   projectId: number;
@@ -170,6 +172,26 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
       const data = await res.json() as { error?: string };
       if (!res.ok) { setActionErr(data.error ?? "Could not accept request."); return; }
       onChanged();
+      await refreshGroup();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAcceptAll() {
+    setBusy(true);
+    setActionErr("");
+    try {
+      const res  = await fetch(`/api/groups/${projectId}/requests/accept-all`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { error?: string; accepted?: number; skipped?: number };
+      if (!res.ok) { setActionErr(data.error ?? "Could not accept the requests."); setStep("list"); return; }
+      const n = data.accepted ?? 0;
+      showSuccessToast(`Accepted ${n} request${n === 1 ? "" : "s"}.`);
+      onChanged();
+      setStep("list");
       await refreshGroup();
     } finally {
       setBusy(false);
@@ -574,6 +596,15 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   {requests.length}
                 </span>
               )}
+              {requests.length >= 2 && (
+                <button
+                  onClick={() => { setStep({ type: "confirm-accept-all" }); setActionErr(""); }}
+                  disabled={busy}
+                  className="ml-auto text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:cursor-not-allowed"
+                >
+                  Accept all
+                </button>
+              )}
             </div>
 
             {requestsErr ? (
@@ -820,6 +851,41 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     );
   }
 
+  function renderConfirmAcceptAll() {
+    const plan = planAcceptAll(requests.length, group?.members.length ?? 0, group?.maxGroupSize ?? null);
+    return (
+      <>
+        <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-800 leading-relaxed mb-5" role="status">
+          <p className="font-semibold">{plan.title}</p>
+          {plan.detail && <p className="mt-1 text-slate-700">{plan.detail}</p>}
+        </div>
+        {actionErr && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs text-red-700">
+            {actionErr}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => { setStep("list"); setActionErr(""); }}
+            disabled={busy}
+            className="px-4 py-2 rounded-lg text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors font-medium disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          {plan.accepting > 0 && (
+            <button
+              onClick={() => void handleAcceptAll()}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg text-sm text-white bg-emerald-700 hover:bg-emerald-800 transition-colors font-semibold disabled:opacity-50"
+            >
+              {busy ? "Accepting…" : `Accept ${plan.accepting}`}
+            </button>
+          )}
+        </div>
+      </>
+    );
+  }
+
   function renderConfirmDisband() {
     return (
       <>
@@ -858,6 +924,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     if (typeof step === "object" && step.type === "confirm-reassign") return "Confirm leader change";
     if (typeof step === "object" && step.type === "confirm-remove")   return "Are you sure?";
     if (typeof step === "object" && step.type === "confirm-disband")  return "Delete group?";
+    if (typeof step === "object" && step.type === "confirm-accept-all") return "Accept join requests";
     return "Manage Group";
   }
 
@@ -916,6 +983,8 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 renderConfirmRemove(step.userId, step.name)}
               {typeof step === "object" && step.type === "confirm-disband" &&
                 renderConfirmDisband()}
+              {typeof step === "object" && step.type === "confirm-accept-all" &&
+                renderConfirmAcceptAll()}
             </>
           )}
         </div>

@@ -817,34 +817,23 @@ groupsRouter.get("/api/groups/:projectId/requests", requireAuth, async (req: Req
   });
 });
 
-// POST /api/groups/requests/:id/accept — accept a join request (leader or instructor)
-groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Request, res: Response) => {
-  const idResult = idParam.safeParse(req.params.id);
-  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+type PendingJoinRequest = {
+  id: number;
+  userId: number;
+  projectId: number;
+  user: { id: number; name: string; githubUsername: string | null };
+};
 
-  const joinReq = await prisma.groupJoinRequest.findUnique({
-    where:   { id: idResult.data },
-    include: { user: { select: { id: true, name: true, githubUsername: true } } },
-  });
-  if (!joinReq) { res.status(404).json({ error: "Request not found." }); return; }
-  if (joinReq.status !== "PENDING") {
-    res.status(409).json({ error: "This request has already been resolved." });
-    return;
-  }
-
-  const project = await loadGroup(joinReq.projectId);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  if (!canManage(req, project)) {
-    res.status(403).json({ error: "Only the group leader or instructor can accept join requests." });
-    return;
-  }
-
-  if (project.groupMemberships.length >= (project.assignment?.maxGroupSize ?? Infinity)) {
-    res.status(409).json({ error: "This group is full. Cannot accept the request." });
-    return;
-  }
-
+/**
+ * Adds the requester to the group and resolves the request. The one place join-request acceptance happens,
+ * so the single "Accept" and "Accept all" follow identical rules. The caller has already checked permission,
+ * that the request is PENDING, and that the group has room.
+ */
+async function acceptJoinRequest(
+  joinReq: PendingJoinRequest,
+  project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>,
+  actorId: number,
+): Promise<void> {
   await prisma.$transaction([
     prisma.groupMembership.create({
       data: {
@@ -875,14 +864,87 @@ groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Re
   await resolveNotifications({ type: "JOIN_REQUEST_RECEIVED", refType: "JOIN_REQUEST", refId: joinReq.id });
   await notify({
     recipientIds: joinReq.userId,
-    actorId:      req.user!.sub,
+    actorId,
     type:         "JOIN_REQUEST_ACCEPTED",
     message:      `Your request to join ${project.groupName || `Group ${project.id}`} was accepted`,
     link:         `/student/group/${project.id}`,
     projectId:    project.id,
   });
+}
+
+// POST /api/groups/requests/:id/accept — accept a join request (leader or instructor)
+groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+
+  const joinReq = await prisma.groupJoinRequest.findUnique({
+    where:   { id: idResult.data },
+    include: { user: { select: { id: true, name: true, githubUsername: true } } },
+  });
+  if (!joinReq) { res.status(404).json({ error: "Request not found." }); return; }
+  if (joinReq.status !== "PENDING") {
+    res.status(409).json({ error: "This request has already been resolved." });
+    return;
+  }
+
+  const project = await loadGroup(joinReq.projectId);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can accept join requests." });
+    return;
+  }
+
+  if (project.groupMemberships.length >= (project.assignment?.maxGroupSize ?? Infinity)) {
+    res.status(409).json({ error: "This group is full. Cannot accept the request." });
+    return;
+  }
+
+  await acceptJoinRequest(joinReq, project, req.user!.sub);
 
   res.json({ message: "Request accepted. Member added to the group." });
+});
+
+// POST /api/groups/:projectId/requests/accept-all — accept every pending request that fits (leader or instructor).
+// Oldest first, up to the group's member limit; the rest stay pending. Returns how many were accepted / left.
+groupsRouter.post("/api/groups/:projectId/requests/accept-all", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.projectId);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can accept join requests." });
+    return;
+  }
+
+  const pending = await prisma.groupJoinRequest.findMany({
+    where:   { projectId: project.id, status: "PENDING" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    include: { user: { select: { id: true, name: true, githubUsername: true } } },
+  });
+  if (pending.length === 0) {
+    res.status(409).json({ error: "There are no pending requests." });
+    return;
+  }
+
+  const max = project.assignment?.maxGroupSize ?? Infinity;
+  let members = project.groupMemberships.length;
+  if (members >= max) {
+    res.status(409).json({ error: "This group is full. Cannot accept the requests." });
+    return;
+  }
+
+  let accepted = 0;
+  for (const joinReq of pending) {
+    if (members >= max) break;
+    await acceptJoinRequest(joinReq, project, req.user!.sub);
+    members += 1;
+    accepted += 1;
+  }
+
+  res.json({ accepted, skipped: pending.length - accepted });
 });
 
 // POST /api/groups/requests/:id/decline — decline a join request (leader or instructor)
