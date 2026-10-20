@@ -7,6 +7,7 @@ import { groupKeys } from "./useGroupQueries";
 import { taskApi, TaskApiError, type CreateTaskInput, type UpdateTaskInput } from "../lib/tasks/api";
 import { applyMove, removeTaskFrom, replaceTaskIn, statusLabel } from "../lib/tasks/board";
 import { columnsFromTasks, placementOf, type Placement } from "../lib/tasks/placement";
+import { clearMovePending, markMovePending } from "../lib/tasks/pendingMoves";
 
 /**
  * Mutations for the Tasks board. Each one updates the cached board optimistically where it makes
@@ -44,11 +45,18 @@ export function useTaskActions(projectId: number) {
     to: Placement,
     opts: { previous?: Placement | null; undo?: boolean } = {},
   ): Promise<BoardTask | null> => {
-    const snapshot = getBoard();
+    // Stop a poll that is already on its way, then keep later ones from putting the card back.
+    await queryClient.cancelQueries({ queryKey: key });
+    // Restore only this task on failure, so another move saved in the meantime is not undone.
+    const before = getBoard()?.tasks.find((t) => t.id === task.id) ?? task;
     setBoard((b) => applyMove(b, task.id, to));
+    const optimistic = getBoard()?.tasks.find((t) => t.id === task.id);
+    if (optimistic) markMovePending(uid, projectId, optimistic);
     try {
       const saved = await taskApi.move(token, projectId, task, to);
       setBoard((b) => replaceTaskIn(b, saved));
+      clearMovePending(uid, projectId, task.id);
+      void refresh(); // a poll that started before this save must not win; this one starts after it
       if (opts.undo) {
         showSuccessToast("Move undone.");
       } else if (saved.status !== task.status) {
@@ -61,10 +69,12 @@ export function useTaskActions(projectId: number) {
       }
       return saved;
     } catch (err) {
-      handleFailure(err, snapshot);
+      clearMovePending(uid, projectId, task.id);
+      setBoard((b) => replaceTaskIn(b, before));
+      handleFailure(err);
       return null;
     }
-  }, [getBoard, setBoard, token, projectId, showToast, showSuccessToast, handleFailure]);
+  }, [getBoard, setBoard, queryClient, key, uid, token, projectId, refresh, showToast, showSuccessToast, handleFailure]);
 
   /** Move a task to the bottom of a column (the status menu and quick add use this). */
   const moveToStatus = useCallback((task: BoardTask, status: TaskStatus) => {

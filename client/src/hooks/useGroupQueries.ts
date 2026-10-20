@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import type { BoardResponse, BoardTask } from "@shared/taskTypes";
 import { POLL_10S } from "./pollingOptions";
 import type { GroupSetup } from "../lib/groupSetup";
+import { mergePending } from "../lib/tasks/pendingMoves";
 
 /**
  * Query keys for the student/group surfaces. userId is the second element of every key so a
@@ -86,7 +87,8 @@ export function useTaskBoardQuery(projectId: number) {
   const uid = user?.id ?? null;
   return useQuery({
     queryKey: groupKeys.tasks(uid, projectId),
-    queryFn:  () => getJson<BoardResponse>(`/api/groups/${projectId}/tasks`, token, "Could not load tasks."),
+    // A poll never puts a card back while its move is still being saved.
+    queryFn:  async () => mergePending(uid, projectId, await getJson<BoardResponse>(`/api/groups/${projectId}/tasks`, token, "Could not load tasks.")),
     enabled:  !!token && uid !== null,
     retry: false,
     ...POLL_10S,
