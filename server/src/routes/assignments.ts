@@ -6,6 +6,7 @@ import { requireRole } from "../middleware/auth.js";
 import { assertOwnsClass, assertOwnsAssignment } from "../lib/ownership.js";
 import { generateUniqueJoinCode } from "../lib/joinCode.js";
 import { BRIEF_DESCRIPTION_MAX, attachmentMetaFor } from "../lib/briefAttachments.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const assignmentsRouter = Router();
 
@@ -154,7 +155,7 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
   const projects = await prisma.project.findMany({
     where:   { assignmentId: assignment.id },
     orderBy: { id: "asc" },
-    include: { members: true, reports: { orderBy: { generatedAt: "desc" }, take: 1 } },
+    include: { members: true, reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 } },
   });
   const attachments = (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [];
 

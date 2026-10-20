@@ -69,6 +69,7 @@ export function useStudentGroupQuery<T>(projectId: number) {
     queryKey: groupKeys.detail(uid, projectId),
     queryFn:  () => getJson<T>(`/api/student/group/${projectId}`, token, "Could not load group."),
     enabled:  !!token && uid !== null,
+    staleTime: 0,               // always show the latest analysis: a focus or remount refetches
     refetchOnWindowFocus: true, // no interval: covers renames, role sets, joins/leaves with no alert
     retry: false,
   });

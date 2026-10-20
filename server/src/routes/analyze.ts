@@ -16,6 +16,7 @@ import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig } from "../lib/scorin
 import { linkCommitsBestEffort } from "../lib/taskCommitLinks.js";
 import type { Request, Response } from "express";
 import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, AnyScoredMember, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const analyzeRouter = Router();
 
@@ -316,7 +317,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     progress.emit("compute", {});
     const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
 
-    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
+    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER] });
     const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
     const savedNarrative = stored.narrative ?? null;
     progress.emit("save", {});
@@ -423,7 +424,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
       scoringConfig.blend!, scoringConfig.thresholds, deadlineMs
     );
 
-    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: { generatedAt: "desc" } });
+    const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER] });
     const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
     const savedNarrative = stored.narrative ?? null;
     progress.emit("save", {});
@@ -529,7 +530,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
   // is carried forward, so re-analyzing doesn't silently blank a saved AI explanation.
   const existing = await prisma.report.findFirst({
     where: { projectId },
-    orderBy: { generatedAt: "desc" },
+    orderBy: [...LATEST_REPORT_ORDER],
   });
 
   const stored = existing?.content
@@ -609,7 +610,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
 
   const latestReport = await prisma.report.findFirst({
     where: { projectId },
-    orderBy: { generatedAt: "desc" },
+    orderBy: [...LATEST_REPORT_ORDER],
   });
   if (!latestReport) {
     res.status(404).json({ error: "No analysis found — run Analyze first." });

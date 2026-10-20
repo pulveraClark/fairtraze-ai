@@ -4,6 +4,7 @@ import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { notify, activeAdminIds } from "../lib/notify.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 // Data-subject rights under RA 10173: consent record, export (access/portability) and the
 // erasure request. Erasure itself is performed by an admin (admin.ts) via lib/anonymizeUser.ts.
@@ -69,7 +70,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
           select: {
             groupName: true,
             assignment: { select: { title: true, sourceType: true } },
-            reports: { orderBy: { generatedAt: "desc" }, take: 1, select: { generatedAt: true, gini: true, teamHealth: true, content: true } },
+            reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1, select: { generatedAt: true, gini: true, teamHealth: true, content: true } },
           },
         },
       },

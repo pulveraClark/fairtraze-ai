@@ -2,6 +2,7 @@ import { groupsNeedAttention } from "../lib/attentionLabel";
 import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
 import { useEffect, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
@@ -93,6 +94,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const taskSummary = useAssignmentTaskSummary(assignmentId);
   const { navigate } = useRouter();
   const { token, user } = useAuth();
+  const queryClient = useQueryClient();
   const isAdmin = user?.systemRole === "ADMIN";
 
   const [assignment, setAssignment] = useState<AssignmentMeta | null>(null);
@@ -173,6 +175,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         const data = (await res.json()) as { groups: LifecycleGroup[] };
         await fetchSummaryForAssignment(data.groups);
       }
+      // The dashboard, class page and sidebar share one cached summary: make them pick up this analysis.
+      void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
     } finally {
       setAnalyzing((prev) => {
         const next = new Set(prev);
@@ -239,6 +243,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     setBulkFailures(failures);
     setBulkRunning(false);
     setBulkProgress(null);
+    void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
     await fetchData();
   }
 

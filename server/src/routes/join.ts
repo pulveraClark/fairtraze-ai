@@ -12,6 +12,7 @@ import type {
 } from "@shared/types.js";
 
 import { contentHasNoRecordedActivity, hasNoRecordedActivity } from "../lib/reportActivity.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const joinRouter = Router();
 
@@ -84,7 +85,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
                 include: {
                   groupMemberships: { where: { userId }, take: 1 },
                   reports: {
-                    orderBy: { generatedAt: "desc" },
+                    orderBy: [...LATEST_REPORT_ORDER],
                     take: 1,
                     select: { gini: true, teamHealth: true, generatedAt: true, content: true },
                   },
@@ -177,7 +178,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
               members:          { select: { id: true } },
               groupMemberships: { include: { user: { select: { name: true } } } },
               reports: {
-                orderBy: { generatedAt: "desc" },
+                orderBy: [...LATEST_REPORT_ORDER],
                 take: 1,
                 select: { gini: true, teamHealth: true, generatedAt: true, content: true },
               },
@@ -601,7 +602,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       where: { id: projectId },
       include: {
         assignment: { include: { classSection: { include: { department: true } } } },
-        reports: { orderBy: { generatedAt: "desc" }, take: 1 },
+        reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 },
       },
     }),
     prisma.user.findUnique({ where: { id: userId }, select: { githubUsername: true } }),

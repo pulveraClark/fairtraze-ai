@@ -7,6 +7,7 @@ import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
 import { projectsWithRepoChangedSince } from "../lib/repoChange.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const projectsRouter = Router();
 
@@ -93,7 +94,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     },
     include: {
       members: true,
-      reports: { orderBy: { generatedAt: "desc" }, take: 1 },
+      reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 },
       assignment: { select: { id: true, title: true, classSectionId: true, classSection: { select: { subjectCode: true, subjectName: true } }, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT } },
     },
     orderBy: { id: "asc" },
@@ -237,7 +238,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
 
   const latestReport = await prisma.report.findFirst({
     where: { projectId },
-    orderBy: { generatedAt: "desc" },
+    orderBy: [...LATEST_REPORT_ORDER],
   });
   if (!latestReport) {
     res.status(404).json({ error: "No report found — analyze this project first." });

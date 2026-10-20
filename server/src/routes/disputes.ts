@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { notify } from "../lib/notify.js";
 import type { TeamReport } from "@shared/types.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const disputesRouter = Router();
 
@@ -79,7 +80,7 @@ disputesRouter.post("/api/disputes", ...requireRole("STUDENT"), async (req, res)
     }),
     prisma.report.findFirst({
       where:   { projectId },
-      orderBy: { generatedAt: "desc" },
+      orderBy: [...LATEST_REPORT_ORDER],
       select:  { content: true },
     }),
   ]);
@@ -107,7 +108,7 @@ async function createDisputeAlert(projectId: number, studentName: string): Promi
       assignment: {
         include: { classSection: { select: { instructorId: true, subjectCode: true } } },
       },
-      reports: { orderBy: { generatedAt: "desc" }, take: 1 },
+      reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 },
     },
   });
 
@@ -190,7 +191,7 @@ disputesRouter.get("/api/disputes", ...requireRole("INSTRUCTOR"), async (req, re
           select: {
             id:         true,
             groupName:  true,
-            reports:    { orderBy: { generatedAt: "desc" }, take: 1, select: { content: true } },
+            reports:    { orderBy: [...LATEST_REPORT_ORDER], take: 1, select: { content: true } },
             assignment: {
               select: {
                 id:    true,

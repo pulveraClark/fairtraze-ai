@@ -12,6 +12,9 @@ describe("hasNoRecordedActivity", () => {
   it("reads a stored report's JSON and treats unreadable content as having activity", () => {
     expect(contentHasNoRecordedActivity(JSON.stringify({ members: [{ contributionShare: 0 }] }))).toBe(true);
     expect(contentHasNoRecordedActivity(JSON.stringify({ members: [{ contributionShare: 0.5 }] }))).toBe(false);
+    // the shape analyze.ts really stores
+    expect(contentHasNoRecordedActivity(JSON.stringify({ report: { members: [{ contributionShare: 0 }] }, narrative: null }))).toBe(true);
+    expect(contentHasNoRecordedActivity(JSON.stringify({ report: { members: [{ contributionShare: 0.4 }] } }))).toBe(false);
     expect(contentHasNoRecordedActivity("not json")).toBe(false);
     expect(contentHasNoRecordedActivity(null)).toBe(false);
   });
