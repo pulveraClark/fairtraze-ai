@@ -22,6 +22,8 @@ vi.mock("../hooks/useGroupQueries", () => ({
   useMyDisputesQuery: () => ({ data: state.notes, isPending: false }),
   useStudentGroupQuery: () => ({ data: state.data, isLoading: false, error: null }),
 }));
+const toast = vi.fn();
+vi.mock("../components/Toast", () => ({ useToast: () => ({ showSuccessToast: toast, showToast: vi.fn() }) }));
 vi.mock("../hooks/useInvalidateOnAlertCount", () => ({ useInvalidateOnAlertCount: () => undefined }));
 vi.mock("../components/tasks/TasksTab", () => ({ TasksTab: () => <div>tasks-board</div> }));
 vi.mock("../components/DocumentGate", () => ({ DocumentGate: () => <div>docs-editor</div> }));
@@ -328,5 +330,48 @@ describe("StudentGroupPage - Set up your group", () => {
     state.tasks = [task("2099-01-01")];
     renderPage();
     expect(screen.queryByText("Next step")).toBeNull();
+  });
+
+  it("goes from incomplete to complete in the visit: one 'Setup complete ✓' toast, never repeated", () => {
+    window.localStorage.clear();
+    toast.mockClear();
+    state.setup = setup();
+    const { rerender } = renderPage();
+    expect(toast).not.toHaveBeenCalled();
+    state.setup = done();
+    const again = () => rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <RouterProvider><StudentGroupPage projectId={1} /></RouterProvider>
+      </QueryClientProvider>,
+    );
+    again();
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith("Setup complete ✓");
+    again();
+    expect(toast).toHaveBeenCalledTimes(1);
+    window.localStorage.clear();
+  });
+  it("an already-complete group (or a later visit) shows no toast and no All set line", () => {
+    window.localStorage.clear();
+    toast.mockClear();
+    state.setup = done();
+    state.tasks = [];
+    renderPage();
+    expect(toast).not.toHaveBeenCalled();
+    expect(screen.queryByText(/All set/)).toBeNull();
+  });
+  it("the flag stops a repeat even if the page is opened incomplete then complete again", () => {
+    window.localStorage.setItem("ft.setup.completeShown.1.1", "1");
+    toast.mockClear();
+    state.setup = setup();
+    const { rerender } = renderPage();
+    state.setup = done();
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <RouterProvider><StudentGroupPage projectId={1} /></RouterProvider>
+      </QueryClientProvider>,
+    );
+    expect(toast).not.toHaveBeenCalled();
+    window.localStorage.clear();
   });
 });

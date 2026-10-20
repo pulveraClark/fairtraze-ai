@@ -30,11 +30,10 @@ describe("taskNextStep", () => {
 });
 
 describe("nextStepText", () => {
-  it("prefers the task line over All set", () => {
-    expect(nextStepText({ tasks: [t("2026-10-23")], userId: 1, setupJustCompleted: true, today: TODAY })).toBe("You have 1 task due Friday");
+  it("is the task line when there is one", () => {
+    expect(nextStepText({ tasks: [t("2026-10-23")], userId: 1, today: TODAY })).toBe("You have 1 task due Friday");
   });
-  it("says All set only in the visit where setup was just finished", () => {
-    expect(nextStepText({ tasks: [], userId: 1, setupJustCompleted: true, today: TODAY })).toBe("All set ✓");
-    expect(nextStepText({ tasks: [], userId: 1, setupJustCompleted: false, today: TODAY })).toBeNull();
+  it("is null when there is nothing to say (no All set text any more)", () => {
+    expect(nextStepText({ tasks: [], userId: 1, today: TODAY })).toBeNull();
   });
 });

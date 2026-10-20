@@ -26,7 +26,6 @@ const setups: Record<string, GroupSetup | null> = {
   "leader-partial": leaderPartial,
   nudge: null,
   "next-step": null,
-  "all-set": null,
 };
 
 // Pretend GitHub cannot find the repository, with the exact wording the server sends.
@@ -43,6 +42,5 @@ createRoot(document.getElementById("root")!).render(
     {setup && <GroupSetupCard projectId={1} setup={setup} token="t" onSaved={() => undefined} />}
     {state === "nudge" && <SetupNudgeBar projectId={1} setup={leaderPartial} token="t" onSaved={() => undefined} />}
     {state === "next-step" && <NextStepLine text="You have 2 tasks due Friday" onOpenTasks={() => undefined} />}
-    {state === "all-set" && <NextStepLine text="All set ✓" />}
   </main>,
 );

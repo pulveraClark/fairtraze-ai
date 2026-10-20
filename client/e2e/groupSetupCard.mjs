@@ -35,7 +35,6 @@ const STATES = [
   ["leader-partial", async () => {}],
   ["nudge", async () => {}],
   ["next-step", async () => {}],
-  ["all-set", async () => {}],
 ];
 
 try {

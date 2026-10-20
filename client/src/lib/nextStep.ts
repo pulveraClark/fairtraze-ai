@@ -33,17 +33,7 @@ export function taskNextStep(tasks: readonly TaskLike[], userId: number | null, 
   return `You have ${n} ${plural(n, "task", "tasks")} due ${dayName(first, today)}`;
 }
 
-export const ALL_SET_TEXT = "All set ✓";
-
-/**
- * What the line says, or null to hide it. "All set" is only for the visit in which setup was just finished,
- * so it does not sit on the page forever.
- */
-export function nextStepText(opts: {
-  tasks: readonly TaskLike[];
-  userId: number | null;
-  setupJustCompleted: boolean;
-  today?: string;
-}): string | null {
-  return taskNextStep(opts.tasks, opts.userId, opts.today) ?? (opts.setupJustCompleted ? ALL_SET_TEXT : null);
+/** What the line says, or null to hide it (nothing useful to say). Finishing setup is announced by a toast instead. */
+export function nextStepText(opts: { tasks: readonly TaskLike[]; userId: number | null; today?: string }): string | null {
+  return taskNextStep(opts.tasks, opts.userId, opts.today);
 }

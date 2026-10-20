@@ -33,7 +33,8 @@ import type { BriefAttachment } from "../lib/briefAttachments";
 import { RULES_OUTDATED_STUDENT_NOTICE } from "@shared/scoringRules";
 import { SetupNudgeBar } from "../components/SetupNudgeBar";
 import { SetupGate } from "../components/SetupGate";
-import { readSetupSkipped, storeSetupSkipped } from "../lib/setupSkip";
+import { readSetupSkipped, storeSetupSkipped, readSetupCompleteShown, storeSetupCompleteShown } from "../lib/setupSkip";
+import { useToast } from "../components/Toast";
 import { NextStepLine } from "../components/NextStepLine";
 import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
@@ -299,15 +300,20 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     void queryClient.invalidateQueries({ queryKey: groupKeys.detail(uid, projectId) });
   };
 
-  // "All set" is for the visit in which this group finished its setup, not for every later visit.
-  const [sawSetupIncomplete, setSawSetupIncomplete] = useState(false);
+  // "Setup complete ✓" is a toast, once, in the visit where this group goes from incomplete to complete.
+  const { showSuccessToast } = useToast();
+  const sawSetupIncomplete = useRef(false);
   useEffect(() => {
-    if (setupCardVisible(setupQuery.data)) setSawSetupIncomplete(true);
-  }, [setupQuery.data]);
+    const setup = setupQuery.data;
+    if (!setup) return;
+    if (setupCardVisible(setup)) { sawSetupIncomplete.current = true; return; }
+    if (sawSetupIncomplete.current && deriveSetupProgress(setup).complete && !readSetupCompleteShown(uid, projectId)) {
+      storeSetupCompleteShown(uid, projectId);
+      showSuccessToast("Setup complete ✓");
+    }
+  }, [setupQuery.data, uid, projectId, showSuccessToast]);
   const setupComplete = !!setupQuery.data && deriveSetupProgress(setupQuery.data).complete;
-  const nextStep = setupComplete
-    ? nextStepText({ tasks: tasksQuery.data ?? [], userId: user?.id ?? null, setupJustCompleted: sawSetupIncomplete })
-    : null;
+  const nextStep = setupComplete ? nextStepText({ tasks: tasksQuery.data ?? [], userId: user?.id ?? null }) : null;
 
   // Not a member / group gone → back to the class list.
   useEffect(() => {
