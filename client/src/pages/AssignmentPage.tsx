@@ -1,7 +1,7 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
 import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
@@ -106,6 +106,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [search, setSearch]         = useState("");
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
+  const analyzingRef = useRef<Set<number>>(new Set());
+  const bulkLock     = useRef(false);
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
   const [editingBrief, setEditingBrief]       = useState(false);
   const [showScoring, setShowScoring]         = useState(false);
@@ -163,6 +165,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   async function handleReanalyze(projectId: number) {
     const item = summary.find((s) => s.projectId === projectId);
     if (item && repoNotLinked(item)) { setBulkNotice(`${item.groupName}: ${REPO_NOT_LINKED_MESSAGE}`); return; }
+    if (analyzingRef.current.has(projectId)) return; // already running: ignore a second click
+    analyzingRef.current.add(projectId);
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
       await fetch(`/api/projects/${projectId}/analyze`, {
@@ -178,6 +182,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       // The dashboard, class page and sidebar share one cached summary: make them pick up this analysis.
       void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
     } finally {
+      analyzingRef.current.delete(projectId);
       setAnalyzing((prev) => {
         const next = new Set(prev);
         next.delete(projectId);
@@ -212,7 +217,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     setBulkNotice(skipped.length
       ? `Not analyzed, no repository linked yet: ${skipped.map((id) => summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`).join(", ")}.`
       : null);
-    if (ids.length === 0) return;
+    if (ids.length === 0 || bulkLock.current) return;
+    bulkLock.current = true;
     setBulkRunning(true);
     setBulkFailures([]);
     setBulkProgress({ done: 0, total: ids.length });
@@ -242,6 +248,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     }
     setBulkFailures(failures);
     setBulkRunning(false);
+    bulkLock.current = false;
     setBulkProgress(null);
     void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
     await fetchData();

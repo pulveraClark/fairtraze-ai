@@ -44,3 +44,29 @@ describe("ProjectCard for a student already in a group (R9)", () => {
     expect(screen.queryByText(/Moderate Risk|0\.31/)).toBeNull();
   });
 });
+
+describe("ProjectCard double submits", () => {
+  it("sends one join request for two quick clicks and shows Sending…", async () => {
+    let finish!: () => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => {
+      finish = () => resolve(new Response(JSON.stringify({ id: 1 }), { status: 201 }));
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onChanged = vi.fn();
+    const a = asgn({ myGroup: null, groups: [{ id: 5, groupName: "Group 5", memberCount: 1, leaderName: "Ana", isFull: false }] });
+    render(<ProjectCard asgn={a as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={onChanged} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Request to join a group/ }));
+    fireEvent.click(screen.getByRole("radio"));
+    const send = screen.getByRole("button", { name: "Send Request" });
+    fireEvent.click(send);
+    fireEvent.click(send);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const sending = await screen.findByRole("button", { name: "Sending…" });
+    expect(sending).toBeDisabled();
+    finish();
+    await vi.waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    vi.unstubAllGlobals();
+  });
+});

@@ -13,6 +13,7 @@ import { ApiError, classKeys, groupKeys, useClassProjectsQuery } from "../hooks/
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { GroupManageModal } from "../components/GroupManageModal";
+import { useSubmitGuard } from "../hooks/useSubmitGuard";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HEALTH_BADGE: Record<string, string> = {
@@ -127,16 +128,15 @@ export function ProjectCard({
   const [showBrief, setShowBrief]   = useState(false);
   const [groupName, setGroupName]   = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, run }   = useSubmitGuard();
   const [error, setError]           = useState("");
 
   const isPending   = asgn.myRequest?.status === "PENDING";
 
   async function handleCreate() {
     if (!groupName.trim()) { setError("Enter a group name."); return; }
-    setSubmitting(true);
-    setError("");
-    try {
+    await run(async () => {
+      setError("");
       const res = await fetch("/api/join/create-group", {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -145,16 +145,13 @@ export function ProjectCard({
       const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? "Could not create group."); return; }
       onChanged();
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   async function handleRequest() {
     if (!selectedId) { setError("Select a group to request."); return; }
-    setSubmitting(true);
-    setError("");
-    try {
+    await run(async () => {
+      setError("");
       const res = await fetch(`/api/groups/${selectedId}/request`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -163,26 +160,22 @@ export function ProjectCard({
       const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? "Could not send request."); return; }
       onChanged();
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   async function handleCancelRequest() {
     if (!asgn.myRequest) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/groups/requests/${asgn.myRequest.id}/cancel`, {
+    const requestId = asgn.myRequest.id;
+    await run(async () => {
+      setError("");
+      const res = await fetch(`/api/groups/requests/${requestId}/cancel`, {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? "Could not cancel request."); return; }
       onChanged();
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   function fmtDeadline(iso: string | null): string {
@@ -374,7 +367,8 @@ export function ProjectCard({
                   </button>
                   <button
                     onClick={() => { setMode("idle"); setError(""); setGroupName(""); }}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                    disabled={submitting}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors disabled:cursor-not-allowed disabled:text-slate-600"
                   >
                     Cancel
                   </button>
@@ -439,7 +433,8 @@ export function ProjectCard({
                   </button>
                   <button
                     onClick={() => { setMode("idle"); setError(""); setSelectedId(null); }}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                    disabled={submitting}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors disabled:cursor-not-allowed disabled:text-slate-600"
                   >
                     Cancel
                   </button>

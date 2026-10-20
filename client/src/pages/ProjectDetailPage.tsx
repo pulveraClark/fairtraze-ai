@@ -1,6 +1,6 @@
 import { HISTORY_HINT } from "../lib/docActionHints";
 import { AppFooter } from "../components/AppFooter";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint, AnyScoredMember } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
@@ -56,6 +56,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [notFound, setNotFound]           = useState(false);
   const [loading, setLoading]             = useState(true);
   const [reanalyzing, setReanalyzing]     = useState(false);
+  const analyzeLock = useRef(false); // set synchronously, so a second click before the re-render is ignored
   const [stepperDone, setStepperDone]     = useState(false);
   // True between the analyze response and the follow-up report reads finishing
   const [loadingReport, setLoadingReport] = useState(false);
@@ -208,6 +209,8 @@ export function ProjectDetailPage({ projectId }: Props) {
   }, [fetchStored, fetchDisputes, fetchHistory]);
 
   async function handleAnalyze() {
+    if (analyzeLock.current) return;
+    analyzeLock.current = true;
     setReanalyzing(true);
     setStepperDone(false);
     setProgress(startProgress());
@@ -237,6 +240,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         );
       }
     } finally {
+      analyzeLock.current = false;
       setReanalyzing(false);
       setLoadingReport(false);
     }

@@ -2,7 +2,7 @@ import { groupsNeedAttention } from "../lib/attentionLabel";
 import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
 import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
@@ -444,6 +444,7 @@ export function InstructorDashboardPage() {
   const [filterMode, setFilterMode]   = useState<FilterMode>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [analyzing, setAnalyzing]     = useState<Set<number>>(new Set());
+  const analyzingRef = useRef<Set<number>>(new Set());
   const [showClassModal, setShowClassModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LifecycleClass | null>(null);
   const [deleting, setDeleting]         = useState(false);
@@ -489,6 +490,8 @@ export function InstructorDashboardPage() {
   }
 
   async function handleReanalyze(projectId: number) {
+    if (analyzingRef.current.has(projectId)) return; // already running: ignore a second click
+    analyzingRef.current.add(projectId);
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
       await fetch(`/api/projects/${projectId}/analyze`, {
@@ -497,6 +500,7 @@ export function InstructorDashboardPage() {
       });
       await summaryQuery.refetch();
     } finally {
+      analyzingRef.current.delete(projectId);
       setAnalyzing((prev) => {
         const next = new Set(prev);
         next.delete(projectId);

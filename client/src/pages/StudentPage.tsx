@@ -11,6 +11,7 @@ import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../hooks/useStudent
 import type { EnrolledClass } from "../hooks/useStudentClassesQuery";
 import { QrScanner } from "../components/QrScanner";
 import { extractJoinCode } from "../lib/joinCodeFromQr";
+import { useSubmitGuard } from "../hooks/useSubmitGuard";
 
 
 const HEALTH_BADGE: Record<string, string> = {
@@ -30,7 +31,7 @@ function JoinClassModal({
   onJoined: () => void;
 }) {
   const [joinCode, setJoinCode] = useState("");
-  const [loading, setLoading]   = useState(false);
+  const { submitting: loading, run } = useSubmitGuard();
   const [error, setError]       = useState("");
   const [done, setDone]         = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -51,9 +52,8 @@ function JoinClassModal({
 
   async function handleEnroll() {
     if (!joinCode.trim()) { setError("Please enter a join code."); return; }
-    setLoading(true);
-    setError("");
-    try {
+    await run(async () => {
+      setError("");
       const res  = await fetch("/api/join/class", {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -64,9 +64,7 @@ function JoinClassModal({
       setEnrolled({ subjectCode: data.subjectCode!, subjectName: data.subjectName! });
       onJoined();
       setDone(true);
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (

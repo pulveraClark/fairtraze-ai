@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { useSubmitGuard } from "../hooks/useSubmitGuard";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, CARD, FOCUS_LIGHT } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
@@ -91,7 +92,7 @@ function LinkStep({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [touched, setTouched] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const { submitting: saving, run } = useSubmitGuard();
   const [serverError, setServerError] = useState("");
 
   const canEdit = setup.canLinkRepo || (setup.canChangeRepo && editing);
@@ -101,10 +102,11 @@ function LinkStep({
     e.preventDefault();
     setTouched(true);
     if (feedback.kind !== "ok") return;
-    setSaving(true);
-    setServerError("");
-    const result = await saveRepo(projectId, token, feedback.url);
-    setSaving(false);
+    const result = await run(async () => {
+      setServerError("");
+      return saveRepo(projectId, token, feedback.url);
+    });
+    if (!result) return; // a save is already running
     if (result.ok) {
       setEditing(false);
       setValue("");
@@ -166,7 +168,7 @@ function LinkStep({
           )}
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={saving || feedback.kind !== "ok"} className={BUTTON_PRIMARY_COMPACT}>
-              {saving ? "Checking GitHub…" : setup.repoLinked ? "Save new link" : "Save link"}
+              {saving ? "Saving…" : setup.repoLinked ? "Save new link" : "Save link"}
             </button>
             {editing && (
               <button type="button" disabled={saving} onClick={() => { setEditing(false); setValue(""); setTouched(false); setServerError(""); }} className={BUTTON_SECONDARY_COMPACT}>
