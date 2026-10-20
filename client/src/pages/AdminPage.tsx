@@ -8,6 +8,8 @@ import { InstructorApprovals } from "../components/InstructorApprovals";
 import { DeletionRequests } from "../components/DeletionRequests";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { AdminUserDetails } from "../components/AdminUserDetails";
+import { InfoTip } from "../components/ui/InfoTip";
+import { TIPS } from "../lib/helpText";
 import { useToast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { parseAdminUsersView, serializeAdminUsersView, defaultDir, hasActiveFilters, clearFilters } from "../lib/adminUsersUrl";
@@ -423,6 +425,7 @@ export function AdminPage() {
                   <p className="text-xs text-slate-600">
                     {usersMeta.total} {usersMeta.total === 1 ? "user" : "users"}
                   </p>
+                  <InfoTip label="About last active">{TIPS.adminLastActive}</InfoTip>
                   {(usersMeta.formerCount > 0 || view.former) && (
                     <label className="ft-hit inline-flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
                       <input
@@ -483,7 +486,7 @@ export function AdminPage() {
                 onClick={() => void exportCsv()}
                 disabled={exporting || usersLoading || usersMeta.total === 0}
                 title="Download the current filtered list as a CSV file"
-                className="min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                className="min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               >
                 {exporting ? "Exporting…" : "Export CSV"}
               </button>

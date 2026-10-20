@@ -19,6 +19,7 @@ const pct = (x: number) => `${+x.toFixed(1)}%`;
 /** Shown to students (and to instructors where the same screen is shared). No Gini wording. */
 export const TIPS = {
   roles: "Roles are labels for context. They never change anyone's score.",
+  adminLastActive: "Last active is the most recent sign-in or session refresh. Accounts that have not signed in since this was added show as Never.",
   rolesLeader: "Roles are labels for context and never change anyone's score. Set them in Manage Group.",
   leaderBadge: "The leader is the group's contact. It gives no extra credit; everyone is scored on their own activity.",
   repoLink: "FairTraze reads commit activity from this repository. Make it public so the link can be checked.",
