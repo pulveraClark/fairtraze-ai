@@ -67,6 +67,13 @@ describe("Modal", () => {
     expect(cls).toContain("sm:max-w-[1040px]");
   });
 
+  it("size sm and md narrow the panel from sm up", () => {
+    const { rerender } = render(<Modal open onClose={() => {}} title="T" size="sm"><p>x</p></Modal>);
+    expect(screen.getByRole("dialog").className).toContain("sm:max-w-md");
+    rerender(<Modal open onClose={() => {}} title="T" size="md"><p>x</p></Modal>);
+    expect(screen.getByRole("dialog").className).toContain("sm:max-w-xl");
+  });
+
   it("renders a sidebar column before the content, only when a sidebar is given", () => {
     const { rerender } = render(<Modal open onClose={() => {}} title="T" sidebar={<p>Side</p>}><p>Main</p></Modal>);
     expect(screen.getByTestId("modal-sidebar")).toHaveTextContent("Side");

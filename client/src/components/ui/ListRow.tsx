@@ -3,7 +3,7 @@ import { FOCUS_LIGHT } from "./styles";
 
 interface Props {
   children: ReactNode;
-  /** Receives the row element so the caller can hand it to a Drawer as the focus-return target. */
+  /** Receives the row element so the caller can hand it to a Modal as the focus-return target. */
   onClick: (el: HTMLButtonElement) => void;
   ariaLabel?: string;
   /** Set when the row opens a drawer/dialog. */

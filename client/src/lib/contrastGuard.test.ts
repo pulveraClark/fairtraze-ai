@@ -17,7 +17,6 @@ const ALLOWED = [
   { file: "hooks/useAlerts.ts", contains: "text-slate-300", why: "dark-theme alert colours (a light variant sits beside each)" },
   // Disabled controls are exempt from contrast.
   { file: "components/DocumentEditorToolbar.tsx", contains: "cursor-not-allowed", why: "disabled control" },
-  { file: "components/InfoTooltip.tsx", contains: "text-slate-300", why: "file is deleted in a later commit" },
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

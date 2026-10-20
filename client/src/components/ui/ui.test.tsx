@@ -1,11 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { useState } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StatusPill, PILL_TONES } from "./StatusPill";
 import { StatTile } from "./StatTile";
 import { ListRow } from "./ListRow";
-import { Drawer } from "./Drawer";
 import { Skeleton } from "./Skeleton";
 
 function luminance(hex: string): number {
@@ -65,60 +63,6 @@ describe("ListRow", () => {
     row.focus();
     await userEvent.keyboard("{Enter}");
     expect(onClick).toHaveBeenCalledWith(row);
-  });
-});
-
-function Harness({ onClose }: { onClose?: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [opener, setOpener] = useState<HTMLElement | null>(null);
-  return (
-    <>
-      <ListRow onClick={(el) => { setOpener(el); setOpen(true); }}>Open row</ListRow>
-      <Drawer open={open} onClose={() => { onClose?.(); setOpen(false); }} title="Details" restoreFocusTo={opener}>
-        <button type="button">Inside</button>
-      </Drawer>
-    </>
-  );
-}
-
-describe("Drawer", () => {
-  it("moves focus in, traps Tab, closes on Esc and returns focus to the opener", async () => {
-    const user = userEvent.setup();
-    render(<Harness />);
-    const row = screen.getByRole("button", { name: "Open row" });
-    await user.click(row);
-    const dialog = screen.getByRole("dialog", { name: "Details" });
-    expect(dialog).toHaveAttribute("aria-modal", "true");
-    const close = screen.getByRole("button", { name: "Close panel" });
-    const inside = screen.getByRole("button", { name: "Inside" });
-    expect(close).toHaveFocus();
-    await user.tab();
-    expect(inside).toHaveFocus();
-    await user.tab();           // wraps to the first control
-    expect(close).toHaveFocus();
-    await user.tab({ shift: true });  // wraps back to the last
-    expect(inside).toHaveFocus();
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(row).toHaveFocus();
-  });
-
-  it("closes on backdrop click and restores focus", async () => {
-    const onClose = vi.fn();
-    render(<Harness onClose={onClose} />);
-    const row = screen.getByRole("button", { name: "Open row" });
-    await userEvent.click(row);
-    fireEvent.click(screen.getByTestId("drawer-backdrop"));
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(row).toHaveFocus();
-  });
-
-  it("restores body scroll when closed", async () => {
-    render(<Harness />);
-    await userEvent.click(screen.getByRole("button", { name: "Open row" }));
-    expect(document.body.style.overflow).toBe("hidden");
-    await userEvent.keyboard("{Escape}");
-    expect(document.body.style.overflow).not.toBe("hidden");
   });
 });
 

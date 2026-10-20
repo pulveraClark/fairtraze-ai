@@ -2,7 +2,6 @@ export { PageHeader } from "./PageHeader";
 export { StatTile } from "./StatTile";
 export { InfoTip } from "./InfoTip";
 export { ListRow } from "./ListRow";
-export { Drawer } from "./Drawer";
 export { Modal } from "./Modal";
 export { StatusPill } from "./StatusPill";
 export { EmptyState } from "./EmptyState";
