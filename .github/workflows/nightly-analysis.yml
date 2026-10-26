@@ -1,0 +1,34 @@
+name: Nightly analysis
+
+# Asks the deployed server to analyze every active group whose data changed (POST /api/internal/analyze-due).
+# 18:00 UTC is 2:00 AM in Manila. GitHub may start scheduled runs late, and it switches scheduled
+# workflows off after 60 days without repository activity: re-enable it under the Actions tab if that happens.
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  analyze-due:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Start the automatic analysis
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Set the APP_URL and CRON_SECRET repository secrets." >&2
+            exit 1
+          fi
+          # Render's free tier sleeps: the first call wakes it and may time out or answer 502/503,
+          # so retry on any failure, 30 seconds apart. A 202 means the run was accepted.
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "x-cron-secret: $CRON_SECRET" \
+            --max-time 120 \
+            --retry 6 --retry-delay 30 --retry-all-errors \
+            "${APP_URL%/}/api/internal/analyze-due"
