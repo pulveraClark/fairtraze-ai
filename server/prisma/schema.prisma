@@ -242,6 +242,9 @@ model ClassSection {
   department   Department        @relation(fields: [departmentId], references: [id])
   assignments  Assignment[]
   enrollments  ClassEnrollment[]
+  // AI work summaries / brief check for this class's groups. Off = no AI calls and the UI hides them.
+  // Never read by scoring.
+  aiReviewEnabled Boolean         @default(true)
 
   @@unique([instructorId, edpCode])
 }
@@ -346,6 +349,7 @@ model Project {
   // route). Display and rate limit only: never read by scoring, never marks a report outdated.
   commitsRefreshedAt       DateTime?
   createdAt                DateTime          @default(now())
+  aiCommitDigests          AiCommitDigest[]
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   members                  Member[]
   reports                  Report[]
@@ -552,6 +556,54 @@ model Report {
   documentContributions DocumentContribution[]
   combinedContributions CombinedContribution[]
   documentSnapshots     DocumentSnapshot[]
+  aiReviews             AiReportReview[]
+}
+
+enum AiReviewKind {
+  MEMBER_SUMMARIES
+  BRIEF_COMPARISON
+}
+
+enum AiReviewStatus {
+  OK
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+// One AI-written line per commit, judged once per (group, sha, prompt version) and reused by later
+// runs. authorLogin is personal data (scrubbed on erasure). AI review only: never read by scoring.
+model AiCommitDigest {
+  id            Int      @id @default(autoincrement())
+  projectId     Int
+  sha           String
+  promptVersion String
+  model         String
+  authorLogin   String?
+  summary       String
+  files         Json
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sha, promptVersion])
+}
+
+// AI review of one analysis run (member summaries or brief comparison). content is JSON; see
+// server/src/lib/aiReview. Report.content is never touched. Never read by scoring.
+model AiReportReview {
+  id            Int            @id @default(autoincrement())
+  reportId      Int
+  kind          AiReviewKind
+  status        AiReviewStatus
+  promptVersion String
+  model         String
+  briefHash     String?
+  content       Json
+  errorCode     String?
+  createdAt     DateTime       @default(now())
+  report        Report         @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, kind])
 }
 
 // Normalized per-member persistence of a single analysis run's document-side (Editor) scores,

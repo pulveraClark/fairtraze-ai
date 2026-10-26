@@ -17,6 +17,8 @@ import { createLimiter, takeDailyBudget, resetDailyBudgetForTests } from "./aiRe
 import { generateJson, AiReviewError, parseRetryDelayMs } from "./geminiClient.js";
 
 const schema = { type: "object" };
+const rejection = (p: Promise<unknown>): Promise<AiReviewError> =>
+  p.then(() => { throw new Error("expected a rejection"); }, (e: unknown) => e as AiReviewError);
 const validate = (v: unknown) => (v && typeof v === "object" && "ok" in (v as object) ? (v as { ok: boolean }) : null);
 const req = { system: "s", prompt: "p", schema, validate };
 
@@ -94,7 +96,7 @@ describe("generateJson", () => {
 
   it("maps a provider failure to AI_UNAVAILABLE without leaking its text", async () => {
     generateContent.mockRejectedValue(Object.assign(new Error("secret provider detail"), { status: 503 }));
-    const err = await generateJson(req).catch((e) => e as AiReviewError);
+    const err = await rejection(generateJson(req));
     expect(err).toBeInstanceOf(AiReviewError);
     expect(err.code).toBe("AI_UNAVAILABLE");
     expect(err.message).not.toContain("secret provider detail");
@@ -114,7 +116,7 @@ describe("generateJson", () => {
   it("gives up after a second 429 with AI_RATE_LIMITED", async () => {
     vi.useFakeTimers();
     generateContent.mockRejectedValue(Object.assign(new Error("retry in 1s"), { status: 429 }));
-    const p = generateJson(req).catch((e) => e as AiReviewError);
+    const p = rejection(generateJson(req));
     await vi.advanceTimersByTimeAsync(20_000);
     expect((await p).code).toBe("AI_RATE_LIMITED");
     expect(generateContent).toHaveBeenCalledTimes(2);
@@ -123,7 +125,7 @@ describe("generateJson", () => {
   it("times out", async () => {
     vi.useFakeTimers();
     generateContent.mockImplementation(() => new Promise(() => {}));
-    const p = generateJson({ ...req, timeoutMs: 1000 }).catch((e) => e as AiReviewError);
+    const p = rejection(generateJson({ ...req, timeoutMs: 1000 }));
     await vi.advanceTimersByTimeAsync(2000);
     expect((await p).code).toBe("AI_TIMEOUT");
   });
