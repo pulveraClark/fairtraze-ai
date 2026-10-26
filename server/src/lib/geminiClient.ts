@@ -6,7 +6,7 @@ import { aiReviewLimiter, takeDailyBudget } from "./aiReview/limiter.js";
 // gemini.ts on purpose: the narrative path is untouched. Low randomness: temperature 0, fixed seed.
 // The key is read lazily so importing this file never throws, and a missing key is a soft failure.
 
-export type AiErrorCode = "AI_DISABLED" | "AI_UNAVAILABLE" | "AI_RATE_LIMITED" | "AI_TIMEOUT" | "AI_BAD_OUTPUT";
+export type AiErrorCode = "AI_DISABLED" | "AI_UNAVAILABLE" | "AI_RATE_LIMITED" | "AI_TIMEOUT" | "AI_BAD_OUTPUT" | "AI_BAD_INPUT";
 
 export class AiReviewError extends Error {
   constructor(public readonly code: AiErrorCode, message?: string) {
@@ -22,6 +22,8 @@ export function aiReviewEnabled(): boolean {
 
 export const AI_REVIEW_SEED = 7;
 export const AI_CALL_TIMEOUT_MS = 45_000;
+// A request that carries files (PDF, images) takes longer.
+export const AI_CALL_TIMEOUT_FILES_MS = 60_000;
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {
@@ -43,6 +45,9 @@ export interface JsonRequest<T> {
   // Returns the typed value, or null when the shape is wrong.
   validate: (value: unknown) => T | null;
   timeoutMs?: number;
+  // Files sent inline with the prompt (PDF, images). Held in memory for this call only: never logged,
+  // stored or put in an error. When Gemini rejects the request as invalid (400), the error is AI_BAD_INPUT.
+  files?: Array<{ mimeType: string; data: Buffer }>;
 }
 
 export function parseRetryDelayMs(err: unknown): number {
@@ -59,7 +64,8 @@ function stripFences(text: string): string {
 }
 
 async function callOnce(req: JsonRequest<unknown>): Promise<string> {
-  const timeoutMs = req.timeoutMs ?? AI_CALL_TIMEOUT_MS;
+  const hasFiles = !!req.files?.length;
+  const timeoutMs = req.timeoutMs ?? (hasFiles ? AI_CALL_TIMEOUT_FILES_MS : AI_CALL_TIMEOUT_MS);
   const controller = new AbortController();
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -72,7 +78,15 @@ async function callOnce(req: JsonRequest<unknown>): Promise<string> {
     const response = await Promise.race([
       getClient().models.generateContent({
         model: modelName(),
-        contents: req.prompt,
+        contents: hasFiles
+          ? [{
+              role: "user",
+              parts: [
+                ...req.files!.map((f) => ({ inlineData: { mimeType: f.mimeType, data: f.data.toString("base64") } })),
+                { text: req.prompt },
+              ],
+            }]
+          : req.prompt,
         config: {
           systemInstruction: req.system,
           temperature: 0,
@@ -90,10 +104,12 @@ async function callOnce(req: JsonRequest<unknown>): Promise<string> {
   }
 }
 
-function classify(err: unknown): AiReviewError {
+function classify(err: unknown, hasFiles = false): AiReviewError {
   if (err instanceof AiReviewError) return err;
   const status = (err as { status?: number } | null)?.status;
   if (status === 429) return new AiReviewError("AI_RATE_LIMITED");
+  // With files attached, a 400 usually means one of them could not be read; the caller can retry without.
+  if (status === 400 && hasFiles) return new AiReviewError("AI_BAD_INPUT");
   return new AiReviewError("AI_UNAVAILABLE");
 }
 
@@ -110,12 +126,12 @@ export async function generateJson<T>(req: JsonRequest<T>): Promise<T> {
     text = await run();
   } catch (err) {
     const status = (err as { status?: number } | null)?.status;
-    if (status !== 429) throw classify(err);
+    if (status !== 429) throw classify(err, !!req.files?.length);
     await new Promise((r) => setTimeout(r, parseRetryDelayMs(err)));
     try {
       text = await run();
     } catch (err2) {
-      throw classify(err2);
+      throw classify(err2, !!req.files?.length);
     }
   }
 

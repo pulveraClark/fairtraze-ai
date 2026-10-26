@@ -130,6 +130,52 @@ describe("generateJson", () => {
     expect((await p).code).toBe("AI_TIMEOUT");
   });
 
+  describe("with files", () => {
+    const file = { mimeType: "application/pdf", data: Buffer.from("%PDF-1.4 synthetic") };
+
+    it("sends the files as inline data parts before the prompt, and a plain string without files", async () => {
+      generateContent.mockResolvedValue({ text: '{"ok": true}' });
+      await generateJson({ ...req, files: [file] });
+      const contents = generateContent.mock.calls[0]![0].contents;
+      expect(contents).toEqual([{
+        role: "user",
+        parts: [{ inlineData: { mimeType: "application/pdf", data: file.data.toString("base64") } }, { text: "p" }],
+      }]);
+      await generateJson(req);
+      expect(generateContent.mock.calls[1]![0].contents).toBe("p");
+      await generateJson({ ...req, files: [] });
+      expect(generateContent.mock.calls[2]![0].contents).toBe("p");
+    });
+
+    it("waits 60 s with files and 45 s without", async () => {
+      vi.useFakeTimers();
+      generateContent.mockImplementation(() => new Promise(() => {}));
+      let settled: string | null = null;
+      const withFiles = rejection(generateJson({ ...req, files: [file] })).then((e) => { settled = e.code; });
+      await vi.advanceTimersByTimeAsync(50_000);
+      expect(settled).toBeNull();
+      await vi.advanceTimersByTimeAsync(11_000);
+      await withFiles;
+      expect(settled).toBe("AI_TIMEOUT");
+
+      let plain: string | null = null;
+      const noFiles = rejection(generateJson(req)).then((e) => { plain = e.code; });
+      await vi.advanceTimersByTimeAsync(46_000);
+      await noFiles;
+      expect(plain).toBe("AI_TIMEOUT");
+    });
+
+    it("maps a 400 to AI_BAD_INPUT only when files were sent, without leaking provider text or file bytes", async () => {
+      generateContent.mockRejectedValue(Object.assign(new Error("bad pdf data " + file.data.toString("base64")), { status: 400 }));
+      const err = await rejection(generateJson({ ...req, files: [file] }));
+      expect(err.code).toBe("AI_BAD_INPUT");
+      expect(err.message).toBe("AI_BAD_INPUT");
+      const plain = await rejection(generateJson(req));
+      expect(plain.code).toBe("AI_UNAVAILABLE");
+      expect(generateContent).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("parses the retry delay Gemini asks for, capped", () => {
     expect(parseRetryDelayMs(new Error("Please retry in 7.2s."))).toBe(8000);
     expect(parseRetryDelayMs(new Error("retry in 500s"))).toBe(30000);
