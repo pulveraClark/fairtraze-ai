@@ -42,7 +42,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   const when = formatBasedOn(basedOnAt);
 
   return (
-    <section aria-labelledby="narrative-title" className={`${CARD} h-full min-w-0 border-l-4 border-l-purple-600 p-4`}>
+    <section aria-labelledby="narrative-title" className={`${CARD} min-w-0 border-l-4 border-l-purple-600 p-4`}>
       {/* Header: the one AI button lives here, whatever the state */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
