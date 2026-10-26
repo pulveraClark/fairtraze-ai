@@ -32,11 +32,16 @@ describe("static: scoring and the AI input do not read task data", () => {
   });
 
   it("the analysis route reads no task table; its only task-related import is the best-effort commit linker", () => {
-    const src = read("../src/routes/analyze.ts");
-    expect(src).not.toMatch(/prisma\.task|prisma\.taskComment|prisma\.taskSubtask|prisma\.taskWatcher|prisma\.taskAttachment|prisma\.taskActivity|prisma\.taskCommitLink|prisma\.taskMilestone/);
-    const taskImports = src.split(/\r?\n/).filter((l) => /^import .*(task|Task)/.test(l));
-    expect(taskImports).toEqual(['import { linkCommitsBestEffort } from "../lib/taskCommitLinks.js";']);
+    // The analysis itself moved out of the route into lib/analysisRunner.ts; check both files.
+    for (const file of ["../src/routes/analyze.ts", "../src/lib/analysisRunner.ts"]) {
+      const src = read(file);
+      expect(src).not.toMatch(/prisma\.task|prisma\.taskComment|prisma\.taskSubtask|prisma\.taskWatcher|prisma\.taskAttachment|prisma\.taskActivity|prisma\.taskCommitLink|prisma\.taskMilestone/);
+    }
+    const taskImports = read("../src/lib/analysisRunner.ts").split(/\r?\n/).filter((l) => /^import .*(task|Task)/.test(l));
+    expect(taskImports).toEqual(['import { linkCommitsBestEffort } from "./taskCommitLinks.js";']);
+    expect(read("../src/routes/analyze.ts").split(/\r?\n/).filter((l) => /^import .*(task|Task)/.test(l))).toEqual([]);
     // It runs after the report is saved, not before.
+    const src = read("../src/lib/analysisRunner.ts");
     expect(src.indexOf("linkCommitsBestEffort({")).toBeGreaterThan(src.indexOf("prisma.report.create"));
   });
 

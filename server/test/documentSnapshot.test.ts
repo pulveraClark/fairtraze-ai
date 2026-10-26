@@ -147,7 +147,7 @@ describe("DocumentSnapshot persistence", () => {
   }, 40000);
 
   it("the snapshot-writing code path never imports getYDoc/y-websocket/authorshipCapture — it must only read the persisted yjsState column", () => {
-    const analyzeSrcPath = fileURLToPath(new URL("../src/routes/analyze.ts", import.meta.url));
+    const analyzeSrcPath = fileURLToPath(new URL("../src/lib/analysisRunner.ts", import.meta.url));
     const src = readFileSync(analyzeSrcPath, "utf-8");
     const importLines = src.split("\n").filter((line) => line.trimStart().startsWith("import "));
     expect(src).toContain("writeDocumentSnapshot");
