@@ -8,7 +8,12 @@ export const BRIEF_MAX_PDFS = 1;
 export const BRIEF_IMAGE_MAX_BYTES = 1024 * 1024;
 export const BRIEF_PDF_MAX_BYTES = 5 * 1024 * 1024;
 
-export type BriefMime = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+// What the brief check (AI) reads from the attachments. A subset of what can be uploaded.
+export const BRIEF_AI_MAX_IMAGES = 3;
+export const BRIEF_AI_MAX_PDF_PAGES = 20;
+export const BRIEF_AI_MAX_TOTAL_BYTES = 6 * 1024 * 1024;
+
+export type BriefMime ="image/jpeg" | "image/png" | "image/webp" | "application/pdf";
 
 /** Content-sniffs the bytes (the Content-Type header alone is not trusted). */
 export function sniffBriefMime(buf: Buffer): BriefMime | null {
@@ -75,6 +80,76 @@ export interface AttachmentMeta {
   filename: string;
   size: number;
   order: number;
+}
+
+/**
+ * Best-effort page count: the number of /Type /Page objects ("/Pages" is the tree, not a page).
+ * Null when none is visible (for example page objects packed in compressed object streams).
+ */
+export function countPdfPages(buf: Buffer): number | null {
+  const n = buf.toString("latin1").match(/\/Type\s*\/Page(?![A-Za-z])/g)?.length ?? 0;
+  return n > 0 ? n : null;
+}
+
+export interface AiBriefFile {
+  id: number;
+  filename: string;
+  mimeType: BriefMime;
+  // Held in memory only to be sent to the AI. Never stored, logged or returned by an API.
+  data: Buffer;
+}
+
+export type AiSkipReasonCode = "TOO_LARGE" | "TOO_MANY_PAGES" | "UNSUPPORTED" | "TOO_MANY_FILES" | "TOTAL_TOO_LARGE";
+
+export interface AiBriefFileSkip {
+  filename: string;
+  reason: AiSkipReasonCode;
+}
+
+/**
+ * Which attachments the brief check reads, given the rows in display order: 1 PDF (5 MB, 20 pages) and the
+ * first 3 images (1 MB each), 6 MB in total. The type comes from the bytes, not from the stored label.
+ * Everything else is skipped with a reason; a skipped file is never an error.
+ */
+export function selectBriefFilesForAi(
+  rows: Array<{ id: number; filename: string; data: Uint8Array }>,
+): { usable: AiBriefFile[]; skipped: AiBriefFileSkip[] } {
+  const usable: AiBriefFile[] = [];
+  const skipped: AiBriefFileSkip[] = [];
+  let pdfs = 0;
+  let images = 0;
+  let total = 0;
+  for (const row of rows) {
+    const data = Buffer.from(row.data);
+    const skip = (reason: AiSkipReasonCode) => skipped.push({ filename: row.filename, reason });
+    const mime = sniffBriefMime(data);
+    if (!mime) { skip("UNSUPPORTED"); continue; }
+    const isPdf = mime === "application/pdf";
+    if (data.length > (isPdf ? BRIEF_PDF_MAX_BYTES : BRIEF_IMAGE_MAX_BYTES)) { skip("TOO_LARGE"); continue; }
+    if (isPdf ? pdfs >= BRIEF_MAX_PDFS : images >= BRIEF_AI_MAX_IMAGES) { skip("TOO_MANY_FILES"); continue; }
+    if (isPdf) {
+      const pages = countPdfPages(data);
+      if (pages !== null && pages > BRIEF_AI_MAX_PDF_PAGES) { skip("TOO_MANY_PAGES"); continue; }
+    }
+    if (total + data.length > BRIEF_AI_MAX_TOTAL_BYTES) { skip("TOTAL_TOO_LARGE"); continue; }
+    total += data.length;
+    if (isPdf) pdfs++; else images++;
+    usable.push({ id: row.id, filename: row.filename, mimeType: mime, data });
+  }
+  return { usable, skipped };
+}
+
+/**
+ * The brief's attachments for one assignment, split into what the AI reads and what it skips.
+ * The caller resolves the assignment on the server from the group; ids never come from a client.
+ */
+export async function loadBriefFilesForAi(assignmentId: number) {
+  const rows = await prisma.projectAttachment.findMany({
+    where: { assignmentId },
+    orderBy: [{ order: "asc" }, { id: "asc" }],
+    select: { id: true, filename: true, data: true },
+  });
+  return selectBriefFilesForAi(rows);
 }
 
 /** Attachment metadata (never the bytes) per assignment, in display order. */

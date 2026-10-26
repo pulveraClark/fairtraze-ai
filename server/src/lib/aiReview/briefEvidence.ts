@@ -21,6 +21,18 @@ export function briefHash(text: string): string {
   return createHash("sha256").update(text.trim()).digest("hex").slice(0, 32);
 }
 
+/**
+ * What the brief check was run on: the written brief plus the attachments' metadata (never their bytes), in
+ * display order. With no attachments it equals `briefHash`, so older stored checks stay current. A replaced
+ * file is a new row (new id), so adding, removing or replacing a file changes it. Skipped files count too.
+ */
+export function briefFingerprint(description: string, attachments: Array<{ id: number; size: number; mime: string }>): string {
+  if (attachments.length === 0) return briefHash(description);
+  const h = createHash("sha256").update(description.trim());
+  for (const a of attachments) h.update(`\n${a.id}:${a.size}:${a.mime}`);
+  return h.digest("hex").slice(0, 32);
+}
+
 const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** Paths worth sending as a list: skip rules applied, shallow first, capped. */

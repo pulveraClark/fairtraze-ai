@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  briefHash, buildDocSections, fitBriefInput, inputSize, selectKeyFiles, selectTreePaths, verifyRequirements,
+  briefFingerprint, briefHash, buildDocSections, fitBriefInput, inputSize, selectKeyFiles, selectTreePaths, verifyRequirements,
   MAX_KEY_FILES, MAX_TREE_PATHS, MAX_REQUIREMENTS, type BriefVerifyContext,
 } from "./briefEvidence.js";
 import { validateBriefOutput, type RawRequirement } from "./prompts.js";
@@ -8,6 +8,28 @@ import type { DocPiece } from "./docsEvidence.js";
 
 const piece = (start: number, text: string, heading: string | null, isHeading = false): DocPiece => ({
   start, end: start + text.length, text, heading, isHeading,
+});
+
+describe("briefFingerprint", () => {
+  const a = { id: 1, size: 100, mime: "application/pdf" };
+  const b = { id: 2, size: 50, mime: "image/png" };
+
+  it("equals the old text-only hash when there are no attachments", () => {
+    expect(briefFingerprint("  Build a thing ", [])).toBe(briefHash("Build a thing"));
+  });
+
+  it("changes when a file is added, removed, replaced or the text changes", () => {
+    const base = briefFingerprint("Build a thing", [a]);
+    expect(base).not.toBe(briefHash("Build a thing"));
+    expect(briefFingerprint("Build a thing", [a, b])).not.toBe(base);
+    expect(briefFingerprint("Build a thing", [])).not.toBe(base);
+    expect(briefFingerprint("Build a thing", [{ ...a, id: 3 }])).not.toBe(base);
+    expect(briefFingerprint("Build another thing", [a])).not.toBe(base);
+  });
+
+  it("is stable and ignores surrounding whitespace in the text", () => {
+    expect(briefFingerprint(" x ", [a, b])).toBe(briefFingerprint("x", [a, b]));
+  });
 });
 
 describe("what is sent", () => {

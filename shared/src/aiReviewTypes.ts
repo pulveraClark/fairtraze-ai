@@ -75,8 +75,19 @@ export interface AiBriefRequirement {
   unverified?: boolean;
 }
 
+export type AiSkipReason = "TOO_LARGE" | "TOO_MANY_PAGES" | "UNSUPPORTED" | "TOO_MANY_FILES" | "TOTAL_TOO_LARGE" | "UNREADABLE";
+
+// What the brief check read. Names and counts only; file contents are never stored.
+export interface AiBriefSources {
+  writtenBrief: boolean;
+  filesRead: number;
+  skipped: Array<{ filename: string; reason: AiSkipReason }>;
+}
+
 export interface AiBriefContent {
   requirements: AiBriefRequirement[];
+  // Absent on checks stored before attachments were read.
+  sources?: AiBriefSources;
   // Count of lines of student text that addressed the AI and were replaced before sending.
   aiAddressedCount: number;
 }
