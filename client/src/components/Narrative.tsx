@@ -6,7 +6,8 @@ import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
-import { aiAddressedLine, reviewStatusLine } from "../lib/aiReview";
+import { aiAddressedLine, briefStatusLine, reviewStatusLine } from "../lib/aiReview";
+import { BriefCheckCard } from "./BriefCheckCard";
 import type { UseAiReview } from "../hooks/useAiReview";
 
 interface Props {
@@ -29,6 +30,8 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   const generateLabel = reviewOn ? "Generate AI explanation & review" : "Generate explanation";
   const statusLine = reviewStatusLine(review?.data ?? null);
   const addressedLine = aiAddressedLine(review?.data ?? null);
+  const briefLine = briefStatusLine(review?.data ?? null);
+  const briefCheck = review?.data?.enabled ? review.data.briefCheck : undefined;
 
   async function generate(regenerate = false) {
     setGenerating(true);
@@ -79,6 +82,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       {review?.error && <p role="alert" className="mb-3 text-sm text-red-800">{review.error}</p>}
       {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
+      {briefLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{briefLine}</p>}
 
       {/* No narrative yet */}
       {!narrative && !generating && (
@@ -134,6 +138,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           </p>
         </>
       )}
+      {briefCheck && !generating && <BriefCheckCard check={briefCheck} instructor />}
     </section>
   );
 }

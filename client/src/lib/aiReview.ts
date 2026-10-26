@@ -9,6 +9,20 @@ export interface AiSummaryView extends AiMemberSummary {
   isYou: boolean;
 }
 
+export interface AiBriefCheck {
+  requirements: Array<{
+    text: string;
+    status: "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
+    unverified: boolean;
+    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean }>;
+  }>;
+  nothingFound: boolean;
+  generatedAt: string;
+  outdated: boolean;
+  // Instructor only.
+  aiAddressedCount?: number;
+}
+
 export interface AiReviewResponse {
   enabled: boolean;
   running?: boolean;
@@ -22,6 +36,9 @@ export interface AiReviewResponse {
   status?: "OK" | "PARTIAL" | "FAILED" | "SKIPPED";
   errorCode?: string | null;
   aiAddressed?: Array<AiAddressedNote & { name: string }>;
+  briefFailed?: boolean;
+  // Instructor and group leader only.
+  briefCheck?: AiBriefCheck;
 }
 
 export const AI_POLL_MS = 5000;
@@ -53,6 +70,11 @@ export function reviewStatusLine(data: AiReviewResponse | null): string | null {
   if (data.status === "PARTIAL") return "Some work summaries show changed files only, because the AI was unavailable or its wording was not used.";
   if (data.outdated) return "Work summaries are from an earlier analysis. Generate again to update them.";
   return null;
+}
+
+export function briefStatusLine(data: AiReviewResponse | null): string | null {
+  if (!data?.enabled || data.running || !data.briefFailed) return null;
+  return "The brief check could not run. Try again later.";
 }
 
 export function aiAddressedLine(data: AiReviewResponse | null): string | null {

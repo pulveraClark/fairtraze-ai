@@ -33,6 +33,7 @@ export const TIPS = {
   scoreBlend: "Your combined share is your GitHub share and your Docs share blended with these weights. Your instructor sets them.",
   narrative: "A formula works out every number and flag. The AI only describes them in words, writes short work summaries that may be wrong, and never changes a number or gives a grade.",
   aiReviewClass: "When on, Generate also writes short AI work summaries for this class's groups. Turning it off stops AI calls and hides the summaries from everyone.",
+  briefCheck: "AI reads the brief and the group's work and says whether each requirement is present. It can be wrong, so check the quoted evidence.",
   workSummary: "Written by AI from this member's commits and their own part of the Docs. It can be wrong, so check the evidence.",
   authorship: "Colors show who typed each part of the document. Turn it off to read without colors.",
   equalShareMember: (equalPct: number, members: number) =>
