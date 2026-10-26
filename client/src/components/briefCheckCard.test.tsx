@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { DocSectionProvider } from "../hooks/useDocSectionLink";
 import { BriefCheckCard, NOTHING_FOUND_LINE } from "./BriefCheckCard";
 import { StudentWorkSummaries } from "./StudentWorkSummaries";
 import { Narrative } from "./Narrative";
@@ -35,10 +36,35 @@ describe("BriefCheckCard", () => {
     expect(details.open).toBe(true);
     for (const label of ["Found", "Partly found", "Not found"]) expect(pill(label)).toBeTruthy();
     expect(screen.getByText("export function Login()")).toBeTruthy();
-    expect(screen.getByText(/File: src\/Login.tsx/)).toBeTruthy();
+    expect(screen.getByText("src/Login.tsx")).toBeTruthy();
+    expect(screen.getByText("Docs section:")).toBeTruthy();
     expect(screen.getByText(/Text written by another member is not shown/)).toBeTruthy();
     expect(screen.getByText(/No evidence could be checked/)).toBeTruthy();
     expect(screen.getByText(/Not a grade and not a judgment of quality/)).toBeTruthy();
+  });
+
+  it("links file evidence to GitHub in a new tab and Docs sections to the Docs tab, the same for instructor and leader", async () => {
+    const href = "https://github.com/example/Trips/commit/a41f9c2d0e5b#diff-abc";
+    const linked = { ...check, requirements: [{ ...check.requirements[0]!, evidence: [
+      { type: "file" as const, ref: "src/Login.tsx", quote: "q", quoteHidden: false, href, isCommit: true, more: [{ sha: "b52e0d3", href: "https://github.com/example/Trips/commit/b52e0d3" }] },
+      { type: "doc" as const, ref: "Methodology", quote: "", quoteHidden: true },
+    ] }] };
+    const open = vi.fn();
+    for (const instructor of [true, false]) {
+      const { unmount } = render(<DocSectionProvider value={open}><BriefCheckCard check={linked} instructor={instructor} /></DocSectionProvider>);
+      await userEvent.click(screen.getByText(/Brief check/));
+      const file = screen.getByRole("link", { name: "Open Login.tsx changes on GitHub (new tab)" });
+      expect(file.getAttribute("href")).toBe(href);
+      expect(file.getAttribute("target")).toBe("_blank");
+      expect(file.getAttribute("rel")).toBe("noopener noreferrer");
+      expect(screen.getByText("+1 more")).toBeTruthy();
+      const doc = screen.getByRole("link", { name: "Open section Methodology in Docs" });
+      expect(doc.getAttribute("target")).toBeNull();
+      await userEvent.click(doc);
+      unmount();
+    }
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledWith("Methodology");
   });
 
   it("nothing found: one calm line; the instructor sees the AI-addressed note, the leader does not", () => {

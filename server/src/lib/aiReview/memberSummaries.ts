@@ -235,7 +235,7 @@ export async function runMemberSummaries(
   const evidenceOf = (userId: number) => {
     const memberLines = lines.get(userId) ?? [];
     return {
-      files: mergeFiles(memberLines.map((l) => l.files)),
+      files: mergeFiles(memberLines.map((l) => ({ sha: l.sha, files: l.files }))),
       docSections: docs.get(userId)?.headings ?? [],
       commitCount: memberLines.length,
       otherCommits: otherCommits.get(userId) ?? 0,

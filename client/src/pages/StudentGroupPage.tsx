@@ -2,7 +2,7 @@ import { HISTORY_HINT } from "../lib/docActionHints";
 import { AppFooter } from "../components/AppFooter";
 import { BUTTON_SECONDARY_COMPACT } from "../components/ui/styles";
 import { classCrumb } from "../lib/classLabel";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LastAnalyzed } from "../components/LastAnalyzed";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { requestReportRefresh } from "../lib/refreshReport";
@@ -26,6 +26,7 @@ import { GroupManageModal } from "../components/GroupManageModal";
 import { TasksTab } from "../components/tasks/TasksTab";
 import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
+import { DocSectionProvider, useDocSectionNav } from "../hooks/useDocSectionLink";
 import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
@@ -279,6 +280,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const [viewingHistory, setViewingHistory]     = useState(false);
   // "Open in document" from a task: the editor scrolls to the task's linked heading.
   const docFocus = useDocHeadingFocus(() => { setViewingHistory(false); selectTab("document"); });
+  // Evidence in the AI review links to a Docs section: same tab, with a history entry so Back returns.
+  const docSection = useDocSectionNav(
+    useCallback(() => { setViewingHistory(false); setActiveTab("document"); }, []),
+    useCallback(() => setActiveTab(tabFromSearch(window.location.search)), []),
+  );
   // A "join request" notification links here with ?manage=1 to open the manage modal.
   const [showManageModal, setShowManageModal]   = useState(
     () => new URLSearchParams(window.location.search).get("manage") === "1"
@@ -462,6 +468,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
 
   return (
+    <DocSectionProvider value={docSection.open}>
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {showManageModal && (
         <GroupManageModal
@@ -1041,8 +1048,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   editable={true}
                   canChooseTemplate={membership.role === "LEADER"}
                   title={project.groupName}
-                  scrollToHeading={docFocus.focus?.heading}
-                  onHeadingResolved={docFocus.onResolved}
+                  scrollToHeading={docFocus.focus?.heading ?? docSection.heading}
+                  onHeadingResolved={docFocus.focus ? docFocus.onResolved : docSection.onResolved}
                 />
               </>
             )}
@@ -1053,5 +1060,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
       <AppFooter />
     </div>
+    </DocSectionProvider>
   );
 }

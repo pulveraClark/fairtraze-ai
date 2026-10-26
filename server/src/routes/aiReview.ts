@@ -10,8 +10,9 @@ import { generateMemberSummaries } from "../lib/aiReview/memberSummaries.js";
 import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
 import { briefHash } from "../lib/aiReview/briefEvidence.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
+import { canonicalRepoUrl, linkFile, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
 import type {
-  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiRequirementStatus,
+  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiRequirementStatus, AiFileLinks,
 } from "@shared/aiReviewTypes.js";
 
 export const aiReviewRouter = Router();
@@ -41,10 +42,16 @@ export function shapeSummariesForViewer(
   viewer: AiViewer,
   viewerUserId: number,
   people: Map<number, AiPerson>,
+  repo: RepoRef | null = null,
 ): { summaries: AiMemberSummaryView[]; aiAddressed?: Array<AiAddressedNote & { name: string }> } {
   const visible = viewer === "member" ? content.members.filter((m) => m.userId === viewerUserId) : content.members;
   const summaries = visible.map((m) => ({
     ...m,
+    // Links are built here, at read time, from the stored shas; `commits` itself is not sent.
+    evidence: {
+      ...m.evidence,
+      files: m.evidence.files.map(({ commits, ...f }) => ({ ...f, ...(linkFile(repo, f.path, commits) ?? {}) })),
+    },
     name: people.get(m.userId)?.name ?? "Former member",
     githubUsername: people.get(m.userId)?.githubUsername ?? null,
     isYou: m.userId === viewerUserId,
@@ -61,7 +68,7 @@ export interface AiBriefView {
     text: string;
     status: AiRequirementStatus;
     unverified: boolean;
-    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean }>;
+    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean } & AiFileLinks>;
   }>;
   // True when no requirement was found (all Not found). The page shows one calm line.
   nothingFound: boolean;
@@ -80,6 +87,7 @@ export function shapeBriefForViewer(
   viewer: AiViewer,
   viewerUserId: number,
   current: { brief: string; latestReportId: number | null },
+  repo: RepoRef | null = null,
 ): AiBriefView | null {
   if (!row || viewer === "member" || !current.brief.trim()) return null;
   if (row.status === "FAILED" || row.status === "SKIPPED") return null;
@@ -91,7 +99,8 @@ export function shapeBriefForViewer(
     unverified: !!r.unverified,
     evidence: r.evidence.map((e) => {
       const othersWrote = e.type === "doc" && viewer === "leader" && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
-      return { type: e.type, ref: e.ref, quote: othersWrote ? "" : e.quote, quoteHidden: othersWrote };
+      const links = e.type === "file" ? (linkFile(repo, e.ref, e.commits) ?? {}) : {};
+      return { type: e.type, ref: e.ref, quote: othersWrote ? "" : e.quote, quoteHidden: othersWrote, ...links };
     }),
   }));
   return {
@@ -147,8 +156,11 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
+  const repo = repoRefOf(project.repoUrl);
   const base = {
     enabled: true,
+    // Where file evidence links to; the viewer already sees this group's repository.
+    repoUrl: canonicalRepoUrl(repo),
     running: isReviewRunning(project.id),
     canGenerate: instructor && req.user!.role === "INSTRUCTOR",
     hasReport: !!latestReport,
@@ -165,7 +177,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
       }),
     ]);
     const text = assignment?.description ?? "";
-    const view = shapeBriefForViewer(briefRow, viewer, req.user!.sub, { brief: text, latestReportId: latestReport?.id ?? null });
+    const view = shapeBriefForViewer(briefRow, viewer, req.user!.sub, { brief: text, latestReportId: latestReport?.id ?? null }, repo);
     if (view) brief.briefCheck = view;
     if (viewer === "instructor" && briefRow?.status === "FAILED" && text.trim()) brief.briefFailed = true;
   }
@@ -176,7 +188,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   }
 
   const people = new Map(project.groupMemberships.map((m) => [m.userId, { name: m.user.name, githubUsername: m.user.githubUsername ?? null }]));
-  const shaped = shapeSummariesForViewer(review.content as unknown as AiMemberSummariesContent, viewer, req.user!.sub, people);
+  const shaped = shapeSummariesForViewer(review.content as unknown as AiMemberSummariesContent, viewer, req.user!.sub, people, repo);
   const basedOn = await prisma.report.findUnique({ where: { id: review.reportId }, select: { generatedAt: true } });
   res.json({
     ...base,

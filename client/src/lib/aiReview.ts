@@ -1,4 +1,4 @@
-import type { AiMemberSummary, AiAddressedNote } from "@shared/aiReviewTypes";
+import type { AiMemberSummary, AiAddressedNote, AiFileLinks } from "@shared/aiReviewTypes";
 
 // Mirrors the response of GET /api/groups/:id/ai-review (server/src/routes/aiReview.ts).
 // Display only: nothing here is a score, and nothing here decides who may see what (the server does).
@@ -14,7 +14,7 @@ export interface AiBriefCheck {
     text: string;
     status: "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
     unverified: boolean;
-    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean }>;
+    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean } & AiFileLinks>;
   }>;
   nothingFound: boolean;
   generatedAt: string;
@@ -25,6 +25,8 @@ export interface AiBriefCheck {
 
 export interface AiReviewResponse {
   enabled: boolean;
+  // Canonical link of the group's repository (links on file evidence are built by the server).
+  repoUrl?: string | null;
   running?: boolean;
   canGenerate?: boolean;
   hasReport?: boolean;

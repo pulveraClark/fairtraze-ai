@@ -6,6 +6,8 @@ import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
 import type { AiBriefContent, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
 import { fetchRepoTree, fetchRepoFileText } from "./repoFiles.js";
+import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
+import { COMMIT_PAGES } from "./memberSummaries.js";
 import { sanitizeForAi } from "./sanitize.js";
 import { redactSecrets } from "./redact.js";
 import { BRIEF_PROMPT_VERSION, BRIEF_SCHEMA, BRIEF_SYSTEM, dataBlock, validateBriefOutput } from "./prompts.js";
@@ -25,6 +27,8 @@ export interface BriefDeps {
   loadDocs: typeof loadGroupDocEvidence;
   generate: typeof generateJson;
   githubToken: string | undefined;
+  // Only used to order the commits behind file links (newest first); optional and best effort.
+  listCommits?: typeof fetchRepoCommitMessages;
 }
 
 const defaultDeps = (): BriefDeps => ({
@@ -33,10 +37,24 @@ const defaultDeps = (): BriefDeps => ({
   loadDocs: loadGroupDocEvidence,
   generate: generateJson,
   githubToken: process.env.GITHUB_TOKEN,
+  listCommits: fetchRepoCommitMessages,
 });
 
 export interface BriefResult extends ReviewResult<AiBriefContent> {
   briefHash: string | null;
+}
+
+// sha -> commit time (ms) for the newest commits; empty when GitHub cannot be read (links then fall back
+// to the order the digests were written in).
+async function commitTimes(deps: BriefDeps, owner: string, repo: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!deps.listCommits || !deps.githubToken) return out;
+  try {
+    for (const c of await deps.listCommits(owner, repo, deps.githubToken, COMMIT_PAGES)) out.set(c.sha, Date.parse(c.committedAt) || 0);
+  } catch {
+    // Order is a nicety; the check itself does not depend on it.
+  }
+  return out;
 }
 
 export async function runBriefComparison(projectId: number, deps: BriefDeps = defaultDeps()): Promise<BriefResult> {
@@ -74,6 +92,8 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   let paths: string[] = [];
   const fileText = new Map<string, string>();
   const files: BriefInput["files"] = [];
+  // path -> shas of the commits that touched it, newest first. Display only (links); never sent to the AI.
+  const commitsByPath = new Map<string, string[]>();
   const repo = project.repoUrl ? checkRepoUrl(project.repoUrl) : null;
   if (sourceType !== "EDITOR" && repo?.ok) {
     sources++;
@@ -84,10 +104,23 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
       try {
         const tree = await deps.fetchTree(repo.owner, repo.repo, deps.githubToken);
         paths = selectTreePaths(tree);
-        const digests = await prisma.aiCommitDigest.findMany({ where: { projectId }, select: { files: true } });
+        const digests = await prisma.aiCommitDigest.findMany({
+          where: { projectId },
+          select: { sha: true, files: true, createdAt: true },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        const committedAt = await commitTimes(deps, repo.owner, repo.repo);
+        const newestFirst = [...digests].sort(
+          (a, b) => (committedAt.get(b.sha) ?? 0) - (committedAt.get(a.sha) ?? 0),
+        );
         const added = new Map<string, number>();
-        for (const d of digests) {
-          for (const f of d.files as Array<{ path: string; added: number }>) added.set(f.path, (added.get(f.path) ?? 0) + f.added);
+        for (const d of newestFirst) {
+          for (const f of d.files as Array<{ path: string; added: number }>) {
+            added.set(f.path, (added.get(f.path) ?? 0) + f.added);
+            const list = commitsByPath.get(f.path) ?? [];
+            if (!list.includes(d.sha)) list.push(d.sha);
+            commitsByPath.set(f.path, list);
+          }
         }
         for (const path of selectKeyFiles(paths, added)) {
           try {
@@ -143,7 +176,10 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     return empty("FAILED", err instanceof AiReviewError ? err.code : "AI_UNAVAILABLE", hash);
   }
 
-  const requirements = verifyRequirements(raw, { paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans });
+  const requirements = verifyRequirements(raw, { paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans }).map((r) => ({
+    ...r,
+    evidence: r.evidence.map((e) => (e.type === "file" && commitsByPath.has(e.ref) ? { ...e, commits: commitsByPath.get(e.ref)!.slice(0, 6) } : e)),
+  }));
   return {
     status: errors.length > 0 ? "PARTIAL" : "OK",
     errorCode: errors[0] ?? null,

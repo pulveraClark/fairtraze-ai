@@ -5,16 +5,21 @@ import type { AiSummaryEvidence } from "@shared/aiReviewTypes.js";
 
 export const NO_ACTIVITY_LINE = "No recorded commits or Docs text to summarize yet.";
 
+// perCommit is newest commit first; `sha` (optional) is recorded per file, so the newest commit that
+// touched a file comes first in `commits`.
 export function mergeFiles(
-  perCommit: Array<Array<{ path: string; added: number; removed: number }>>,
+  perCommit: Array<Array<{ path: string; added: number; removed: number }> | { sha?: string; files: Array<{ path: string; added: number; removed: number }> }>,
   limit = 8,
 ): AiSummaryEvidence["files"] {
-  const byPath = new Map<string, { path: string; added: number; removed: number }>();
-  for (const files of perCommit) {
+  const byPath = new Map<string, { path: string; added: number; removed: number; commits?: string[] }>();
+  for (const entry of perCommit) {
+    const files = Array.isArray(entry) ? entry : entry.files;
+    const sha = Array.isArray(entry) ? undefined : entry.sha;
     for (const f of files) {
       const cur = byPath.get(f.path) ?? { path: f.path, added: 0, removed: 0 };
       cur.added += f.added;
       cur.removed += f.removed;
+      if (sha) cur.commits = [...(cur.commits ?? []), sha];
       byPath.set(f.path, cur);
     }
   }

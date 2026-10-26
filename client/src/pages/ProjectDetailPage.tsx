@@ -24,6 +24,7 @@ import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/grou
 import { TasksTab } from "../components/tasks/TasksTab";
 import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
+import { DocSectionProvider, useDocSectionNav } from "../hooks/useDocSectionLink";
 import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { groupCrumbLabels } from "../lib/groupCrumbs";
@@ -97,6 +98,11 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [viewingHistory, setViewingHistory]     = useState(false);
   // "Open in document" from a task: the editor scrolls to the task's linked heading (read-only here).
   const docFocus = useDocHeadingFocus(() => { setViewingHistory(false); selectTab("document"); });
+  // Evidence in the AI review links to a Docs section: same tab, with a history entry so Back returns.
+  const docSection = useDocSectionNav(
+    useCallback(() => { setViewingHistory(false); setActiveTab("document"); }, []),
+    useCallback(() => setActiveTab(tabFromSearch(window.location.search)), []),
+  );
 
   // Summary used for breadcrumb + group switcher — shared with the dashboard/class pages
   // via useProjectsSummaryQuery so navigating between them reuses the cached fetch.
@@ -423,6 +429,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   const switchBtn = `flex h-8 w-8 items-center justify-center text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`;
 
   return (
+    <DocSectionProvider value={(h) => { closeMember(); docSection.open(h); }}>
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
@@ -834,8 +841,8 @@ export function ProjectDetailPage({ projectId }: Props) {
                   editable={false}
                   canChooseTemplate={false}
                   title={groupName}
-                  scrollToHeading={docFocus.focus?.heading}
-                  onHeadingResolved={docFocus.onResolved}
+                  scrollToHeading={docFocus.focus?.heading ?? docSection.heading}
+                  onHeadingResolved={docFocus.focus ? docFocus.onResolved : docSection.onResolved}
                 />
               </>
             )}
@@ -897,5 +904,6 @@ export function ProjectDetailPage({ projectId }: Props) {
         />
       )}
     </div>
+    </DocSectionProvider>
   );
 }

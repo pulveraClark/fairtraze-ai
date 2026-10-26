@@ -1,5 +1,7 @@
 import { FOCUS_LIGHT } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
+import { FileEvidenceLink } from "./ui/ExternalEvidenceLink";
+import { DocSectionLink } from "../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 
@@ -43,9 +45,12 @@ export function BriefCheckCard({ check, instructor = false }: { check: AiBriefCh
                   <ul className="mt-2 space-y-2">
                     {r.evidence.map((e, j) => (
                       <li key={j} className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-normal">
-                        <p className="text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
-                          {e.type === "file" ? "File" : "Docs section"}: {e.ref}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
+                          <span>{e.type === "file" ? "File" : "Docs section"}:</span>
+                          {e.type === "file"
+                            ? <FileEvidenceLink path={e.ref} href={e.href} isCommit={e.isCommit} more={e.more} />
+                            : <DocSectionLink heading={e.ref} />}
+                        </div>
                         {e.quoteHidden ? (
                           <p className="text-xs text-slate-700">Text written by another member is not shown.</p>
                         ) : e.quote ? (

@@ -3,8 +3,24 @@
 
 export type AiSummarySource = "ai" | "facts";
 
+// A link to one commit on GitHub (short sha shown, full link behind it).
+export interface AiEvidenceLink {
+  sha: string;
+  href: string;
+}
+
+// Added by the API at read time (never stored): where a file's evidence links to.
+export interface AiFileLinks {
+  href?: string;
+  // True when href is a commit diff, false when it is the file on the default branch.
+  isCommit?: boolean;
+  // Other commits that touched the file, newest first.
+  more?: AiEvidenceLink[];
+}
+
 export interface AiSummaryEvidence {
-  files: Array<{ path: string; added: number; removed: number }>;
+  // commits: shas of the commits that touched the file, newest first (stored with the review).
+  files: Array<{ path: string; added: number; removed: number; commits?: string[] } & AiFileLinks>;
   // Headings of the Docs sections the member wrote under.
   docSections: string[];
   commitCount: number;
@@ -42,6 +58,8 @@ export interface AiBriefEvidence {
   type: "file" | "doc";
   // File path, or Docs section heading.
   ref: string;
+  // Files only: shas of the commits that touched the file, newest first, when known.
+  commits?: string[];
   // Short text copied from that file or section. Verified in code before it is stored.
   quote: string;
   // Docs only: ids of the members who wrote the quoted text. Used to hide other members' Docs words

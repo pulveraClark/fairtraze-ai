@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { FOCUS_LIGHT } from "../ui";
 import { InfoTip } from "../ui/InfoTip";
+import { FileEvidenceLink } from "../ui/ExternalEvidenceLink";
+import { DocSectionLink } from "../../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../../lib/helpText";
 import { formatBasedOn, summaryFor, type AiReviewResponse, type AiSummaryView } from "../../lib/aiReview";
 
@@ -24,9 +26,9 @@ function EvidenceDetails({ s }: { s: AiSummaryView }) {
             </p>
             <ul className="mt-1 space-y-1">
               {files.map((f) => (
-                <li key={f.path} className="flex items-start justify-between gap-3">
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{f.path}</span>
-                  <span className="shrink-0 tabular-nums text-xs text-slate-700">+{f.added} / -{f.removed}</span>
+                <li key={f.path} className="flex flex-wrap items-start justify-between gap-x-3">
+                  <FileEvidenceLink path={f.path} href={f.href} isCommit={f.isCommit} more={f.more} />
+                  <span className="shrink-0 tabular-nums text-xs text-slate-700 sm:pt-3">+{f.added} / -{f.removed}</span>
                 </li>
               ))}
             </ul>
@@ -41,7 +43,7 @@ function EvidenceDetails({ s }: { s: AiSummaryView }) {
           <div>
             <p className="text-xs font-semibold text-slate-700">Docs sections written in</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-5">
-              {docSections.map((h) => <li key={h} className="[overflow-wrap:anywhere]">{h}</li>)}
+              {docSections.map((h) => <li key={h} className="[overflow-wrap:anywhere]"><DocSectionLink heading={h} /></li>)}
             </ul>
           </div>
         )}

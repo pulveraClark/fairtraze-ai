@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { summaryFor, reviewStatusLine, aiAddressedLine, type AiReviewResponse, type AiSummaryView } from "../lib/aiReview";
+import { DocSectionProvider } from "../hooks/useDocSectionLink";
 import { MemberWorkSummary } from "./report/AiWorkSummary";
 import { StudentWorkSummaries } from "./StudentWorkSummaries";
 import { Narrative } from "./Narrative";
@@ -51,6 +52,23 @@ describe("MemberWorkSummary (instructor drawer)", () => {
     expect(screen.getByText("src/pages/Login.tsx")).toBeTruthy();
     expect(screen.getByText("Methodology")).toBeTruthy();
     expect(screen.getByText(/2 older commits not read/)).toBeTruthy();
+  });
+
+  it("links changed files to the commit diff and Docs sections to the Docs tab; old reviews stay plain text", async () => {
+    const href = "https://github.com/example/Trips/commit/a41f9c2d0e5b#diff-abc";
+    const linked: AiReviewResponse = {
+      ...base,
+      summaries: [{ ...ana, evidence: { ...evidence, files: [{ path: "src/pages/Login.tsx", added: 40, removed: 2, href, isCommit: true, more: [{ sha: "b52e0d3", href: "https://github.com/example/Trips/commit/b52e0d3" }] }] } }],
+    };
+    const open = vi.fn();
+    render(<DocSectionProvider value={open}><MemberWorkSummary review={linked} member={{ userId: 1 }} /></DocSectionProvider>);
+    await userEvent.click(screen.getByText("See evidence"));
+    const file = screen.getByRole("link", { name: "Open Login.tsx changes on GitHub (new tab)" });
+    expect(file.getAttribute("href")).toBe(href);
+    expect(file.getAttribute("target")).toBe("_blank");
+    expect(screen.getByRole("link", { name: "Open commit b52e0d3 on GitHub (new tab)" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("link", { name: "Open section Methodology in Docs" }));
+    expect(open).toHaveBeenCalledWith("Methodology");
   });
 
   it("a facts-only summary says the AI was unavailable", () => {
