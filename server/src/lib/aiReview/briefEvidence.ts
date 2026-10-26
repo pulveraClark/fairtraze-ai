@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { AiBriefEvidence, AiBriefRequirement } from "@shared/aiReviewTypes.js";
 import type { AuthorshipSpan } from "../../collab/authorshipMap.js";
 import type { DocPiece } from "./docsEvidence.js";
+import { indexOfQuote, normalizeInstructions, normalizeQuote } from "@shared/quoteMatch.js";
 import { skipReason } from "./skipRules.js";
 import type { RawRequirement } from "./prompts.js";
 
@@ -139,13 +140,17 @@ type RequirementSource = Pick<AiBriefRequirement, "sourceQuote" | "sourceFile" |
  * Null when there is no source, or any source given cannot be confirmed.
  */
 function verifySource(r: RawRequirement, src: BriefVerifyContext["source"]): RequirementSource | null {
-  const quote = (r.sourceQuote ?? "").trim().slice(0, MAX_SOURCE_QUOTE_CHARS);
+  const given = (r.sourceQuote ?? "").trim();
+  const quote = given.slice(0, MAX_SOURCE_QUOTE_CHARS);
   const file = (r.sourceFile ?? "").trim();
   if (!quote && !file) return null;
   const out: RequirementSource = {};
   if (quote) {
-    const q = normalize(quote);
-    if (q.length < MIN_SOURCE_QUOTE_CHARS || !normalize(src.instructions).includes(q)) return null;
+    // Strict about the words, tolerant of formatting (see shared/src/quoteMatch.ts). A quote cut at the
+    // character limit may end inside a word.
+    const q = normalizeQuote(quote);
+    const cut = given.length > MAX_SOURCE_QUOTE_CHARS;
+    if (q.length < MIN_SOURCE_QUOTE_CHARS || indexOfQuote(normalizeInstructions(src.instructions), q, cut) === -1) return null;
     out.sourceQuote = quote;
   }
   if (file) {

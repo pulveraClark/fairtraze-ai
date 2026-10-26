@@ -164,6 +164,52 @@ describe("verifyRequirements: the source of each requirement", () => {
     expect(out.droppedCount).toBe(2);
   });
 
+  it("ignores formatting noise: curly quotes, dashes, bullets, numbering, markdown and trailing punctuation", () => {
+    const formatted = ctx({
+      source: {
+        instructions: "# Goals\n- The app can’t lose data — ever.\n1. Students write a **survey report**.\n> Keep the `repo` public",
+        files: [],
+      },
+    });
+    const quotes = [
+      "The app can't lose data - ever",
+      "• The app can’t lose data – ever.",
+      "1) Students write a survey report",
+      "- Students write a **survey report**.",
+      "keep the repo public.",
+    ];
+    const out = verifyRequirements(quotes.map((sourceQuote, i) => req({ text: `R${i}`, sourceQuote })), formatted);
+    expect(out.droppedCount).toBe(0);
+    expect(out.requirements).toHaveLength(quotes.length);
+    expect(out.requirements[1]!.sourceQuote).toBe("• The app can’t lose data – ever."); // stored as the AI gave it
+  });
+
+  it("is still strict about the words: one changed, extra or cut-short word is dropped", () => {
+    const strict = ctx({ source: { instructions: "- The app must have a login page for students.", files: [] } });
+    const out = verifyRequirements([
+      req({ text: "ok", sourceQuote: "The app must have a login page" }),
+      req({ text: "changed", sourceQuote: "The app must have a signup page" }),
+      req({ text: "extra", sourceQuote: "The app must have a login page for all students" }),
+      req({ text: "cut", sourceQuote: "The app must have a login page for student" }),
+    ], strict);
+    expect(out.requirements.map((r) => r.text)).toEqual(["ok"]);
+    expect(out.droppedCount).toBe(3);
+  });
+
+  it("keeps the 8-character minimum after normalization", () => {
+    const short = ctx({ source: { instructions: "- **Use React.** Then ship it.", files: [] } });
+    const out = verifyRequirements([req({ text: "short", sourceQuote: "- *Use R*" }), req({ text: "ok", sourceQuote: "Use React. Then" })], short);
+    expect(out.requirements.map((r) => r.text)).toEqual(["ok"]);
+    expect(out.droppedCount).toBe(1);
+  });
+
+  it("a long quote cut at 200 characters may end inside a word", () => {
+    const words = Array.from({ length: 60 }, (_, i) => `word${i}`).join(" ");
+    const out = verifyRequirements([req({ sourceQuote: words })], ctx({ source: { instructions: words, files: [] } }));
+    expect(out.droppedCount).toBe(0);
+    expect(out.requirements[0]!.sourceQuote).toHaveLength(200);
+  });
+
   it("cuts a quote to 200 characters before checking it", () => {
     const long = "Build a login page. " + "x".repeat(300);
     const withLong = ctx({ source: { instructions: long, files: [] } });
