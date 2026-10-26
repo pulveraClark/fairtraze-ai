@@ -1,18 +1,19 @@
 import { prisma } from "../prisma.js";
 import { checkRepoUrl } from "@shared/repoUrl.js";
+import { attachmentMetaFor, loadBriefFilesForAi } from "../briefAttachments.js";
 import { LATEST_REPORT_ORDER } from "../latestReport.js";
 import { buildPseudonymEntries, scrubFreeText } from "../geminiPseudonyms.js";
 import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
-import type { AiBriefContent, AiReviewStatus } from "@shared/aiReviewTypes.js";
+import type { AiBriefContent, AiBriefSources, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
 import { fetchRepoTree, fetchRepoFileText } from "./repoFiles.js";
 import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
 import { COMMIT_PAGES } from "./memberSummaries.js";
 import { sanitizeForAi } from "./sanitize.js";
 import { redactSecrets } from "./redact.js";
-import { BRIEF_PROMPT_VERSION, BRIEF_SCHEMA, BRIEF_SYSTEM, dataBlock, validateBriefOutput } from "./prompts.js";
+import { BRIEF_PROMPT_VERSION, BRIEF_SCHEMA, BRIEF_SYSTEM, NO_WRITTEN_BRIEF, dataBlock, validateBriefOutput } from "./prompts.js";
 import {
-  KEY_FILE_CHARS, briefHash, buildDocSections, fitBriefInput, selectKeyFiles, selectTreePaths, verifyRequirements,
+  KEY_FILE_CHARS, briefFingerprint, buildDocSections, fitBriefInput, selectKeyFiles, selectTreePaths, verifyRequirements,
   type BriefInput,
 } from "./briefEvidence.js";
 import type { ReviewResult } from "./memberSummaries.js";
@@ -29,6 +30,8 @@ export interface BriefDeps {
   githubToken: string | undefined;
   // Only used to order the commits behind file links (newest first); optional and best effort.
   listCommits?: typeof fetchRepoCommitMessages;
+  // The brief's attached PDF/images for an assignment. Defaults to the database; tests inject their own.
+  loadBriefFiles?: typeof loadBriefFilesForAi;
 }
 
 const defaultDeps = (): BriefDeps => ({
@@ -58,20 +61,30 @@ async function commitTimes(deps: BriefDeps, owner: string, repo: string): Promis
 }
 
 export async function runBriefComparison(projectId: number, deps: BriefDeps = defaultDeps()): Promise<BriefResult> {
-  const empty = (status: AiReviewStatus, errorCode: string | null = null, hash: string | null = null): BriefResult => ({
-    status, errorCode, briefHash: hash, content: { requirements: [], aiAddressedCount: 0 },
+  const empty = (
+    status: AiReviewStatus, errorCode: string | null = null, hash: string | null = null, sources?: AiBriefSources,
+  ): BriefResult => ({
+    status, errorCode, briefHash: hash, content: { requirements: [], aiAddressedCount: 0, ...(sources ? { sources } : {}) },
   });
 
+  // The assignment, and so its attachments, always come from the group being reviewed.
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      assignment: { select: { description: true, sourceType: true } },
+      assignment: { select: { id: true, description: true, sourceType: true } },
       groupMemberships: { orderBy: { userId: "asc" }, include: { user: { select: { name: true, githubUsername: true } } } },
     },
   });
   const brief = (project?.assignment?.description ?? "").trim();
-  if (!project || !brief) return empty("SKIPPED");
-  const hash = briefHash(brief);
+  const assignmentId = project?.assignment?.id;
+  // Metadata of every attachment (for the fingerprint, skipped ones included); bytes only for the ones read.
+  const attachmentMeta = assignmentId ? (await attachmentMetaFor([assignmentId])).get(assignmentId) ?? [] : [];
+  const briefFiles = assignmentId && attachmentMeta.length > 0
+    ? await (deps.loadBriefFiles ?? loadBriefFilesForAi)(assignmentId)
+    : { usable: [], skipped: [] };
+  if (!project || (!brief && briefFiles.usable.length === 0)) return empty("SKIPPED");
+  const hash = briefFingerprint(brief, attachmentMeta);
+  let briefSources: AiBriefSources = { writtenBrief: !!brief, filesRead: briefFiles.usable.length, skipped: briefFiles.skipped };
 
   const sourceType = project.assignment?.sourceType ?? "GITHUB";
   const entries = buildPseudonymEntries(
@@ -158,22 +171,42 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   }
 
   // Every source that was expected failed: say so instead of reporting "nothing found".
-  if (sources > 0 && sourcesFailed === sources) return empty("FAILED", errors[0] ?? null, hash);
+  if (sources > 0 && sourcesFailed === sources) return empty("FAILED", errors[0] ?? null, hash, briefSources);
 
-  const briefText = scrubFreeText(redactSecrets(brief), entries);
+  const briefText = brief ? scrubFreeText(redactSecrets(brief), entries) : NO_WRITTEN_BRIEF;
   const input = fitBriefInput({ brief: briefText, paths, files, docs });
   for (const f of input.files) fileText.set(f.path, f.excerpt);
 
-  let raw;
-  try {
-    raw = await deps.generate({
+  const ask = (attached: typeof briefFiles.usable) =>
+    deps.generate({
       system: BRIEF_SYSTEM,
       prompt: dataBlock(input),
       schema: BRIEF_SCHEMA as unknown as Record<string, unknown>,
       validate: validateBriefOutput,
+      ...(attached.length > 0 ? { files: attached.map((f) => ({ mimeType: f.mimeType, data: f.data })) } : {}),
     });
+
+  let raw;
+  try {
+    raw = await ask(briefFiles.usable);
   } catch (err) {
-    return empty("FAILED", err instanceof AiReviewError ? err.code : "AI_UNAVAILABLE", hash);
+    if (!(err instanceof AiReviewError && err.code === "AI_BAD_INPUT" && briefFiles.usable.length > 0)) {
+      return empty("FAILED", err instanceof AiReviewError ? err.code : "AI_UNAVAILABLE", hash, briefSources);
+    }
+    // Gemini could not read the attachments and does not say which one: try again on the written brief
+    // alone, and say that every attached file could not be read.
+    briefSources = {
+      writtenBrief: !!brief,
+      filesRead: 0,
+      skipped: [...briefFiles.skipped, ...briefFiles.usable.map((f) => ({ filename: f.filename, reason: "UNREADABLE" as const }))],
+    };
+    errors.push("AI_BAD_INPUT");
+    if (!brief) return empty("FAILED", "AI_BAD_INPUT", hash, briefSources);
+    try {
+      raw = await ask([]);
+    } catch (err2) {
+      return empty("FAILED", err2 instanceof AiReviewError ? err2.code : "AI_UNAVAILABLE", hash, briefSources);
+    }
   }
 
   const requirements = verifyRequirements(raw, { paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans }).map((r) => ({
@@ -184,7 +217,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     status: errors.length > 0 ? "PARTIAL" : "OK",
     errorCode: errors[0] ?? null,
     briefHash: hash,
-    content: { requirements, aiAddressedCount: injected },
+    content: { requirements, aiAddressedCount: injected, sources: briefSources },
   };
 }
 

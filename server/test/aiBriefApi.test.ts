@@ -3,7 +3,7 @@ import request from "supertest";
 import { createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
-import { briefHash } from "../src/lib/aiReview/briefEvidence.js";
+import { briefFingerprint, briefHash } from "../src/lib/aiReview/briefEvidence.js";
 
 const app = createApp();
 beforeEach(() => { process.env.AI_REVIEW_ENABLED = "true"; });
@@ -34,7 +34,7 @@ async function setup(opts: { status?: "OK" | "FAILED" | "SKIPPED"; requirements?
   ];
   await prisma.aiReportReview.create({
     data: {
-      reportId: report.id, kind: "BRIEF_COMPARISON", status: opts.status ?? "OK", promptVersion: "brief-1", model: "m",
+      reportId: report.id, kind: "BRIEF_COMPARISON", status: opts.status ?? "OK", promptVersion: "brief-2", model: "m",
       briefHash: briefHash(BRIEF), errorCode: opts.status === "FAILED" ? "AI_UNAVAILABLE" : null,
       content: { requirements, aiAddressedCount: 2 },
     },
@@ -111,6 +111,73 @@ describe("brief check visibility", () => {
     expect((await get(s.project.id, s.instructor)).body.briefCheck.outdated).toBe(false);
     await prisma.report.create({ data: { projectId: s.project.id, content: "{}", generatedAt: new Date(Date.now() + 60_000) } });
     expect((await get(s.project.id, s.leader)).body.briefCheck.outdated).toBe(true);
+  });
+
+  describe("attached files", () => {
+    const attach = (assignmentId: number, filename: string, order = 0) => {
+      const data = Buffer.from(`%PDF-1.4 synthetic ${filename}`);
+      return prisma.projectAttachment.create({
+        data: { assignmentId, kind: "PDF", mime: "application/pdf", data, size: data.length, filename, order },
+      });
+    };
+    const fingerprintOf = async (assignmentId: number, text: string) => {
+      const metas = await prisma.projectAttachment.findMany({
+        where: { assignmentId }, orderBy: [{ order: "asc" }, { id: "asc" }], select: { id: true, size: true, mime: true },
+      });
+      return briefFingerprint(text, metas);
+    };
+    const storeHash = (reportId: number, hash: string) =>
+      prisma.aiReportReview.updateMany({ where: { reportId, kind: "BRIEF_COMPARISON" }, data: { briefHash: hash } });
+
+    it("shows the check when there is no written brief but there are attachments, and passes what was read to the instructor and the leader", async () => {
+      const s = await setup({ brief: "  " });
+      expect((await get(s.project.id, s.instructor)).body).not.toHaveProperty("briefCheck");
+      await attach(s.asg.id, "brief.pdf");
+      const sources = { writtenBrief: false, filesRead: 1, skipped: [{ filename: "big.png", reason: "TOO_LARGE" }] };
+      await prisma.aiReportReview.updateMany({
+        where: { reportId: s.report.id },
+        data: { content: { requirements: [{ text: "Has a login page", status: "FOUND", evidence: [] }], aiAddressedCount: 0, sources } },
+      });
+      for (const viewer of [s.instructor, s.leader]) {
+        const b = (await get(s.project.id, viewer)).body.briefCheck;
+        expect(b.requirements).toHaveLength(1);
+        expect(b.sources).toEqual(sources);
+      }
+      expect(JSON.stringify((await get(s.project.id, s.leader)).body)).not.toContain("synthetic");
+    });
+
+    it("a check stored before files were read has no sources and is not marked outdated by the fingerprint", async () => {
+      const s = await setup();
+      const b = (await get(s.project.id, s.instructor)).body.briefCheck;
+      expect(b).not.toHaveProperty("sources");
+      expect(b.outdated).toBe(false);
+    });
+
+    it("adding, removing or replacing an attachment marks the check outdated", async () => {
+      const s = await setup();
+      const first = await attach(s.asg.id, "brief.pdf");
+      await storeHash(s.report.id, await fingerprintOf(s.asg.id, BRIEF));
+      expect((await get(s.project.id, s.instructor)).body.briefCheck.outdated).toBe(false);
+
+      await attach(s.asg.id, "extra.pdf", 1);
+      expect((await get(s.project.id, s.instructor)).body.briefCheck.outdated).toBe(true);
+
+      await storeHash(s.report.id, await fingerprintOf(s.asg.id, BRIEF));
+      await prisma.projectAttachment.delete({ where: { id: first.id } });
+      expect((await get(s.project.id, s.leader)).body.briefCheck.outdated).toBe(true);
+
+      await storeHash(s.report.id, await fingerprintOf(s.asg.id, BRIEF));
+      const remaining = await prisma.projectAttachment.findFirstOrThrow({ where: { assignmentId: s.asg.id } });
+      await prisma.projectAttachment.delete({ where: { id: remaining.id } });
+      await attach(s.asg.id, "extra.pdf", 1); // same name and size, new row
+      expect((await get(s.project.id, s.instructor)).body.briefCheck.outdated).toBe(true);
+    });
+
+    it("the instructor is told about a failed run that had only attachments", async () => {
+      const s = await setup({ status: "FAILED", requirements: [], brief: "" });
+      await attach(s.asg.id, "brief.pdf");
+      expect((await get(s.project.id, s.instructor)).body.briefFailed).toBe(true);
+    });
   });
 
   it("is hidden along with everything else when the class switch is off", async () => {

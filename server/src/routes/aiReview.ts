@@ -8,11 +8,12 @@ import { aiReviewEnabled } from "../lib/geminiClient.js";
 import { isReviewRunning, startReview } from "../lib/aiReview/reviewLock.js";
 import { generateMemberSummaries } from "../lib/aiReview/memberSummaries.js";
 import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
-import { briefHash } from "../lib/aiReview/briefEvidence.js";
+import { briefFingerprint } from "../lib/aiReview/briefEvidence.js";
+import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
 import { canonicalRepoUrl, linkFile, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
 import type {
-  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiRequirementStatus, AiFileLinks,
+  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiBriefSources, AiRequirementStatus, AiFileLinks,
 } from "@shared/aiReviewTypes.js";
 
 export const aiReviewRouter = Router();
@@ -74,22 +75,26 @@ export interface AiBriefView {
   nothingFound: boolean;
   generatedAt: string;
   outdated: boolean;
+  // What was read: the written brief and how many attached files, and which files were skipped (names only).
+  // Absent on checks stored before attachments were read.
+  sources?: AiBriefSources;
   // Instructor only.
   aiAddressedCount?: number;
 }
 
 // The brief check is for the owning instructor and the group leader, never other members.
 // Same wording and evidence for both; the leader sees only the section heading, not the quoted words,
-// for Docs text written by anyone else. Returns null (card hidden) when the brief is empty, the run
-// failed or was skipped, or the AI listed no requirements.
+// for Docs text written by anyone else. Returns null (card hidden) when there is no brief (no text and no
+// attachment), the run failed or was skipped, or the AI listed no requirements. `attachments` is metadata only.
 export function shapeBriefForViewer(
   row: { status: string; content: unknown; promptVersion: string; briefHash: string | null; reportId: number; createdAt: Date } | null,
   viewer: AiViewer,
   viewerUserId: number,
-  current: { brief: string; latestReportId: number | null },
+  current: { brief: string; attachments?: Array<{ id: number; size: number; mime: string }>; latestReportId: number | null },
   repo: RepoRef | null = null,
 ): AiBriefView | null {
-  if (!row || viewer === "member" || !current.brief.trim()) return null;
+  const attachments = current.attachments ?? [];
+  if (!row || viewer === "member" || (!current.brief.trim() && attachments.length === 0)) return null;
   if (row.status === "FAILED" || row.status === "SKIPPED") return null;
   const content = row.content as AiBriefContent;
   if (!content.requirements?.length) return null;
@@ -107,7 +112,8 @@ export function shapeBriefForViewer(
     requirements,
     nothingFound: requirements.every((r) => r.status === "NOT_FOUND"),
     generatedAt: row.createdAt.toISOString(),
-    outdated: row.reportId !== current.latestReportId || row.promptVersion !== BRIEF_PROMPT_VERSION || row.briefHash !== briefHash(current.brief),
+    outdated: row.reportId !== current.latestReportId || row.promptVersion !== BRIEF_PROMPT_VERSION || row.briefHash !== briefFingerprint(current.brief, attachments),
+    ...(content.sources ? { sources: content.sources } : {}),
     ...(viewer === "instructor" ? { aiAddressedCount: content.aiAddressedCount ?? 0 } : {}),
   };
 }
@@ -169,17 +175,21 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   // the member summaries have not been written.
   let brief: { briefCheck?: AiBriefView; briefFailed?: boolean } = {};
   if (viewer !== "member") {
+    // The assignment (and so the attachments) is resolved from this group; no id comes from the client.
     const [assignment, briefRow] = await Promise.all([
-      prisma.assignment.findFirst({ where: { projects: { some: { id: project.id } } }, select: { description: true } }),
+      prisma.assignment.findFirst({ where: { projects: { some: { id: project.id } } }, select: { id: true, description: true } }),
       prisma.aiReportReview.findFirst({
         where: { kind: "BRIEF_COMPARISON", report: { projectId: project.id } },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }),
     ]);
     const text = assignment?.description ?? "";
-    const view = shapeBriefForViewer(briefRow, viewer, req.user!.sub, { brief: text, latestReportId: latestReport?.id ?? null }, repo);
+    const attachments = assignment ? (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [] : [];
+    const view = shapeBriefForViewer(
+      briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo,
+    );
     if (view) brief.briefCheck = view;
-    if (viewer === "instructor" && briefRow?.status === "FAILED" && text.trim()) brief.briefFailed = true;
+    if (viewer === "instructor" && briefRow?.status === "FAILED" && (text.trim() || attachments.length > 0)) brief.briefFailed = true;
   }
 
   if (!review) {

@@ -44,6 +44,126 @@ function deps(over: Partial<BriefDeps> & { generate: BriefDeps["generate"]; anaI
 const answer = (requirements: unknown[]) =>
   vi.fn(async (req: { validate: (v: unknown) => unknown }) => req.validate({ requirements })) as unknown as BriefDeps["generate"];
 
+// Synthetic attachments only: magic bytes plus a marker text that must never be stored or logged.
+const MARKER = "SYNTHETIC-FILE-MARKER";
+const pdfBytes = () => Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Page >> endobj\n${MARKER}`);
+const pngBytes = () => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(MARKER)]);
+async function attach(assignmentId: number, data: Buffer, filename: string, order = 0) {
+  const kind = data.subarray(0, 4).toString("ascii") === "%PDF" ? "PDF" : "IMAGE";
+  const mime = kind === "PDF" ? "application/pdf" : "image/png";
+  return prisma.projectAttachment.create({ data: { assignmentId, kind, mime, data, size: data.length, filename, order } });
+}
+const callsOf = (generate: BriefDeps["generate"]) =>
+  (generate as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as { prompt: string; files?: Array<{ mimeType: string; data: Buffer }> });
+const none = [{ text: "R", status: "NOT_FOUND", evidence: [] }];
+
+describe("runBriefComparison with attached files", () => {
+  it("runs on attachments alone (empty written brief), sends them as files, and records what was read", async () => {
+    const { project, ana } = await setup({ description: "  " });
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf", 0);
+    await attach(project.assignmentId!, pngBytes(), "mock.png", 1);
+    const generate = answer(none);
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+
+    expect(r.status).toBe("OK");
+    expect(r.content.sources).toEqual({ writtenBrief: false, filesRead: 2, skipped: [] });
+    const [call] = callsOf(generate);
+    expect(call!.files!.map((f) => f.mimeType)).toEqual(["application/pdf", "image/png"]);
+    expect(call!.prompt).toContain("no written brief");
+  });
+
+  it("with a written brief and files, sends both and says so", async () => {
+    const { project, ana } = await setup();
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf");
+    const generate = answer(none);
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    expect(r.content.sources).toEqual({ writtenBrief: true, filesRead: 1, skipped: [] });
+    expect(callsOf(generate)[0]!.prompt).toContain("The app has a login page.");
+    expect(callsOf(generate)[0]!.files).toHaveLength(1);
+  });
+
+  it("stays SKIPPED, with no AI call, when there is no text and no usable file", async () => {
+    const { project, ana } = await setup({ description: "" });
+    await attach(project.assignmentId!, Buffer.from("just some text, not a PDF or image"), "notes.txt");
+    const generate = answer(none);
+    expect((await runBriefComparison(project.id, deps({ generate, anaId: ana.id }))).status).toBe("SKIPPED");
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("records skipped files by name and reason, and still reads the rest", async () => {
+    const { project, ana } = await setup();
+    for (let i = 0; i < 4; i++) await attach(project.assignmentId!, pngBytes(), `shot${i}.png`, i);
+    await attach(project.assignmentId!, Buffer.from("not an allowed type"), "notes.txt", 9);
+    const r = await runBriefComparison(project.id, deps({ generate: answer(none), anaId: ana.id }));
+    expect(r.content.sources).toEqual({
+      writtenBrief: true, filesRead: 3,
+      skipped: [{ filename: "shot3.png", reason: "TOO_MANY_FILES" }, { filename: "notes.txt", reason: "UNSUPPORTED" }],
+    });
+  });
+
+  it("on a bad-input error retries once without files and marks every file unreadable (PARTIAL)", async () => {
+    const { project, ana } = await setup();
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf", 0);
+    await attach(project.assignmentId!, pngBytes(), "mock.png", 1);
+    const generate = vi.fn()
+      .mockRejectedValueOnce(new AiReviewError("AI_BAD_INPUT"))
+      .mockImplementationOnce(async (req: { validate: (v: unknown) => unknown }) => req.validate({ requirements: none })) as unknown as BriefDeps["generate"];
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    const calls = callsOf(generate);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.files).toHaveLength(2);
+    expect(calls[1]!.files).toBeUndefined();
+    expect(r.status).toBe("PARTIAL");
+    expect(r.content.sources).toEqual({
+      writtenBrief: true, filesRead: 0,
+      skipped: [{ filename: "brief.pdf", reason: "UNREADABLE" }, { filename: "mock.png", reason: "UNREADABLE" }],
+    });
+  });
+
+  it("with no written brief and unreadable files there is nothing to check: FAILED, one call", async () => {
+    const { project, ana } = await setup({ description: null });
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf");
+    const generate = vi.fn().mockRejectedValue(new AiReviewError("AI_BAD_INPUT")) as unknown as BriefDeps["generate"];
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    expect(r).toMatchObject({ status: "FAILED", errorCode: "AI_BAD_INPUT" });
+    expect(r.content.sources).toMatchObject({ filesRead: 0, skipped: [{ filename: "brief.pdf", reason: "UNREADABLE" }] });
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads only this group's assignment's files, and stores names and counts, never file bytes", async () => {
+    const { project, ana, report } = await setup();
+    await attach(project.assignmentId!, pdfBytes(), "mine.pdf");
+    const { user: otherInstructor } = await createUser();
+    const otherClass = await createClassSection(otherInstructor.id);
+    const otherAsg = await createAssignment(otherClass.id, { sourceType: "COMBINED" });
+    await attach(otherAsg.id, pngBytes(), "someone-elses.png");
+
+    const generate = answer(none);
+    await generateBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    expect(callsOf(generate)[0]!.files).toHaveLength(1);
+    expect(callsOf(generate)[0]!.files![0]!.mimeType).toBe("application/pdf");
+
+    const row = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } });
+    const stored = JSON.stringify(row);
+    expect(stored).toContain('"filesRead":1');
+    expect(stored).not.toContain(MARKER);
+    expect(stored).not.toContain(pdfBytes().toString("base64"));
+    expect(stored).not.toContain("someone-elses");
+  });
+
+  it("stores the fingerprint, which changes when a file is added", async () => {
+    const { project, ana, report } = await setup();
+    const d = () => deps({ generate: answer(none), anaId: ana.id });
+    await generateBriefComparison(project.id, d());
+    const before = (await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } })).briefHash;
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf");
+    await generateBriefComparison(project.id, d());
+    const after = (await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } })).briefHash;
+    expect(after).toMatch(/^[0-9a-f]{32}$/);
+    expect(after).not.toBe(before);
+  });
+});
+
 describe("runBriefComparison", () => {
   it("lists each requirement with verified evidence and sends only sanitized, filtered material", async () => {
     const { project, ana } = await setup();
@@ -107,7 +227,7 @@ describe("runBriefComparison", () => {
     await generateBriefComparison(project.id, d());
     const rows = await prisma.aiReportReview.findMany({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } });
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: "OK", promptVersion: "brief-1" });
+    expect(rows[0]).toMatchObject({ status: "OK", promptVersion: "brief-2" });
     expect(rows[0]!.briefHash).toMatch(/^[0-9a-f]{32}$/);
     expect((await prisma.report.findUnique({ where: { id: report.id } }))!.content).toBe("{}");
   });

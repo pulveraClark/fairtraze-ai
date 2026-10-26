@@ -93,7 +93,7 @@ describe("API shaping adds links for every viewer and never changes who sees wha
         ],
       }],
     };
-    const row = { status: "OK", content, promptVersion: "brief-1", briefHash: null, reportId: 1, createdAt: new Date() };
+    const row = { status: "OK", content, promptVersion: "brief-2", briefHash: null, reportId: 1, createdAt: new Date() };
     const view = shapeBriefForViewer(row, "leader", 1, { brief: "x", latestReportId: 1 }, repo)!;
     const [file, doc] = view.requirements[0]!.evidence;
     expect(file).toMatchObject({ href: commitUrl(repo, sha1, "a.ts"), isCommit: true, quote: "save()" });
