@@ -14,7 +14,8 @@ export const SECTION_MISSING_MESSAGE = "That section may have been renamed.";
 export function docSectionHref(heading: string, current: string = typeof window === "undefined" ? "http://localhost/" : window.location.href): string {
   const url = new URL(current);
   url.searchParams.set("tab", "document");
-  url.searchParams.set("section", heading);
+  if (heading) url.searchParams.set("section", heading);
+  else url.searchParams.delete("section");
   url.searchParams.delete("task");
   return `${url.pathname}${url.search}`;
 }
@@ -96,6 +97,25 @@ export function DocSectionLink({ heading, children }: { heading: string; childre
       }}
     >
       <span className="min-w-0 [overflow-wrap:anywhere]">{children ?? heading}</span>
+    </a>
+  );
+}
+
+/** A link to the Docs tab itself (no section); plain nothing when the page cannot open it. */
+export function DocsTabLink({ children }: { children: ReactNode }) {
+  const open = useOpenDocSection();
+  if (!open) return null;
+  return (
+    <a
+      href={docSectionHref("")}
+      className={LINK}
+      onClick={(e) => {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        open("");
+      }}
+    >
+      {children}
     </a>
   );
 }

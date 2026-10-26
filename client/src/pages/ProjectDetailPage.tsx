@@ -771,6 +771,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               review={aiReview}
               generator={aiGenerator}
               basedOnAt={stored.analyzedAt}
+              repoUrl={sourceType !== "EDITOR" ? stored.repoUrl : null}
               onNarrativeGenerated={onNarrativeGenerated}
             />
 

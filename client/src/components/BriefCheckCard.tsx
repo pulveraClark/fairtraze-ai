@@ -3,7 +3,7 @@ import { FOCUS_LIGHT } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
 import { AiBadge } from "./ui/AiBadge";
 import { FileEvidenceLink } from "./ui/ExternalEvidenceLink";
-import { DocSectionLink } from "../hooks/useDocSectionLink";
+import { DocSectionLink, DocsTabLink, useOpenDocSection } from "../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 
@@ -14,24 +14,26 @@ import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 export const NOTHING_FOUND_LINE = "No brief requirements were found in the group's work yet.";
 export const NO_BRIEF_LINE = "Brief check · no brief added yet";
 // `unverified` = the AI said Found/Partly found but none of its quotes could be confirmed in the work it was sent.
-export const COULDNT_CHECK_REASON = "The AI's evidence couldn't be confirmed in the work, so this is not counted as found.";
+// The server drops those refs, and a ref the AI could not prove may be wrong, so none is shown: only where to look.
+export const VERIFY_REASON = "The AI says this is covered, but we couldn't find its proof in the work.";
+export const CHECK_WORK_LINE = "Please check the group's work for this one.";
 const QUOTE_MAX = 140;
 
 type Req = AiBriefCheck["requirements"][number];
-type Kind = "FOUND" | "PARTLY_FOUND" | "NOT_FOUND" | "COULDNT_CHECK";
+type Kind = "FOUND" | "PARTLY_FOUND" | "NOT_FOUND" | "VERIFY";
 
 const STATUS: Record<Kind, { label: string; icon: string; cls: string }> = {
   FOUND: { label: "Found", icon: "✓", cls: "border-emerald-300 bg-emerald-50 text-emerald-900" },
   PARTLY_FOUND: { label: "Partly found", icon: "◐", cls: "border-amber-300 bg-amber-50 text-amber-950" },
   NOT_FOUND: { label: "Not found in the work", icon: "○", cls: "border-slate-300 bg-slate-100 text-slate-900" },
-  COULDNT_CHECK: { label: "Couldn't check", icon: "?", cls: "border-slate-300 bg-slate-100 text-slate-900" },
+  VERIFY: { label: "Please verify", icon: "?", cls: "border-slate-300 bg-slate-100 text-slate-900" },
 };
 
-// A requirement whose evidence could not be confirmed is shown as "Couldn't check", not as "Not found".
-const kindOf = (r: Req): Kind => (r.unverified ? "COULDNT_CHECK" : r.status);
+// A requirement whose evidence could not be confirmed is shown as "Please verify", not as "Not found".
+const kindOf = (r: Req): Kind => (r.unverified ? "VERIFY" : r.status);
 
 // Attention order: the items the reader may want to look at first.
-const ATTENTION: Kind[] = ["PARTLY_FOUND", "NOT_FOUND", "COULDNT_CHECK"];
+const ATTENTION: Kind[] = ["PARTLY_FOUND", "NOT_FOUND", "VERIFY"];
 
 export function truncateQuote(q: string, max = QUOTE_MAX): string {
   const t = q.trim();
@@ -48,7 +50,7 @@ export function summaryLine(counts: Record<Kind, number>, total: number): string
   if (counts.FOUND) parts.push(`${counts.FOUND} found`);
   if (counts.PARTLY_FOUND) parts.push(`${counts.PARTLY_FOUND} partly found`);
   if (counts.NOT_FOUND) parts.push(`${counts.NOT_FOUND} not found`);
-  if (counts.COULDNT_CHECK) parts.push(`${counts.COULDNT_CHECK} couldn't check`);
+  if (counts.VERIFY) parts.push(`${counts.VERIFY} to verify`);
   return parts.join(" · ");
 }
 
@@ -62,7 +64,30 @@ function Pill({ kind }: { kind: Kind }) {
   );
 }
 
-function RequirementRow({ r }: { r: Req }) {
+// Where to look when nothing could be confirmed: the Docs tab and the repository, whichever the page can open.
+function WhereToCheck({ repoUrl }: { repoUrl?: string | null }) {
+  const canOpenDocs = useOpenDocSection() !== null;
+  if (!canOpenDocs && !repoUrl) return <p className="mt-1">{CHECK_WORK_LINE}</p>;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3">
+      <span className="font-semibold">Where to check:</span>
+      {canOpenDocs && <DocsTabLink>Open FairTraze Docs</DocsTabLink>}
+      {repoUrl && (
+        <a
+          href={repoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open the repository on GitHub (new tab)"
+          className={`inline-flex min-h-10 items-center text-sm font-medium text-blue-800 underline decoration-blue-800/40 underline-offset-2 hover:decoration-blue-800 ${FOCUS_LIGHT}`}
+        >
+          Open the repository
+        </a>
+      )}
+    </div>
+  );
+}
+
+function RequirementRow({ r, repoUrl }: { r: Req; repoUrl?: string | null }) {
   const kind = kindOf(r);
   // The same file is shown once per row, however many quotes pointed at it.
   const seen = new Set<string>();
@@ -78,7 +103,12 @@ function RequirementRow({ r }: { r: Req }) {
         <Pill kind={kind} />
         <p className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{r.text}</p>
       </div>
-      {kind === "COULDNT_CHECK" && <p className="mt-1 text-xs leading-normal text-slate-700">{COULDNT_CHECK_REASON}</p>}
+      {kind === "VERIFY" && (
+        <div className="mt-1 text-xs leading-normal text-slate-700">
+          <p>{VERIFY_REASON}</p>
+          <WhereToCheck repoUrl={repoUrl} />
+        </div>
+      )}
       {evidence.length > 0 && (
         <details className="mt-1">
           <summary className={`flex min-h-10 cursor-pointer items-center text-xs font-semibold text-indigo-900 underline underline-offset-2 ${FOCUS_LIGHT}`}>See evidence</summary>
@@ -112,14 +142,14 @@ function RequirementRow({ r }: { r: Req }) {
   );
 }
 
-export function BriefCheckCard({ check, instructor = false }: { check: AiBriefCheck; instructor?: boolean }) {
+export function BriefCheckCard({ check, instructor = false, repoUrl }: { check: AiBriefCheck; instructor?: boolean; repoUrl?: string | null }) {
   const [showFound, setShowFound] = useState(false);
   const when = formatBasedOn(check.generatedAt);
   const total = check.requirements.length;
 
   if (total === 0) return <p className="mt-4 text-sm leading-normal text-slate-700">{NO_BRIEF_LINE}</p>;
 
-  const counts: Record<Kind, number> = { FOUND: 0, PARTLY_FOUND: 0, NOT_FOUND: 0, COULDNT_CHECK: 0 };
+  const counts: Record<Kind, number> = { FOUND: 0, PARTLY_FOUND: 0, NOT_FOUND: 0, VERIFY: 0 };
   for (const r of check.requirements) counts[kindOf(r)]++;
   const allFound = counts.FOUND === total;
   const attention = ATTENTION.flatMap((k) => check.requirements.filter((r) => kindOf(r) === k));
@@ -143,7 +173,7 @@ export function BriefCheckCard({ check, instructor = false }: { check: AiBriefCh
         <p className="text-sm font-semibold leading-normal text-slate-900">{summaryLine(counts, total)}</p>
         {!allFound && attention.length > 0 && (
           <ul className="divide-y divide-slate-100">
-            {attention.map((r, i) => <RequirementRow key={i} r={r} />)}
+            {attention.map((r, i) => <RequirementRow key={i} r={r} repoUrl={repoUrl} />)}
           </ul>
         )}
         {!allFound && found.length > 0 && (
@@ -159,7 +189,7 @@ export function BriefCheckCard({ check, instructor = false }: { check: AiBriefCh
             </button>
             {showFound && (
               <ul id="brief-found-list" className="divide-y divide-slate-100">
-                {found.map((r, i) => <RequirementRow key={i} r={r} />)}
+                {found.map((r, i) => <RequirementRow key={i} r={r} repoUrl={repoUrl} />)}
               </ul>
             )}
           </>

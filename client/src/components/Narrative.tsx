@@ -21,9 +21,11 @@ interface Props {
   generator?: AiReportGenerator;
   /** When the analysis the explanation is based on ran (ISO). Shown in the footer. */
   basedOnAt?: string | null;
+  /** Linked repository, for the brief check's "Open the repository" link. */
+  repoUrl?: string | null;
 }
 
-export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt }: Props) {
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl }: Props) {
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
   const { reviewOn, generating, error } = generator ?? own;
 
@@ -107,7 +109,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           </p>
         </>
       )}
-      {briefCheck && !generating && <BriefCheckCard check={briefCheck} instructor />}
+      {briefCheck && !generating && <BriefCheckCard check={briefCheck} instructor repoUrl={repoUrl} />}
     </section>
   );
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocSectionProvider } from "../hooks/useDocSectionLink";
-import { BriefCheckCard, NOTHING_FOUND_LINE, NO_BRIEF_LINE, COULDNT_CHECK_REASON, truncateQuote } from "./BriefCheckCard";
+import { BriefCheckCard, NOTHING_FOUND_LINE, NO_BRIEF_LINE, VERIFY_REASON, CHECK_WORK_LINE, truncateQuote } from "./BriefCheckCard";
 import { StudentWorkSummaries } from "./StudentWorkSummaries";
 import { Narrative } from "./Narrative";
 import { briefStatusLine, type AiBriefCheck, type AiReviewResponse } from "../lib/aiReview";
@@ -41,14 +41,14 @@ describe("BriefCheckCard", () => {
     expect(details.open).toBe(false);
     await open();
     expect(details.open).toBe(true);
-    expect(screen.getByText("2 found · 1 partly found · 1 not found · 1 couldn't check")).toBeTruthy();
+    expect(screen.getByText("2 found · 1 partly found · 1 not found · 1 to verify")).toBeTruthy();
     expect(screen.getByText(/Not a grade and not a judgment of quality/)).toBeTruthy();
     expect(screen.getByText("AI explanation")).toBeTruthy();
     expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
     expect(screen.queryByText(/%/)).toBeNull();
   });
 
-  it("omits a zero count and the couldn't-check part", async () => {
+  it("omits a zero count and the to-verify part", async () => {
     const some = { ...check, requirements: [check.requirements[0]!, check.requirements[2]!, check.requirements[3]!] };
     render(<BriefCheckCard check={some} />);
     await open();
@@ -64,7 +64,7 @@ describe("BriefCheckCard", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(pill("Partly found")).toBeTruthy();
     expect(pill("Not found in the work")).toBeTruthy();
-    expect(pill("Couldn't check")).toBeTruthy();
+    expect(pill("Please verify")).toBeTruthy();
     expect(screen.queryByText("Has a login page")).toBeNull();
 
     const toggle = screen.getByRole("button", { name: "Show found requirements (2)" });
@@ -76,11 +76,40 @@ describe("BriefCheckCard", () => {
     expect(screen.getAllByText((_c, el) => el?.tagName === "SPAN" && el.textContent === "✓Found").length).toBe(2);
   });
 
-  it("explains a couldn't-check item in plain words", async () => {
+  it("explains a please-verify item in plain words and never shows a quote or ref for it", async () => {
     render(<BriefCheckCard check={check} />);
     await open();
-    expect(screen.getByText(COULDNT_CHECK_REASON)).toBeTruthy();
-    expect(screen.queryByText(/No evidence could be checked/)).toBeNull();
+    expect(screen.getByText(VERIFY_REASON)).toBeTruthy();
+    expect(VERIFY_REASON).toBe("The AI says this is covered, but we couldn't find its proof in the work.");
+    expect(screen.queryByText(/The AI pointed to/)).toBeNull();
+    expect(screen.queryByText(/couldn't check/i)).toBeNull();
+  });
+
+  it("Where to check: Docs and repository links when the page has them", async () => {
+    const openDocs = vi.fn();
+    render(<DocSectionProvider value={openDocs}><BriefCheckCard check={check} repoUrl="https://github.com/example/Trips" /></DocSectionProvider>);
+    await open();
+    expect(screen.getByText("Where to check:")).toBeTruthy();
+    await userEvent.click(screen.getByRole("link", { name: "Open FairTraze Docs" }));
+    expect(openDocs).toHaveBeenCalledWith("");
+    const repo = screen.getByRole("link", { name: "Open the repository on GitHub (new tab)" });
+    expect(repo.getAttribute("href")).toBe("https://github.com/example/Trips");
+    expect(repo.getAttribute("target")).toBe("_blank");
+    expect(repo.getAttribute("rel")).toContain("noopener");
+    expect(repo.className).toContain("min-h-10");
+  });
+
+  it("Where to check: only the link that exists, and a plain line when neither does", async () => {
+    const { unmount } = render(<BriefCheckCard check={check} repoUrl="https://github.com/example/Trips" />);
+    await open();
+    expect(screen.queryByRole("link", { name: "Open FairTraze Docs" })).toBeNull();
+    expect(screen.getByRole("link", { name: /Open the repository/ })).toBeTruthy();
+    unmount();
+    render(<BriefCheckCard check={check} />);
+    await open();
+    expect(screen.getByText(CHECK_WORK_LINE)).toBeTruthy();
+    expect(CHECK_WORK_LINE).toBe("Please check the group's work for this one.");
+    expect(screen.queryByText("Where to check:")).toBeNull();
   });
 
   it("keeps evidence closed by default; code evidence is a file link only; docs show one short quote", async () => {
