@@ -146,6 +146,73 @@ describe("brief check visibility", () => {
       expect(JSON.stringify((await get(s.project.id, s.leader)).body)).not.toContain("synthetic");
     });
 
+    it("passes each requirement's source (quote, file, page) to the instructor and the leader; a page needs a file", async () => {
+      const s = await setup();
+      await prisma.aiReportReview.updateMany({
+        where: { reportId: s.report.id },
+        data: { content: { aiAddressedCount: 0, sources: { writtenBrief: true, filesRead: 1, skipped: [], droppedCount: 2 }, requirements: [
+          { text: "From the text", status: "NOT_FOUND", evidence: [], sourceQuote: "The app has a login page." },
+          { text: "From the file", status: "NOT_FOUND", evidence: [], sourceFile: "brief.pdf", sourcePage: 3 },
+          { text: "Odd page", status: "NOT_FOUND", evidence: [], sourceQuote: "The app has a login page.", sourcePage: 9 },
+        ] } },
+      });
+      for (const viewer of [s.instructor, s.leader]) {
+        const b = (await get(s.project.id, viewer)).body.briefCheck;
+        expect(b.sources.droppedCount).toBe(2);
+        expect(b.requirements[0]).toMatchObject({ sourceQuote: "The app has a login page." });
+        expect(b.requirements[0]).not.toHaveProperty("sourceFile");
+        expect(b.requirements[1]).toMatchObject({ sourceFile: "brief.pdf", sourcePage: 3 });
+        expect(b.requirements[2]).not.toHaveProperty("sourcePage");
+      }
+    });
+
+    it("a check stored before sources existed still shapes, with no source fields", async () => {
+      const s = await setup();
+      const b = (await get(s.project.id, s.instructor)).body.briefCheck;
+      expect(b.requirements).toHaveLength(2);
+      for (const r of b.requirements) {
+        expect(r).not.toHaveProperty("sourceQuote");
+        expect(r).not.toHaveProperty("sourceFile");
+        expect(r).not.toHaveProperty("sourcePage");
+      }
+      expect(b).not.toHaveProperty("nothingRead");
+    });
+
+    it("files attached but none readable and no written brief: the instructor and the leader get nothingRead with the reasons", async () => {
+      const s = await setup({ status: "SKIPPED", requirements: [], brief: "" });
+      await attach(s.asg.id, "scan.pdf");
+      const sources = { writtenBrief: false, filesRead: 0, skipped: [{ filename: "scan.pdf", reason: "TOO_LARGE" }] };
+      await prisma.aiReportReview.updateMany({
+        where: { reportId: s.report.id },
+        data: { content: { requirements: [], aiAddressedCount: 0, sources }, errorCode: "BRIEF_NOTHING_READ" },
+      });
+      await storeHash(s.report.id, await fingerprintOf(s.asg.id, ""));
+      for (const viewer of [s.instructor, s.leader]) {
+        const res = (await get(s.project.id, viewer)).body;
+        expect(res.briefCheck).toMatchObject({ requirements: [], nothingFound: false, nothingRead: true, outdated: false, sources });
+        expect(res).not.toHaveProperty("briefFailed");
+      }
+      expect((await get(s.project.id, s.ben)).body).not.toHaveProperty("briefCheck");
+      // Adding a written brief later makes it outdated.
+      await prisma.assignment.update({ where: { id: s.asg.id }, data: { description: "Now there is a written brief." } });
+      expect((await get(s.project.id, s.instructor)).body.briefCheck.outdated).toBe(true);
+    });
+
+    it("a skipped run is still hidden when the written brief was read or nothing was skipped", async () => {
+      const s = await setup({ status: "SKIPPED", requirements: [] });
+      await attach(s.asg.id, "scan.pdf");
+      await prisma.aiReportReview.updateMany({
+        where: { reportId: s.report.id },
+        data: { content: { requirements: [], aiAddressedCount: 0, sources: { writtenBrief: true, filesRead: 0, skipped: [{ filename: "scan.pdf", reason: "TOO_LARGE" }] } } },
+      });
+      expect((await get(s.project.id, s.instructor)).body).not.toHaveProperty("briefCheck");
+      await prisma.aiReportReview.updateMany({
+        where: { reportId: s.report.id },
+        data: { content: { requirements: [], aiAddressedCount: 0, sources: { writtenBrief: false, filesRead: 0, skipped: [] } } },
+      });
+      expect((await get(s.project.id, s.instructor)).body).not.toHaveProperty("briefCheck");
+    });
+
     it("a check stored before files were read has no sources and is not marked outdated by the fingerprint", async () => {
       const s = await setup();
       const b = (await get(s.project.id, s.instructor)).body.briefCheck;

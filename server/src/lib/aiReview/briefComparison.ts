@@ -82,8 +82,14 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   const briefFiles = assignmentId && attachmentMeta.length > 0
     ? await (deps.loadBriefFiles ?? loadBriefFilesForAi)(assignmentId)
     : { usable: [], skipped: [] };
-  if (!project || (!brief && briefFiles.usable.length === 0)) return empty("SKIPPED");
+  if (!project) return empty("SKIPPED");
   const hash = briefFingerprint(brief, attachmentMeta);
+  if (!brief && briefFiles.usable.length === 0) {
+    // Nothing at all was added: stay hidden. Files were added but none could be read: no AI call, but keep
+    // the reasons so the page can say why nothing was checked.
+    if (briefFiles.skipped.length === 0) return empty("SKIPPED");
+    return empty("SKIPPED", "BRIEF_NOTHING_READ", hash, { writtenBrief: false, filesRead: 0, skipped: briefFiles.skipped });
+  }
   let briefSources: AiBriefSources = { writtenBrief: !!brief, filesRead: briefFiles.usable.length, skipped: briefFiles.skipped };
 
   const sourceType = project.assignment?.sourceType ?? "GITHUB";
@@ -177,16 +183,18 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   const input = fitBriefInput({ brief: briefText, paths, files, docs });
   for (const f of input.files) fileText.set(f.path, f.excerpt);
 
+  // The names of the attached files go in the DATA block so the AI can name one as a requirement's source.
   const ask = (attached: typeof briefFiles.usable) =>
     deps.generate({
       system: BRIEF_SYSTEM,
-      prompt: dataBlock(input),
+      prompt: dataBlock(attached.length > 0 ? { ...input, attachedFiles: attached.map((f) => f.filename) } : input),
       schema: BRIEF_SCHEMA as unknown as Record<string, unknown>,
       validate: validateBriefOutput,
       ...(attached.length > 0 ? { files: attached.map((f) => ({ mimeType: f.mimeType, data: f.data })) } : {}),
     });
 
   let raw;
+  let sentFiles = briefFiles.usable;
   try {
     raw = await ask(briefFiles.usable);
   } catch (err) {
@@ -202,6 +210,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     };
     errors.push("AI_BAD_INPUT");
     if (!brief) return empty("FAILED", "AI_BAD_INPUT", hash, briefSources);
+    sentFiles = [];
     try {
       raw = await ask([]);
     } catch (err2) {
@@ -209,7 +218,17 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     }
   }
 
-  const requirements = verifyRequirements(raw, { paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans }).map((r) => ({
+  // A requirement may point only to the written instructions that were sent and to files that were sent.
+  const verified = verifyRequirements(raw, {
+    source: { instructions: brief ? input.brief : "", files: sentFiles.map((f) => f.filename) },
+    paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans,
+  });
+  briefSources = { ...briefSources, droppedCount: verified.droppedCount };
+  // The AI answered but every requirement lacked a confirmable source: report a failure rather than hide the card.
+  if (verified.requirements.length === 0 && verified.droppedCount > 0) {
+    return empty("FAILED", "AI_BAD_OUTPUT", hash, briefSources);
+  }
+  const requirements = verified.requirements.map((r) => ({
     ...r,
     evidence: r.evidence.map((e) => (e.type === "file" && commitsByPath.has(e.ref) ? { ...e, commits: commitsByPath.get(e.ref)!.slice(0, 6) } : e)),
   }));

@@ -70,9 +70,16 @@ export interface AiBriefView {
     status: AiRequirementStatus;
     unverified: boolean;
     evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean } & AiFileLinks>;
+    // Where the requirement comes from (see AiBriefRequirement). Absent on older checks.
+    sourceQuote?: string;
+    sourceFile?: string;
+    sourcePage?: number;
   }>;
   // True when no requirement was found (all Not found). The page shows one calm line.
   nothingFound: boolean;
+  // True when files were attached but none could be read and there is no written brief, so nothing was
+  // checked (no AI call was made). `sources.skipped` says why, file by file.
+  nothingRead?: boolean;
   generatedAt: string;
   outdated: boolean;
   // What was read: the written brief and how many attached files, and which files were skipped (names only).
@@ -85,7 +92,8 @@ export interface AiBriefView {
 // The brief check is for the owning instructor and the group leader, never other members.
 // Same wording and evidence for both; the leader sees only the section heading, not the quoted words,
 // for Docs text written by anyone else. Returns null (card hidden) when there is no brief (no text and no
-// attachment), the run failed or was skipped, or the AI listed no requirements. `attachments` is metadata only.
+// attachment), the run failed or was skipped, or the AI listed no requirements. The one skipped run that is
+// shown is "nothing read": files attached, none readable, no written brief. `attachments` is metadata only.
 export function shapeBriefForViewer(
   row: { status: string; content: unknown; promptVersion: string; briefHash: string | null; reportId: number; createdAt: Date } | null,
   viewer: AiViewer,
@@ -95,13 +103,23 @@ export function shapeBriefForViewer(
 ): AiBriefView | null {
   const attachments = current.attachments ?? [];
   if (!row || viewer === "member" || (!current.brief.trim() && attachments.length === 0)) return null;
-  if (row.status === "FAILED" || row.status === "SKIPPED") return null;
+  if (row.status === "FAILED") return null;
   const content = row.content as AiBriefContent;
+  const outdated =
+    row.reportId !== current.latestReportId || row.promptVersion !== BRIEF_PROMPT_VERSION || row.briefHash !== briefFingerprint(current.brief, attachments);
+  if (row.status === "SKIPPED") {
+    const s = content.sources;
+    if (!s || s.writtenBrief || s.filesRead > 0 || s.skipped.length === 0) return null;
+    return { requirements: [], nothingFound: false, nothingRead: true, generatedAt: row.createdAt.toISOString(), outdated, sources: s };
+  }
   if (!content.requirements?.length) return null;
   const requirements = content.requirements.map((r) => ({
     text: r.text,
     status: r.status,
     unverified: !!r.unverified,
+    ...(r.sourceQuote ? { sourceQuote: r.sourceQuote } : {}),
+    ...(r.sourceFile ? { sourceFile: r.sourceFile } : {}),
+    ...(r.sourceFile && r.sourcePage ? { sourcePage: r.sourcePage } : {}),
     evidence: r.evidence.map((e) => {
       const othersWrote = e.type === "doc" && viewer === "leader" && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
       const links = e.type === "file" ? (linkFile(repo, e.ref, e.commits) ?? {}) : {};
@@ -112,7 +130,7 @@ export function shapeBriefForViewer(
     requirements,
     nothingFound: requirements.every((r) => r.status === "NOT_FOUND"),
     generatedAt: row.createdAt.toISOString(),
-    outdated: row.reportId !== current.latestReportId || row.promptVersion !== BRIEF_PROMPT_VERSION || row.briefHash !== briefFingerprint(current.brief, attachments),
+    outdated,
     ...(content.sources ? { sources: content.sources } : {}),
     ...(viewer === "instructor" ? { aiAddressedCount: content.aiAddressedCount ?? 0 } : {}),
   };

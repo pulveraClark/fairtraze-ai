@@ -87,6 +87,7 @@ describe("what is sent", () => {
 });
 
 const ctx = (over: Partial<BriefVerifyContext> = {}): BriefVerifyContext => ({
+  source: { instructions: "Build a login page.\nStudents  write a SURVEY report.", files: ["brief.pdf", "mock.png"] },
   paths: new Set(["src/Login.tsx", "README.md"]),
   fileText: new Map([["src/Login.tsx", "export function Login() {\n  return <form>Sign   in</form>;\n}"]]),
   docs: [{ heading: "Methodology", text: "We surveyed 40 students about login habits." }],
@@ -94,18 +95,22 @@ const ctx = (over: Partial<BriefVerifyContext> = {}): BriefVerifyContext => ({
   spans: [{ userId: 7, start: 11, end: 54 }],
   ...over,
 });
-const req = (r: Partial<RawRequirement>): RawRequirement => ({ text: "Has a login page", status: "FOUND", evidence: [], ...r });
+const req = (r: Partial<RawRequirement>): RawRequirement => ({
+  text: "Has a login page", status: "FOUND", evidence: [], sourceQuote: "Build a login page.", ...r,
+});
+// The requirements only; droppedCount has its own tests below.
+const verify = (raw: RawRequirement[], c: BriefVerifyContext) => verifyRequirements(raw, c).requirements;
 
 describe("verifyRequirements", () => {
   it("keeps evidence that is in what was sent (whitespace and case do not matter)", () => {
-    const [r] = verifyRequirements([req({ evidence: [{ type: "file", ref: "src/Login.tsx", quote: "<form>sign in</form>" }, { type: "doc", ref: "Methodology", quote: "We surveyed 40 students" }] })], ctx());
+    const [r] = verify([req({ evidence: [{ type: "file", ref: "src/Login.tsx", quote: "<form>sign in</form>" }, { type: "doc", ref: "Methodology", quote: "We surveyed 40 students" }] })], ctx());
     expect(r!.status).toBe("FOUND");
     expect(r!.evidence).toHaveLength(2);
     expect(r!.evidence[1]).toMatchObject({ type: "doc", authors: [7] });
   });
 
   it("drops invented paths, headings and quotes; Found with nothing left becomes Not found, flagged", () => {
-    const [r] = verifyRequirements([req({ evidence: [
+    const [r] = verify([req({ evidence: [
       { type: "file", ref: "src/Made.tsx", quote: "" },
       { type: "file", ref: "src/Login.tsx", quote: "a line that is not there" },
       { type: "doc", ref: "Conclusion", quote: "We surveyed" },
@@ -115,7 +120,7 @@ describe("verifyRequirements", () => {
   });
 
   it("Partly found keeps the evidence that does verify and drops the rest", () => {
-    const [r] = verifyRequirements([req({ status: "PARTLY_FOUND", evidence: [{ type: "file", ref: "README.md", quote: "" }, { type: "file", ref: "src/Login.tsx", quote: "nope" }] })], ctx());
+    const [r] = verify([req({ status: "PARTLY_FOUND", evidence: [{ type: "file", ref: "README.md", quote: "" }, { type: "file", ref: "src/Login.tsx", quote: "nope" }] })], ctx());
     expect(r!.status).toBe("PARTLY_FOUND");
     expect(r!.evidence.map((e) => e.ref)).toEqual(["README.md"]);
   });
@@ -126,19 +131,112 @@ describe("verifyRequirements", () => {
       req({ text: "  " }),
       ...Array.from({ length: 30 }, (_, i) => req({ text: `R${i}`, status: "NOT_FOUND" })),
     ];
-    const out = verifyRequirements(raw, ctx());
+    const out = verify(raw, ctx());
     expect(out[0]).toMatchObject({ status: "NOT_FOUND", evidence: [] });
     expect(out[0]!.unverified).toBeUndefined();
     expect(out).toHaveLength(MAX_REQUIREMENTS);
   });
 
   it("a doc quote not found in any authored piece has no authors (so it is hidden from the leader)", () => {
-    const [r] = verifyRequirements([req({ evidence: [{ type: "doc", ref: "Methodology", quote: "We surveyed" }] })], ctx({ pieces: [], spans: [] }));
+    const [r] = verify([req({ evidence: [{ type: "doc", ref: "Methodology", quote: "We surveyed" }] })], ctx({ pieces: [], spans: [] }));
     expect(r!.evidence[0]!.authors).toEqual([]);
   });
 });
 
+describe("verifyRequirements: the source of each requirement", () => {
+  it("keeps a sourceQuote that is in the written instructions that were sent (whitespace and case do not matter)", () => {
+    const out = verifyRequirements([
+      req({ sourceQuote: "  students write a survey REPORT. " }),
+      req({ text: "Has a login page", sourceQuote: "Build a login page." }),
+    ], ctx());
+    expect(out.droppedCount).toBe(0);
+    expect(out.requirements.map((r) => r.sourceQuote)).toEqual(["students write a survey REPORT.", "Build a login page."]);
+    expect(out.requirements[0]).not.toHaveProperty("sourceFile");
+  });
+
+  it("drops a requirement whose quote is not in the instructions, or is too short to prove anything, and counts it", () => {
+    const out = verifyRequirements([
+      req({ sourceQuote: "The app must support dark mode." }),
+      req({ sourceQuote: "login" }),
+      req({ text: "Kept" }),
+    ], ctx());
+    expect(out.requirements.map((r) => r.text)).toEqual(["Kept"]);
+    expect(out.droppedCount).toBe(2);
+  });
+
+  it("cuts a quote to 200 characters before checking it", () => {
+    const long = "Build a login page. " + "x".repeat(300);
+    const withLong = ctx({ source: { instructions: long, files: [] } });
+    const out = verifyRequirements([req({ sourceQuote: long })], withLong);
+    expect(out.droppedCount).toBe(0);
+    expect(out.requirements[0]!.sourceQuote).toHaveLength(200);
+  });
+
+  it("matches a sourceFile to a file that was sent (case-insensitive) and keeps the page", () => {
+    const out = verifyRequirements([req({ sourceQuote: undefined, sourceFile: "BRIEF.PDF", sourcePage: 3 })], ctx());
+    expect(out.requirements[0]).toMatchObject({ sourceFile: "brief.pdf", sourcePage: 3 });
+    expect(out.requirements[0]).not.toHaveProperty("sourceQuote");
+  });
+
+  it("drops a file source that was not sent, and ignores an impossible page", () => {
+    const out = verifyRequirements([
+      req({ sourceQuote: undefined, sourceFile: "other.pdf" }),
+      req({ sourceQuote: undefined, sourceFile: "mock.png", sourcePage: -2 }),
+    ], ctx());
+    expect(out.droppedCount).toBe(1);
+    expect(out.requirements).toHaveLength(1);
+    expect(out.requirements[0]).toMatchObject({ sourceFile: "mock.png" });
+    expect(out.requirements[0]).not.toHaveProperty("sourcePage");
+  });
+
+  it("drops a requirement with no source at all; a given source that fails is never rescued by another", () => {
+    const out = verifyRequirements([
+      req({ sourceQuote: undefined }),
+      req({ sourceQuote: "  ", sourceFile: "" }),
+      req({ sourceQuote: "Build a login page.", sourceFile: "other.pdf" }),
+      req({ sourceQuote: "Not in the brief at all.", sourceFile: "brief.pdf" }),
+    ], ctx());
+    expect(out.requirements).toHaveLength(0);
+    expect(out.droppedCount).toBe(4);
+  });
+
+  it("with no written instructions a quote can never be confirmed; only files can be a source", () => {
+    const filesOnly = ctx({ source: { instructions: "", files: ["brief.pdf"] } });
+    const out = verifyRequirements([req({ sourceQuote: "Build a login page." }), req({ sourceQuote: undefined, sourceFile: "brief.pdf" })], filesOnly);
+    expect(out.requirements.map((r) => r.sourceFile)).toEqual(["brief.pdf"]);
+    expect(out.droppedCount).toBe(1);
+  });
+
+  it("does not count blank requirements as dropped, and dropped ones do not use up the 15 slots", () => {
+    const raw = [
+      req({ text: "  " }),
+      ...Array.from({ length: 5 }, (_, i) => req({ text: `bad${i}`, sourceQuote: "nothing like it in the text" })),
+      ...Array.from({ length: 20 }, (_, i) => req({ text: `ok${i}`, status: "NOT_FOUND" })),
+    ];
+    const out = verifyRequirements(raw, ctx());
+    expect(out.droppedCount).toBe(5);
+    expect(out.requirements).toHaveLength(MAX_REQUIREMENTS);
+    expect(out.requirements[0]!.text).toBe("ok0");
+  });
+
+  it("an unverified Found answer still carries its confirmed source", () => {
+    const [r] = verify([req({ evidence: [{ type: "file", ref: "src/Made.tsx", quote: "" }] })], ctx());
+    expect(r).toMatchObject({ status: "NOT_FOUND", unverified: true, sourceQuote: "Build a login page." });
+  });
+});
+
 describe("validateBriefOutput", () => {
+  it("reads the source fields when present and treats wrongly typed ones as absent", () => {
+    const out = validateBriefOutput({ requirements: [
+      { text: "a", status: "FOUND", evidence: [], sourceQuote: "q", sourceFile: "f.pdf", sourcePage: 2 },
+      { text: "b", status: "FOUND", evidence: [], sourceQuote: 5, sourceFile: null, sourcePage: "2" },
+    ] })!;
+    expect(out[0]).toMatchObject({ sourceQuote: "q", sourceFile: "f.pdf", sourcePage: 2 });
+    expect(out[1]).not.toHaveProperty("sourceQuote");
+    expect(out[1]).not.toHaveProperty("sourceFile");
+    expect(out[1]).not.toHaveProperty("sourcePage");
+  });
+
   it("accepts the expected shape and rejects anything else", () => {
     expect(validateBriefOutput({ requirements: [{ text: "x", status: "FOUND", evidence: [{ type: "file", ref: "a", quote: "" }] }] })).toHaveLength(1);
     expect(validateBriefOutput({ requirements: [{ text: "x", status: "GOOD", evidence: [] }] })).toBeNull();

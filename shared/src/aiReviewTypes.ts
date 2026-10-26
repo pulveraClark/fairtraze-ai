@@ -73,6 +73,12 @@ export interface AiBriefRequirement {
   evidence: AiBriefEvidence[];
   // True when the AI said Found/Partly but none of its quotes could be verified.
   unverified?: boolean;
+  // Where the requirement comes from, confirmed in code: the sentence of the written brief (<= 200
+  // characters, found in the text that was sent), and/or the attached file's name (and page, when given).
+  // Absent on checks stored before sources were required.
+  sourceQuote?: string;
+  sourceFile?: string;
+  sourcePage?: number;
 }
 
 export type AiSkipReason = "TOO_LARGE" | "TOO_MANY_PAGES" | "UNSUPPORTED" | "TOO_MANY_FILES" | "TOTAL_TOO_LARGE" | "UNREADABLE";
@@ -82,6 +88,8 @@ export interface AiBriefSources {
   writtenBrief: boolean;
   filesRead: number;
   skipped: Array<{ filename: string; reason: AiSkipReason }>;
+  // Requirements the AI returned that were left out because their source could not be confirmed.
+  droppedCount?: number;
 }
 
 export interface AiBriefContent {

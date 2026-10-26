@@ -55,21 +55,26 @@ async function attach(assignmentId: number, data: Buffer, filename: string, orde
 }
 const callsOf = (generate: BriefDeps["generate"]) =>
   (generate as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as { prompt: string; files?: Array<{ mimeType: string; data: Buffer }> });
-const none = [{ text: "R", status: "NOT_FOUND", evidence: [] }];
+const QUOTE = "The app has a login page.";
+// One requirement taken from the written brief, and one taken from the attached brief.pdf.
+const none = [{ text: "R", status: "NOT_FOUND", evidence: [], sourceQuote: QUOTE }];
+const noneFromFile = [{ text: "R", status: "NOT_FOUND", evidence: [], sourceFile: "brief.pdf", sourcePage: 2 }];
 
 describe("runBriefComparison with attached files", () => {
   it("runs on attachments alone (empty written brief), sends them as files, and records what was read", async () => {
     const { project, ana } = await setup({ description: "  " });
     await attach(project.assignmentId!, pdfBytes(), "brief.pdf", 0);
     await attach(project.assignmentId!, pngBytes(), "mock.png", 1);
-    const generate = answer(none);
+    const generate = answer(noneFromFile);
     const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
 
     expect(r.status).toBe("OK");
-    expect(r.content.sources).toEqual({ writtenBrief: false, filesRead: 2, skipped: [] });
+    expect(r.content.sources).toEqual({ writtenBrief: false, filesRead: 2, skipped: [], droppedCount: 0 });
+    expect(r.content.requirements[0]).toMatchObject({ sourceFile: "brief.pdf", sourcePage: 2 });
     const [call] = callsOf(generate);
     expect(call!.files!.map((f) => f.mimeType)).toEqual(["application/pdf", "image/png"]);
     expect(call!.prompt).toContain("no written brief");
+    expect(call!.prompt).toContain('"attachedFiles":["brief.pdf","mock.png"]');
   });
 
   it("with a written brief and files, sends both and says so", async () => {
@@ -77,16 +82,34 @@ describe("runBriefComparison with attached files", () => {
     await attach(project.assignmentId!, pdfBytes(), "brief.pdf");
     const generate = answer(none);
     const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
-    expect(r.content.sources).toEqual({ writtenBrief: true, filesRead: 1, skipped: [] });
+    expect(r.content.sources).toMatchObject({ writtenBrief: true, filesRead: 1, skipped: [] });
     expect(callsOf(generate)[0]!.prompt).toContain("The app has a login page.");
     expect(callsOf(generate)[0]!.files).toHaveLength(1);
   });
 
-  it("stays SKIPPED, with no AI call, when there is no text and no usable file", async () => {
-    const { project, ana } = await setup({ description: "" });
+  it("no text and no usable file: SKIPPED with no AI call, but the skip reasons are kept so the page can say why", async () => {
+    const { project, ana, report } = await setup({ description: "" });
     await attach(project.assignmentId!, Buffer.from("just some text, not a PDF or image"), "notes.txt");
     const generate = answer(none);
-    expect((await runBriefComparison(project.id, deps({ generate, anaId: ana.id }))).status).toBe("SKIPPED");
+    const d = deps({ generate, anaId: ana.id });
+    const r = await runBriefComparison(project.id, d);
+    expect(r).toMatchObject({ status: "SKIPPED", errorCode: "BRIEF_NOTHING_READ" });
+    expect(r.content.requirements).toEqual([]);
+    expect(r.content.sources).toEqual({ writtenBrief: false, filesRead: 0, skipped: [{ filename: "notes.txt", reason: "UNSUPPORTED" }] });
+    expect(generate).not.toHaveBeenCalled();
+
+    await generateBriefComparison(project.id, d);
+    const row = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } });
+    expect(row.status).toBe("SKIPPED");
+    expect(row.briefHash).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it("no text and no attachments at all stays plainly SKIPPED: no sources, no hash, no AI call", async () => {
+    const { project, ana } = await setup({ description: "" });
+    const generate = answer(none);
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    expect(r).toMatchObject({ status: "SKIPPED", errorCode: null, briefHash: null });
+    expect(r.content).not.toHaveProperty("sources");
     expect(generate).not.toHaveBeenCalled();
   });
 
@@ -95,7 +118,7 @@ describe("runBriefComparison with attached files", () => {
     for (let i = 0; i < 4; i++) await attach(project.assignmentId!, pngBytes(), `shot${i}.png`, i);
     await attach(project.assignmentId!, Buffer.from("not an allowed type"), "notes.txt", 9);
     const r = await runBriefComparison(project.id, deps({ generate: answer(none), anaId: ana.id }));
-    expect(r.content.sources).toEqual({
+    expect(r.content.sources).toMatchObject({
       writtenBrief: true, filesRead: 3,
       skipped: [{ filename: "shot3.png", reason: "TOO_MANY_FILES" }, { filename: "notes.txt", reason: "UNSUPPORTED" }],
     });
@@ -114,7 +137,7 @@ describe("runBriefComparison with attached files", () => {
     expect(calls[0]!.files).toHaveLength(2);
     expect(calls[1]!.files).toBeUndefined();
     expect(r.status).toBe("PARTIAL");
-    expect(r.content.sources).toEqual({
+    expect(r.content.sources).toMatchObject({
       writtenBrief: true, filesRead: 0,
       skipped: [{ filename: "brief.pdf", reason: "UNREADABLE" }, { filename: "mock.png", reason: "UNREADABLE" }],
     });
@@ -128,6 +151,49 @@ describe("runBriefComparison with attached files", () => {
     expect(r).toMatchObject({ status: "FAILED", errorCode: "AI_BAD_INPUT" });
     expect(r.content.sources).toMatchObject({ filesRead: 0, skipped: [{ filename: "brief.pdf", reason: "UNREADABLE" }] });
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps requirements whose source is confirmed, drops the rest, and counts them in sources.droppedCount", async () => {
+    const { project, ana } = await setup();
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf");
+    const generate = answer([
+      { text: "A", status: "NOT_FOUND", evidence: [], sourceQuote: "students write a SURVEY report." },
+      { text: "B", status: "NOT_FOUND", evidence: [], sourceFile: "brief.pdf", sourcePage: 4 },
+      { text: "C", status: "NOT_FOUND", evidence: [], sourceQuote: "The app must support dark mode." },
+      { text: "D", status: "NOT_FOUND", evidence: [], sourceFile: "other.pdf" },
+      { text: "E", status: "NOT_FOUND", evidence: [] },
+    ]);
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    expect(r.status).toBe("OK");
+    expect(r.content.requirements.map((q) => q.text)).toEqual(["A", "B"]);
+    expect(r.content.requirements[0]).toMatchObject({ sourceQuote: "students write a SURVEY report." });
+    expect(r.content.requirements[1]).toMatchObject({ sourceFile: "brief.pdf", sourcePage: 4 });
+    expect(r.content.sources).toMatchObject({ droppedCount: 3 });
+  });
+
+  it("when every requirement lacks a confirmable source the run FAILS (instead of hiding the card), with the count", async () => {
+    const { project, ana } = await setup();
+    const r = await runBriefComparison(project.id, deps({
+      generate: answer([{ text: "A", status: "NOT_FOUND", evidence: [] }, { text: "B", status: "NOT_FOUND", evidence: [], sourceQuote: "made up sentence here" }]),
+      anaId: ana.id,
+    }));
+    expect(r).toMatchObject({ status: "FAILED", errorCode: "AI_BAD_OUTPUT" });
+    expect(r.content.requirements).toEqual([]);
+    expect(r.content.sources).toMatchObject({ droppedCount: 2 });
+  });
+
+  it("after the retry without files, a requirement that names a file is dropped (no file was sent)", async () => {
+    const { project, ana } = await setup();
+    await attach(project.assignmentId!, pdfBytes(), "brief.pdf");
+    const generate = vi.fn()
+      .mockRejectedValueOnce(new AiReviewError("AI_BAD_INPUT"))
+      .mockImplementationOnce(async (req: { validate: (v: unknown) => unknown }) =>
+        req.validate({ requirements: [...noneFromFile, ...none] })) as unknown as BriefDeps["generate"];
+    const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id }));
+    expect(r.content.requirements).toHaveLength(1);
+    expect(r.content.requirements[0]).toMatchObject({ sourceQuote: QUOTE });
+    expect(r.content.sources).toMatchObject({ droppedCount: 1, filesRead: 0 });
+    expect(callsOf(generate)[1]!.prompt).not.toContain("attachedFiles");
   });
 
   it("reads only this group's assignment's files, and stores names and counts, never file bytes", async () => {
@@ -171,8 +237,8 @@ describe("runBriefComparison", () => {
       data: { projectId: project.id, sha: "abc", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", authorLogin: "anacruz", summary: "Added login.", files: [{ path: "src/Login.tsx", added: 20, removed: 0 }] },
     });
     const generate = answer([
-      { text: "The app has a login page.", status: "FOUND", evidence: [{ type: "file", ref: "src/Login.tsx", quote: "export function Login()" }] },
-      { text: "Students write a survey report.", status: "PARTLY_FOUND", evidence: [{ type: "doc", ref: "Methodology", quote: "We surveyed 40 students" }, { type: "doc", ref: "Invented", quote: "x" }] },
+      { text: "The app has a login page.", status: "FOUND", sourceQuote: QUOTE, evidence: [{ type: "file", ref: "src/Login.tsx", quote: "export function Login()" }] },
+      { text: "Students write a survey report.", status: "PARTLY_FOUND", sourceQuote: "Students write a survey report.", evidence: [{ type: "doc", ref: "Methodology", quote: "We surveyed 40 students" }, { type: "doc", ref: "Invented", quote: "x" }] },
     ]);
     const d = deps({ generate, anaId: ana.id });
     const r = await runBriefComparison(project.id, d);
@@ -214,7 +280,7 @@ describe("runBriefComparison", () => {
 
   it("still runs on the Docs when GitHub cannot be read (PARTIAL), and says Not found rather than inventing evidence", async () => {
     const { project, ana } = await setup();
-    const generate = answer([{ text: "The app has a login page.", status: "FOUND", evidence: [{ type: "file", ref: "src/Login.tsx", quote: "" }] }]);
+    const generate = answer([{ text: "The app has a login page.", status: "FOUND", sourceQuote: QUOTE, evidence: [{ type: "file", ref: "src/Login.tsx", quote: "" }] }]);
     const r = await runBriefComparison(project.id, deps({ generate, anaId: ana.id, fetchTree: vi.fn().mockRejectedValue(new Error("github")) }));
     expect(r.status).toBe("PARTIAL");
     expect(r.content.requirements[0]).toMatchObject({ status: "NOT_FOUND", unverified: true });
@@ -222,7 +288,7 @@ describe("runBriefComparison", () => {
 
   it("stores one row per report, replaced on regenerate, with the brief hash, and never touches Report.content", async () => {
     const { project, ana, report } = await setup();
-    const d = () => deps({ generate: answer([{ text: "R", status: "NOT_FOUND", evidence: [] }]), anaId: ana.id });
+    const d = () => deps({ generate: answer(none), anaId: ana.id });
     await generateBriefComparison(project.id, d());
     await generateBriefComparison(project.id, d());
     const rows = await prisma.aiReportReview.findMany({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } });

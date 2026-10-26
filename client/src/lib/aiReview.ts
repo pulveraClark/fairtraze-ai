@@ -1,4 +1,4 @@
-import type { AiMemberSummary, AiAddressedNote, AiFileLinks } from "@shared/aiReviewTypes";
+import type { AiMemberSummary, AiAddressedNote, AiBriefSources, AiFileLinks } from "@shared/aiReviewTypes";
 
 // Mirrors the response of GET /api/groups/:id/ai-review (server/src/routes/aiReview.ts).
 // Display only: nothing here is a score, and nothing here decides who may see what (the server does).
@@ -15,10 +15,21 @@ export interface AiBriefCheck {
     status: "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
     unverified: boolean;
     evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean } & AiFileLinks>;
+    // Where the requirement comes from: the sentence of the written brief, or the attached file's name
+    // (and page). Absent on checks stored before sources were required.
+    sourceQuote?: string;
+    sourceFile?: string;
+    sourcePage?: number;
   }>;
   nothingFound: boolean;
+  // Files were attached but none could be read and there is no written brief, so nothing was checked;
+  // `sources.skipped` says why. `requirements` is empty then.
+  nothingRead?: boolean;
   generatedAt: string;
   outdated: boolean;
+  // What was read (written brief, number of files, skipped files with reasons, and `droppedCount`: how many
+  // returned requirements were left out because their source could not be confirmed). Absent on older checks.
+  sources?: AiBriefSources;
   // Instructor only.
   aiAddressedCount?: number;
 }

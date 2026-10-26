@@ -84,6 +84,8 @@ export interface BriefInput {
   paths: string[];
   files: Array<{ path: string; excerpt: string }>;
   docs: DocSection[];
+  // Names of the attached files sent with the request, in order (so the AI can name a file as a source).
+  attachedFiles?: string[];
 }
 
 export function inputSize(i: BriefInput): number {
@@ -107,7 +109,14 @@ export function fitBriefInput(input: BriefInput, cap = BRIEF_INPUT_MAX_CHARS): B
   return cur;
 }
 
+export const MAX_SOURCE_QUOTE_CHARS = 200;
+// A shorter quote would match almost anything, so it proves nothing.
+export const MIN_SOURCE_QUOTE_CHARS = 8;
+
 export interface BriefVerifyContext {
+  // What the brief's requirements may point to: the written instructions text that was sent ("" when there
+  // was none) and the names of the attached files that were actually sent.
+  source: { instructions: string; files: string[] };
   paths: Set<string>;
   fileText: Map<string, string>;
   docs: DocSection[];
@@ -122,15 +131,55 @@ function authorsOf(quoteNorm: string, heading: string, ctx: BriefVerifyContext):
   return [...new Set(ctx.spans.filter((s) => s.start < piece.end && s.end > piece.start).map((s) => s.userId))];
 }
 
+type RequirementSource = Pick<AiBriefRequirement, "sourceQuote" | "sourceFile" | "sourcePage">;
+
 /**
- * Keeps only evidence that can be found in what was actually sent. A Found / Partly found answer left
- * with no evidence becomes Not found, flagged `unverified`. Requirements are capped and trimmed.
+ * The requirement's source, if it can be confirmed: a sourceQuote that is in the written instructions that
+ * were sent (whitespace and case do not matter) and/or a sourceFile that is one of the files actually sent.
+ * Null when there is no source, or any source given cannot be confirmed.
  */
-export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContext): AiBriefRequirement[] {
-  return raw
-    .filter((r) => r.text !== "")
+function verifySource(r: RawRequirement, src: BriefVerifyContext["source"]): RequirementSource | null {
+  const quote = (r.sourceQuote ?? "").trim().slice(0, MAX_SOURCE_QUOTE_CHARS);
+  const file = (r.sourceFile ?? "").trim();
+  if (!quote && !file) return null;
+  const out: RequirementSource = {};
+  if (quote) {
+    const q = normalize(quote);
+    if (q.length < MIN_SOURCE_QUOTE_CHARS || !normalize(src.instructions).includes(q)) return null;
+    out.sourceQuote = quote;
+  }
+  if (file) {
+    const sent = src.files.find((f) => f.toLowerCase() === file.toLowerCase());
+    if (!sent) return null;
+    out.sourceFile = sent;
+    if (Number.isInteger(r.sourcePage) && r.sourcePage! >= 1 && r.sourcePage! <= 9999) out.sourcePage = r.sourcePage;
+  }
+  return out;
+}
+
+export interface VerifiedBrief {
+  requirements: AiBriefRequirement[];
+  // Requirements the AI returned whose source could not be confirmed (or had none); they are not shown.
+  droppedCount: number;
+}
+
+/**
+ * Keeps only requirements whose source can be confirmed, and only evidence that can be found in what was
+ * actually sent. A Found / Partly found answer left with no evidence becomes Not found, flagged
+ * `unverified`. Requirements are capped and trimmed.
+ */
+export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContext): VerifiedBrief {
+  let droppedCount = 0;
+  const sourced: Array<{ r: RawRequirement; source: RequirementSource }> = [];
+  for (const r of raw) {
+    if (r.text.trim() === "") continue;
+    const source = verifySource(r, ctx.source);
+    if (source) sourced.push({ r, source });
+    else droppedCount++;
+  }
+  const requirements = sourced
     .slice(0, MAX_REQUIREMENTS)
-    .map((r) => {
+    .map(({ r, source }) => {
       const evidence: AiBriefEvidence[] = [];
       if (r.status !== "NOT_FOUND") {
         for (const e of r.evidence.slice(0, 3)) {
@@ -150,8 +199,9 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
       }
       const found = r.status !== "NOT_FOUND";
       if (found && evidence.length === 0) {
-        return { text: r.text.slice(0, 200), status: "NOT_FOUND" as const, evidence: [], unverified: true };
+        return { text: r.text.slice(0, 200), status: "NOT_FOUND" as const, evidence: [], unverified: true, ...source };
       }
-      return { text: r.text.slice(0, 200), status: r.status, evidence };
+      return { text: r.text.slice(0, 200), status: r.status, evidence, ...source };
     });
+  return { requirements, droppedCount };
 }
