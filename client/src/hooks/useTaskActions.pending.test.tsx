@@ -7,6 +7,7 @@ import * as AuthContextModule from "../context/AuthContext";
 import { ToastProvider } from "../components/Toast";
 import { useTaskActions } from "./useTaskActions";
 import { useTaskBoardQuery } from "./useGroupQueries";
+import { usePendingMoveIds } from "../lib/tasks/pendingMoves";
 import { LEADER_PERMS, mkBoard, mkTask, resetFixtureIds } from "../../test/taskFixtures";
 
 vi.mock("../context/AuthContext", async () => {
@@ -54,7 +55,7 @@ function setup(board: BoardResponse) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}><ToastProvider>{children}</ToastProvider></QueryClientProvider>
   );
-  const hook = renderHook(() => ({ query: useTaskBoardQuery(7), actions: useTaskActions(7) }), { wrapper });
+  const hook = renderHook(() => ({ query: useTaskBoardQuery(7), actions: useTaskActions(7), saving: usePendingMoveIds(1, 7) }), { wrapper });
   return { server, client, ...hook };
 }
 
@@ -124,5 +125,33 @@ describe("a pending move is not overwritten by a poll", () => {
       await second;
     });
     expect(statusOf(result, 2)).toBe("IN_PROGRESS");
+  });
+});
+
+describe("the saving lock follows the pending move", () => {
+  it("locks only the card being saved, and unlocks it when the save succeeds", async () => {
+    const a = mkTask({ id: 1, status: "TODO", permissions: LEADER_PERMS });
+    const b = mkTask({ id: 2, status: "TODO", permissions: LEADER_PERMS });
+    const { server, result } = setup(mkBoard({}, [a, b]));
+    await waitFor(() => expect(result.current.query.data).toBeDefined());
+    expect(result.current.saving).toEqual([]);
+
+    let moving!: Promise<BoardTask | null>;
+    act(() => { moving = result.current.actions.moveTask(a, { status: "IN_PROGRESS", afterId: null, beforeId: null }); });
+    await waitFor(() => expect(result.current.saving).toEqual([1]));
+
+    await act(async () => { server.posts[0].resolve({ status: 200, body: { ...a, status: "IN_PROGRESS", version: 2 } }); await moving; });
+    expect(result.current.saving).toEqual([]);
+  });
+
+  it("unlocks when the save fails", async () => {
+    const a = mkTask({ id: 1, status: "TODO", permissions: LEADER_PERMS });
+    const { server, result } = setup(mkBoard({}, [a]));
+    await waitFor(() => expect(result.current.query.data).toBeDefined());
+    let moving!: Promise<BoardTask | null>;
+    act(() => { moving = result.current.actions.moveTask(a, { status: "DONE", afterId: null, beforeId: null }); });
+    await waitFor(() => expect(result.current.saving).toEqual([1]));
+    await act(async () => { server.posts[0].resolve({ status: 403, body: { error: "No." } }); await moving; });
+    expect(result.current.saving).toEqual([]);
   });
 });

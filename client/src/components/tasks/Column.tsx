@@ -22,13 +22,16 @@ interface Props {
   unfilteredCount: number;
   /** Present only where the viewer may create a task in this column. */
   onQuickAdd?: (title: string) => Promise<string | void>;
+  /** Tasks whose move is still saving. */
+  savingIds?: ReadonlySet<number>;
+  onSavingBlocked?: () => void;
 }
 
 export function columnId(status: TaskStatus): string {
   return `col:${status}`;
 }
 
-export function Column({ status, ids, tasksById, board, today, onOpen, dropState, showDropHint, unfilteredCount, onQuickAdd }: Props) {
+export function Column({ status, ids, tasksById, board, today, onOpen, dropState, showDropHint, unfilteredCount, onQuickAdd, savingIds, onSavingBlocked }: Props) {
   const label = TASK_STATUS_LABELS[status];
   const { setNodeRef } = useDroppable({ id: columnId(status), data: { type: "column", status } });
 
@@ -58,7 +61,7 @@ export function Column({ status, ids, tasksById, board, today, onOpen, dropState
         <ul ref={setNodeRef} className="flex min-h-12 flex-1 flex-col gap-2" aria-label={`${label} tasks`}>
           {ids.map((id) => {
             const task = tasksById.get(id);
-            return task ? <SortableTaskCard key={id} task={task} board={board} today={today} onOpen={onOpen} /> : null;
+            return task ? <SortableTaskCard key={id} task={task} board={board} today={today} onOpen={onOpen} saving={savingIds?.has(id) ?? false} onSavingBlocked={onSavingBlocked} /> : null;
           })}
         </ul>
       </SortableContext>

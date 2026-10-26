@@ -18,10 +18,12 @@ interface ViewProps {
   /** The grip (can move), a lock (cannot) or nothing (view-only viewer). */
   handle?: ReactNode;
   overlay?: boolean;
+  /** This card's move is still being saved. */
+  saving?: boolean;
 }
 
 /** The visual card. Shared by the sortable list item and the drag overlay. */
-export function TaskCardView({ task, board, today, onOpen, handle, overlay }: ViewProps) {
+export function TaskCardView({ task, board, today, onOpen, handle, overlay, saving = false }: ViewProps) {
   const assignee = board.members.find((m) => m.userId === task.assignedToUserId) ?? null;
   const milestone = board.milestones.find((m) => m.id === task.milestoneId) ?? null;
   const labels = task.labelIds
@@ -104,6 +106,21 @@ export function TaskCardView({ task, board, today, onOpen, handle, overlay }: Vi
           )}
         </span>
       </div>
+
+      {/* The live region stays mounted so screen readers announce "Saving…" when it fills. */}
+      {!overlay && (
+        <span aria-live="polite" className={saving ? "mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-800" : "sr-only"}>
+          {saving && (
+            <>
+              <svg className="h-3.5 w-3.5 shrink-0 text-indigo-700 motion-safe:animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Saving…
+            </>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -113,19 +130,37 @@ interface SortableProps {
   board: BoardResponse;
   today: string;
   onOpen: (taskId: number) => void;
+  /** This card's move is still saving: dragging is off for this card only. */
+  saving?: boolean;
+  /** Called when the user tries to pick up a saving card. */
+  onSavingBlocked?: () => void;
 }
 
 /** A card inside a column. The grip is the only drag handle (so the title stays clickable and touch scroll works). */
-export function SortableTaskCard({ task, board, today, onOpen }: SortableProps) {
+export function SortableTaskCard({ task, board, today, onOpen, saving = false, onSavingBlocked }: SortableProps) {
   const canMove = task.permissions.move;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "task" },
-    disabled: !canMove,
+    disabled: !canMove || saving,
   });
 
   let handle: ReactNode = null;
-  if (canMove) {
+  if (canMove && saving) {
+    // No drag listeners while saving; any attempt to pick the card up gets a calm explanation instead.
+    const blocked = () => onSavingBlocked?.();
+    handle = (
+      <button
+        type="button"
+        onPointerDown={blocked}
+        onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); blocked(); } }}
+        aria-label={`Move ${task.key}. Still saving, one moment.`}
+        className={`-ml-1.5 -mt-1 flex h-11 w-9 shrink-0 cursor-progress touch-none items-center justify-center rounded text-slate-600 ${FOCUS_LIGHT}`}
+      >
+        <GripIcon className="h-4 w-4" />
+      </button>
+    );
+  } else if (canMove) {
     handle = (
       <button
         type="button"
@@ -156,10 +191,10 @@ export function SortableTaskCard({ task, board, today, onOpen }: SortableProps) 
   return (
     <li
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : saving ? 0.7 : 1 }}
       className="list-none"
     >
-      <TaskCardView task={task} board={board} today={today} onOpen={onOpen} handle={handle} />
+      <TaskCardView task={task} board={board} today={today} onOpen={onOpen} handle={handle} saving={saving} />
     </li>
   );
 }

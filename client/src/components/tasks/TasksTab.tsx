@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TASK_STATUSES, type BoardTask, type BulkAction, type BulkSkipped, type TaskStatus } from "@shared/taskTypes";
 import { useTaskBoardQuery } from "../../hooks/useGroupQueries";
 import { useTaskActions } from "../../hooks/useTaskActions";
+import { useSavingBlockedToast } from "../../hooks/useSavingBlockedToast";
+import { usePendingMoveIds } from "../../lib/tasks/pendingMoves";
 import { useTaskShortcuts } from "../../hooks/useTaskShortcuts";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../Toast";
@@ -49,6 +51,8 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
   const { showToast } = useToast();
   const query = useTaskBoardQuery(projectId);
   const actions = useTaskActions(projectId);
+  const savingIds = usePendingMoveIds(user?.id ?? null, projectId);
+  const onSavingBlocked = useSavingBlockedToast();
   // Remembered per user per group (search text excluded: it starts empty each visit).
   const [filters, setFilters] = useState<TaskFilters>(() => readStoredFilters(user?.id ?? null, projectId));
   const [openId, setOpenId] = useState<number | null>(initialTaskId);
@@ -244,6 +248,8 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
           onOpen={open}
           onMove={onMove}
           onDenied={actions.showError}
+          savingIds={savingIds}
+          onSavingBlocked={onSavingBlocked}
           onQuickAdd={board.viewer.canCreate ? quickAdd : undefined}
         />
       )}

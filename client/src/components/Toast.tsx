@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 
 export interface ToastOptions {
   message: string;
-  /** "error" toasts use role="alert" and stay a little longer. Default "success". */
-  tone?: "success" | "error";
+  /** "error" toasts use role="alert" and stay a little longer. "info" is neutral (no check, no error style). Default "success". */
+  tone?: "success" | "error" | "info";
   /** An action button (e.g. Undo). A toast with an action stays longer so it can be reached. */
   actionLabel?: string;
   onAction?: () => void;
@@ -57,6 +57,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   useEffect(() => clearTimer, [clearTimer]);
 
   const isError = toast?.tone === "error";
+  const isInfo = toast?.tone === "info";
 
   return (
     <ToastContext.Provider value={{ showSuccessToast, showToast }}>
@@ -71,14 +72,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             onFocus={clearTimer}
             onBlur={() => startTimer(durationRef.current)}
             className={`pointer-events-auto flex items-center gap-2.5 bg-white border shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 animate-toast-in ${
-              isError ? "border-red-300" : "border-emerald-200"
+              isError ? "border-red-300" : isInfo ? "border-slate-300" : "border-emerald-200"
             }`}
           >
             <span
               aria-hidden="true"
-              className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${isError ? "bg-red-100" : "bg-emerald-100"}`}
+              className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${isError ? "bg-red-100" : isInfo ? "bg-slate-100" : "bg-emerald-100"}`}
             >
-              {isError ? (
+              {isInfo ? (
+                <svg className="w-3 h-3 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v5m0-8.5v.01" />
+                </svg>
+              ) : isError ? (
                 <svg className="w-3 h-3 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v5m0 3.5v.01" />
                 </svg>
