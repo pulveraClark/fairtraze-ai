@@ -17,6 +17,8 @@ import { usePrefersReducedMotion } from "../lib/usePrefersReducedMotion";
 import { Narrative } from "../components/Narrative";
 import { MemberWorkSummary } from "../components/report/AiWorkSummary";
 import { useAiReview } from "../hooks/useAiReview";
+import { useGenerateAiReport } from "../hooks/useGenerateAiReport";
+import { workSummaryState } from "../lib/aiReview";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
@@ -60,6 +62,9 @@ export function ProjectDetailPage({ projectId }: Props) {
   const [stored, setStored]               = useState<StoredReportResponse | null>(null);
   const [narrativeText, setNarrativeText] = useState<string | null>(null);
   const [narrativeOutdated, setNarrativeOutdated] = useState(false);
+  const onNarrativeGenerated = useCallback((text: string) => { setNarrativeText(text); setNarrativeOutdated(false); }, []);
+  // One generate action shared by the AI report card and the member details window.
+  const aiGenerator = useGenerateAiReport(projectId, aiReview, onNarrativeGenerated);
   const [fetchError, setFetchError]       = useState<string | null>(null);
   const [notFound, setNotFound]           = useState(false);
   const [loading, setLoading]             = useState(true);
@@ -745,31 +750,33 @@ export function ProjectDetailPage({ projectId }: Props) {
               />
             </section>
 
+            {/* AI report: directly under the summary tiles, above the member list */}
+            {/* keyed to projectId so it always reflects the current group */}
+            <Narrative
+              key={projectId}
+              narrative={narrativeText}
+              outdated={narrativeOutdated}
+              projectId={projectId}
+              review={aiReview}
+              generator={aiGenerator}
+              onNarrativeGenerated={onNarrativeGenerated}
+            />
+
             {/* Member contributions — replaces the old bar chart and table */}
             <MemberContributionList
               members={stored.report.members}
               memberRoles={stored.memberRoles}
               disputedMembers={disputedMembers}
               resolvedFlagOutcomes={resolvedFlagOutcomes}
+              aiSummaryState={aiReview.data?.canGenerate ? workSummaryState(aiReview.data) : null}
               onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
             />
 
-            {/* AI report + Imbalance trend (equal height) */}
-            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
-              {/* keyed to projectId so it always reflects the current group */}
-              <div className={reportHistory.length >= 2 ? "h-full min-w-0" : "h-full min-w-0 lg:col-span-2"}>
-                <Narrative
-                  key={projectId}
-                  narrative={narrativeText}
-                  outdated={narrativeOutdated}
-                  projectId={projectId}
-                  review={aiReview}
-                  onNarrativeGenerated={(text) => { setNarrativeText(text); setNarrativeOutdated(false); }}
-                />
-              </div>
-              {/* Imbalance trend — omitted until there are at least 2 runs, since a single point isn't a trend. */}
+            {/* Imbalance trend */}
+            <div>
+              {/* Omitted until there are at least 2 runs, since a single point isn't a trend. */}
               {reportHistory.length >= 2 && (
-                <section aria-labelledby="trend-title" className={`${CARD} h-full min-w-0 overflow-hidden`}>
+                <section aria-labelledby="trend-title" className={`${CARD} min-w-0 overflow-hidden`}>
                   <button
                     type="button"
                     onClick={() => setTrendExpanded((v) => !v)}
@@ -873,6 +880,8 @@ export function ProjectDetailPage({ projectId }: Props) {
           workSummary={selectedMember ? (
             <MemberWorkSummary
               review={aiReview.data}
+              onGenerate={() => { void aiGenerator.generate(!!narrativeText); }}
+              generating={aiGenerator.generating}
               member={{ userId: (selectedMember as { userId?: number }).userId, githubUsername: (selectedMember as { githubUsername?: string }).githubUsername }}
             />
           ) : undefined}

@@ -5,6 +5,7 @@ import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
 import { Avatar } from "../Avatar";
 import { InfoTip } from "../ui/InfoTip";
 import { TIPS, helpLink } from "../../lib/helpText";
+import { WORK_SUMMARY_CHIP_TEXT, type WorkSummaryState } from "../../lib/aiReview";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -14,6 +15,8 @@ interface Props {
   disputedMembers?: Set<string>;
   resolvedFlagOutcomes?: Map<string, Map<string, Outcome>>;
   onOpen: (member: AnyScoredMember, opener: HTMLElement) => void;
+  /** Instructor only: where the AI work summaries stand. Omit (or null) to show no chip. A text chip, not a button. */
+  aiSummaryState?: WorkSummaryState | null;
 }
 
 /** Role chips: leader + functional roles, text only (context, never a score input). */
@@ -34,7 +37,7 @@ export function RoleChips({ info }: { info: MemberRoleInfo | undefined }) {
   );
 }
 
-export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen }: Props) {
+export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState }: Props) {
   const n = members.length;
   const equalPct = n > 0 ? 100 / n : 0;
   // One shared bar scale so rows are comparable; always wide enough to show the equal-share marker.
@@ -49,6 +52,11 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
           Select a member for details.
           <InfoTip label="About the equal-share marker" helpHref={helpLink("shares")}>{TIPS.equalShareList(equalPct)}</InfoTip>
         </p>
+        {aiSummaryState && (
+          <p className="mt-2 inline-flex max-w-full flex-wrap items-center rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs font-medium leading-normal text-slate-800">
+            {WORK_SUMMARY_CHIP_TEXT[aiSummaryState]}
+          </p>
+        )}
       </div>
       <ul className="divide-y divide-slate-200">
         {members.map((m) => {

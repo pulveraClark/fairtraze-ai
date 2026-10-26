@@ -1,14 +1,12 @@
-import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import type { NarrativeResponse } from "@shared/types";
-import { useAuth } from "../context/AuthContext";
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui/styles";
+import { BUTTON_SECONDARY, CARD } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
-import { aiAddressedLine, briefStatusLine, reviewStatusLine } from "../lib/aiReview";
+import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { BriefCheckCard } from "./BriefCheckCard";
 import type { UseAiReview } from "../hooks/useAiReview";
+import { useGenerateAiReport, type AiReportGenerator } from "../hooks/useGenerateAiReport";
 
 interface Props {
   narrative: string | null;
@@ -18,48 +16,29 @@ interface Props {
   onNarrativeGenerated: (text: string) => void;
   /** AI work summaries for this group. When on, the Generate button also writes them. */
   review?: UseAiReview;
+  /** Shared with the member details window so both buttons are the same action. Built here when absent. */
+  generator?: AiReportGenerator;
 }
 
-export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review }: Props) {
-  const { token } = useAuth();
-  const [generating, setGenerating] = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator }: Props) {
+  const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
+  const { reviewOn, generating, error, generate } = generator ?? own;
 
   // One button for both: the explanation and, when AI review is on for the class, the work summaries.
-  const reviewOn = !!review?.data?.enabled && !!review.data.canGenerate && !!review.data.hasReport;
-  const generateLabel = reviewOn ? "Generate AI explanation & review" : "Generate explanation";
+  const buttonLabel = generating
+    ? "Generating…"
+    : narrative
+      ? (reviewOn ? "Regenerate AI explanation & review" : "Regenerate")
+      : (reviewOn ? "Generate AI explanation & review" : "Generate explanation");
+  const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
   const statusLine = reviewStatusLine(review?.data ?? null);
   const addressedLine = aiAddressedLine(review?.data ?? null);
   const briefLine = briefStatusLine(review?.data ?? null);
   const briefCheck = review?.data?.enabled ? review.data.briefCheck : undefined;
 
-  async function generate(regenerate = false) {
-    setGenerating(true);
-    setError(null);
-    // The review runs in the background; it never delays or blocks the explanation.
-    if (reviewOn) void review!.start();
-    try {
-      const url = `/api/projects/${projectId}/narrative${regenerate ? "?regenerate=true" : ""}`;
-      const res = await fetch(url, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = (await res.json()) as Partial<NarrativeResponse> & { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Could not generate explanation.");
-      } else if (data.narrative) {
-        onNarrativeGenerated(data.narrative);
-      }
-    } catch {
-      setError("Network error — could not reach the server.");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   return (
     <section aria-labelledby="narrative-title" className={`${CARD} h-full min-w-0 border-l-4 border-l-purple-600 p-4`}>
-      {/* Header */}
+      {/* Header: the one AI button lives here, whatever the state */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 id="narrative-title" className="text-lg font-semibold text-slate-900">AI report</h2>
@@ -68,17 +47,18 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
             <InfoTip label="About the AI report" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
           </p>
         </div>
-        {narrative && !generating && (
-          <button type="button" onClick={() => generate(true)} className={BUTTON_SECONDARY}>
-            Regenerate
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => generate(!!narrative)}
+          disabled={generating}
+          className={`${BUTTON_SECONDARY} [@media(pointer:coarse)]:min-h-10`}
+        >
+          {buttonLabel}
+        </button>
       </div>
 
       {/* Work-summary status: one calm line each, only when there is something to say */}
-      {review?.data?.enabled && review.data.running && (
-        <p role="status" className="mb-3 text-sm leading-normal text-slate-700">Writing work summaries. You can keep using the page.</p>
-      )}
+      {summaryState && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>}
       {review?.error && <p role="alert" className="mb-3 text-sm text-red-800">{review.error}</p>}
       {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
@@ -90,9 +70,6 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           <p className="text-sm leading-normal text-slate-700">
             The computed scores are ready. Generate an AI explanation when you need it.
           </p>
-          <button type="button" onClick={() => generate(false)} className={BUTTON_SECONDARY}>
-            {generateLabel}
-          </button>
           {error && (
             <p className="max-w-sm text-sm text-red-800">{error}</p>
           )}

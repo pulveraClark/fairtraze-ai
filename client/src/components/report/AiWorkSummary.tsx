@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { FOCUS_LIGHT } from "../ui";
+import { BUTTON_SECONDARY } from "../ui/styles";
 import { InfoTip } from "../ui/InfoTip";
 import { FileEvidenceLink } from "../ui/ExternalEvidenceLink";
 import { DocSectionLink } from "../../hooks/useDocSectionLink";
@@ -79,10 +80,13 @@ export function WorkSummaryBlock({
 
 /** Instructor: the section at the top of the member details window. Renders nothing when AI review is off. */
 export function MemberWorkSummary({
-  review, member,
+  review, member, onGenerate, generating = false,
 }: {
   review: AiReviewResponse | null;
   member: { userId?: number; githubUsername?: string | null };
+  /** The same action as the AI report's button. The button shows only when the server says this viewer may generate. */
+  onGenerate?: () => void;
+  generating?: boolean;
 }): ReactNode {
   if (!review?.enabled) return null;
   const summary = summaryFor(review, member);
@@ -96,12 +100,23 @@ export function MemberWorkSummary({
         <p role="status" className="text-sm leading-normal text-slate-700">Writing work summaries. You can keep using the page.</p>
       ) : summary ? (
         <WorkSummaryBlock summary={summary} data={review} instructor />
+      ) : review.canGenerate && review.hasReport && onGenerate ? (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-sm leading-normal text-slate-700">No work summary yet.</p>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={generating}
+            className={`${BUTTON_SECONDARY} [@media(pointer:coarse)]:min-h-10`}
+          >
+            {generating ? "Generating…" : "Generate AI explanation & review"}
+          </button>
+          <p className="text-xs leading-normal text-slate-700">
+            Same as the button in the AI report. Covers the whole group (about 1 minute).
+          </p>
+        </div>
       ) : (
-        <p className="text-sm leading-normal text-slate-700">
-          {review.canGenerate && review.hasReport
-            ? "No work summary yet. Use Generate AI explanation & review."
-            : "No work summary yet."}
-        </p>
+        <p className="text-sm leading-normal text-slate-700">No work summary yet.</p>
       )}
     </section>
   );

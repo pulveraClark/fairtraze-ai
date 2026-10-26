@@ -74,6 +74,27 @@ export function reviewStatusLine(data: AiReviewResponse | null): string | null {
   return null;
 }
 
+export type WorkSummaryState = "running" | "ready" | "none";
+
+/** Where the group's work summaries stand; null when AI review is off. Instructor views only. */
+export function workSummaryState(data: AiReviewResponse | null | undefined): WorkSummaryState | null {
+  if (!data?.enabled) return null;
+  if (data.running) return "running";
+  return data.summaries && data.summaries.length > 0 ? "ready" : "none";
+}
+
+export const WORK_SUMMARY_STATUS_TEXT: Record<WorkSummaryState, string> = {
+  ready: "✓ Work summaries ready · open a member below to read theirs",
+  none: "Work summaries not generated yet",
+  running: "Writing work summaries. You can keep using the page.",
+};
+
+export const WORK_SUMMARY_CHIP_TEXT: Record<WorkSummaryState, string> = {
+  ready: "✓ AI summaries ready",
+  none: "AI summaries not generated yet",
+  running: "Writing AI summaries…",
+};
+
 export function briefStatusLine(data: AiReviewResponse | null): string | null {
   if (!data?.enabled || data.running || !data.briefFailed) return null;
   return "The brief check could not run. Try again later.";
