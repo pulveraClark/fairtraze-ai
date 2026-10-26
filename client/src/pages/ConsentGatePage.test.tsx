@@ -69,6 +69,17 @@ describe("ConsentGatePage", () => {
     expect(screen.getByRole("heading", { name: /has been updated/i })).toBeInTheDocument();
   });
 
+  it("version 1.4: a returning user is told about the files the check can read, and the short list uses the new terms", () => {
+    renderGate("1.3");
+    expect(PRIVACY_NOTICE_VERSION).toBe("1.4");
+    expect(PRIVACY_CHANGE_SUMMARY).toMatch(/project instructions check can now also read the PDF and images attached/);
+    expect(PRIVACY_CHANGE_SUMMARY).toMatch(/names and keys inside them are not removed/);
+    expect(screen.getByText(PRIVACY_CHANGE_SUMMARY, { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(/Google Gemini writes the AI findings/)).toBeInTheDocument();
+    expect(screen.getByText(/also reads the PDF and images attached to the project instructions/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/work summaries|project brief/i);
+  });
+
   it("shows the server error and does not continue when saving fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: "Notice updated, reload." }) }));
     renderGate();

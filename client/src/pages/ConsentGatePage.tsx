@@ -54,7 +54,7 @@ export function ConsentGatePage() {
         </p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-normal text-slate-800">
           <li>We collect your account details and your GitHub and document-editing activity to help instructors assess group contributions fairly.</li>
-          <li>Google Gemini writes the report explanation and short work summaries using pseudonyms, never your name, email or GitHub username.</li>
+          <li>Google Gemini writes the AI findings: the report explanation and, when your instructor switches it on, a note on each member and a check of the work against the project instructions. Names are replaced with pseudonyms, and your email and GitHub username are not sent. The check also reads the PDF and images attached to the project instructions, as they were attached.</li>
           <li>You can download your data or request deletion at any time in Settings.</li>
         </ul>
         <p className="mt-3 text-sm">

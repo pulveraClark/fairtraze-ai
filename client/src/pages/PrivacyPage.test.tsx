@@ -24,10 +24,34 @@ describe("PrivacyPage", () => {
       expect(screen.getByRole("heading", { name: h })).toBeInTheDocument();
     }
     expect(screen.getByText(/Google Gemini/)).toBeInTheDocument();
-    // AI work summaries: what is sent, the free-tier statement, and who sees the summaries.
+    // AI findings: what is sent, the free-tier statement, and who sees the findings.
     expect(screen.getByText(/free Gemini API tier/)).toBeInTheDocument();
     expect(screen.getByText(/may use what it receives to improve its products/)).toBeInTheDocument();
-    expect(screen.getByText(/AI work summary of every member and the brief comparison for their group/)).toBeInTheDocument();
+    expect(screen.getByText(/the AI findings for every member and the project instructions check for their group/)).toBeInTheDocument();
+    expect(screen.getByText(/Google processes this data outside the Philippines/)).toBeInTheDocument();
+  });
+
+  it("version 1.4 says what the project instructions check sends, that files are not cleaned, and how long they are kept", () => {
+    vi.mocked(AuthContextModule.useAuth).mockReturnValue({
+      user: null, token: null, loading: false,
+      register: vi.fn(), login: vi.fn(), logout: vi.fn(), refreshUser: vi.fn(),
+    });
+    render(<RouterProvider><PrivacyPage /></RouterProvider>);
+    expect(PRIVACY_NOTICE_VERSION).toBe("1.4");
+    // What is sent: the written instructions (the explanation gets the first 1,500 characters) and the files.
+    expect(screen.getByText(/the first 1,500 characters of the written project instructions/)).toBeInTheDocument();
+    expect(screen.getByText(/the files attached to them \(one PDF and up to three images, PNG, JPEG or WebP\)/)).toBeInTheDocument();
+    expect(screen.getByText(/images were resized and re-encoded by the browser/i)).toBeInTheDocument();
+    // Files are not cleaned.
+    expect(screen.getByText(/it cannot be done inside attached files, so names, emails or keys inside a file are sent as they are/)).toBeInTheDocument();
+    // Kept as part of the project, and who can open them.
+    expect(screen.getByText(/until your instructor removes them or deletes the project\. Students in the class can open them/)).toBeInTheDocument();
+    // Who sees the "The AI read:" information.
+    expect(screen.getByText(/including which attached files the AI read and which it skipped/)).toBeInTheDocument();
+    expect(screen.getByText(/it also says which attached files the AI read or skipped/)).toBeInTheDocument();
+    // The old terms are gone from the notice.
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/AI work summar|brief comparison|project brief|assignment brief/i);
     expect(screen.getByRole("link", { name: "privacy.gov.ph" })).toHaveAttribute("href", "https://privacy.gov.ph");
   });
 });

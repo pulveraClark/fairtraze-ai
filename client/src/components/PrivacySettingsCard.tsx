@@ -125,7 +125,7 @@ export function PrivacySettingsCard() {
           <h3 className="text-sm font-semibold text-slate-900">Your data</h3>
           <p className="mt-0.5 text-sm text-slate-800">
             A JSON file with your profile, group memberships, your own contribution entries, your editing and commit
-            summaries, tasks, notes you filed and notifications. It never includes other members' data.
+            activity, your own AI findings, tasks, notes you filed and notifications. It never includes other members' data.
           </p>
           <button type="button" onClick={() => void download()} disabled={busy !== null} className={`${BUTTON_SECONDARY} mt-2`}>
             {busy === "download" ? "Preparing…" : "Download my data"}
