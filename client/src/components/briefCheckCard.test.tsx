@@ -276,6 +276,100 @@ describe("BriefCheckCard", () => {
     expect(screen.queryByText(/changed since/)).toBeNull();
   });
 
+  describe("what the AI read", () => {
+    const withSources = (sources: NonNullable<AiBriefCheck["sources"]>): AiBriefCheck => ({ ...check, sources });
+    const none = { writtenBrief: true, filesRead: 0, skipped: [] };
+
+    it("written instructions and attached files", async () => {
+      render(<BriefCheckCard check={withSources({ ...none, filesRead: 2 })} />);
+      await open();
+      expect(screen.getByText("The AI read: the written instructions and 2 attached files.")).toBeTruthy();
+      expect(screen.getByText("Scanned pages may be read less accurately.")).toBeTruthy();
+      expect(screen.queryByText(/were not checked/)).toBeNull();
+    });
+
+    it("attached files only, and one file in the singular", async () => {
+      const { rerender } = render(<BriefCheckCard check={withSources({ writtenBrief: false, filesRead: 2, skipped: [] })} />);
+      await open();
+      expect(screen.getByText("The AI read: 2 attached files. No written instructions were added.")).toBeTruthy();
+      rerender(<BriefCheckCard check={withSources({ ...none, filesRead: 1 })} />);
+      expect(screen.getByText("The AI read: the written instructions and 1 attached file.")).toBeTruthy();
+    });
+
+    it("written instructions only: no read line and no scanned-pages note", async () => {
+      render(<BriefCheckCard check={withSources(none)} />);
+      await open();
+      expect(screen.queryByText(/The AI read:/)).toBeNull();
+      expect(screen.queryByText(/Scanned pages/)).toBeNull();
+    });
+
+    it("older checks with no sources show no read lines", async () => {
+      render(<BriefCheckCard check={check} />);
+      await open();
+      expect(screen.queryByText(/The AI read:|was skipped|Scanned pages|were not checked/)).toBeNull();
+    });
+
+    it("each skipped file gets one plain sentence, then one line saying its requirements were not checked", async () => {
+      const skipped = [
+        { filename: "big.pdf", reason: "TOO_LARGE" as const },
+        { filename: "huge.png", reason: "TOO_LARGE" as const },
+        { filename: "long.pdf", reason: "TOO_MANY_PAGES" as const },
+        { filename: "notes.txt", reason: "UNSUPPORTED" as const },
+        { filename: "scan.pdf", reason: "UNREADABLE" as const },
+        { filename: "shot4.png", reason: "TOO_MANY_FILES" as const },
+        { filename: "second.pdf", reason: "TOO_MANY_FILES" as const },
+        { filename: "last.png", reason: "TOTAL_TOO_LARGE" as const },
+      ];
+      render(<BriefCheckCard check={withSources({ ...none, filesRead: 1, skipped })} />);
+      await open();
+      for (const line of [
+        "big.pdf was too large (over 5 MB) and was skipped.",
+        "huge.png was too large (over 1 MB) and was skipped.",
+        "long.pdf has too many pages (over 20) and was skipped.",
+        "notes.txt is not a supported type and was skipped.",
+        "scan.pdf could not be read.",
+        "shot4.png was not read: only the first 3 images are read.",
+        "second.pdf was not read: only one PDF is read.",
+        "last.png was not read: the files together are over 6 MB.",
+      ]) expect(screen.getByText(line)).toBeTruthy();
+      expect(screen.getAllByText("Requirements in skipped files were not checked.")).toHaveLength(1);
+    });
+
+    it("a long file name wraps instead of widening the card", async () => {
+      const name = `${"very-long-name-".repeat(8)}.pdf`;
+      render(<BriefCheckCard check={withSources({ ...none, skipped: [{ filename: name, reason: "UNREADABLE" }] })} />);
+      await open();
+      expect(screen.getByText(`${name} could not be read.`).parentElement!.className).toContain("[overflow-wrap:anywhere]");
+    });
+  });
+
+  describe("nothing could be read", () => {
+    const nothing: AiBriefCheck = {
+      ...check, requirements: [], nothingRead: true,
+      sources: { writtenBrief: false, filesRead: 0, skipped: [{ filename: "scan.pdf", reason: "TOO_LARGE" }, { filename: "notes.txt", reason: "UNSUPPORTED" }] },
+    };
+
+    it("replaces the body: title line, the skipped files and what to do; no list, no summary, no 'no instructions' line", async () => {
+      const { container } = render(<BriefCheckCard check={nothing} instructor />);
+      await open();
+      expect(screen.getByText("Project instructions check · nothing could be read.")).toBeTruthy();
+      expect(screen.getByText("scan.pdf was too large (over 5 MB) and was skipped.")).toBeTruthy();
+      expect(screen.getByText("notes.txt is not a supported type and was skipped.")).toBeTruthy();
+      expect(screen.getByText("Requirements in skipped files were not checked.")).toBeTruthy();
+      expect(screen.getByText("Add the project instructions as text, or attach a smaller file.")).toBeTruthy();
+      expect(container.querySelector("ul")).toBeNull();
+      expect(screen.queryByText(/requirements are covered/)).toBeNull();
+      expect(screen.queryByText(/no instructions added yet/)).toBeNull();
+      expect(screen.queryByText(/The AI compared/)).toBeNull();
+    });
+
+    it("the leader is told to ask the instructor", async () => {
+      render(<BriefCheckCard check={nothing} />);
+      await open();
+      expect(screen.getByText("Ask your instructor to add the project instructions as text, or attach a smaller file.")).toBeTruthy();
+    });
+  });
+
   it("renders nothing when there are no requirements", () => {
     const { container } = render(<BriefCheckCard check={{ ...check, requirements: [] }} />);
     expect(container.innerHTML).toBe("");

@@ -7,8 +7,9 @@ import { DocSectionLink, DocsTabLink, useOpenDocSection } from "../hooks/useDocS
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 import {
-  ATTENTION_ORDER, PILL, comparedSentence, countKinds, coveredSentence, coveredToggleLabel, droppedSentence, highlightHash,
-  kindOf, otherCountsSentence, pillLabel, type RequirementKind,
+  ATTENTION_ORDER, NOTHING_READ_TITLE, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
+  coveredToggleLabel, droppedSentence, highlightHash, kindOf, nothingReadAdvice, otherCountsSentence, pillLabel, readLine, skippedLine,
+  type RequirementKind,
 } from "../lib/instructionsCheck";
 
 // "Project instructions check" with the AI findings badge. Shown to the instructor and the group leader only
@@ -203,6 +204,33 @@ function RequirementRow({ r, instructor, access, repoUrl, docs }: {
   );
 }
 
+/** What the AI read and which attached files it skipped. Older checks have no `sources` and show nothing. */
+function ReadLines({ sources }: { sources: AiBriefCheck["sources"] }) {
+  if (!sources) return null;
+  const read = readLine(sources);
+  if (!read && sources.skipped.length === 0) return null;
+  return (
+    <div className="space-y-0.5 text-xs leading-normal text-slate-700 [overflow-wrap:anywhere]">
+      {read && <p>{read}</p>}
+      {sources.skipped.map((s, i) => <p key={i}>{skippedLine(s)}</p>)}
+      {sources.skipped.length > 0 && <p>{SKIPPED_NOT_CHECKED}</p>}
+      {sources.filesRead > 0 && <p>{SCANNED_NOTE}</p>}
+    </div>
+  );
+}
+
+function Header() {
+  return (
+    <summary className={`flex min-h-10 cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 py-2 text-sm font-semibold text-slate-900 [&::-webkit-details-marker]:hidden ${FOCUS_LIGHT}`}>
+      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-700 transition-transform [details[open]>summary_&]:rotate-90" fill="currentColor">
+        <path d="M7 4l6 6-6 6V4z" />
+      </svg>
+      Project instructions check
+      <AiBadge variant="ai" />
+    </summary>
+  );
+}
+
 export function BriefCheckCard({
   check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions,
 }: {
@@ -219,6 +247,19 @@ export function BriefCheckCard({
   const [showCovered, setShowCovered] = useState(false);
   const when = formatBasedOn(check.generatedAt);
   const total = check.requirements.length;
+  // Files were attached but none could be read and there is no written text: nothing was checked, and why.
+  if (check.nothingRead) {
+    return (
+      <details className="mt-4 rounded-xl border border-slate-200 bg-white">
+        <Header />
+        <div className="space-y-3 border-t border-slate-200 px-3 py-3">
+          <p className="text-sm font-semibold leading-normal text-slate-900">{NOTHING_READ_TITLE}</p>
+          <ReadLines sources={check.sources} />
+          <p className="text-sm leading-normal text-slate-900">{nothingReadAdvice(instructor)}</p>
+        </div>
+      </details>
+    );
+  }
   if (total === 0) return null;
 
   const access: InstructionsAccess = { instructionsHref, onViewInstructions };
@@ -232,13 +273,7 @@ export function BriefCheckCard({
 
   return (
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
-      <summary className={`flex min-h-10 cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 py-2 text-sm font-semibold text-slate-900 [&::-webkit-details-marker]:hidden ${FOCUS_LIGHT}`}>
-        <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-700 transition-transform [details[open]>summary_&]:rotate-90" fill="currentColor">
-          <path d="M7 4l6 6-6 6V4z" />
-        </svg>
-        Project instructions check
-        <AiBadge variant="ai" />
-      </summary>
+      <Header />
       <div className="space-y-3 border-t border-slate-200 px-3 py-3">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-slate-700">
           <span className="flex min-w-0 items-center gap-1">
@@ -252,6 +287,7 @@ export function BriefCheckCard({
             <button type="button" onClick={() => onViewInstructions()} className={LINK_CLS}>View the instructions</button>
           )}
         </div>
+        <ReadLines sources={check.sources} />
         <p className="text-sm font-semibold leading-normal text-slate-900">
           {coveredSentence(counts.COVERED, total)}
           {others && !allCovered ? ` ${others}` : ""}

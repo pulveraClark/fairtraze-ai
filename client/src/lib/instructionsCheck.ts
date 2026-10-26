@@ -92,3 +92,48 @@ export function highlightFromHash(hash: string): string | null {
     return null;
   }
 }
+
+// ── What the AI read (from check.sources) ──────────────────────────────────────────────────────────
+
+type Sources = NonNullable<AiBriefCheck["sources"]>;
+type Skipped = Sources["skipped"][number];
+
+const isPdfName = (name: string) => /\.pdf$/i.test(name);
+const isImageName = (name: string) => /\.(png|jpe?g|webp)$/i.test(name);
+
+/** "The AI read: ..." for the files it read; null for older checks and when it read only the written text. */
+export function readLine(sources: Sources | undefined): string | null {
+  if (!sources || sources.filesRead <= 0) return null;
+  const files = `${sources.filesRead} attached file${sources.filesRead === 1 ? "" : "s"}`;
+  return sources.writtenBrief
+    ? `The AI read: the written instructions and ${files}.`
+    : `The AI read: ${files}. No written instructions were added.`;
+}
+
+/**
+ * One plain sentence for a file that was not read. The size and count limits depend on the kind of file
+ * (a PDF may be 5 MB, an image 1 MB; one PDF, three images), which is told from the file name.
+ */
+export function skippedLine(s: Skipped): string {
+  const name = s.filename;
+  switch (s.reason) {
+    case "TOO_LARGE":
+      return `${name} was too large (over ${isPdfName(name) ? "5 MB" : isImageName(name) ? "1 MB" : "the size limit"}) and was skipped.`;
+    case "TOO_MANY_PAGES": return `${name} has too many pages (over 20) and was skipped.`;
+    case "UNSUPPORTED": return `${name} is not a supported type and was skipped.`;
+    case "UNREADABLE": return `${name} could not be read.`;
+    case "TOO_MANY_FILES":
+      return isPdfName(name) ? `${name} was not read: only one PDF is read.` : `${name} was not read: only the first 3 images are read.`;
+    case "TOTAL_TOO_LARGE": return `${name} was not read: the files together are over 6 MB.`;
+  }
+}
+
+export const SKIPPED_NOT_CHECKED = "Requirements in skipped files were not checked.";
+export const SCANNED_NOTE = "Scanned pages may be read less accurately.";
+export const NOTHING_READ_TITLE = "Project instructions check · nothing could be read.";
+
+export function nothingReadAdvice(instructor: boolean): string {
+  return instructor
+    ? "Add the project instructions as text, or attach a smaller file."
+    : "Ask your instructor to add the project instructions as text, or attach a smaller file.";
+}

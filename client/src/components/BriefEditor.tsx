@@ -117,6 +117,7 @@ export function BriefEditor({ assignmentId, description, onDescriptionChange, dr
             className={BUTTON_SECONDARY_COMPACT}
             disabled={disabled || busy || draft.images.length >= BRIEF_MAX_IMAGES}
             onClick={() => imageInput.current?.click()}
+            aria-describedby="project-files-hint"
           >
             {busy ? "Processing…" : "Add images"}
           </button>
@@ -157,7 +158,7 @@ export function BriefEditor({ assignmentId, description, onDescriptionChange, dr
             PDF <span className="font-normal text-slate-600">(one file, max 5 MB)</span>
           </span>
           <div className="flex gap-2">
-            <button type="button" className={BUTTON_SECONDARY_COMPACT} disabled={disabled} onClick={() => pdfInput.current?.click()}>
+            <button type="button" className={BUTTON_SECONDARY_COMPACT} disabled={disabled} onClick={() => pdfInput.current?.click()} aria-describedby="project-files-hint">
               {draft.pdf ? "Replace PDF" : "Add PDF"}
             </button>
             {draft.pdf && (
@@ -173,6 +174,10 @@ export function BriefEditor({ assignmentId, description, onDescriptionChange, dr
           </div>
         )}
       </div>
+
+      <p id="project-files-hint" className="text-xs leading-normal text-slate-700">
+        Don't put personal data or passwords in project instructions files.
+      </p>
 
       {msg && <p role="alert" className="text-xs text-red-700">{msg}</p>}
     </div>
