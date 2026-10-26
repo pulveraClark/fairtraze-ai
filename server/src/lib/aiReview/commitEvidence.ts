@@ -1,0 +1,103 @@
+import { Octokit } from "@octokit/rest";
+import { getFileWeight } from "@shared/fileWeights.js";
+import { skipReason } from "./skipRules.js";
+
+// What we may show Gemini about one commit: message first line, changed file paths with +/- counts and
+// a short excerpt of the added lines. Read-only and separate from the scoring fetch (lib/github.ts).
+
+export const MAX_FILES_PER_COMMIT = 6;
+export const MAX_ADDED_LINES_PER_FILE = 40;
+export const MAX_LINE_CHARS = 160;
+
+export interface CommitFileEvidence {
+  path: string;
+  added: number;
+  removed: number;
+  addedLines: string[];
+}
+
+export interface CommitEvidence {
+  sha: string;
+  message: string; // first line only
+  authorLogin: string | null;
+  files: CommitFileEvidence[];
+  // Changed files left out (generated, lock, binary, secret-named, or past the per-commit cap).
+  skippedFiles: number;
+}
+
+export interface RawCommitFile {
+  filename: string;
+  additions?: number;
+  deletions?: number;
+  patch?: string;
+}
+
+function addedLinesOf(patch: string): string[] {
+  const out: string[] = [];
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("++")) out.push(line.slice(1));
+  }
+  return out;
+}
+
+export function condenseCommit(raw: {
+  sha: string;
+  message: string;
+  authorLogin: string | null;
+  files: RawCommitFile[];
+}): CommitEvidence {
+  const kept: Array<CommitFileEvidence & { weight: number }> = [];
+  let skipped = 0;
+  for (const f of raw.files) {
+    const reason = skipReason(f.filename, { hasPatch: !!f.patch, patchChars: f.patch?.length ?? 0 });
+    if (reason) {
+      skipped++;
+      continue;
+    }
+    const lines = addedLinesOf(f.patch ?? "");
+    kept.push({
+      path: f.filename,
+      added: f.additions ?? lines.length,
+      removed: f.deletions ?? 0,
+      addedLines: lines
+        .filter((l) => l.trim() !== "")
+        .slice(0, MAX_ADDED_LINES_PER_FILE)
+        .map((l) => (l.length > MAX_LINE_CHARS ? l.slice(0, MAX_LINE_CHARS) : l)),
+      weight: getFileWeight(f.filename) * (f.additions ?? lines.length),
+    });
+  }
+  kept.sort((a, b) => b.weight - a.weight || a.path.localeCompare(b.path));
+  const top = kept.slice(0, MAX_FILES_PER_COMMIT);
+  skipped += kept.length - top.length;
+  return {
+    sha: raw.sha,
+    message: raw.message.split("\n")[0]!.trim(),
+    authorLogin: raw.authorLogin,
+    files: top.map(({ weight: _weight, ...file }) => file),
+    skippedFiles: skipped,
+  };
+}
+
+// One GitHub call per commit (single-commit endpoint). Callers only ask for commits that are not
+// already digested, so a re-run costs calls for new commits only.
+export async function fetchCommitEvidence(
+  owner: string,
+  repo: string,
+  githubToken: string,
+  sha: string,
+): Promise<CommitEvidence> {
+  const octokit = new Octokit({ auth: githubToken });
+  const res = await octokit.request("GET /repos/{owner}/{repo}/commits/{ref}", { owner, repo, ref: sha });
+  const data = res.data as unknown as {
+    sha: string;
+    author?: { login?: string } | null;
+    commit: { message: string };
+    files?: RawCommitFile[];
+  };
+  return condenseCommit({
+    sha: data.sha,
+    message: data.commit.message,
+    authorLogin: data.author?.login ?? null,
+    files: data.files ?? [],
+  });
+}
