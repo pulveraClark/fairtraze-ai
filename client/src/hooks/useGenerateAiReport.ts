@@ -36,7 +36,7 @@ export function useGenerateAiReport(
       const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const data = (await res.json()) as Partial<NarrativeResponse> & { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Could not generate explanation.");
+        setError(data.error ?? "Could not generate AI findings.");
       } else if (data.narrative) {
         onNarrativeGenerated(data.narrative);
       }

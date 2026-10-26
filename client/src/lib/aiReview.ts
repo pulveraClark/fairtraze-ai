@@ -68,9 +68,9 @@ export function formatBasedOn(iso: string | null | undefined): string | null {
 /** One calm line for the Generate area; null when there is nothing to say. Instructor only. */
 export function reviewStatusLine(data: AiReviewResponse | null): string | null {
   if (!data?.enabled || data.running || !data.summaries) return null;
-  if (data.status === "FAILED") return "Work summaries could not be written because the AI was unavailable. Changed files are shown instead. Try again later.";
-  if (data.status === "PARTIAL") return "Some work summaries show changed files only, because the AI was unavailable or its wording was not used.";
-  if (data.outdated) return "Work summaries are from an earlier analysis. Generate again to update them.";
+  if (data.status === "FAILED") return "AI findings could not be written because the AI was unavailable. Changed files are shown instead. Try again later.";
+  if (data.status === "PARTIAL") return "Some AI findings show changed files only, because the AI was unavailable or its wording was not used.";
+  if (data.outdated) return "AI findings are from an earlier analysis. Generate again to update them.";
   return null;
 }
 
@@ -84,25 +84,32 @@ export function workSummaryState(data: AiReviewResponse | null | undefined): Wor
 }
 
 export const WORK_SUMMARY_STATUS_TEXT: Record<WorkSummaryState, string> = {
-  ready: "✓ Work summaries ready · open a member below to read theirs",
-  none: "Work summaries not generated yet",
-  running: "Writing work summaries. You can keep using the page.",
+  ready: "✓ AI findings ready · open a member below to read theirs",
+  none: "AI findings not generated yet",
+  running: "Writing AI findings…",
 };
 
 export const WORK_SUMMARY_CHIP_TEXT: Record<WorkSummaryState, string> = {
-  ready: "✓ AI summaries ready",
-  none: "AI summaries not generated yet",
-  running: "Writing AI summaries…",
+  ready: "✓ AI findings ready",
+  none: "AI findings not generated yet",
+  running: "Writing AI findings…",
 };
 
-/** Label of the one AI button: Generate / Regenerate, and the short form when the class review switch is off. */
-export function aiButtonLabel(generating: boolean, hasNarrative: boolean, reviewOn: boolean): string {
+/** Label of the one AI button; the same whether or not the class switch for member findings is on. */
+export function aiButtonLabel(generating: boolean, hasExisting: boolean): string {
   if (generating) return "Generating…";
-  if (hasNarrative) return reviewOn ? "Regenerate AI explanation & review" : "Regenerate";
-  return reviewOn ? "Generate AI explanation & review" : "Generate explanation";
+  return hasExisting ? "Regenerate AI findings" : "Generate AI findings";
 }
 
-export const AI_BUTTON_NOTE = "Also updates the AI report below.";
+export const AI_BUTTON_NOTE = "Also updates the AI findings below.";
+
+/** Footer sentence saying what the AI read, by the group's source type. Neutral when the type is unknown. */
+export function aiSourceLine(sourceType: string | null | undefined): string {
+  if (sourceType === "GITHUB") return "Written by AI after reading the commits.";
+  if (sourceType === "EDITOR") return "Written by AI after reading the Docs.";
+  if (sourceType === "COMBINED") return "Written by AI after reading the commits and Docs.";
+  return "Written by AI after reading the work.";
+}
 
 export function briefStatusLine(data: AiReviewResponse | null): string | null {
   if (!data?.enabled || data.running || !data.briefFailed) return null;

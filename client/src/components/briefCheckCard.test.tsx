@@ -37,13 +37,13 @@ const open = () => userEvent.click(screen.getByText(/Brief check/));
 describe("BriefCheckCard", () => {
   it("is collapsed, labelled as AI that may be wrong, with the counts line first and zero counts left out", async () => {
     render(<BriefCheckCard check={check} instructor />);
-    const details = screen.getByText(/Brief check · AI review, may be wrong/).closest("details")!;
+    const details = screen.getByText(/Brief check · may be wrong/).closest("details")!;
     expect(details.open).toBe(false);
     await open();
     expect(details.open).toBe(true);
     expect(screen.getByText("2 found · 1 partly found · 1 not found · 1 to verify")).toBeTruthy();
     expect(screen.getByText(/Not a grade and not a judgment of quality/)).toBeTruthy();
-    expect(screen.getByText("AI explanation")).toBeTruthy();
+    expect(screen.getByText("AI findings")).toBeTruthy();
     expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
     expect(screen.queryByText(/%/)).toBeNull();
   });
@@ -184,7 +184,7 @@ describe("brief check placement", () => {
   it("leader view shows the brief check even before any summary exists", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...base, canGenerate: false, briefCheck: check }) }));
     render(<StudentWorkSummaries projectId={5} isLeader />);
-    await waitFor(() => expect(screen.getByText(/Brief check · AI review/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Brief check · may be wrong/)).toBeTruthy());
     expect(screen.queryByText("What each member worked on")).toBeNull();
   });
 
@@ -198,9 +198,9 @@ describe("brief check placement", () => {
   it("instructor: the brief check sits in the AI report card; a failed run gets one calm line", () => {
     const start = vi.fn();
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} />);
-    expect(screen.getByText(/Brief check · AI review/)).toBeTruthy();
+    expect(screen.getByText(/Brief check · may be wrong/)).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefFailed: true }, error: null, start }} />);
-    expect(screen.queryByText(/Brief check · AI review/)).toBeNull();
+    expect(screen.queryByText(/Brief check · may be wrong/)).toBeNull();
     expect(screen.getByText("The brief check could not run. Try again later.")).toBeTruthy();
     expect(briefStatusLine({ ...base, briefFailed: true, running: true })).toBeNull();
   });

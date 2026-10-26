@@ -13,20 +13,20 @@ const m: ScoredMember = {
   flags: [],
 };
 
-describe("AI summaries chip in the Member contributions header", () => {
+describe("AI findings chip in the Member contributions header", () => {
   it("is plain text (not a button) in the ready, not-generated and writing states", () => {
     const { rerender } = render(<MemberContributionList members={[m]} onOpen={() => {}} aiSummaryState="ready" />);
-    expect(screen.getByText("✓ AI summaries ready").closest("button")).toBeNull();
+    expect(screen.getByText("✓ AI findings ready").closest("button")).toBeNull();
     rerender(<MemberContributionList members={[m]} onOpen={() => {}} aiSummaryState="none" />);
-    expect(screen.getByText("AI summaries not generated yet")).toBeTruthy();
+    expect(screen.getByText("AI findings not generated yet")).toBeTruthy();
     rerender(<MemberContributionList members={[m]} onOpen={() => {}} aiSummaryState="running" />);
-    expect(screen.getByText("Writing AI summaries…")).toBeTruthy();
+    expect(screen.getByText("Writing AI findings…")).toBeTruthy();
   });
 
   it("is hidden when AI review is off or the viewer is not the instructor (state null or omitted)", () => {
     const { rerender } = render(<MemberContributionList members={[m]} onOpen={() => {}} aiSummaryState={null} />);
-    expect(screen.queryByText(/AI summaries/)).toBeNull();
+    expect(screen.queryByText(/AI findings/)).toBeNull();
     rerender(<MemberContributionList members={[m]} onOpen={() => {}} />);
-    expect(screen.queryByText(/AI summaries/)).toBeNull();
+    expect(screen.queryByText(/AI findings/)).toBeNull();
   });
 });

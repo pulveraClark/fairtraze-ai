@@ -21,7 +21,7 @@ interface Props {
   aiSummaryState?: WorkSummaryState | null;
   /** The shared AI generate action. Pass it only for viewers who may generate; omit for no button. */
   generator?: AiReportGenerator;
-  /** An AI explanation already exists (button reads Regenerate). */
+  /** AI findings already exist (button reads Regenerate). */
   hasNarrative?: boolean;
 }
 
@@ -73,7 +73,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
               disabled={generator.generating}
               className={`${BUTTON_SECONDARY} min-h-10`}
             >
-              {aiButtonLabel(generator.generating, hasNarrative, generator.reviewOn)}
+              {aiButtonLabel(generator.generating, hasNarrative)}
             </button>
             <p className="text-xs leading-normal text-slate-700 sm:text-right">{AI_BUTTON_NOTE}</p>
           </div>

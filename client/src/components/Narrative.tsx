@@ -4,7 +4,7 @@ import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
-import { AiBadge } from "./ui/AiBadge";
+import { SparkleIcon } from "./ui/AiBadge";
 import { BriefCheckCard } from "./BriefCheckCard";
 import type { UseAiReview } from "../hooks/useAiReview";
 import { useGenerateAiReport, type AiReportGenerator } from "../hooks/useGenerateAiReport";
@@ -15,7 +15,7 @@ interface Props {
   outdated?: boolean;
   projectId: number;
   onNarrativeGenerated: (text: string) => void;
-  /** AI work summaries for this group. When on, the Generate button also writes them. */
+  /** AI findings on each member for this group. When on, the Generate button also writes them. */
   review?: UseAiReview;
   /** Shared with the member details window so both buttons are the same action. Built here when absent. */
   generator?: AiReportGenerator;
@@ -27,7 +27,7 @@ interface Props {
 
 export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl }: Props) {
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
-  const { reviewOn, generating, error } = generator ?? own;
+  const { generating, error } = generator ?? own;
 
   const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
   const statusLine = reviewStatusLine(review?.data ?? null);
@@ -42,12 +42,12 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       {/* Header: the one AI button now lives in Member contributions */}
       <div className="mb-4">
         <h2 id="narrative-title" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold text-slate-900">
-          AI report
-          {narrative && !generating && <AiBadge variant="ai" label="AI explanation" />}
+          <span className="text-indigo-800"><SparkleIcon /></span>
+          AI findings
         </h2>
         <p className="flex items-center gap-1 text-sm leading-normal text-slate-700">
           Scores computed by formula · explained by AI
-          <InfoTip label="About the AI report" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
+          <InfoTip label="About the AI findings" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       {!narrative && !generating && (
         <div className="flex flex-col gap-2 py-2">
           <p className="text-sm leading-normal text-slate-700">
-            No AI explanation yet. Use the {aiButtonLabel(false, false, reviewOn)} button in Member contributions above.
+            No AI findings yet. Use the {aiButtonLabel(false, false)} button in Member contributions above.
           </p>
           {error && (
             <p className="max-w-sm text-sm text-red-800">{error}</p>
@@ -86,7 +86,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <span>Generating AI explanation…</span>
+          <span>Generating AI findings…</span>
         </div>
       )}
 

@@ -350,20 +350,20 @@ export function HelpPage() {
             <li><strong>The math scores.</strong> Every share, flag{student ? "" : ", Gini value"} and health label is worked out by a fixed formula. The same activity always gives the same result.</li>
             <li>
               <strong>The AI explains.</strong> When the instructor asks for it, an AI (Google Gemini) writes a short
-              plain-language summary of numbers the formula already produced. It is told not to recompute anything, add
+              plain-language description of numbers the formula already produced. It is told not to recompute anything, add
               or remove a flag, state thresholds, or judge the quality of anyone's work. Names are replaced by "Member A,
               B…" before anything is sent.
             </li>
             <li>
-              <strong>Work summaries and the brief check.</strong> When the instructor has this switched on for the class,
-              the AI also writes a short neutral summary of what each member worked on, and the instructor and group
+              <strong>AI findings and the brief check.</strong> When the instructor has this switched on for the class,
+              the AI also writes short, neutral AI findings on what each member worked on, and the instructor and group
               leader can see a brief check: which requirements of the project brief appear in the group's code or document.
-              Each comes with its evidence, can be wrong, and never changes a share or flag{student ? ". You see your own summary." : "."}
+              Each comes with its evidence, can be wrong, and never changes a share or flag{student ? ". You see your own AI findings." : "."}
             </li>
             <li><strong>The AI never grades.</strong> The scores are worked out before the AI is asked, and they do not depend on it.</li>
             <li><strong>The instructor decides.</strong> Reports are evidence. Nothing here is a grade or a final assessment.</li>
           </ul>
-          {student && <p>The AI summary is part of the instructor's report. The student view shows your own numbers and flags.</p>}
+          {student && <p>The AI findings are part of the instructor's report. The student view shows your own numbers and flags.</p>}
         </Section>
 
         <Section id="tasks" title="Tasks are planning only">

@@ -23,4 +23,4 @@ export function formatLastAnalyzed(iso: string, trigger?: "manual" | "auto" | nu
 }
 
 export const UPDATING_TEXT = "Updating…";
-export const NARRATIVE_OUTDATED_TEXT = "Results changed. Generate a new explanation.";
+export const NARRATIVE_OUTDATED_TEXT = "Results changed. Generate new AI findings.";

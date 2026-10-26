@@ -62,8 +62,8 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
       if (res.status === 202 || res.status === 409) {
         const body = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
         if (res.status === 409 && body.code && body.code !== "REVIEW_IN_PROGRESS") {
-          setError(body.error ?? "Could not start the work summaries.");
-          return false;
+          setError(body.error ?? "Could not start the AI findings.");
+return false;
         }
         startedAt.current = Date.now();
         setData((d) => (d ? { ...d, running: true } : d));
@@ -71,7 +71,7 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
         return true;
       }
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(body.error ?? "Could not start the work summaries.");
+      setError(body.error ?? "Could not start the AI findings.");
       return false;
     } catch {
       setError("Network error — could not reach the server.");

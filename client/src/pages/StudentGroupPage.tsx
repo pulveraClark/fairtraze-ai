@@ -882,7 +882,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 })()}
 
                 {/* AI work summaries: a member sees their own; the leader sees every member (the server decides) */}
-                <StudentWorkSummaries projectId={projectId} isLeader={membership.role === "LEADER"} />
+                <StudentWorkSummaries projectId={projectId} isLeader={membership.role === "LEADER"} sourceType={sourceType} />
 
                 {/* Leader-only: every member's share, so work can be rebalanced */}
                 {report.team && <LeaderTeamCard team={report.team} currentUserId={user?.id} sourceType={sourceType} noActivity={report.noActivity} />}

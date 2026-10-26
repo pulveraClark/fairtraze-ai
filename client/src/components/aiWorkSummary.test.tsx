@@ -48,7 +48,7 @@ describe("MemberWorkSummary (instructor drawer)", () => {
     render(<MemberWorkSummary review={base} member={{ userId: 1 }} />);
     expect(screen.getByRole("heading", { name: /What this member worked on/ })).toBeTruthy();
     expect(screen.getByText("Added the login page.")).toBeTruthy();
-    expect(screen.getByText("AI summary")).toBeTruthy();
+    expect(screen.getByText("AI findings")).toBeTruthy();
     expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
     const details = screen.getByText("See evidence").closest("details")!;
     expect(details.open).toBe(false);
@@ -79,9 +79,9 @@ describe("MemberWorkSummary (instructor drawer)", () => {
   it("a facts-only summary never shows the AI badge: grey 'Changed files only' pill and a neutral note above the text", () => {
     render(<MemberWorkSummary review={base} member={{ userId: 2 }} />);
     expect(screen.getByText("Changed files only")).toBeTruthy();
-    expect(screen.queryByText("AI summary")).toBeNull();
+    expect(screen.queryByText("AI findings")).toBeNull();
     expect(screen.queryByText(/May be wrong/)).toBeNull();
-    const note = screen.getByText(/The AI summary couldn't be written right now, so this shows the changed files\./);
+    const note = screen.getByText(/The AI findings couldn't be written right now, so this shows the changed files\./);
     const text = screen.getByText("Wrote the Methodology section.");
     expect(note.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -98,7 +98,7 @@ describe("MemberWorkSummary (instructor drawer)", () => {
 
   it("shows the writing pill with its helper text while summaries are being written", () => {
     render(<MemberWorkSummary review={{ ...base, summaries: null, running: true }} member={{ userId: 1 }} />);
-    expect(screen.getByRole("status").textContent).toBe("AI summary · writing…");
+    expect(screen.getByRole("status").textContent).toBe("AI findings · writing…");
     expect(screen.getByText("This takes about a minute. You can keep using the page.")).toBeTruthy();
   });
 
@@ -113,14 +113,14 @@ describe("MemberWorkSummary (instructor drawer)", () => {
     rerender(<MemberWorkSummary review={{ ...base, summaries: null, running: true }} member={{ userId: 1 }} />);
     expect(screen.getByRole("status").textContent).toMatch(/writing/);
     rerender(<MemberWorkSummary review={{ ...base, summaries: null }} member={{ userId: 1 }} />);
-    expect(screen.getByText("No work summary yet.")).toBeTruthy();
+    expect(screen.getByText("No AI findings yet.")).toBeTruthy();
   });
 
   it("instructor with no summary gets the Generate button, which runs the shared action; others get none", async () => {
     const onGenerate = vi.fn();
     const empty = { ...base, summaries: null };
     const { rerender } = render(<MemberWorkSummary review={empty} member={{ userId: 1 }} onGenerate={onGenerate} />);
-    const btn = screen.getByRole("button", { name: "Generate AI explanation & review" });
+    const btn = screen.getByRole("button", { name: "Generate AI findings" });
     expect(btn.className).toContain("bg-white");
     expect(screen.getByText("Same as the button in Member contributions. Covers the whole group (about 1 minute).")).toBeTruthy();
     await userEvent.click(btn);
@@ -133,6 +133,31 @@ describe("MemberWorkSummary (instructor drawer)", () => {
     // A summary already exists: no button.
     rerender(<MemberWorkSummary review={base} member={{ userId: 1 }} onGenerate={onGenerate} />);
     expect(screen.queryByRole("button", { name: /Generate/ })).toBeNull();
+  });
+});
+
+describe("source line", () => {
+  const line = (t: string) => screen.getByText(new RegExp(`^${t} May be wrong · Based on the analysis of`));
+  it("says what the AI read, by the group's source type", () => {
+    const { rerender } = render(<MemberWorkSummary review={base} member={{ userId: 1 }} sourceType="GITHUB" />);
+    expect(line("Written by AI after reading the commits\.")).toBeTruthy();
+    rerender(<MemberWorkSummary review={base} member={{ userId: 1 }} sourceType="EDITOR" />);
+    expect(line("Written by AI after reading the Docs\.")).toBeTruthy();
+    rerender(<MemberWorkSummary review={base} member={{ userId: 1 }} sourceType="COMBINED" />);
+    expect(line("Written by AI after reading the commits and Docs\.")).toBeTruthy();
+    rerender(<MemberWorkSummary review={base} member={{ userId: 1 }} />);
+    expect(line("Written by AI after reading the work\.")).toBeTruthy();
+  });
+
+  it("is passed through to the student and leader views", async () => {
+    stubReview({ ...base, canGenerate: false, summaries: [ana] });
+    render(<StudentWorkSummaries projectId={5} isLeader={false} sourceType="EDITOR" />);
+    await waitFor(() => expect(screen.getByText(/Written by AI after reading the Docs\. May be wrong/)).toBeTruthy());
+  });
+
+  it("is absent from the facts state", () => {
+    render(<MemberWorkSummary review={base} member={{ userId: 2 }} sourceType="COMBINED" />);
+    expect(screen.queryByText(/Written by AI/)).toBeNull();
   });
 });
 
@@ -152,14 +177,14 @@ function stubReview(body: unknown) {
 }
 
 describe("StudentWorkSummaries", () => {
-  it("a member sees 'Summary of your work' with only their own entry", async () => {
+  it("a member sees 'AI findings on your work' with only their own entry", async () => {
     stubReview({ ...base, canGenerate: false, summaries: [ana] });
     render(<StudentWorkSummaries projectId={5} isLeader={false} />);
-    await waitFor(() => expect(screen.getByText("Summary of your work")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("AI findings on your work")).toBeTruthy());
     expect(screen.getByText("Added the login page.")).toBeTruthy();
     expect(screen.queryByText(/Ben Reyes/)).toBeNull();
     expect(screen.queryByRole("button", { name: /generate/i })).toBeNull();
-    expect(screen.getByText("AI summary")).toBeTruthy();
+    expect(screen.getByText("AI findings")).toBeTruthy();
     expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
   });
 
@@ -170,7 +195,7 @@ describe("StudentWorkSummaries", () => {
     expect(screen.getByText("Ana Cruz (you)")).toBeTruthy();
     expect(screen.getByText("Ben Reyes")).toBeTruthy();
     // Ana's is AI-written, Ben's is the facts fallback: one AI badge, one grey pill, and no Regenerate for a leader.
-    expect(screen.getAllByText("AI summary")).toHaveLength(1);
+    expect(screen.getAllByText("AI findings")).toHaveLength(1);
     expect(screen.getAllByText("Changed files only")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Regenerate" })).toBeNull();
   });
@@ -202,21 +227,21 @@ function Harness({ review, narrative, onGenerated, allowed = true }: { review: U
 }
 
 describe("AI button in Member contributions", () => {
-  it("is renamed when work summaries are on, and one click starts both", async () => {
+  it("one click starts both when AI findings are on", async () => {
     const start = vi.fn().mockResolvedValue(true);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ narrative: "Text." }) }));
     const onGenerated = vi.fn();
     render(<Harness review={{ data: base, error: null, start }} narrative={null} onGenerated={onGenerated} />);
-    await userEvent.click(screen.getByRole("button", { name: "Generate AI explanation & review" }));
+    await userEvent.click(screen.getByRole("button", { name: "Generate AI findings" }));
     expect(start).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onGenerated).toHaveBeenCalledWith("Text."));
   });
 
-  it("keeps the plain label and starts nothing when AI review is off", async () => {
+  it("keeps the same label and starts nothing when the class switch is off", async () => {
     const start = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ narrative: "Text." }) }));
     render(<Harness review={{ data: { enabled: false }, error: null, start }} narrative={null} onGenerated={() => {}} />);
-    await userEvent.click(screen.getByRole("button", { name: "Generate explanation" }));
+    await userEvent.click(screen.getByRole("button", { name: "Generate AI findings" }));
     expect(start).not.toHaveBeenCalled();
   });
 
@@ -224,10 +249,10 @@ describe("AI button in Member contributions", () => {
     let finish: (v: unknown) => void = () => {};
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise((r) => { finish = r; })));
     render(<Harness review={{ data: base, error: null, start: vi.fn() }} narrative={null} onGenerated={() => {}} />);
-    const btn = screen.getByRole("button", { name: "Generate AI explanation & review" });
+    const btn = screen.getByRole("button", { name: "Generate AI findings" });
     expect(btn.className).toContain("bg-white");
     expect(btn.className).toContain("min-h-10");
-    expect(screen.getByText("Also updates the AI report below.")).toBeTruthy();
+    expect(screen.getByText("Also updates the AI findings below.")).toBeTruthy();
     await userEvent.click(btn);
     expect((await screen.findByRole("button", { name: "Generating…" }) as HTMLButtonElement).disabled).toBe(true);
     finish({ ok: true, json: async () => ({ narrative: "Text." }) });
@@ -237,12 +262,12 @@ describe("AI button in Member contributions", () => {
   it("is not rendered for a viewer who may not generate (admin)", () => {
     render(<Harness review={{ data: base, error: null, start: vi.fn() }} narrative={null} onGenerated={() => {}} allowed={false} />);
     expect(screen.queryByRole("button", { name: /generate|regenerate/i })).toBeNull();
-    expect(screen.queryByText("Also updates the AI report below.")).toBeNull();
+    expect(screen.queryByText("Also updates the AI findings below.")).toBeNull();
   });
 
   it("shows a calm status while writing, a failure line, and the neutral AI-addressed note", () => {
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, running: true }, error: null, start: vi.fn() }} />);
-    expect(screen.getByText("Writing work summaries. You can keep using the page.")).toBeTruthy();
+    expect(screen.getByText("Writing AI findings…")).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, status: "FAILED", aiAddressed: [{ userId: 2, name: "Ben Reyes", where: "docs", count: 1 }] }, error: null, start: vi.fn() }} />);
     expect(screen.getByText(/could not be written because the AI was unavailable/)).toBeTruthy();
     expect(screen.getByText(/Ben Reyes appears to address the AI/)).toBeTruthy();
@@ -251,31 +276,32 @@ describe("AI button in Member contributions", () => {
   it("has exactly one AI button in every state (none inside the AI card), and the label follows the state", () => {
     const review = { data: base, error: null, start: vi.fn() };
     const { rerender } = render(<Harness review={review} narrative={null} onGenerated={() => {}} />);
-    expect(screen.getAllByRole("button", { name: /explanation/i })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Generate AI explanation & review" })).toBeTruthy();
-    expect(screen.getByText(/No AI explanation yet\. Use the Generate AI explanation & review button in Member contributions above\./)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^(Re)?generate AI findings$/i })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Generate AI findings" })).toBeTruthy();
+    expect(screen.getByText(/No AI findings yet\. Use the Generate AI findings button in Member contributions above\./)).toBeTruthy();
     rerender(<Harness review={review} narrative="T." onGenerated={() => {}} />);
-    expect(screen.getAllByRole("button", { name: /explanation/i })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Regenerate AI explanation & review" }).className).toContain("bg-white");
+    expect(screen.getAllByRole("button", { name: /^(Re)?generate AI findings$/i })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Regenerate AI findings" }).className).toContain("bg-white");
     expect(screen.queryByRole("button", { name: "Regenerate" })).toBeNull();
-    expect(screen.queryByText(/No AI explanation yet/)).toBeNull();
+    expect(screen.queryByText(/No AI findings yet/)).toBeNull();
   });
 
-  it("labels the explanation as AI with the full footer", () => {
+  it("headings the card AI findings with an icon, no separate pill, and the full footer", () => {
     render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} basedOnAt="2026-10-24T01:00:00Z" />);
-    expect(screen.getByText("AI explanation")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "AI findings" })).toBeTruthy();
+    expect(screen.getAllByText("AI findings")).toHaveLength(1);
     expect(screen.getByText(/May be wrong · Based on the analysis of .+\. Informational only; it does not assign grades or replace instructor judgment\./)).toBeTruthy();
   });
 
   it("status line: ready, not generated yet, and writing", () => {
     const mk = (data: AiReviewResponse) => ({ data, error: null, start: vi.fn() });
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk(base)} />);
-    expect(screen.getByText("✓ Work summaries ready · open a member below to read theirs")).toBeTruthy();
+    expect(screen.getByText("✓ AI findings ready · open a member below to read theirs")).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ ...base, summaries: null })} />);
-    expect(screen.getByText("Work summaries not generated yet")).toBeTruthy();
+    expect(screen.getByText("AI findings not generated yet")).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ ...base, summaries: null, running: true })} />);
-    expect(screen.getByText("Writing work summaries. You can keep using the page.")).toBeTruthy();
+    expect(screen.getByText("Writing AI findings…")).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ enabled: false })} />);
-    expect(screen.queryByText(/Work summaries/)).toBeNull();
+    expect(screen.queryByText(/ready · open|not generated yet|Writing AI findings/)).toBeNull();
   });
 });

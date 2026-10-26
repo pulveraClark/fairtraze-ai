@@ -1,5 +1,5 @@
 // Says where a piece of text came from. AI-written text gets the indigo "AI" pill; the facts-only
-// fallback (a list of changed files, no AI involved) gets a grey pill that never says "AI summary".
+// fallback (a list of changed files, no AI involved) gets a grey pill that never says "AI findings".
 // Text always carries the meaning; the icons are decoration (aria-hidden). Colors are the 100/900
 // pairs used by PILL_TONES (contrast above 4.5:1), and the pill wraps instead of overflowing.
 
@@ -7,7 +7,7 @@ export type AiBadgeVariant = "ai" | "facts" | "writing";
 
 const PILL = "inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-normal";
 
-function SparkleIcon() {
+export function SparkleIcon() {
   return (
     <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2zm7 11l.9 2.6L22.5 16l-2.6.9L19 19.5l-.9-2.6-2.6-.9 2.6-.9L19 13z" />
@@ -32,7 +32,7 @@ function SpinnerIcon() {
   );
 }
 
-export function AiBadge({ variant, label = "AI summary" }: { variant: AiBadgeVariant; label?: string }) {
+export function AiBadge({ variant, label = "AI findings" }: { variant: AiBadgeVariant; label?: string }) {
   if (variant === "facts") {
     return (
       <span className={`${PILL} border-slate-300 bg-slate-100 text-slate-900`}>

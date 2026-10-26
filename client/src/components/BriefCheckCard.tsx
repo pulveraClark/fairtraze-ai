@@ -7,7 +7,7 @@ import { DocSectionLink, DocsTabLink, useOpenDocSection } from "../hooks/useDocS
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 
-// "Brief check - AI review, may be wrong". Shown to the instructor and the group leader only (the server
+// "Brief check - may be wrong" with the AI findings badge. Shown to the instructor and the group leader only (the server
 // decides; this file never filters by role). It says whether each requirement of the brief is present in
 // the group's work. It is not a grade, a score or a judgment of quality.
 
@@ -161,8 +161,8 @@ export function BriefCheckCard({ check, instructor = false, repoUrl }: { check: 
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-700 transition-transform [details[open]>summary_&]:rotate-90" fill="currentColor">
           <path d="M7 4l6 6-6 6V4z" />
         </svg>
-        Brief check · AI review, may be wrong
-        <AiBadge variant="ai" label="AI explanation" />
+        Brief check · may be wrong
+        <AiBadge variant="ai" />
       </summary>
       <div className="space-y-3 border-t border-slate-200 px-3 py-3">
         <p className="flex items-center gap-1 text-xs leading-normal text-slate-700">

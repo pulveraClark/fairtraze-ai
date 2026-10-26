@@ -6,7 +6,7 @@ import { AiBadge } from "../ui/AiBadge";
 import { FileEvidenceLink } from "../ui/ExternalEvidenceLink";
 import { DocSectionLink } from "../../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../../lib/helpText";
-import { formatBasedOn, summaryFor, type AiReviewResponse, type AiSummaryView } from "../../lib/aiReview";
+import { aiButtonLabel, aiSourceLine, formatBasedOn, summaryFor, type AiReviewResponse, type AiSummaryView } from "../../lib/aiReview";
 
 // Short, neutral "what this member worked on" text with its evidence. Display only: the server
 // decides who receives a summary; this file never filters by role.
@@ -55,8 +55,10 @@ function EvidenceDetails({ s }: { s: AiSummaryView }) {
 }
 
 export function WorkSummaryBlock({
-  summary, data, instructor = false, label, onRegenerate,
+  summary, data, instructor = false, label, onRegenerate, sourceType,
 }: {
+  /** The group's source type (GITHUB / EDITOR / COMBINED); decides what the "Written by AI" line says it read. */
+  sourceType?: string | null;
   summary: AiSummaryView;
   data: AiReviewResponse;
   /** The instructor is told when a newer analysis exists; members just see the date. */
@@ -76,7 +78,7 @@ export function WorkSummaryBlock({
       </p>
       {facts && (
         <p className="mt-1.5 text-xs leading-normal text-slate-700">
-          The AI summary couldn't be written right now, so this shows the changed files.
+          The AI findings couldn't be written right now, so this shows the changed files.
           {canRegenerate && (
             <>
               {" "}
@@ -94,7 +96,7 @@ export function WorkSummaryBlock({
       <p className="mt-1.5 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{summary.summary}</p>
       <EvidenceDetails s={summary} />
       <p className="mt-2 text-xs leading-normal text-slate-700">
-        {facts ? "" : `May be wrong${when ? ` · Based on the analysis of ${when}` : ""}.`}
+        {facts ? "" : `${aiSourceLine(sourceType)} May be wrong${when ? ` · Based on the analysis of ${when}` : ""}.`}
         {instructor && data.outdated ? `${facts ? "" : " "}A newer analysis exists.` : ""}
       </p>
     </div>
@@ -103,8 +105,9 @@ export function WorkSummaryBlock({
 
 /** Instructor: the section at the top of the member details window. Renders nothing when AI review is off. */
 export function MemberWorkSummary({
-  review, member, onGenerate, generating = false,
+  review, member, onGenerate, generating = false, sourceType,
 }: {
+  sourceType?: string | null;
   review: AiReviewResponse | null;
   member: { userId?: number; githubUsername?: string | null };
   /** The same action as the AI report's button. The button shows only when the server says this viewer may generate. */
@@ -117,29 +120,29 @@ export function MemberWorkSummary({
     <section aria-labelledby="work-summary-title" className="border-t border-slate-200 py-3">
       <h3 id="work-summary-title" className="mb-1.5 flex items-center gap-1 text-base font-semibold leading-snug text-slate-900">
         What this member worked on
-        <InfoTip label="About the work summary" helpHref={helpLink("ai")}>{TIPS.workSummary}</InfoTip>
+        <InfoTip label="About the AI findings" helpHref={helpLink("ai")}>{TIPS.workSummary}</InfoTip>
       </h3>
       {review.running && !summary ? (
         <AiBadge variant="writing" />
       ) : summary ? (
-        <WorkSummaryBlock summary={summary} data={review} instructor onRegenerate={onGenerate} />
+        <WorkSummaryBlock summary={summary} data={review} instructor onRegenerate={onGenerate} sourceType={sourceType} />
       ) : review.canGenerate && review.hasReport && onGenerate ? (
         <div className="flex flex-col items-start gap-2">
-          <p className="text-sm leading-normal text-slate-700">No work summary yet.</p>
+          <p className="text-sm leading-normal text-slate-700">No AI findings yet.</p>
           <button
             type="button"
             onClick={onGenerate}
             disabled={generating}
             className={`${BUTTON_SECONDARY} [@media(pointer:coarse)]:min-h-10`}
           >
-            {generating ? "Generating…" : "Generate AI explanation & review"}
+            {aiButtonLabel(generating, false)}
           </button>
           <p className="text-xs leading-normal text-slate-700">
             Same as the button in Member contributions. Covers the whole group (about 1 minute).
           </p>
         </div>
       ) : (
-        <p className="text-sm leading-normal text-slate-700">No work summary yet.</p>
+        <p className="text-sm leading-normal text-slate-700">No AI findings yet.</p>
       )}
     </section>
   );

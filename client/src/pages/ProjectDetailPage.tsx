@@ -885,6 +885,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               review={aiReview.data}
               onGenerate={() => { void aiGenerator.generate(!!narrativeText); }}
               generating={aiGenerator.generating}
+              sourceType={sourceType}
               member={{ userId: (selectedMember as { userId?: number }).userId, githubUsername: (selectedMember as { githubUsername?: string }).githubUsername }}
             />
           ) : undefined}

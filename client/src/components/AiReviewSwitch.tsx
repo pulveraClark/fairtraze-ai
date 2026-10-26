@@ -54,9 +54,9 @@ export function AiReviewSwitch({
         >
           <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${enabled ? "left-3.5" : "left-0.5"}`} />
         </span>
-        AI work summaries: {enabled ? "On" : "Off"}
+        AI findings: {enabled ? "On" : "Off"}
       </button>
-      <InfoTip label="About AI work summaries" helpHref={helpLink("ai")}>{TIPS.aiReviewClass}</InfoTip>
+      <InfoTip label="About AI findings" helpHref={helpLink("ai")}>{TIPS.aiReviewClass}</InfoTip>
       {error && <p role="alert" className="w-full text-xs text-red-800">{error}</p>}
     </div>
   );
