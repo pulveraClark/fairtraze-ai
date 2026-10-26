@@ -16,7 +16,14 @@ export type AiViewer = "instructor" | "leader" | "member";
 
 export interface AiMemberSummaryView extends AiMemberSummary {
   name: string;
+  // Lets the report match a GitHub-only member (who has no user id in the stored report).
+  githubUsername: string | null;
   isYou: boolean;
+}
+
+export interface AiPerson {
+  name: string;
+  githubUsername: string | null;
 }
 
 // Who sees what, decided here and nowhere else:
@@ -29,14 +36,19 @@ export function shapeSummariesForViewer(
   content: AiMemberSummariesContent,
   viewer: AiViewer,
   viewerUserId: number,
-  names: Map<number, string>,
+  people: Map<number, AiPerson>,
 ): { summaries: AiMemberSummaryView[]; aiAddressed?: Array<AiAddressedNote & { name: string }> } {
   const visible = viewer === "member" ? content.members.filter((m) => m.userId === viewerUserId) : content.members;
-  const summaries = visible.map((m) => ({ ...m, name: names.get(m.userId) ?? "Former member", isYou: m.userId === viewerUserId }));
+  const summaries = visible.map((m) => ({
+    ...m,
+    name: people.get(m.userId)?.name ?? "Former member",
+    githubUsername: people.get(m.userId)?.githubUsername ?? null,
+    isYou: m.userId === viewerUserId,
+  }));
   if (viewer !== "instructor") return { summaries };
   return {
     summaries,
-    aiAddressed: content.aiAddressed.map((a) => ({ ...a, name: names.get(a.userId) ?? "Former member" })),
+    aiAddressed: content.aiAddressed.map((a) => ({ ...a, name: people.get(a.userId)?.name ?? "Former member" })),
   };
 }
 
@@ -95,8 +107,8 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     return;
   }
 
-  const names = new Map(project.groupMemberships.map((m) => [m.userId, m.user.name]));
-  const shaped = shapeSummariesForViewer(review.content as unknown as AiMemberSummariesContent, viewer, req.user!.sub, names);
+  const people = new Map(project.groupMemberships.map((m) => [m.userId, { name: m.user.name, githubUsername: m.user.githubUsername ?? null }]));
+  const shaped = shapeSummariesForViewer(review.content as unknown as AiMemberSummariesContent, viewer, req.user!.sub, people);
   const basedOn = await prisma.report.findUnique({ where: { id: review.reportId }, select: { generatedAt: true } });
   res.json({
     ...base,

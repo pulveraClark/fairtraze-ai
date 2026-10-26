@@ -6,6 +6,8 @@ import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
+import { aiAddressedLine, reviewStatusLine } from "../lib/aiReview";
+import type { UseAiReview } from "../hooks/useAiReview";
 
 interface Props {
   narrative: string | null;
@@ -13,16 +15,26 @@ interface Props {
   outdated?: boolean;
   projectId: number;
   onNarrativeGenerated: (text: string) => void;
+  /** AI work summaries for this group. When on, the Generate button also writes them. */
+  review?: UseAiReview;
 }
 
-export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated }: Props) {
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review }: Props) {
   const { token } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
+  // One button for both: the explanation and, when AI review is on for the class, the work summaries.
+  const reviewOn = !!review?.data?.enabled && !!review.data.canGenerate && !!review.data.hasReport;
+  const generateLabel = reviewOn ? "Generate AI explanation & review" : "Generate explanation";
+  const statusLine = reviewStatusLine(review?.data ?? null);
+  const addressedLine = aiAddressedLine(review?.data ?? null);
+
   async function generate(regenerate = false) {
     setGenerating(true);
     setError(null);
+    // The review runs in the background; it never delays or blocks the explanation.
+    if (reviewOn) void review!.start();
     try {
       const url = `/api/projects/${projectId}/narrative${regenerate ? "?regenerate=true" : ""}`;
       const res = await fetch(url, {
@@ -60,6 +72,14 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
         )}
       </div>
 
+      {/* Work-summary status: one calm line each, only when there is something to say */}
+      {review?.data?.enabled && review.data.running && (
+        <p role="status" className="mb-3 text-sm leading-normal text-slate-700">Writing work summaries. You can keep using the page.</p>
+      )}
+      {review?.error && <p role="alert" className="mb-3 text-sm text-red-800">{review.error}</p>}
+      {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
+      {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
+
       {/* No narrative yet */}
       {!narrative && !generating && (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
@@ -67,7 +87,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
             The computed scores are ready. Generate an AI explanation when you need it.
           </p>
           <button type="button" onClick={() => generate(false)} className={BUTTON_SECONDARY}>
-            Generate explanation
+            {generateLabel}
           </button>
           {error && (
             <p className="max-w-sm text-sm text-red-800">{error}</p>

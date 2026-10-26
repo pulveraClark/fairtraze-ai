@@ -38,6 +38,8 @@ interface Props {
   onOpenDisputes?: () => void;
   /** Opens the existing Scoring settings (closes the drawer first). */
   onOpenScoringSettings?: () => void;
+  /** AI work summary section, shown first in the main column. Display only. */
+  workSummary?: ReactNode;
 }
 
 export function NotAvailable({ children }: { children?: ReactNode }) {
@@ -289,7 +291,7 @@ function MemberSidebar({
 }
 
 /** Right column: the collapsible detail sections. Keyed by member so open/closed state resets on a switch. */
-function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: ColumnProps) {
+function MemberSections({ member, source, memberRoles, onOpenScoringSettings, workSummary }: ColumnProps) {
   const userId = useAuthOptional()?.user?.id ?? null;
   const [whereOpen, setWhereOpen] = useState(() => readSectionOpen(userId, "where", true));
   const [impactOpen, setImpactOpen] = useState(false);
@@ -308,6 +310,7 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings }: 
 
   return (
     <>
+      {workSummary}
       {/* Collapsible sections */}
       {showGithub && (
         <>

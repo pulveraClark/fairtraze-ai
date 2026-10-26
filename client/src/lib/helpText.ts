@@ -31,7 +31,8 @@ export const TIPS = {
   flagBasisDeadline: "The last third is counted from the group's first recorded activity up to the assignment deadline.",
   flagBasisSpan: "No deadline was set, so the last third is counted across the group's first-to-last recorded activity.",
   scoreBlend: "Your combined share is your GitHub share and your Docs share blended with these weights. Your instructor sets them.",
-  narrative: "A formula works out every number and flag. The AI only describes them in words and never changes them or gives a grade.",
+  narrative: "A formula works out every number and flag. The AI only describes them in words, writes short work summaries that may be wrong, and never changes a number or gives a grade.",
+  workSummary: "Written by AI from this member's commits and their own part of the Docs. It can be wrong, so check the evidence.",
   authorship: "Colors show who typed each part of the document. Turn it off to read without colors.",
   equalShareMember: (equalPct: number, members: number) =>
     `The marker is an equal split of the work: ${pct(equalPct)} each for ${members} members. It is a reference point, not a target.`,

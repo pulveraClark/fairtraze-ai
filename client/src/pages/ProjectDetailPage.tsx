@@ -15,6 +15,8 @@ import { giniBandsText } from "../lib/giniBands";
 import type { FlagSource } from "../lib/flagRules";
 import { usePrefersReducedMotion } from "../lib/usePrefersReducedMotion";
 import { Narrative } from "../components/Narrative";
+import { MemberWorkSummary } from "../components/report/AiWorkSummary";
+import { useAiReview } from "../hooks/useAiReview";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
@@ -52,6 +54,7 @@ interface Props {
 export function ProjectDetailPage({ projectId }: Props) {
   const { navigate }  = useRouter();
   const { token, user } = useAuth();
+  const aiReview = useAiReview(projectId, token);
 
   const [stored, setStored]               = useState<StoredReportResponse | null>(null);
   const [narrativeText, setNarrativeText] = useState<string | null>(null);
@@ -753,6 +756,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                   narrative={narrativeText}
                   outdated={narrativeOutdated}
                   projectId={projectId}
+                  review={aiReview}
                   onNarrativeGenerated={(text) => { setNarrativeText(text); setNarrativeOutdated(false); }}
                 />
               </div>
@@ -859,6 +863,12 @@ export function ProjectDetailPage({ projectId }: Props) {
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
           onOpenDisputes={() => { setSelectedName(null); navigate("/disputes"); }}
           onOpenScoringSettings={() => { setSelectedName(null); setShowScoringModal(true); }}
+          workSummary={selectedMember ? (
+            <MemberWorkSummary
+              review={aiReview.data}
+              member={{ userId: (selectedMember as { userId?: number }).userId, githubUsername: (selectedMember as { githubUsername?: string }).githubUsername }}
+            />
+          ) : undefined}
         />
       )}
 

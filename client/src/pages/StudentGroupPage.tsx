@@ -43,6 +43,7 @@ import { NextStepLine } from "../components/NextStepLine";
 import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
+import { StudentWorkSummaries } from "../components/StudentWorkSummaries";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -872,6 +873,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     </div>
                   );
                 })()}
+
+                {/* AI work summaries: a member sees their own; the leader sees every member (the server decides) */}
+                <StudentWorkSummaries projectId={projectId} isLeader={membership.role === "LEADER"} />
 
                 {/* Leader-only: every member's share, so work can be rebalanced */}
                 {report.team && <LeaderTeamCard team={report.team} currentUserId={user?.id} sourceType={sourceType} noActivity={report.noActivity} />}
