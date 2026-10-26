@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 import { prisma } from "../src/lib/prisma.js";
+import { AI_REVIEW_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
 import { createApp } from "../src/app.js";
 import { waitForReview } from "../src/lib/aiReview/reviewLock.js";
 
@@ -21,7 +22,7 @@ async function setup() {
   await createMembership(student.id, project.id, "LEADER");
   const report = await prisma.report.create({ data: { projectId: project.id, content: "{}" } });
   await prisma.aiReportReview.create({
-    data: { reportId: report.id, kind: "MEMBER_SUMMARIES", status: "OK", promptVersion: "ai-review-1", model: "m", content: { members: [{ userId: student.id, summary: "Wrote the Intro.", source: "ai", evidence: { files: [], docSections: [], commitCount: 0, otherCommits: 0 } }], aiAddressed: [] } },
+    data: { reportId: report.id, kind: "MEMBER_SUMMARIES", status: "OK", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", content: { members: [{ userId: student.id, summary: "Wrote the Intro.", source: "ai", evidence: { files: [], docSections: [], commitCount: 0, otherCommits: 0 } }], aiAddressed: [] } },
   });
   return { instructor, other, admin, student, cls, project, report };
 }

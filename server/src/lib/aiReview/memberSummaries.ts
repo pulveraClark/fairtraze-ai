@@ -5,7 +5,7 @@ import { buildPseudonymEntries } from "../geminiPseudonyms.js";
 import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
 import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
 import type { AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiReviewStatus } from "@shared/aiReviewTypes.js";
-import { fetchCommitEvidence, type CommitEvidence } from "./commitEvidence.js";
+import { fetchCommitEvidence, MAX_REMOVED_LINES_PER_FILE, type CommitEvidence } from "./commitEvidence.js";
 import { loadGroupDocEvidence, memberDocEvidence } from "./docsEvidence.js";
 import { sanitizeForAi } from "./sanitize.js";
 import { redactSecrets } from "./redact.js";
@@ -71,6 +71,10 @@ function fitBatchPayload(evidence: CommitEvidence[], sanitize: (t: string, sha: 
         added: f.added,
         removed: f.removed,
         addedLines: f.addedLines.slice(0, maxLines).map((l) => sanitize(l, e.sha)),
+        // Only present for a file that lost more lines than it gained; shrinks with the added lines.
+        ...(f.removedLines.length > 0
+          ? { removedLines: f.removedLines.slice(0, Math.min(maxLines, MAX_REMOVED_LINES_PER_FILE)).map((l) => sanitize(l, e.sha)) }
+          : {}),
       })),
     }));
   for (const maxLines of [40, 15, 5, 0]) {

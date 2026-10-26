@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 import { prisma } from "../src/lib/prisma.js";
+import { AI_REVIEW_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
 import { createApp } from "../src/app.js";
 import { waitForReview, startReview } from "../src/lib/aiReview/reviewLock.js";
 import { anonymizeUser } from "../src/lib/anonymizeUser.js";
@@ -32,7 +33,7 @@ async function setup() {
       reportId: report.id,
       kind: "MEMBER_SUMMARIES",
       status: "PARTIAL",
-      promptVersion: "ai-review-1",
+      promptVersion: AI_REVIEW_PROMPT_VERSION,
       model: "m",
       errorCode: "AI_UNAVAILABLE",
       content: {
@@ -169,7 +170,7 @@ describe("privacy: export and erasure", () => {
     const s = await setup();
     await prisma.user.update({ where: { id: s.ben.id }, data: { githubUsername: "benreyes" } });
     await prisma.aiCommitDigest.create({
-      data: { projectId: s.project.id, sha: "abc", promptVersion: "ai-review-1", model: "m", authorLogin: "benreyes", summary: "Added x.", files: [] },
+      data: { projectId: s.project.id, sha: "abc", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", authorLogin: "benreyes", summary: "Added x.", files: [] },
     });
     const result = await anonymizeUser(s.ben.id, { actorId: s.instructor.id, actorName: "Admin", action: "USER_DELETED" });
     expect(result).toBeTruthy();

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { prisma } from "../src/lib/prisma.js";
+import { AI_REVIEW_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
 import { generateBriefComparison, runBriefComparison, type BriefDeps } from "../src/lib/aiReview/briefComparison.js";
 import { AiReviewError } from "../src/lib/geminiClient.js";
 import { createUser, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
@@ -47,7 +48,7 @@ describe("runBriefComparison", () => {
   it("lists each requirement with verified evidence and sends only sanitized, filtered material", async () => {
     const { project, ana } = await setup();
     await prisma.aiCommitDigest.create({
-      data: { projectId: project.id, sha: "abc", promptVersion: "ai-review-1", model: "m", authorLogin: "anacruz", summary: "Added login.", files: [{ path: "src/Login.tsx", added: 20, removed: 0 }] },
+      data: { projectId: project.id, sha: "abc", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", authorLogin: "anacruz", summary: "Added login.", files: [{ path: "src/Login.tsx", added: 20, removed: 0 }] },
     });
     const generate = answer([
       { text: "The app has a login page.", status: "FOUND", evidence: [{ type: "file", ref: "src/Login.tsx", quote: "export function Login()" }] },

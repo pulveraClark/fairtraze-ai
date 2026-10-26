@@ -8,17 +8,23 @@ import { skipReason } from "./skipRules.js";
 export const MAX_FILES_PER_COMMIT = 6;
 export const MAX_ADDED_LINES_PER_FILE = 40;
 export const MAX_LINE_CHARS = 160;
+// Removed lines are sent only for a file that lost more lines than it gained, so a deletion-heavy commit
+// can be described by what it took out.
+export const MAX_REMOVED_LINES_PER_FILE = 20;
+export const MAX_MESSAGE_CHARS = 300;
 
 export interface CommitFileEvidence {
   path: string;
   added: number;
   removed: number;
   addedLines: string[];
+  // Empty unless removed > added.
+  removedLines: string[];
 }
 
 export interface CommitEvidence {
   sha: string;
-  message: string; // first line only
+  message: string; // the whole message, cut at MAX_MESSAGE_CHARS
   authorLogin: string | null;
   files: CommitFileEvidence[];
   // Changed files left out (generated, lock, binary, secret-named, or past the per-commit cap).
@@ -40,6 +46,20 @@ function addedLinesOf(patch: string): string[] {
   return out;
 }
 
+function removedLinesOf(patch: string): string[] {
+  const out: string[] = [];
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("-") && !line.startsWith("--")) out.push(line.slice(1));
+  }
+  return out;
+}
+
+const keepLines = (lines: string[], max: number) =>
+  lines
+    .filter((l) => l.trim() !== "")
+    .slice(0, max)
+    .map((l) => (l.length > MAX_LINE_CHARS ? l.slice(0, MAX_LINE_CHARS) : l));
+
 export function condenseCommit(raw: {
   sha: string;
   message: string;
@@ -55,15 +75,17 @@ export function condenseCommit(raw: {
       continue;
     }
     const lines = addedLinesOf(f.patch ?? "");
+    const added = f.additions ?? lines.length;
+    const removed = f.deletions ?? 0;
     kept.push({
       path: f.filename,
-      added: f.additions ?? lines.length,
-      removed: f.deletions ?? 0,
-      addedLines: lines
-        .filter((l) => l.trim() !== "")
-        .slice(0, MAX_ADDED_LINES_PER_FILE)
-        .map((l) => (l.length > MAX_LINE_CHARS ? l.slice(0, MAX_LINE_CHARS) : l)),
-      weight: getFileWeight(f.filename) * (f.additions ?? lines.length),
+      added,
+      removed,
+      addedLines: keepLines(lines, MAX_ADDED_LINES_PER_FILE),
+      removedLines: removed > added ? keepLines(removedLinesOf(f.patch ?? ""), MAX_REMOVED_LINES_PER_FILE) : [],
+      // A removal-only file would weigh 0 and sort last (or be cut by the per-commit cap): count the
+      // lines it removed, so a deletion-heavy commit keeps its files.
+      weight: getFileWeight(f.filename) * Math.max(added, removed),
     });
   }
   kept.sort((a, b) => b.weight - a.weight || a.path.localeCompare(b.path));
@@ -71,7 +93,7 @@ export function condenseCommit(raw: {
   skipped += kept.length - top.length;
   return {
     sha: raw.sha,
-    message: raw.message.split("\n")[0]!.trim(),
+    message: raw.message.trim().slice(0, MAX_MESSAGE_CHARS),
     authorLogin: raw.authorLogin,
     files: top.map(({ weight: _weight, ...file }) => file),
     skippedFiles: skipped,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { condenseCommit, MAX_FILES_PER_COMMIT, MAX_ADDED_LINES_PER_FILE, MAX_LINE_CHARS } from "./commitEvidence.js";
+import { condenseCommit, MAX_FILES_PER_COMMIT, MAX_ADDED_LINES_PER_FILE, MAX_LINE_CHARS, MAX_MESSAGE_CHARS, MAX_REMOVED_LINES_PER_FILE } from "./commitEvidence.js";
 import { flattenDocument, memberDocEvidence } from "./docsEvidence.js";
 import { sanitizeForAi } from "./sanitize.js";
 import { buildPseudonymEntries } from "../geminiPseudonyms.js";
@@ -8,7 +8,7 @@ import type { DocBlock } from "../../collab/documentExport.js";
 const patch = (lines: string[]) => ["@@ -0,0 +1 @@", ...lines.map((l) => `+${l}`), "-old", "+++ not a line"].join("\n");
 
 describe("condenseCommit", () => {
-  it("keeps source files, drops generated/lock/binary/secret files, and keeps only the first message line", () => {
+  it("keeps source files, drops generated/lock/binary/secret files, and keeps the message body", () => {
     const e = condenseCommit({
       sha: "abc1234",
       message: "Add login page\n\nlong body",
@@ -21,10 +21,38 @@ describe("condenseCommit", () => {
         { filename: "src/big.ts", additions: 2 }, // no patch
       ],
     });
-    expect(e.message).toBe("Add login page");
+    expect(e.message).toBe("Add login page\n\nlong body");
     expect(e.files.map((f) => f.path)).toEqual(["src/Login.tsx"]);
-    expect(e.files[0]).toMatchObject({ added: 3, removed: 1, addedLines: ["a", "b", "c"] });
+    expect(e.files[0]).toMatchObject({ added: 3, removed: 1, addedLines: ["a", "b", "c"], removedLines: [] });
     expect(e.skippedFiles).toBe(4);
+  });
+
+  it("cuts a long message at 300 characters", () => {
+    const e = condenseCommit({ sha: "s", message: `Title\n${"x".repeat(500)}`, authorLogin: null, files: [] });
+    expect(e.message).toHaveLength(MAX_MESSAGE_CHARS);
+  });
+
+  it("sends removed lines (capped) only for a file that lost more than it gained", () => {
+    const del = (n: number) => ["@@ -1,40 +1 @@", ...Array.from({ length: n }, (_, i) => `-gone line ${i}`), "-", "+kept"].join("\n");
+    const e = condenseCommit({
+      sha: "s", message: "m", authorLogin: null,
+      files: [
+        { filename: "src/Trip.py", additions: 1, deletions: 30, patch: del(30) },
+        { filename: "src/Add.py", additions: 5, deletions: 2, patch: patch(["a"]) },
+      ],
+    });
+    const trip = e.files.find((f) => f.path === "src/Trip.py")!;
+    expect(trip.removedLines).toHaveLength(MAX_REMOVED_LINES_PER_FILE);
+    expect(trip.removedLines[0]).toBe("gone line 0");
+    expect(e.files.find((f) => f.path === "src/Add.py")!.removedLines).toEqual([]);
+  });
+
+  it("keeps a removal-only file even when it would otherwise be cut by the file cap", () => {
+    const files = [
+      ...Array.from({ length: MAX_FILES_PER_COMMIT }, (_, i) => ({ filename: `src/n${i}.ts`, additions: 2, patch: patch(["a"]) })),
+      { filename: "src/Gone.ts", additions: 0, deletions: 13, patch: "@@ -1,13 +0,0 @@\n-a\n-b" },
+    ];
+    expect(condenseCommit({ sha: "s", message: "m", authorLogin: null, files }).files.map((f) => f.path)).toContain("src/Gone.ts");
   });
 
   it("caps files per commit (largest first), added lines per file and line length", () => {
