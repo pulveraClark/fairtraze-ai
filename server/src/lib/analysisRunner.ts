@@ -12,6 +12,7 @@ import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig } from "./scoringConf
 import { linkCommitsBestEffort } from "./taskCommitLinks.js";
 import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 import { LATEST_REPORT_ORDER } from "./latestReport.js";
+import { withAnalysisLock, ANALYSIS_IN_PROGRESS } from "./analysisLock.js";
 
 // The analysis itself, independent of Express. routes/analyze.ts wraps it for the manual button
 // (ownership, SSE); the automatic runs call it with a no-op progress emitter.
@@ -203,7 +204,14 @@ export interface AnalysisOptions {
 
 // Fetches activity, computes scores, saves a new Report row. Does NOT call Gemini: any previously
 // saved narrative is carried forward, never generated here.
-export async function runAnalysis(projectId: number, { progress, actorInstructorId }: AnalysisOptions): Promise<AnalysisResult> {
+export async function runAnalysis(projectId: number, options: AnalysisOptions): Promise<AnalysisResult> {
+  // One analysis per group at a time. Answered before any stream opens, so it is plain JSON.
+  const locked = await withAnalysisLock(projectId, () => runAnalysisUnlocked(projectId, options));
+  if (!locked.ran) return { status: 409, body: { ...ANALYSIS_IN_PROGRESS }, streamed: false };
+  return locked.value;
+}
+
+async function runAnalysisUnlocked(projectId: number, { progress, actorInstructorId }: AnalysisOptions): Promise<AnalysisResult> {
   const done = (status: number, body: object): AnalysisResult => {
     progress.finish(status, body);
     return { status, body, streamed: true };
