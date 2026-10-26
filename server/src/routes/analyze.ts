@@ -97,7 +97,7 @@ async function runAnalyze(req: Request, res: Response, progress: ProgressEmitter
     res.status(400).json({ error: "Invalid project id" });
     return;
   }
-  const result = await runAnalysis(idResult.data, { progress, actorInstructorId: req.user!.sub });
+  const result = await runAnalysis(idResult.data, { progress, actorInstructorId: req.user!.sub, trigger: "manual" });
   // Errors found before the stream opened stay plain JSON, as before.
   if (!result.streamed) res.status(result.status).json(result.body);
 }
@@ -167,7 +167,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
     );
     await prisma.report.update({
       where: { id: latestReport.id },
-      data: { content: JSON.stringify({ ...stored, narrative }) },
+      data: { content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined }) },
     });
     res.json({ narrative, cached: false });
   } catch (err) {

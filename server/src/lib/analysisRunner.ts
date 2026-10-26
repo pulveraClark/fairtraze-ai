@@ -12,6 +12,7 @@ import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig } from "./scoringConf
 import { linkCommitsBestEffort } from "./taskCommitLinks.js";
 import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamReport, ProjectScoringConfig, DocumentScoredMember } from "@shared/types.js";
 import { LATEST_REPORT_ORDER } from "./latestReport.js";
+import { reportPolicy, type AnalysisTrigger } from "./resultsChange.js";
 import { withAnalysisLock, ANALYSIS_IN_PROGRESS } from "./analysisLock.js";
 
 // The analysis itself, independent of Express. routes/analyze.ts wraps it for the manual button
@@ -189,6 +190,8 @@ function buildRawMembers(
   return { rawMembers, unmatchedLogins };
 }
 
+interface StoredReport { report?: TeamReport; narrative?: string; narrativeOutdated?: boolean }
+
 export interface AnalysisResult {
   status: number;
   body: object;
@@ -200,6 +203,8 @@ export interface AnalysisOptions {
   progress: ProgressEmitter;
   // The instructor who must own the class; null for system callers (automatic runs).
   actorInstructorId: number | null;
+  // Who started this run; stored on the report and decides whether alerts are raised.
+  trigger: AnalysisTrigger;
 }
 
 // Fetches activity, computes scores, saves a new Report row. Does NOT call Gemini: any previously
@@ -211,7 +216,7 @@ export async function runAnalysis(projectId: number, options: AnalysisOptions): 
   return locked.value;
 }
 
-async function runAnalysisUnlocked(projectId: number, { progress, actorInstructorId }: AnalysisOptions): Promise<AnalysisResult> {
+async function runAnalysisUnlocked(projectId: number, { progress, actorInstructorId, trigger }: AnalysisOptions): Promise<AnalysisResult> {
   const done = (status: number, body: object): AnalysisResult => {
     progress.finish(status, body);
     return { status, body, streamed: true };
@@ -262,15 +267,16 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER] });
-    const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+    const stored = existing?.content ? (JSON.parse(existing.content) as StoredReport) : {};
     const savedNarrative = stored.narrative ?? null;
+    const policy = reportPolicy(trigger, stored, report, savedNarrative);
     progress.emit("save", {});
     const createdReport = await prisma.report.create({
       data: {
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null, scoringRulesVersion: SCORING_RULES_VERSION }),
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null, scoringRulesVersion: SCORING_RULES_VERSION, ...policy.contentExtras }),
       },
     });
 
@@ -284,9 +290,9 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
       data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
     });
 
-    await notifyReportReady(project);
+    if (policy.notify) await notifyReportReady(project);
 
-    generateAlertsForProject(projectId, report, {
+    if (policy.notify) generateAlertsForProject(projectId, report, {
       groupName:      project.groupName,
       assignmentLabel: project.assignmentLabel,
       assignmentId:   project.assignmentId,
@@ -364,15 +370,16 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     );
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER] });
-    const stored = existing?.content ? (JSON.parse(existing.content) as { narrative?: string }) : {};
+    const stored = existing?.content ? (JSON.parse(existing.content) as StoredReport) : {};
     const savedNarrative = stored.narrative ?? null;
+    const policy = reportPolicy(trigger, stored, report, savedNarrative);
     progress.emit("save", {});
     const createdReport = await prisma.report.create({
       data: {
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION }),
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION, ...policy.contentExtras }),
       },
     });
 
@@ -399,11 +406,11 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
       data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
     });
 
-    await notifyReportReady(project);
+    if (policy.notify) await notifyReportReady(project);
     // Task commit linking (messages only). Best effort: never throws and never touches the report or scores.
     await linkCommitsBestEffort({ id: projectId, repoUrl: project.repoUrl });
 
-    generateAlertsForProject(projectId, report, {
+    if (policy.notify) generateAlertsForProject(projectId, report, {
       groupName:      project.groupName,
       assignmentLabel: project.assignmentLabel,
       assignmentId:   project.assignmentId,
@@ -468,16 +475,17 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
   });
 
   const stored = existing?.content
-    ? (JSON.parse(existing.content) as { report?: TeamReport; narrative?: string })
+    ? (JSON.parse(existing.content) as StoredReport)
     : {};
   const savedNarrative = stored.narrative ?? null;
+    const policy = reportPolicy(trigger, stored, report, savedNarrative);
   progress.emit("save", {});
   await prisma.report.create({
     data: {
       projectId,
       gini:      report.gini,
       teamHealth: report.teamHealth,
-      content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION }),
+      content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins, scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION, ...policy.contentExtras }),
     },
   });
 
@@ -488,11 +496,11 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
   });
 
   // Fire-and-forget: generate alerts for at-risk groups. Never blocks the response.
-  await notifyReportReady(project);
+  if (policy.notify) await notifyReportReady(project);
   // Task commit linking (messages only). Best effort: never throws and never touches the report or scores.
   await linkCommitsBestEffort({ id: projectId, repoUrl: project.repoUrl });
 
-  generateAlertsForProject(projectId, report, {
+  if (policy.notify) generateAlertsForProject(projectId, report, {
     groupName:      project.groupName,
     assignmentLabel: project.assignmentLabel,
     assignmentId:   project.assignmentId,

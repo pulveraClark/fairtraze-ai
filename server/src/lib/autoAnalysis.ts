@@ -4,6 +4,7 @@ import { fetchLatestCommitTime } from "./githubCommitMessages.js";
 import { projectsWithRepoChangedSince } from "./repoChange.js";
 import { LATEST_REPORT_ORDER } from "./latestReport.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
+import { runAnalysis, silentProgress, type AnalysisResult } from "./analysisRunner.js";
 
 // Which groups get analyzed automatically, and whether anything changed since their last report.
 // Planning only: nothing here touches the analyzer or the scoring maths.
@@ -131,4 +132,96 @@ export function latestReportOf(projectId: number) {
     orderBy: [...LATEST_REPORT_ORDER],
     select: { id: true, generatedAt: true, content: true },
   });
+}
+
+export interface AutoRunSummary {
+  analyzed: number;
+  skipped: number;
+  failed: number;
+  /** Subset of skipped: not looked at because GitHub's rate limit was hit earlier in this run. */
+  skippedRateLimited: number;
+  /** Subset of skipped: another analysis already held the group. */
+  skippedLocked: number;
+}
+
+export interface AutoRunDeps {
+  change: ChangeDeps;
+  analyze: (projectId: number) => Promise<AnalysisResult>;
+  log: (line: string) => void;
+}
+
+const defaultRunDeps = (): AutoRunDeps => ({
+  change: defaultDeps(),
+  analyze: (projectId) => runAnalysis(projectId, { progress: silentProgress, actorInstructorId: null, trigger: "auto" }),
+  log: (line) => console.log(line),
+});
+
+const isRateLimit = (err: unknown) => {
+  const status = (err as { status?: number } | null)?.status;
+  return status === 403 || status === 429;
+};
+
+/**
+ * Analyzes every due group whose data changed, one at a time. A failure in one group never stops the
+ * others. After GitHub says "rate limited" the remaining groups that need GitHub are skipped (Docs-only
+ * groups still run). Never calls Gemini; alerts are raised only for changed results (see reportPolicy).
+ */
+export async function runAutoAnalysis(now: Date = new Date(), deps: AutoRunDeps = defaultRunDeps()): Promise<AutoRunSummary> {
+  const summary: AutoRunSummary = { analyzed: 0, skipped: 0, failed: 0, skippedRateLimited: 0, skippedLocked: 0 };
+  const groups = await selectDueGroups(now);
+  let rateLimited = false;
+
+  for (const group of groups) {
+    const needsGithub = group.sourceType !== "EDITOR";
+    if (rateLimited && needsGithub) {
+      summary.skipped++;
+      summary.skippedRateLimited++;
+      continue;
+    }
+    try {
+      const reason = await reasonToReanalyze(group, await latestReportOf(group.id), deps.change);
+      if (!reason) {
+        summary.skipped++;
+        continue;
+      }
+      const result = await deps.analyze(group.id);
+      if (result.status === 200) summary.analyzed++;
+      else if (result.status === 409) { summary.skipped++; summary.skippedLocked++; }
+      else if (result.status === 429) {
+        rateLimited = true;
+        summary.skipped++;
+        summary.skippedRateLimited++;
+      } else {
+        summary.failed++;
+        deps.log(`[auto-analyze] group ${group.id} failed: status ${result.status}`);
+      }
+    } catch (err) {
+      if (isRateLimit(err)) {
+        rateLimited = true;
+        summary.skipped++;
+        summary.skippedRateLimited++;
+      } else {
+        summary.failed++;
+        deps.log(`[auto-analyze] group ${group.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  deps.log(
+    `[auto-analyze] done: ${summary.analyzed} analyzed, ${summary.skipped} skipped` +
+      ` (${summary.skippedLocked} busy, ${summary.skippedRateLimited} rate limited), ${summary.failed} failed, of ${groups.length} due`
+  );
+  return summary;
+}
+
+let batchRunning = false;
+
+/** Starts a run in the background unless one is already going. Never throws; the summary is logged. */
+export function startAutoAnalysisInBackground(): { started: boolean } {
+  if (batchRunning) return { started: false };
+  batchRunning = true;
+  runAutoAnalysis()
+    .catch((err) => console.error("[auto-analyze] run crashed:", err))
+    .finally(() => { batchRunning = false; });
+  return { started: true };
 }
