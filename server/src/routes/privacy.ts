@@ -182,6 +182,21 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     };
   });
 
+  // AI work summaries: only the caller's OWN entry from each group's latest review.
+  const aiReviews = await prisma.aiReportReview.findMany({
+    where: { kind: "MEMBER_SUMMARIES", report: { projectId: { in: memberships.map((m) => m.projectId) } } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { createdAt: true, content: true, report: { select: { projectId: true } } },
+  });
+  const seenGroups = new Set<number>();
+  const aiWorkSummaries = [];
+  for (const r of aiReviews) {
+    if (seenGroups.has(r.report.projectId)) continue;
+    seenGroups.add(r.report.projectId);
+    const mine = (r.content as unknown as { members?: Array<{ userId: number; summary: string; source: string }> }).members?.find((m) => m.userId === userId);
+    if (mine) aiWorkSummaries.push({ projectId: r.report.projectId, generatedAt: r.createdAt, summary: mine.summary, source: mine.source });
+  }
+
   const payload = {
     exportedAt:    new Date().toISOString(),
     noticeVersion: PRIVACY_NOTICE_VERSION,
@@ -189,6 +204,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     profile:       { ...user, avatarOnFile: user.avatarUpdatedAt !== null },
     classEnrollments: enrollments.map((e) => ({ joinedAt: e.joinedAt, subjectCode: e.classSection.subjectCode, subjectName: e.classSection.subjectName })),
     groups,
+    aiWorkSummaries,
     joinRequests,
     roleSuggestions: roleSuggestions.map((r) => ({ ...r, suggestedRoles: safeJson(r.suggestedRoles) })),
     editorActivity: {

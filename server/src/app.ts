@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import { analyzeRouter } from "./routes/analyze.js";
 import { internalRouter } from "./routes/internal.js";
 import { refreshReportRouter } from "./routes/refreshReport.js";
+import { aiReviewRouter } from "./routes/aiReview.js";
 import { projectsRouter } from "./routes/projects.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
@@ -114,10 +115,13 @@ export function createApp() {
   app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
 
   app.post("/api/groups/:id/refresh-report", authenticateToken, refreshReportLimiter);
+  // AI review starts share the analysis limiter (per instructor).
+  app.post("/api/groups/:id/ai-review", authenticateToken, analysisLimiter);
 
   app.use(projectsRouter);
   app.use(analyzeRouter);
   app.use(refreshReportRouter);
+  app.use(aiReviewRouter);
   app.use(authRouter);
   app.use(usersRouter);
   app.use(privacyRouter);

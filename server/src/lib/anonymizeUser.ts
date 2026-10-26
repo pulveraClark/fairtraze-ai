@@ -227,6 +227,30 @@ export async function anonymizeUser(
         }
       }
 
+      // 3c. AI review: the user's own summary is removed from their groups' stored reviews, and their
+      // GitHub login is cleared from per-commit digests. Nothing else (scores, other members) changes.
+      if (projectIds.length > 0) {
+        const aiLogin = (user.githubUsername ?? "").trim();
+        if (aiLogin) {
+          await tx.aiCommitDigest.updateMany({
+            where: { projectId: { in: projectIds }, authorLogin: { equals: aiLogin, mode: "insensitive" } },
+            data: { authorLogin: null },
+          });
+        }
+        const aiReviews = await tx.aiReportReview.findMany({
+          where: { kind: "MEMBER_SUMMARIES", report: { projectId: { in: projectIds } } },
+          select: { id: true, content: true },
+        });
+        for (const r of aiReviews) {
+          const c = r.content as { members?: Array<{ userId: number }>; aiAddressed?: Array<{ userId: number }> };
+          const members = (c.members ?? []).filter((m) => m.userId !== userId);
+          const aiAddressed = (c.aiAddressed ?? []).filter((a) => a.userId !== userId);
+          if (members.length !== (c.members ?? []).length || aiAddressed.length !== (c.aiAddressed ?? []).length) {
+            await tx.aiReportReview.update({ where: { id: r.id }, data: { content: { ...c, members, aiAddressed } as never } });
+          }
+        }
+      }
+
       // 4. Personal rows that have no value once the account is gone.
       await tx.taskNotificationLog.deleteMany({ where: { userId } });
       await tx.taskWatcher.deleteMany({ where: { userId } });
