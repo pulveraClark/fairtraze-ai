@@ -10,7 +10,7 @@ export interface PseudonymEntry {
   githubUsername: string;
 }
 
-const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+export const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 // A, B, ... Z, AA, AB, ...
 function labelFor(index: number): string {
