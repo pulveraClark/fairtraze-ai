@@ -62,6 +62,13 @@ describe("existing users must accept the current notice", () => {
     expect(res.body.user.consentRequired).toBe(true);
   });
 
+  it("a user who accepted notice 1.1 (before AI work summaries) is asked again", async () => {
+    expect(PRIVACY_NOTICE_VERSION).not.toBe("1.1");
+    const { user, password } = await createUser({ systemRole: "STUDENT", consentVersion: "1.1" });
+    const res = await request(app).post("/api/auth/login").send({ email: user.email, password });
+    expect(res.body.user.consentRequired).toBe(true);
+  });
+
   it("refuses to record consent to a version other than the current one", async () => {
     const { user } = await createUser({ systemRole: "STUDENT", consentVersion: null });
     const res = await request(app).post("/api/privacy/consent").set("Authorization", authHeaderFor(user)).send({ version: "0.9-old" });

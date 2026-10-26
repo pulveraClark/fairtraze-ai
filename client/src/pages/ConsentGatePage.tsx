@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
+import { PRIVACY_CHANGE_SUMMARY, PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "../components/ui";
@@ -43,12 +43,18 @@ export function ConsentGatePage() {
         <h1 className="text-xl font-semibold leading-tight text-slate-900">
           {returning ? "Our Privacy Notice has been updated" : "Please review our Privacy Notice"}
         </h1>
+        {returning && (
+          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-normal text-slate-800">
+            <strong>What changed. </strong>
+            {PRIVACY_CHANGE_SUMMARY}
+          </p>
+        )}
         <p className="mt-3 text-sm leading-normal text-slate-800">
           To keep using FAIR TRAZE AI, please read and accept the Privacy Notice (version {PRIVACY_NOTICE_VERSION}). In short:
         </p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-normal text-slate-800">
           <li>We collect your account details and your GitHub and document-editing activity to help instructors assess group contributions fairly.</li>
-          <li>Google Gemini writes the report explanation using pseudonyms, never your name, email or GitHub username.</li>
+          <li>Google Gemini writes the report explanation and short work summaries using pseudonyms, never your name, email or GitHub username.</li>
           <li>You can download your data or request deletion at any time in Settings.</li>
         </ul>
         <p className="mt-3 text-sm">

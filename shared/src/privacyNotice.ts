@@ -2,8 +2,12 @@
 // Bump PRIVACY_NOTICE_VERSION whenever the notice materially changes: every user is re-asked
 // for consent on their next login. Not scoring code.
 
-export const PRIVACY_NOTICE_VERSION = "1.1";
-export const PRIVACY_NOTICE_UPDATED = "2026-10-19";
+export const PRIVACY_NOTICE_VERSION = "1.2";
+export const PRIVACY_NOTICE_UPDATED = "2026-10-26";
+
+// One line shown on the consent screen to people who accepted an earlier version.
+export const PRIVACY_CHANGE_SUMMARY =
+  "New: AI work summaries and a brief comparison. Google Gemini now also receives short excerpts of code changes and your group's document text, with names, emails and keys removed. In this demonstration it uses Google's free tier, where Google may use the data to improve its products."
 
 // Contact and retention wording shown on the Privacy Notice; change them here only.
 export const PRIVACY_CONTACT_EMAIL = "pulveraedzel@gmail.com";

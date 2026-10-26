@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
+import { PRIVACY_CHANGE_SUMMARY, PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
 import { RouterProvider } from "../router";
 import { ConsentGatePage } from "./ConsentGatePage";
 import * as AuthContextModule from "../context/AuthContext";
@@ -35,6 +35,15 @@ describe("ConsentGatePage", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("tells a returning user what changed, and a brand-new user nothing extra", () => {
+    const first = renderGate("1.1");
+    expect(screen.getByText(/What changed/)).toBeInTheDocument();
+    expect(screen.getByText(PRIVACY_CHANGE_SUMMARY)).toBeInTheDocument();
+    first.unmount();
+    renderGate(null);
+    expect(screen.queryByText(/What changed/)).toBeNull();
   });
 
   it("blocks until the box is ticked, then records the current version", async () => {

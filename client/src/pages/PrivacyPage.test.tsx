@@ -24,6 +24,10 @@ describe("PrivacyPage", () => {
       expect(screen.getByRole("heading", { name: h })).toBeInTheDocument();
     }
     expect(screen.getByText(/Google Gemini/)).toBeInTheDocument();
+    // AI work summaries: what is sent, the free-tier statement, and who sees the summaries.
+    expect(screen.getByText(/free Gemini API tier/)).toBeInTheDocument();
+    expect(screen.getByText(/may use what it receives to improve its products/)).toBeInTheDocument();
+    expect(screen.getByText(/AI work summary of every member and the brief comparison for their group/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "privacy.gov.ph" })).toHaveAttribute("href", "https://privacy.gov.ph");
   });
 });
