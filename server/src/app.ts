@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { analyzeRouter } from "./routes/analyze.js";
 import { internalRouter } from "./routes/internal.js";
+import { refreshReportRouter } from "./routes/refreshReport.js";
 import { projectsRouter } from "./routes/projects.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
@@ -28,6 +29,7 @@ import {
   corsOptions,
   helmetMiddleware,
   authLimiter,
+  refreshReportLimiter,
   trustProxyHops,
   analysisLimiter,
   exportLimiter,
@@ -111,8 +113,11 @@ export function createApp() {
   app.post("/api/join/class", authenticateToken, joinCodeLimiter);
   app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
 
+  app.post("/api/groups/:id/refresh-report", authenticateToken, refreshReportLimiter);
+
   app.use(projectsRouter);
   app.use(analyzeRouter);
+  app.use(refreshReportRouter);
   app.use(authRouter);
   app.use(usersRouter);
   app.use(privacyRouter);

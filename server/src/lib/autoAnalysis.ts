@@ -5,6 +5,7 @@ import { projectsWithRepoChangedSince } from "./repoChange.js";
 import { LATEST_REPORT_ORDER } from "./latestReport.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
 import { runAnalysis, silentProgress, type AnalysisResult } from "./analysisRunner.js";
+import { isAnalysisRunning } from "./analysisLock.js";
 
 // Which groups get analyzed automatically, and whether anything changed since their last report.
 // Planning only: nothing here touches the analyzer or the scoring maths.
@@ -35,34 +36,55 @@ export interface DueGroup {
   scoringConfigChangedAt: Date | null;
 }
 
+const DUE_SELECT = {
+  id: true,
+  repoUrl: true,
+  membershipChangedAt: true,
+  scoringConfigChangedAt: true,
+  document: { select: { id: true } },
+  assignment: { select: { sourceType: true, createdAt: true, deadline: true } },
+} as const;
+
+type DueRow = {
+  id: number;
+  repoUrl: string | null;
+  membershipChangedAt: Date | null;
+  scoringConfigChangedAt: Date | null;
+  document: { id: number } | null;
+  assignment: { sourceType: "GITHUB" | "EDITOR" | "COMBINED"; createdAt: Date; deadline: Date | null } | null;
+};
+
+/** The one eligibility rule: active project, and (unless Docs-only) a linked repository. */
+function toDueGroup(p: DueRow, now: Date): DueGroup | null {
+  if (!p.assignment || !isProjectActive(p.assignment, now)) return null;
+  if (p.assignment.sourceType !== "EDITOR" && !p.repoUrl) return null;
+  return {
+    id: p.id,
+    repoUrl: p.repoUrl,
+    sourceType: p.assignment.sourceType,
+    documentId: p.document?.id ?? null,
+    membershipChangedAt: p.membershipChangedAt,
+    scoringConfigChangedAt: p.scoringConfigChangedAt,
+  };
+}
+
 /** Active groups that have members and, unless Docs-only, a linked repository. */
 export async function selectDueGroups(now: Date): Promise<DueGroup[]> {
   const projects = await prisma.project.findMany({
     where: { assignmentId: { not: null }, groupMemberships: { some: {} } },
-    select: {
-      id: true,
-      repoUrl: true,
-      membershipChangedAt: true,
-      scoringConfigChangedAt: true,
-      document: { select: { id: true } },
-      assignment: { select: { sourceType: true, createdAt: true, deadline: true } },
-    },
+    select: DUE_SELECT,
     orderBy: { id: "asc" },
   });
-  const out: DueGroup[] = [];
-  for (const p of projects) {
-    if (!p.assignment || !isProjectActive(p.assignment, now)) continue;
-    if (p.assignment.sourceType !== "EDITOR" && !p.repoUrl) continue;
-    out.push({
-      id: p.id,
-      repoUrl: p.repoUrl,
-      sourceType: p.assignment.sourceType,
-      documentId: p.document?.id ?? null,
-      membershipChangedAt: p.membershipChangedAt,
-      scoringConfigChangedAt: p.scoringConfigChangedAt,
-    });
-  }
-  return out;
+  return projects.map((p) => toDueGroup(p, now)).filter((g): g is DueGroup => g !== null);
+}
+
+/** One group under the same rules as selectDueGroups, or null when it is not eligible. */
+export async function loadDueGroup(projectId: number, now: Date): Promise<DueGroup | null> {
+  const p = await prisma.project.findFirst({
+    where: { id: projectId, assignmentId: { not: null }, groupMemberships: { some: {} } },
+    select: DUE_SELECT,
+  });
+  return p ? toDueGroup(p, now) : null;
 }
 
 export type ChangeReason =
@@ -224,4 +246,64 @@ export function startAutoAnalysisInBackground(): { started: boolean } {
     .catch((err) => console.error("[auto-analyze] run crashed:", err))
     .finally(() => { batchRunning = false; });
   return { started: true };
+}
+
+// ── Refresh on open ──────────────────────────────────────────────────────────
+
+/** A group is checked for news at most this often, however many people open its report. */
+export const REFRESH_CHECK_COOLDOWN_MS = 5 * 60 * 1000;
+const lastChecked = new Map<number, number>();
+
+export function resetRefreshCooldown(): void {
+  lastChecked.clear();
+}
+
+export type RefreshDecision =
+  | { refreshing: true }
+  | { refreshing: false; why: "not-eligible" | "no-report" | "recent" | "busy" | "checked-recently" | "unchanged" };
+
+export interface RefreshDeps {
+  change: ChangeDeps;
+  /** Starts the analysis; not awaited by the caller. */
+  analyze: (projectId: number) => Promise<AnalysisResult>;
+}
+
+/**
+ * Called when someone opens a report. Starts a background analysis ONLY when every condition holds:
+ * the group is eligible and its project active, the latest report is older than
+ * REFRESH_ON_OPEN_AFTER_MS, nothing is already analyzing it, and something changed since that report.
+ * It looks only at database state and the clock - the caller cannot ask for a run, so a student who
+ * calls it repeatedly gets the same answer as the instructor.
+ */
+export async function refreshReportIfStale(
+  projectId: number,
+  now: Date = new Date(),
+  deps: RefreshDeps = {
+    change: defaultDeps(),
+    analyze: (id) => runAnalysis(id, { progress: silentProgress, actorInstructorId: null, trigger: "auto" }),
+  },
+): Promise<RefreshDecision> {
+  const group = await loadDueGroup(projectId, now);
+  if (!group) return { refreshing: false, why: "not-eligible" };
+
+  const last = await latestReportOf(projectId);
+  if (!last) return { refreshing: false, why: "no-report" };
+  if (now.getTime() - last.generatedAt.getTime() <= REFRESH_ON_OPEN_AFTER_MS) return { refreshing: false, why: "recent" };
+  if (isAnalysisRunning(projectId)) return { refreshing: false, why: "busy" };
+
+  const before = lastChecked.get(projectId);
+  if (before !== undefined && now.getTime() - before < REFRESH_CHECK_COOLDOWN_MS) return { refreshing: false, why: "checked-recently" };
+  lastChecked.set(projectId, now.getTime());
+
+  let reason: ChangeReason | null;
+  try {
+    reason = await reasonToReanalyze(group, last, deps.change);
+  } catch (err) {
+    console.error(`[auto-analyze] change check for group ${projectId} failed:`, err instanceof Error ? err.message : err);
+    return { refreshing: false, why: "unchanged" };
+  }
+  if (!reason) return { refreshing: false, why: "unchanged" };
+
+  deps.analyze(projectId).catch((err) => console.error(`[auto-analyze] refresh of group ${projectId} failed:`, err));
+  return { refreshing: true };
 }

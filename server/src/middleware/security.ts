@@ -125,6 +125,14 @@ export const analysisLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Refresh-on-open: the route does the real gating, this only stops one account hammering it.
+export const refreshReportLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 // Scheduler endpoint: a handful of calls a night (plus retries), so 20 per hour per IP is generous
 // and still stops a guessing attempt on the secret.
 export const internalLimiter = rateLimit({
