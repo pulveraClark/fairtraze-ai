@@ -291,6 +291,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   );
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
+  // The sentence of the project instructions to mark when the window opens from the instructions check.
+  const [briefHighlight, setBriefHighlight] = useState<string | null>(null);
   // Functional role suggestion state
   const myRoles      = data?.membership?.functionalRoles ?? [];
   const mySuggestion = data?.membership?.roleSuggestion ?? null;
@@ -489,7 +491,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           title={assignment.title}
           description={assignment.description}
           attachments={assignment.attachments}
-          onClose={() => setShowBrief(false)}
+          highlight={briefHighlight}
+          onClose={() => { setShowBrief(false); setBriefHighlight(null); }}
         />
       )}
 
@@ -593,7 +596,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 onClick={() => setShowBrief(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
               >
-                Brief
+                Instructions
               </button>
             )}
             <button
@@ -882,7 +885,14 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 })()}
 
                 {/* AI work summaries: a member sees their own; the leader sees every member (the server decides) */}
-                <StudentWorkSummaries projectId={projectId} isLeader={membership.role === "LEADER"} sourceType={sourceType} />
+                <StudentWorkSummaries
+                  projectId={projectId}
+                  isLeader={membership.role === "LEADER"}
+                  sourceType={sourceType}
+                  onViewInstructions={assignment.description || assignment.attachments.length > 0
+                    ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
+                    : undefined}
+                />
 
                 {/* Leader-only: every member's share, so work can be rebalanced */}
                 {report.team && <LeaderTeamCard team={report.team} currentUserId={user?.id} sourceType={sourceType} noActivity={report.noActivity} />}

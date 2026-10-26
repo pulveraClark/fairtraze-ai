@@ -16,6 +16,7 @@ import { useRouter } from "../router";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { BriefCard } from "../components/BriefCard";
+import { highlightFromHash } from "../lib/instructionsCheck";
 import { classCrumb, classFullLabel } from "../lib/classLabel";
 import { EditAssignmentModal } from "../components/EditAssignmentModal";
 import type { BriefAttachment } from "../lib/briefAttachments";
@@ -110,6 +111,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const bulkLock     = useRef(false);
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
   const [editingBrief, setEditingBrief]       = useState(false);
+  // "See in the instructions" links carry the sentence in the #highlight= hash, so it never reaches a server log.
+  const [highlight] = useState(() => highlightFromHash(window.location.hash));
   const [showScoring, setShowScoring]         = useState(false);
 
   // ── Bulk selection / bulk analyze / bulk export ────────────────────────────
@@ -417,6 +420,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               description={assignment.description}
               attachments={assignment.attachments}
               onEdit={isAdmin ? undefined : () => setEditingBrief(true)}
+              highlight={highlight}
             />
           </div>
         )}

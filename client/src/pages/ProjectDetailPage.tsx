@@ -762,7 +762,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
             />
 
-            {/* AI report, then the brief check inside it. Keyed to projectId so it always reflects the current group */}
+            {/* AI report, then the project instructions check inside it. Keyed to projectId so it always reflects the current group */}
             <Narrative
               key={projectId}
               narrative={narrativeText}
@@ -772,6 +772,8 @@ export function ProjectDetailPage({ projectId }: Props) {
               generator={aiGenerator}
               basedOnAt={stored.analyzedAt}
               repoUrl={sourceType !== "EDITOR" ? stored.repoUrl : null}
+              sourceType={sourceType}
+              instructionsHref={classId && assignmentId ? assignmentUrl : undefined}
               onNarrativeGenerated={onNarrativeGenerated}
             />
 

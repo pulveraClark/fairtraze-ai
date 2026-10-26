@@ -86,7 +86,7 @@ function WhatItIs() {
 /* ------------------------------------------------------------------ */
 function HowItWorks() {
   const steps = [
-    { n: 1, title: "Set up", body: "The instructor creates a class section and a project (with an optional project brief) and shares the join code. Students form groups with it." },
+    { n: 1, title: "Set up", body: "The instructor creates a class section and a project (with optional project instructions) and shares the join code. Students form groups with it." },
     { n: 2, title: "Collect", body: "Activity is gathered from GitHub, the FairTraze Collaborative Editor, or both, depending on the project." },
     { n: 3, title: "Score", body: "Fixed formulas turn the activity into contribution shares, flags, a Gini coefficient and a team-health label." },
     { n: 4, title: "Explain and review", body: "Gemini explains the numbers in plain language. The instructor reviews the evidence and decides." },
@@ -325,7 +325,7 @@ function SystemRoles() {
       dot: "bg-indigo-500",
       items: [
         "Creates class sections and projects, and shares join codes",
-        "Writes the project brief: a description, up to 5 images and one PDF",
+        "Writes the project instructions: a description, up to 5 images and one PDF",
         "Runs analysis, watches live progress, and reviews the full report with per-member breakdowns",
         "Adjusts the GitHub weights, flag thresholds and GitHub/Docs blend per project in Scoring Settings",
         "Receives notifications about team-health risk, flagged members and disputes",
@@ -338,7 +338,7 @@ function SystemRoles() {
       card: "bg-slate-50 border-slate-200",
       dot: "bg-slate-500",
       items: [
-        "Enrolls with the instructor's join code and reads the project brief",
+        "Enrolls with the instructor's join code and reads the project instructions",
         "Creates a group (and becomes its leader) or joins an existing group",
         "Sees their own contribution report and flags. Regular members see only their own",
         "A group leader also sees each member's contribution share so work can be distributed fairly. Members are told this on their page",

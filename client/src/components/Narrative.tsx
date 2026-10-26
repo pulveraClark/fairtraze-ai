@@ -6,6 +6,7 @@ import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
 import { BriefCheckCard } from "./BriefCheckCard";
+import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
 import type { UseAiReview } from "../hooks/useAiReview";
 import { useGenerateAiReport, type AiReportGenerator } from "../hooks/useGenerateAiReport";
 
@@ -21,11 +22,15 @@ interface Props {
   generator?: AiReportGenerator;
   /** When the analysis the explanation is based on ran (ISO). Shown in the footer. */
   basedOnAt?: string | null;
-  /** Linked repository, for the brief check's "Open the repository" link. */
+  /** Linked repository, for the project instructions check's "Open the repository" link. */
   repoUrl?: string | null;
+  /** The group's source type: hides the Docs link for a GitHub-only group. */
+  sourceType?: string | null;
+  /** The page that shows (and edits) the project instructions. */
+  instructionsHref?: string;
 }
 
-export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl }: Props) {
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref }: Props) {
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
   const { generating, error } = generator ?? own;
 
@@ -34,6 +39,8 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   const addressedLine = aiAddressedLine(review?.data ?? null);
   const briefLine = briefStatusLine(review?.data ?? null);
   const briefCheck = review?.data?.enabled ? review.data.briefCheck : undefined;
+  // Instructor only: the server says exactly when the project has no written instructions and no file.
+  const noInstructions = !!review?.data?.enabled && !!review.data.canGenerate && review.data.hasInstructions === false;
 
   const when = formatBasedOn(basedOnAt);
 
@@ -52,7 +59,9 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       </div>
 
       {/* Work-summary status: one calm line each, only when there is something to say */}
-      {summaryState && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>}
+      {summaryState && WORK_SUMMARY_STATUS_TEXT[summaryState] && (
+        <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>
+      )}
       {review?.error && <p role="alert" className="mb-3 text-sm text-red-800">{review.error}</p>}
       {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
@@ -109,7 +118,19 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           </p>
         </>
       )}
-      {briefCheck && !generating && <BriefCheckCard check={briefCheck} instructor repoUrl={repoUrl} />}
+      {briefCheck && !generating && (
+        <BriefCheckCard check={briefCheck} instructor repoUrl={repoUrl} sourceType={sourceType} instructionsHref={instructionsHref} />
+      )}
+      {noInstructions && !briefCheck && !generating && (
+        <p className="mt-4 flex flex-wrap items-center gap-x-2 text-sm leading-normal text-slate-700">
+          <span>{NO_INSTRUCTIONS_LINE}</span>
+          {instructionsHref && (
+            <a href={instructionsHref} className="inline-flex min-h-10 items-center font-medium text-blue-800 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+              Add the instructions
+            </a>
+          )}
+        </p>
+      )}
     </section>
   );
 }

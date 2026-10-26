@@ -216,7 +216,7 @@ export function ProjectCard({
                   onClick={() => setShowBrief(true)}
                   className="min-h-9 shrink-0 rounded-lg px-2 text-sm font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                 >
-                  View brief
+                  View the instructions
                 </button>
               </div>
             )}

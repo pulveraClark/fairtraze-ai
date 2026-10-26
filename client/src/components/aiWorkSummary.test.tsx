@@ -286,22 +286,25 @@ describe("AI button in Member contributions", () => {
     expect(screen.queryByText(/No AI findings yet/)).toBeNull();
   });
 
-  it("headings the card AI findings with an icon, no separate pill, and the full footer", () => {
+  it("headings the card AI findings with an icon, no separate pill, and the one footer disclaimer", () => {
     render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} basedOnAt="2026-10-24T01:00:00Z" />);
     expect(screen.getByRole("heading", { name: "AI findings" })).toBeTruthy();
     expect(screen.getAllByText("AI findings")).toHaveLength(1);
     expect(screen.getByText(/May be wrong · Based on the analysis of .+\. Informational only; it does not assign grades or replace instructor judgment\./)).toBeTruthy();
+    // The card adds no second "supports your assessment..." sentence of its own.
+    expect(screen.queryByText(/supports your assessment|should not replace your own judgment/)).toBeNull();
   });
 
-  it("status line: ready, not generated yet, and writing", () => {
+  it("status line: ready and writing; nothing extra before anything is generated", () => {
     const mk = (data: AiReviewResponse) => ({ data, error: null, start: vi.fn() });
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk(base)} />);
-    expect(screen.getByText("✓ AI findings ready · open a member below to read theirs")).toBeTruthy();
+    expect(screen.getByText("Select a member above to read their AI findings.")).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ ...base, summaries: null })} />);
-    expect(screen.getByText("AI findings not generated yet")).toBeTruthy();
+    expect(screen.queryByText(/Select a member above|not generated yet|Writing AI findings/)).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ ...base, summaries: null, running: true })} />);
     expect(screen.getByText("Writing AI findings…")).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ enabled: false })} />);
-    expect(screen.queryByText(/ready · open|not generated yet|Writing AI findings/)).toBeNull();
+    expect(screen.queryByText(/Select a member above|not generated yet|Writing AI findings/)).toBeNull();
   });
 });

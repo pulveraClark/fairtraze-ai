@@ -355,9 +355,9 @@ export function HelpPage() {
               B…" before anything is sent.
             </li>
             <li>
-              <strong>AI findings and the brief check.</strong> When the instructor has this switched on for the class,
+              <strong>AI findings and the project instructions check.</strong> When the instructor has this switched on for the class,
               the AI also writes short, neutral AI findings on what each member worked on, and the instructor and group
-              leader can see a brief check: which requirements of the project brief appear in the group's code or document.
+              leader can see a project instructions check: which requirements of the project instructions are covered in the group's code or document.
               Each comes with its evidence, can be wrong, and never changes a share or flag{student ? ". You see your own AI findings." : "."}
             </li>
             <li><strong>The AI never grades.</strong> The scores are worked out before the AI is asked, and they do not depend on it.</li>

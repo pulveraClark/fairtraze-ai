@@ -41,7 +41,7 @@ describe("SystemOverview", () => {
   it("covers current features and drops stale claims", () => {
     const { container } = renderAs();
     const t = container.textContent ?? "";
-    for (const s of ["instructor sign-ups", "Live analysis progress", "fewest open tasks", "project brief", "Merge commits are excluded", "Where the work went"]) {
+    for (const s of ["instructor sign-ups", "Live analysis progress", "fewest open tasks", "project instructions", "Merge commits are excluded", "Where the work went"]) {
       expect(t.toLowerCase()).toContain(s.toLowerCase());
     }
     expect(t).not.toMatch(/lorenz/i);

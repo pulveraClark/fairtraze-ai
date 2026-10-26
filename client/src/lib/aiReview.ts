@@ -96,9 +96,10 @@ export function workSummaryState(data: AiReviewResponse | null | undefined): Wor
   return data.summaries && data.summaries.length > 0 ? "ready" : "none";
 }
 
-export const WORK_SUMMARY_STATUS_TEXT: Record<WorkSummaryState, string> = {
-  ready: "✓ AI findings ready · open a member below to read theirs",
-  none: "AI findings not generated yet",
+// The line in the AI findings card. Nothing is said before anything is generated.
+export const WORK_SUMMARY_STATUS_TEXT: Record<WorkSummaryState, string | null> = {
+  ready: "Select a member above to read their AI findings.",
+  none: null,
   running: "Writing AI findings…",
 };
 
@@ -126,7 +127,7 @@ export function aiSourceLine(sourceType: string | null | undefined): string {
 
 export function briefStatusLine(data: AiReviewResponse | null): string | null {
   if (!data?.enabled || data.running || !data.briefFailed) return null;
-  return "The brief check could not run. Try again later.";
+  return "The project instructions check could not run. Try again later.";
 }
 
 export function aiAddressedLine(data: AiReviewResponse | null): string | null {

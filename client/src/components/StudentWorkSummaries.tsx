@@ -8,11 +8,17 @@ import { BriefCheckCard } from "./BriefCheckCard";
 
 /**
  * Student report tab. A member sees "AI findings on your work"; the leader sees one entry per member
- * ("What each member worked on") and the brief check. The server sends a member only their own entry
- * and the brief check to nobody but the leader and the instructor, so this component simply shows what
+ * ("What each member worked on") and the project instructions check. The server sends a member only their own entry
+ * and the check to nobody but the leader and the instructor, so this component simply shows what
  * it receives. Renders nothing while AI review is off or nothing exists yet.
  */
-export function StudentWorkSummaries({ projectId, isLeader, sourceType }: { projectId: number; isLeader: boolean; sourceType?: string | null }) {
+export function StudentWorkSummaries({ projectId, isLeader, sourceType, onViewInstructions }: {
+  projectId: number;
+  isLeader: boolean;
+  sourceType?: string | null;
+  /** Opens the project instructions window (optionally at one sentence). Given only when the page has the instructions. */
+  onViewInstructions?: (quote?: string) => void;
+}) {
   const { token } = useAuth();
   const { data } = useAiReview(projectId, token);
   if (!data?.enabled) return null;
@@ -46,7 +52,7 @@ export function StudentWorkSummaries({ projectId, isLeader, sourceType }: { proj
           ) : null}
         </>
       )}
-      {briefCheck && <BriefCheckCard check={briefCheck} />}
+      {briefCheck && <BriefCheckCard check={briefCheck} sourceType={sourceType} onViewInstructions={onViewInstructions} />}
     </section>
   );
 }

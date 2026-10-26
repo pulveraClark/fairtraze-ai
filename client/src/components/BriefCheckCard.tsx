@@ -6,34 +6,22 @@ import { FileEvidenceLink } from "./ui/ExternalEvidenceLink";
 import { DocSectionLink, DocsTabLink, useOpenDocSection } from "../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
+import {
+  ATTENTION_ORDER, PILL, comparedSentence, countKinds, coveredSentence, coveredToggleLabel, droppedSentence, highlightHash,
+  kindOf, otherCountsSentence, pillLabel, type RequirementKind,
+} from "../lib/instructionsCheck";
 
-// "Brief check - may be wrong" with the AI findings badge. Shown to the instructor and the group leader only (the server
-// decides; this file never filters by role). It says whether each requirement of the brief is present in
-// the group's work. It is not a grade, a score or a judgment of quality.
+// "Project instructions check" with the AI findings badge. Shown to the instructor and the group leader only
+// (the server decides; this file never filters by role). It says whether each requirement of the project
+// instructions is covered in the group's work. It is not a grade, a score or a judgment of quality.
 
-export const NOTHING_FOUND_LINE = "No brief requirements were found in the group's work yet.";
-export const NO_BRIEF_LINE = "Brief check · no brief added yet";
-// `unverified` = the AI said Found/Partly found but none of its quotes could be confirmed in the work it was sent.
-// The server drops those refs, and a ref the AI could not prove may be wrong, so none is shown: only where to look.
-export const VERIFY_REASON = "The AI says this is covered, but we couldn't find its proof in the work.";
+// The AI said yes but none of its proof could be found in the work (instructor), or it found no proof (leader).
+export const CHECK_WHY = "The AI said yes, but the proof it gave could not be found in the work.";
+export const NOT_CLEAR_WHY = "The AI could not find proof of it. If your group did it, make sure it is in the Docs or the repository.";
 export const CHECK_WORK_LINE = "Please check the group's work for this one.";
 const QUOTE_MAX = 140;
 
 type Req = AiBriefCheck["requirements"][number];
-type Kind = "FOUND" | "PARTLY_FOUND" | "NOT_FOUND" | "VERIFY";
-
-const STATUS: Record<Kind, { label: string; icon: string; cls: string }> = {
-  FOUND: { label: "Found", icon: "✓", cls: "border-emerald-300 bg-emerald-50 text-emerald-900" },
-  PARTLY_FOUND: { label: "Partly found", icon: "◐", cls: "border-amber-300 bg-amber-50 text-amber-950" },
-  NOT_FOUND: { label: "Not found in the work", icon: "○", cls: "border-slate-300 bg-slate-100 text-slate-900" },
-  VERIFY: { label: "Please verify", icon: "?", cls: "border-slate-300 bg-slate-100 text-slate-900" },
-};
-
-// A requirement whose evidence could not be confirmed is shown as "Please verify", not as "Not found".
-const kindOf = (r: Req): Kind => (r.unverified ? "VERIFY" : r.status);
-
-// Attention order: the items the reader may want to look at first.
-const ATTENTION: Kind[] = ["PARTLY_FOUND", "NOT_FOUND", "VERIFY"];
 
 export function truncateQuote(q: string, max = QUOTE_MAX): string {
   const t = q.trim();
@@ -43,34 +31,64 @@ export function truncateQuote(q: string, max = QUOTE_MAX): string {
   return `${(at > max * 0.6 ? cut.slice(0, at) : cut).trimEnd()}…`;
 }
 
-// Counts that are zero are left out; when everything is found there is one calm sentence instead.
-export function summaryLine(counts: Record<Kind, number>, total: number): string {
-  if (counts.FOUND === total) return `All ${total} requirement${total === 1 ? "" : "s"} found`;
-  const parts: string[] = [];
-  if (counts.FOUND) parts.push(`${counts.FOUND} found`);
-  if (counts.PARTLY_FOUND) parts.push(`${counts.PARTLY_FOUND} partly found`);
-  if (counts.NOT_FOUND) parts.push(`${counts.NOT_FOUND} not found`);
-  if (counts.VERIFY) parts.push(`${counts.VERIFY} to verify`);
-  return parts.join(" · ");
+const LINK_CLS = `inline-flex min-h-10 min-w-0 max-w-full items-center text-sm font-medium text-blue-800 underline decoration-blue-800/40 underline-offset-2 hover:decoration-blue-800 ${FOCUS_LIGHT}`;
+
+/** How a reader opens the project instructions: a link to the page that shows them (instructor) or a window (leader, student). */
+interface InstructionsAccess {
+  instructionsHref?: string;
+  onViewInstructions?: (quote?: string) => void;
 }
 
-function Pill({ kind }: { kind: Kind }) {
-  const s = STATUS[kind];
+function Pill({ kind, instructor }: { kind: RequirementKind; instructor: boolean }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${s.cls}`}>
-      <span aria-hidden="true">{s.icon}</span>
-      {s.label}
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${PILL[kind].cls}`}>
+      <span aria-hidden="true">{PILL[kind].icon}</span>
+      {pillLabel(kind, instructor)}
     </span>
   );
 }
 
-// Where to look when nothing could be confirmed: the Docs tab and the repository, whichever the page can open.
-function WhereToCheck({ repoUrl }: { repoUrl?: string | null }) {
-  const canOpenDocs = useOpenDocSection() !== null;
-  if (!canOpenDocs && !repoUrl) return <p className="mt-1">{CHECK_WORK_LINE}</p>;
+/** "See in the instructions": highlights the sentence the requirement comes from, when there is one. */
+function SeeInInstructions({ quote, access }: { quote?: string; access: InstructionsAccess }) {
+  if (access.onViewInstructions) {
+    return <button type="button" onClick={() => access.onViewInstructions!(quote)} className={LINK_CLS}>See in the instructions</button>;
+  }
+  if (access.instructionsHref) {
+    return (
+      <a
+        href={`${access.instructionsHref}${quote ? highlightHash(quote) : ""}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="See in the instructions (new tab)"
+        className={LINK_CLS}
+      >
+        See in the instructions
+      </a>
+    );
+  }
+  return null;
+}
+
+const hasSource = (r: Req) => !!(r.sourceQuote || r.sourceFile);
+const fileSource = (r: Req) => `${r.sourceFile}${r.sourcePage ? `, page ${r.sourcePage}` : ""}`;
+
+/** "Project instructions: "<sentence>"" or "From: <file>, page 2", then the link. Nothing for older checks. */
+function FromLine({ r, access }: { r: Req; access: InstructionsAccess }) {
+  if (!hasSource(r)) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3">
-      <span className="font-semibold">Where to check:</span>
+    <div className="flex flex-wrap items-center gap-x-2 [overflow-wrap:anywhere]">
+      {r.sourceQuote ? <span>Project instructions: “{truncateQuote(r.sourceQuote, 200)}”</span> : <span>From: {fileSource(r)}</span>}
+      <SeeInInstructions quote={r.sourceQuote} access={access} />
+    </div>
+  );
+}
+
+// Where to look when the proof could not be confirmed: the Docs tab and the repository, whichever the page can open.
+function LookIn({ repoUrl, docs }: { repoUrl?: string | null; docs: boolean }) {
+  const canOpenDocs = useOpenDocSection() !== null && docs;
+  if (!canOpenDocs && !repoUrl) return <span>{CHECK_WORK_LINE}</span>;
+  return (
+    <span className="flex flex-wrap items-center gap-x-3">
       {canOpenDocs && <DocsTabLink>Open FairTraze Docs</DocsTabLink>}
       {repoUrl && (
         <a
@@ -78,17 +96,17 @@ function WhereToCheck({ repoUrl }: { repoUrl?: string | null }) {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open the repository on GitHub (new tab)"
-          className={`inline-flex min-h-10 items-center text-sm font-medium text-blue-800 underline decoration-blue-800/40 underline-offset-2 hover:decoration-blue-800 ${FOCUS_LIGHT}`}
+          className={LINK_CLS}
         >
           Open the repository
         </a>
       )}
-    </div>
+    </span>
   );
 }
 
-function RequirementRow({ r, repoUrl }: { r: Req; repoUrl?: string | null }) {
-  const kind = kindOf(r);
+/** Closed by default. Covered rows start with where in the instructions the requirement comes from. */
+function Proof({ r, access, showSource }: { r: Req; access: InstructionsAccess; showSource: boolean }) {
   // The same file is shown once per row, however many quotes pointed at it.
   const seen = new Set<string>();
   const evidence = r.evidence.filter((e) => {
@@ -97,27 +115,25 @@ function RequirementRow({ r, repoUrl }: { r: Req; repoUrl?: string | null }) {
     seen.add(e.ref);
     return true;
   });
+  const withSource = showSource && hasSource(r);
+  if (evidence.length === 0 && !withSource) return null;
   return (
-    <li className="min-w-0 py-2">
-      <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-        <Pill kind={kind} />
-        <p className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{r.text}</p>
-      </div>
-      {kind === "VERIFY" && (
-        <div className="mt-1 text-xs leading-normal text-slate-700">
-          <p>{VERIFY_REASON}</p>
-          <WhereToCheck repoUrl={repoUrl} />
-        </div>
-      )}
-      {evidence.length > 0 && (
-        <details className="mt-1">
-          <summary className={`flex min-h-10 cursor-pointer items-center text-xs font-semibold text-indigo-900 underline underline-offset-2 ${FOCUS_LIGHT}`}>See evidence</summary>
-          <ul className="space-y-2 pb-1">
+    <details className="mt-1">
+      <summary className={`flex min-h-10 cursor-pointer items-center text-xs font-semibold text-indigo-900 underline underline-offset-2 ${FOCUS_LIGHT}`}>See proof</summary>
+      <div className="space-y-2 pb-1">
+        {withSource && (
+          <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-800">
+            <span>From the project instructions{r.sourceFile ? ` (${fileSource(r)})` : ""}:</span>
+            <SeeInInstructions quote={r.sourceQuote} access={access} />
+          </div>
+        )}
+        {evidence.length > 0 && (
+          <ul className="space-y-2">
             {evidence.map((e, j) => (
               <li key={j} className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-normal">
                 {e.type === "file" ? (
                   <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
-                    <span>File:</span>
+                    <span>Code:</span>
                     <FileEvidenceLink path={e.ref} href={e.href} isCommit={e.isCommit} />
                   </div>
                 ) : (
@@ -136,24 +152,83 @@ function RequirementRow({ r, repoUrl }: { r: Req; repoUrl?: string | null }) {
               </li>
             ))}
           </ul>
-        </details>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** A small label/value grid (label column about 64px), used for the "check" rows. */
+function Grid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
+  return (
+    <dl className="mt-1 grid grid-cols-[4rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs leading-normal text-slate-800">
+      {rows.map(([label, value]) => (
+        <div key={label} className="contents">
+          <dt className="font-semibold text-slate-700">{label}</dt>
+          <dd className="min-w-0 [overflow-wrap:anywhere]">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function RequirementRow({ r, instructor, access, repoUrl, docs }: {
+  r: Req; instructor: boolean; access: InstructionsAccess; repoUrl?: string | null; docs: boolean;
+}) {
+  const kind = kindOf(r);
+  return (
+    <li className="min-w-0 py-2">
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+        <Pill kind={kind} instructor={instructor} />
+        <p className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{r.text}</p>
+      </div>
+      {kind === "CHECK" ? (
+        <Grid
+          rows={[
+            ["Check", instructor ? `Does the work include “${r.text}”?` : `Is “${r.text}” in your work?`],
+            ...(hasSource(r) ? [["From", <FromLine key="from" r={r} access={access} />] as [string, React.ReactNode]] : []),
+            ["Why", instructor ? CHECK_WHY : NOT_CLEAR_WHY],
+            ...(instructor ? [["Look in", <LookIn key="look" repoUrl={repoUrl} docs={docs} />] as [string, React.ReactNode]] : []),
+          ]}
+        />
+      ) : (
+        <>
+          {kind !== "COVERED" && hasSource(r) && (
+            <div className="mt-1 text-xs leading-normal text-slate-800"><FromLine r={r} access={access} /></div>
+          )}
+          <Proof r={r} access={access} showSource={kind === "COVERED"} />
+        </>
       )}
     </li>
   );
 }
 
-export function BriefCheckCard({ check, instructor = false, repoUrl }: { check: AiBriefCheck; instructor?: boolean; repoUrl?: string | null }) {
-  const [showFound, setShowFound] = useState(false);
+export function BriefCheckCard({
+  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions,
+}: {
+  check: AiBriefCheck;
+  instructor?: boolean;
+  repoUrl?: string | null;
+  /** The group's source type: hides the Docs link for a GitHub-only group and names the activity compared. */
+  sourceType?: string | null;
+  /** Instructor: the page that shows the project instructions (opened in a new tab). */
+  instructionsHref?: string;
+  /** Leader and students: opens the project instructions window, optionally at one sentence. */
+  onViewInstructions?: (quote?: string) => void;
+}) {
+  const [showCovered, setShowCovered] = useState(false);
   const when = formatBasedOn(check.generatedAt);
   const total = check.requirements.length;
+  if (total === 0) return null;
 
-  if (total === 0) return <p className="mt-4 text-sm leading-normal text-slate-700">{NO_BRIEF_LINE}</p>;
-
-  const counts: Record<Kind, number> = { FOUND: 0, PARTLY_FOUND: 0, NOT_FOUND: 0, VERIFY: 0 };
-  for (const r of check.requirements) counts[kindOf(r)]++;
-  const allFound = counts.FOUND === total;
-  const attention = ATTENTION.flatMap((k) => check.requirements.filter((r) => kindOf(r) === k));
-  const found = check.requirements.filter((r) => kindOf(r) === "FOUND");
+  const access: InstructionsAccess = { instructionsHref, onViewInstructions };
+  const counts = countKinds(check.requirements);
+  const allCovered = counts.COVERED === total;
+  const attention = ATTENTION_ORDER.flatMap((k) => check.requirements.filter((r) => kindOf(r) === k));
+  const covered = check.requirements.filter((r) => kindOf(r) === "COVERED");
+  const others = otherCountsSentence(counts, instructor);
+  const dropped = check.sources?.droppedCount ?? 0;
+  const docs = sourceType !== "GITHUB";
 
   return (
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
@@ -161,42 +236,53 @@ export function BriefCheckCard({ check, instructor = false, repoUrl }: { check: 
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-700 transition-transform [details[open]>summary_&]:rotate-90" fill="currentColor">
           <path d="M7 4l6 6-6 6V4z" />
         </svg>
-        Brief check · may be wrong
+        Project instructions check
         <AiBadge variant="ai" />
       </summary>
       <div className="space-y-3 border-t border-slate-200 px-3 py-3">
-        <p className="flex items-center gap-1 text-xs leading-normal text-slate-700">
-          Whether each requirement of the brief is present in the group's work. Not a grade and not a judgment of quality.
-          <InfoTip label="About the brief check" helpHref={helpLink("ai")}>{TIPS.briefCheck}</InfoTip>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-slate-700">
+          <span className="flex min-w-0 items-center gap-1">
+            {comparedSentence(sourceType)}
+            <InfoTip label="About the project instructions check" helpHref={helpLink("ai")}>{TIPS.briefCheck}</InfoTip>
+          </span>
+          {instructionsHref && !onViewInstructions && (
+            <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label="View the instructions (new tab)" className={LINK_CLS}>View the instructions</a>
+          )}
+          {onViewInstructions && (
+            <button type="button" onClick={() => onViewInstructions()} className={LINK_CLS}>View the instructions</button>
+          )}
+        </div>
+        <p className="text-sm font-semibold leading-normal text-slate-900">
+          {coveredSentence(counts.COVERED, total)}
+          {others && !allCovered ? ` ${others}` : ""}
         </p>
-        {check.nothingFound && <p role="status" className="text-sm font-medium leading-normal text-slate-900">{NOTHING_FOUND_LINE}</p>}
-        <p className="text-sm font-semibold leading-normal text-slate-900">{summaryLine(counts, total)}</p>
-        {!allFound && attention.length > 0 && (
+        {!allCovered && attention.length > 0 && (
           <ul className="divide-y divide-slate-100">
-            {attention.map((r, i) => <RequirementRow key={i} r={r} repoUrl={repoUrl} />)}
+            {attention.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} />)}
           </ul>
         )}
-        {!allFound && found.length > 0 && (
+        {!allCovered && covered.length > 0 && (
           <>
             <button
               type="button"
-              aria-expanded={showFound}
-              aria-controls="brief-found-list"
-              onClick={() => setShowFound((v) => !v)}
+              aria-expanded={showCovered}
+              aria-controls="instructions-covered-list"
+              onClick={() => setShowCovered((v) => !v)}
               className={`inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 ${FOCUS_LIGHT}`}
             >
-              {showFound ? "Hide" : "Show"} found requirements ({found.length})
+              {coveredToggleLabel(showCovered, covered.length)}
             </button>
-            {showFound && (
-              <ul id="brief-found-list" className="divide-y divide-slate-100">
-                {found.map((r, i) => <RequirementRow key={i} r={r} repoUrl={repoUrl} />)}
+            {showCovered && (
+              <ul id="instructions-covered-list" className="divide-y divide-slate-100">
+                {covered.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} />)}
               </ul>
             )}
           </>
         )}
+        {dropped > 0 && <p className="text-xs leading-normal text-slate-700">{droppedSentence(dropped)}</p>}
         <p className="text-xs leading-normal text-slate-700">
           May be wrong{when ? ` · Based on the analysis of ${when}` : ""}.
-          {check.outdated ? " The brief or the analysis has changed since. Generate again to update it." : ""}
+          {check.outdated ? " The project instructions or the analysis changed since. Generate again to update it." : ""}
         </p>
         {instructor && (check.aiAddressedCount ?? 0) > 0 && (
           <p className="text-xs leading-normal text-slate-700">Some text in the group's work appears to address the AI. It was not used.</p>

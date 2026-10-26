@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { findQuoteRange } from "@shared/quoteMatch";
 import { Linkified } from "../lib/linkify";
 import { loadAttachmentBlob, type BriefAttachment } from "../lib/briefAttachments";
 import { useFocusTrap } from "./ui/useFocusTrap";
@@ -81,30 +82,58 @@ function ImageViewer({
   );
 }
 
+/**
+ * The instructions text. When `highlight` is a sentence found in it (same tolerant matching the server used),
+ * that sentence is marked and scrolled into view; otherwise the text is shown as it is.
+ */
+function InstructionsText({ text, highlight }: { text: string; highlight?: string | null }) {
+  const markRef = useRef<HTMLElement>(null);
+  const range = highlight ? findQuoteRange(text, highlight) : null;
+  const start = range?.start;
+  useEffect(() => {
+    if (start !== undefined) markRef.current?.scrollIntoView?.({ block: "center" });
+  }, [start]);
+  if (!range) return <Linkified text={text} />;
+  return (
+    <>
+      <Linkified text={text.slice(0, range.start)} />
+      <mark ref={markRef} className="rounded bg-amber-200 px-0.5 text-slate-900 underline decoration-amber-700 decoration-2 underline-offset-2">
+        <Linkified text={text.slice(range.start, range.end)} />
+      </mark>
+      <Linkified text={text.slice(range.end)} />
+    </>
+  );
+}
+
 interface Props {
   assignmentId: number;
   description: string | null;
   attachments: BriefAttachment[];
   /** Instructor view: shows an Edit button. */
   onEdit?: () => void;
-  /** Open by default the first time this user sees this brief (remembered per assignment). */
+  /** Open by default the first time this user sees these instructions (remembered per assignment). */
   rememberOpenState?: boolean;
-  /** Skip the collapsible wrapper (used inside the "View brief" modal). */
+  /** Skip the collapsible wrapper (used inside the instructions modal). */
   alwaysOpen?: boolean;
+  /** A sentence to mark in the text (from "See in the instructions"). Opens the card. */
+  highlight?: string | null;
 }
 
 const seenKey = (id: number) => `ft.brief.seen.${id}`;
 
-export function BriefCard({ assignmentId, description, attachments, onEdit, rememberOpenState = false, alwaysOpen = false }: Props) {
+export function BriefCard({ assignmentId, description, attachments, onEdit, rememberOpenState = false, alwaysOpen = false, highlight = null }: Props) {
   const { token } = useAuth();
   const images = attachments.filter((a) => a.kind === "IMAGE");
   const pdf = attachments.find((a) => a.kind === "PDF") ?? null;
   const hasContent = !!description || attachments.length > 0;
 
   const [open, setOpen] = useState(() => {
-    if (alwaysOpen || !rememberOpenState) return true;
+    if (alwaysOpen || !rememberOpenState || highlight) return true;
     try { return localStorage.getItem(seenKey(assignmentId)) === null; } catch { return true; }
   });
+  useEffect(() => {
+    if (highlight) setOpen(true);
+  }, [highlight]);
   useEffect(() => {
     if (!rememberOpenState) return;
     try { localStorage.setItem(seenKey(assignmentId), "1"); } catch { /* private mode */ }
@@ -124,7 +153,7 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
       if (download) {
         const a = document.createElement("a");
         a.href = url;
-        a.download = pdf.filename || "brief.pdf";
+        a.download = pdf.filename || "project-instructions.pdf";
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -143,7 +172,7 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
   const header = (
     <div className="flex min-h-10 items-center justify-between gap-3">
       {alwaysOpen ? (
-        <h2 className="text-base font-semibold text-slate-900">Project brief</h2>
+        <h2 className="text-base font-semibold text-slate-900">Project instructions</h2>
       ) : (
         <button
           type="button"
@@ -155,7 +184,7 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
           <svg className={`h-4 w-4 shrink-0 text-slate-600 transition-transform ${open ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-          <span className="text-base font-semibold text-slate-900">Project brief</span>
+          <span className="text-base font-semibold text-slate-900">Project instructions</span>
           <span className="text-xs text-slate-600">{open ? "Hide" : "Show"}</span>
         </button>
       )}
@@ -166,18 +195,18 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
   );
 
   return (
-    <section className={`${CARD} p-4`} aria-label="Project brief">
+    <section className={`${CARD} p-4`} aria-label="Project instructions">
       {header}
       {open && (
         <div id={bodyId} className="mt-2 space-y-4">
           {!hasContent && (
             <p className="text-sm text-slate-600">
-              {onEdit ? "No brief yet. Use Edit to add a description or files for your students." : "The instructor has not added a brief for this project."}
+              {onEdit ? "No instructions yet. Use Edit to add a description or files for your students." : "The instructor has not added project instructions for this project."}
             </p>
           )}
           {description && (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-800">
-              <Linkified text={description} />
+              <InstructionsText text={description} highlight={highlight} />
             </p>
           )}
           {images.length > 0 && (
@@ -213,10 +242,10 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
   );
 }
 
-/** Modal wrapper so students can read a brief from the class page before joining a group. */
+/** Modal wrapper so students can read the project instructions from the class page before joining a group. */
 export function BriefModal({
-  assignmentId, title, description, attachments, onClose,
-}: { assignmentId: number; title: string; description: string | null; attachments: BriefAttachment[]; onClose: () => void }) {
+  assignmentId, title, description, attachments, onClose, highlight = null,
+}: { assignmentId: number; title: string; description: string | null; attachments: BriefAttachment[]; onClose: () => void; highlight?: string | null }) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(true, ref, onClose);
   return (
@@ -225,7 +254,7 @@ export function BriefModal({
         ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label={`Project brief: ${title}`}
+        aria-label={`Project instructions: ${title}`}
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -233,7 +262,7 @@ export function BriefModal({
           <p className="min-w-0 truncate text-sm text-slate-600">{title}</p>
           <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Close</button>
         </div>
-        <BriefCard assignmentId={assignmentId} description={description} attachments={attachments} alwaysOpen />
+        <BriefCard assignmentId={assignmentId} description={description} attachments={attachments} alwaysOpen highlight={highlight} />
       </div>
     </div>
   );

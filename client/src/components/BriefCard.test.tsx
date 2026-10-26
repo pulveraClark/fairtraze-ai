@@ -24,7 +24,7 @@ describe("BriefCard", () => {
     first.unmount();
     render(<BriefCard assignmentId={1} description="Hello" attachments={[]} rememberOpenState />);
     expect(screen.queryByText("Hello")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /project brief/i }));
+    fireEvent.click(screen.getByRole("button", { name: /project instructions/i }));
     expect(screen.getByText("Hello")).toBeTruthy();
   });
 
@@ -58,5 +58,31 @@ describe("BriefCard", () => {
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     rerender(<BriefCard assignmentId={4} description="x" attachments={[]} onEdit={() => {}} />);
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+  });
+
+  describe("highlight (from 'See in the instructions')", () => {
+    const TEXT = ["# Goals", "- The app must have a login page.", "- Members can’t see each other’s scores."].join("\n");
+
+    it("marks the sentence in the original text, whatever the markers and quotes, and scrolls it into view", () => {
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const { container } = render(<BriefCard assignmentId={5} description={TEXT} attachments={[]} highlight="Members can't see each other's scores" />);
+      const mark = container.querySelector("mark")!;
+      expect(mark.textContent).toBe("Members can’t see each other’s scores");
+      expect(scroll).toHaveBeenCalled();
+      expect(container.textContent).toContain("The app must have a login page.");
+    });
+
+    it("shows the text unchanged when the sentence is not in it", () => {
+      const { container } = render(<BriefCard assignmentId={6} description={TEXT} attachments={[]} highlight="A sentence that is not there at all." />);
+      expect(container.querySelector("mark")).toBeNull();
+      expect(container.textContent).toContain("The app must have a login page.");
+    });
+
+    it("opens a card that was collapsed on the next visit", () => {
+      localStorage.setItem("ft.brief.seen.7", "1");
+      const { container } = render(<BriefCard assignmentId={7} description={TEXT} attachments={[]} rememberOpenState highlight="The app must have a login page." />);
+      expect(container.querySelector("mark")?.textContent).toBe("The app must have a login page");
+    });
   });
 });
