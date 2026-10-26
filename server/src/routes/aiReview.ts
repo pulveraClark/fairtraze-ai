@@ -191,7 +191,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   };
   // Brief check: instructor and leader only. Computed before the early return so it shows even if
   // the member summaries have not been written.
-  let brief: { briefCheck?: AiBriefView; briefFailed?: boolean } = {};
+  let brief: { briefCheck?: AiBriefView; briefFailed?: boolean; hasInstructions?: boolean } = {};
   if (viewer !== "member") {
     // The assignment (and so the attachments) is resolved from this group; no id comes from the client.
     const [assignment, briefRow] = await Promise.all([
@@ -207,7 +207,10 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
       briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo,
     );
     if (view) brief.briefCheck = view;
-    if (viewer === "instructor" && briefRow?.status === "FAILED" && (text.trim() || attachments.length > 0)) brief.briefFailed = true;
+    const hasInstructions = !!text.trim() || attachments.length > 0;
+    if (viewer === "instructor" && briefRow?.status === "FAILED" && hasInstructions) brief.briefFailed = true;
+    // Lets the instructor's page say "no instructions added yet" exactly (a missing check can mean other things).
+    if (viewer === "instructor") brief.hasInstructions = hasInstructions;
   }
 
   if (!review) {

@@ -166,6 +166,22 @@ describe("brief check visibility", () => {
       }
     });
 
+    it("tells only the instructor whether the project has instructions (text or a file)", async () => {
+      const withText = await setup();
+      expect((await get(withText.project.id, withText.instructor)).body.hasInstructions).toBe(true);
+
+      const fileOnly = await setup({ brief: "  " });
+      expect((await get(fileOnly.project.id, fileOnly.instructor)).body.hasInstructions).toBe(false);
+      await attach(fileOnly.asg.id, "brief.pdf");
+      expect((await get(fileOnly.project.id, fileOnly.instructor)).body.hasInstructions).toBe(true);
+
+      const none = await setup({ brief: "" });
+      expect((await get(none.project.id, none.instructor)).body.hasInstructions).toBe(false);
+      for (const viewer of [withText.leader, withText.ben]) {
+        expect((await get(withText.project.id, viewer)).body).not.toHaveProperty("hasInstructions");
+      }
+    });
+
     it("a check stored before sources existed still shapes, with no source fields", async () => {
       const s = await setup();
       const b = (await get(s.project.id, s.instructor)).body.briefCheck;

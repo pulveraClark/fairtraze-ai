@@ -50,6 +50,8 @@ export interface AiReviewResponse {
   errorCode?: string | null;
   aiAddressed?: Array<AiAddressedNote & { name: string }>;
   briefFailed?: boolean;
+  // Instructor only: whether the project has written instructions or an attached file.
+  hasInstructions?: boolean;
   // Instructor and group leader only.
   briefCheck?: AiBriefCheck;
 }
