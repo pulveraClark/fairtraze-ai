@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { FOCUS_LIGHT } from "../ui";
 import { BUTTON_SECONDARY } from "../ui/styles";
 import { InfoTip } from "../ui/InfoTip";
+import { AiBadge } from "../ui/AiBadge";
 import { FileEvidenceLink } from "../ui/ExternalEvidenceLink";
 import { DocSectionLink } from "../../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../../lib/helpText";
@@ -54,25 +55,47 @@ function EvidenceDetails({ s }: { s: AiSummaryView }) {
 }
 
 export function WorkSummaryBlock({
-  summary, data, instructor = false, label,
+  summary, data, instructor = false, label, onRegenerate,
 }: {
   summary: AiSummaryView;
   data: AiReviewResponse;
   /** The instructor is told when a newer analysis exists; members just see the date. */
   instructor?: boolean;
   label?: string;
+  /** Instructor only: the same action as the AI report's button, offered next to the fallback note. */
+  onRegenerate?: () => void;
 }) {
   const when = formatBasedOn(data.basedOnReportAt ?? data.generatedAt);
+  const facts = summary.source === "facts";
+  const canRegenerate = instructor && !!data.canGenerate && !!data.hasReport && !!onRegenerate;
   return (
     <div>
       {label && <p className="text-sm font-semibold text-slate-900">{label}</p>}
-      <p className="text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{summary.summary}</p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <AiBadge variant={facts ? "facts" : "ai"} />
+      </p>
+      {facts && (
+        <p className="mt-1.5 text-xs leading-normal text-slate-700">
+          The AI summary couldn't be written right now, so this shows the changed files.
+          {canRegenerate && (
+            <>
+              {" "}
+              <button
+                type="button"
+                onClick={onRegenerate}
+                className={`inline-flex min-h-8 items-center rounded px-1 font-semibold text-indigo-800 underline [@media(pointer:coarse)]:min-h-10 ${FOCUS_LIGHT}`}
+              >
+                Regenerate
+              </button>
+            </>
+          )}
+        </p>
+      )}
+      <p className="mt-1.5 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{summary.summary}</p>
       <EvidenceDetails s={summary} />
       <p className="mt-2 text-xs leading-normal text-slate-700">
-        {summary.source === "facts"
-          ? "AI summary unavailable. This line only lists changed files."
-          : `AI summary, may be wrong${when ? `. Based on the analysis of ${when}` : ""}.`}
-        {instructor && data.outdated ? " A newer analysis exists." : ""}
+        {facts ? "" : `May be wrong${when ? ` · Based on the analysis of ${when}` : ""}.`}
+        {instructor && data.outdated ? `${facts ? "" : " "}A newer analysis exists.` : ""}
       </p>
     </div>
   );
@@ -97,9 +120,9 @@ export function MemberWorkSummary({
         <InfoTip label="About the work summary" helpHref={helpLink("ai")}>{TIPS.workSummary}</InfoTip>
       </h3>
       {review.running && !summary ? (
-        <p role="status" className="text-sm leading-normal text-slate-700">Writing work summaries. You can keep using the page.</p>
+        <AiBadge variant="writing" />
       ) : summary ? (
-        <WorkSummaryBlock summary={summary} data={review} instructor />
+        <WorkSummaryBlock summary={summary} data={review} instructor onRegenerate={onGenerate} />
       ) : review.canGenerate && review.hasReport && onGenerate ? (
         <div className="flex flex-col items-start gap-2">
           <p className="text-sm leading-normal text-slate-700">No work summary yet.</p>

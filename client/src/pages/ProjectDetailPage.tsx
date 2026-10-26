@@ -759,6 +759,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               projectId={projectId}
               review={aiReview}
               generator={aiGenerator}
+              basedOnAt={stored.analyzedAt}
               onNarrativeGenerated={onNarrativeGenerated}
             />
 

@@ -41,6 +41,8 @@ describe("BriefCheckCard", () => {
     expect(screen.getByText(/Text written by another member is not shown/)).toBeTruthy();
     expect(screen.getByText(/No evidence could be checked/)).toBeTruthy();
     expect(screen.getByText(/Not a grade and not a judgment of quality/)).toBeTruthy();
+    expect(screen.getByText("AI explanation")).toBeTruthy();
+    expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
   });
 
   it("links file evidence to GitHub in a new tab and Docs sections to the Docs tab, the same for instructor and leader", async () => {

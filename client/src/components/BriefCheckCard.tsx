@@ -1,5 +1,6 @@
 import { FOCUS_LIGHT } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
+import { AiBadge } from "./ui/AiBadge";
 import { FileEvidenceLink } from "./ui/ExternalEvidenceLink";
 import { DocSectionLink } from "../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../lib/helpText";
@@ -23,6 +24,7 @@ export function BriefCheckCard({ check, instructor = false }: { check: AiBriefCh
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
       <summary className={`flex min-h-10 cursor-pointer flex-wrap items-center gap-x-2 px-3 py-2 text-sm font-semibold text-slate-900 ${FOCUS_LIGHT}`}>
         Brief check · AI review, may be wrong
+        <AiBadge variant="ai" label="AI explanation" />
       </summary>
       <div className="space-y-3 border-t border-slate-200 px-3 py-3">
         <p className="flex items-center gap-1 text-xs leading-normal text-slate-700">
@@ -65,7 +67,7 @@ export function BriefCheckCard({ check, instructor = false }: { check: AiBriefCh
           })}
         </ul>
         <p className="text-xs leading-normal text-slate-700">
-          AI review, may be wrong{when ? `. Written ${when}` : ""}.
+          May be wrong{when ? ` · Based on the analysis of ${when}` : ""}.
           {check.outdated ? " The brief or the analysis has changed since. Generate again to update it." : ""}
         </p>
         {instructor && (check.aiAddressedCount ?? 0) > 0 && (
