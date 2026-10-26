@@ -135,7 +135,7 @@ export function MemberWorkSummary({
             {generating ? "Generating…" : "Generate AI explanation & review"}
           </button>
           <p className="text-xs leading-normal text-slate-700">
-            Same as the button in the AI report. Covers the whole group (about 1 minute).
+            Same as the button in Member contributions. Covers the whole group (about 1 minute).
           </p>
         </div>
       ) : (

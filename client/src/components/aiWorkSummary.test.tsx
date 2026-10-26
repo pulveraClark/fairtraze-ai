@@ -122,7 +122,7 @@ describe("MemberWorkSummary (instructor drawer)", () => {
     const { rerender } = render(<MemberWorkSummary review={empty} member={{ userId: 1 }} onGenerate={onGenerate} />);
     const btn = screen.getByRole("button", { name: "Generate AI explanation & review" });
     expect(btn.className).toContain("bg-white");
-    expect(screen.getByText("Same as the button in the AI report. Covers the whole group (about 1 minute).")).toBeTruthy();
+    expect(screen.getByText("Same as the button in Member contributions. Covers the whole group (about 1 minute).")).toBeTruthy();
     await userEvent.click(btn);
     expect(onGenerate).toHaveBeenCalledTimes(1);
     rerender(<MemberWorkSummary review={empty} member={{ userId: 1 }} onGenerate={onGenerate} generating />);
