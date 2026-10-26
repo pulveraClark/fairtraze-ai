@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { prisma } from "../src/lib/prisma.js";
-import { AI_REVIEW_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
+import { AI_REVIEW_PROMPT_VERSION, COMMIT_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
 import { generateMemberSummaries, runMemberSummaries, type MemberSummaryDeps } from "../src/lib/aiReview/memberSummaries.js";
 import { AiReviewError } from "../src/lib/geminiClient.js";
 import { createUser, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
@@ -75,7 +75,29 @@ describe("runMemberSummaries", () => {
     expect(await prisma.aiCommitDigest.count({ where: { projectId: project.id } })).toBe(3);
   });
 
-  it("gives the model the removed lines and the message body of a deletion-only commit, and stores the digest under the current prompt version", async () => {
+  it("after the findings prompt moved to ai-review-3, commit digests written under ai-review-2 are still reused: only the member findings are written again", async () => {
+    expect(AI_REVIEW_PROMPT_VERSION).toBe("ai-review-3");
+    expect(COMMIT_PROMPT_VERSION).toBe("ai-review-2");
+    const { project, ana, report } = await setup();
+    for (const [sha, login] of [["a1", "anacruz"], ["a2", "anacruz"], ["b1", "benreyes"]] as const) {
+      await prisma.aiCommitDigest.create({
+        data: { projectId: project.id, sha, promptVersion: "ai-review-2", model: "m", authorLogin: login, summary: `Added file ${sha}.`, files: [{ path: `src/${sha}.ts`, added: 5, removed: 1 }] },
+      });
+    }
+    const generate = happyGenerate();
+    const d = deps({ generate });
+    await generateMemberSummaries(project.id, d);
+
+    expect((d.fetchEvidence as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+    const calls = (generate as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as { system: string; prompt: string });
+    expect(calls).toHaveLength(1); // the member findings call only; no commit is judged again
+    expect(calls[0]!.system).toContain("PLAIN ENGLISH");
+    const row = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: report.id, kind: "MEMBER_SUMMARIES" } });
+    expect(row.promptVersion).toBe("ai-review-3");
+    expect(ana.id).toBeGreaterThan(0);
+  });
+
+  it("gives the model the removed lines and the message body of a deletion-only commit, and stores the digest under the current commit prompt version", async () => {
     const { project } = await setup();
     // A digest written by the previous prompt must not be reused.
     await prisma.aiCommitDigest.create({
@@ -107,7 +129,7 @@ describe("runMemberSummaries", () => {
     expect(commitCall.system).toMatch(/removing code can be meaningful work/i);
 
     const rows = await prisma.aiCommitDigest.findMany({ where: { projectId: project.id, sha: "d1" } });
-    expect(rows.map((r) => r.promptVersion).sort()).toEqual(["ai-review-1", AI_REVIEW_PROMPT_VERSION].sort());
+    expect(rows.map((r) => r.promptVersion).sort()).toEqual(["ai-review-1", COMMIT_PROMPT_VERSION].sort());
   });
 
   it("falls back to a facts line when the AI is down, and reports FAILED", async () => {

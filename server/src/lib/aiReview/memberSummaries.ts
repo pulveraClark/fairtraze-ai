@@ -11,8 +11,10 @@ import { sanitizeForAi } from "./sanitize.js";
 import { redactSecrets } from "./redact.js";
 import { checkTone } from "./toneGuard.js";
 import { factsSummary, mergeFiles, NO_ACTIVITY_LINE } from "./facts.js";
+import { logReadability } from "./readability.js";
 import {
   AI_REVIEW_PROMPT_VERSION,
+  COMMIT_PROMPT_VERSION,
   COMMIT_SCHEMA,
   COMMIT_SYSTEM,
   ROLLUP_SCHEMA,
@@ -152,7 +154,7 @@ export async function runMemberSummaries(
       const shas = selected.flatMap((s) => s.list.map((c) => c.sha));
 
       const cached = await prisma.aiCommitDigest.findMany({
-        where: { projectId, promptVersion: AI_REVIEW_PROMPT_VERSION, sha: { in: shas } },
+        where: { projectId, promptVersion: COMMIT_PROMPT_VERSION, sha: { in: shas } },
       });
       const digestBySha = new Map<string, DigestLine>(
         cached.map((d) => [d.sha, { sha: d.sha, summary: d.summary, files: d.files as DigestLine["files"] }]),
@@ -193,7 +195,7 @@ export async function runMemberSummaries(
           const text = redactSecrets(said.get(e.sha) ?? "");
           const usable = text !== "" && text.length <= DIGEST_MAX_CHARS && checkTone(text).ok;
           if (usable) {
-            toStore.push({ projectId, sha: e.sha, promptVersion: AI_REVIEW_PROMPT_VERSION, model: modelName(), authorLogin: e.authorLogin, summary: text, files });
+            toStore.push({ projectId, sha: e.sha, promptVersion: COMMIT_PROMPT_VERSION, model: modelName(), authorLogin: e.authorLogin, summary: text, files });
             digestBySha.set(e.sha, { sha: e.sha, summary: text, files });
           } else {
             // Not stored, so the next Generate tries this commit again.
@@ -294,6 +296,9 @@ export async function runMemberSummaries(
       evidence,
     };
   });
+
+  // Log-only: how many of the sentences the AI wrote are long. Never changes what is shown.
+  logReadability(`member findings (group ${projectId})`, members.filter((m) => m.source === "ai").map((m) => m.summary));
 
   const needed = withEvidence.length;
   const fromAi = withEvidence.filter((p) => written.has(p.userId)).length;

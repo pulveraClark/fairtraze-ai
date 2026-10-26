@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
+import { logReadability } from "../lib/aiReview/readability.js";
 import { runAnalysis, type ProgressEmitter } from "../lib/analysisRunner.js";
 import type { Request, Response } from "express";
 import type { TeamReport } from "@shared/types.js";
@@ -165,6 +166,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
       stored.report,
       project.assignment?.description ?? null // context only; never affects scores
     );
+    logReadability(`score explanation (group ${projectId})`, [narrative]); // log only
     await prisma.report.update({
       where: { id: latestReport.id },
       data: { content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined }) },
