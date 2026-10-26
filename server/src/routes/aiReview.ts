@@ -7,8 +7,12 @@ import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 import { aiReviewEnabled } from "../lib/geminiClient.js";
 import { isReviewRunning, startReview } from "../lib/aiReview/reviewLock.js";
 import { generateMemberSummaries } from "../lib/aiReview/memberSummaries.js";
-import { AI_REVIEW_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
-import type { AiMemberSummariesContent, AiMemberSummary, AiAddressedNote } from "@shared/aiReviewTypes.js";
+import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
+import { briefHash } from "../lib/aiReview/briefEvidence.js";
+import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
+import type {
+  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiRequirementStatus,
+} from "@shared/aiReviewTypes.js";
 
 export const aiReviewRouter = Router();
 
@@ -49,6 +53,53 @@ export function shapeSummariesForViewer(
   return {
     summaries,
     aiAddressed: content.aiAddressed.map((a) => ({ ...a, name: people.get(a.userId)?.name ?? "Former member" })),
+  };
+}
+
+export interface AiBriefView {
+  requirements: Array<{
+    text: string;
+    status: AiRequirementStatus;
+    unverified: boolean;
+    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean }>;
+  }>;
+  // True when no requirement was found (all Not found). The page shows one calm line.
+  nothingFound: boolean;
+  generatedAt: string;
+  outdated: boolean;
+  // Instructor only.
+  aiAddressedCount?: number;
+}
+
+// The brief check is for the owning instructor and the group leader, never other members.
+// Same wording and evidence for both; the leader sees only the section heading, not the quoted words,
+// for Docs text written by anyone else. Returns null (card hidden) when the brief is empty, the run
+// failed or was skipped, or the AI listed no requirements.
+export function shapeBriefForViewer(
+  row: { status: string; content: unknown; promptVersion: string; briefHash: string | null; reportId: number; createdAt: Date } | null,
+  viewer: AiViewer,
+  viewerUserId: number,
+  current: { brief: string; latestReportId: number | null },
+): AiBriefView | null {
+  if (!row || viewer === "member" || !current.brief.trim()) return null;
+  if (row.status === "FAILED" || row.status === "SKIPPED") return null;
+  const content = row.content as AiBriefContent;
+  if (!content.requirements?.length) return null;
+  const requirements = content.requirements.map((r) => ({
+    text: r.text,
+    status: r.status,
+    unverified: !!r.unverified,
+    evidence: r.evidence.map((e) => {
+      const othersWrote = e.type === "doc" && viewer === "leader" && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
+      return { type: e.type, ref: e.ref, quote: othersWrote ? "" : e.quote, quoteHidden: othersWrote };
+    }),
+  }));
+  return {
+    requirements,
+    nothingFound: requirements.every((r) => r.status === "NOT_FOUND"),
+    generatedAt: row.createdAt.toISOString(),
+    outdated: row.reportId !== current.latestReportId || row.promptVersion !== BRIEF_PROMPT_VERSION || row.briefHash !== briefHash(current.brief),
+    ...(viewer === "instructor" ? { aiAddressedCount: content.aiAddressedCount ?? 0 } : {}),
   };
 }
 
@@ -102,8 +153,25 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     canGenerate: instructor && req.user!.role === "INSTRUCTOR",
     hasReport: !!latestReport,
   };
+  // Brief check: instructor and leader only. Computed before the early return so it shows even if
+  // the member summaries have not been written.
+  let brief: { briefCheck?: AiBriefView; briefFailed?: boolean } = {};
+  if (viewer !== "member") {
+    const [assignment, briefRow] = await Promise.all([
+      prisma.assignment.findFirst({ where: { projects: { some: { id: project.id } } }, select: { description: true } }),
+      prisma.aiReportReview.findFirst({
+        where: { kind: "BRIEF_COMPARISON", report: { projectId: project.id } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      }),
+    ]);
+    const text = assignment?.description ?? "";
+    const view = shapeBriefForViewer(briefRow, viewer, req.user!.sub, { brief: text, latestReportId: latestReport?.id ?? null });
+    if (view) brief.briefCheck = view;
+    if (viewer === "instructor" && briefRow?.status === "FAILED" && text.trim()) brief.briefFailed = true;
+  }
+
   if (!review) {
-    res.json({ ...base, generatedAt: null, summaries: null });
+    res.json({ ...base, generatedAt: null, summaries: null, ...brief });
     return;
   }
 
@@ -117,6 +185,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     // The analysis moved on (or the prompt changed) since this review was written.
     outdated: review.reportId !== latestReport?.id || review.promptVersion !== AI_REVIEW_PROMPT_VERSION,
     summaries: shaped.summaries,
+    ...brief,
     ...(viewer === "instructor"
       ? { status: review.status, errorCode: review.errorCode, aiAddressed: shaped.aiAddressed }
       : {}),
@@ -154,7 +223,14 @@ aiReviewRouter.post("/api/groups/:id/ai-review", ...requireRole("INSTRUCTOR"), r
     return;
   }
   const started = startReview(project.id, async () => {
-    await generateMemberSummaries(project.id);
+    // Two independent parts; one failing never stops the other.
+    for (const part of [generateMemberSummaries, generateBriefComparison]) {
+      try {
+        await part(project.id);
+      } catch (err) {
+        console.error(`[ai-review] group ${project.id} ${part.name} failed:`, err);
+      }
+    }
   });
   if (!started) {
     res.status(409).json({ code: "REVIEW_IN_PROGRESS", error: "A review of this group is already running." });

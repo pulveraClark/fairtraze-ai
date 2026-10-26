@@ -33,3 +33,32 @@ export interface AiMemberSummariesContent {
 }
 
 export type AiReviewStatus = "OK" | "PARTIAL" | "FAILED" | "SKIPPED";
+
+// ── Brief comparison (instructor and group leader) ──────────────────────────────────────────────
+
+export type AiRequirementStatus = "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
+
+export interface AiBriefEvidence {
+  type: "file" | "doc";
+  // File path, or Docs section heading.
+  ref: string;
+  // Short text copied from that file or section. Verified in code before it is stored.
+  quote: string;
+  // Docs only: ids of the members who wrote the quoted text. Used to hide other members' Docs words
+  // from the leader; never sent to the client.
+  authors?: number[];
+}
+
+export interface AiBriefRequirement {
+  text: string;
+  status: AiRequirementStatus;
+  evidence: AiBriefEvidence[];
+  // True when the AI said Found/Partly but none of its quotes could be verified.
+  unverified?: boolean;
+}
+
+export interface AiBriefContent {
+  requirements: AiBriefRequirement[];
+  // Count of lines of student text that addressed the AI and were replaced before sending.
+  aiAddressedCount: number;
+}
