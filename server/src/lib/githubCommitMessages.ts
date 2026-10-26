@@ -53,3 +53,15 @@ export async function fetchRepoCommitMessages(
   }
   return out;
 }
+
+/**
+ * Time of the newest commit on the default branch, or null for an empty repo. One API call. Used only to
+ * decide whether a group has anything new since its last report (automatic analysis); not a scoring input.
+ */
+export async function fetchLatestCommitTime(owner: string, repo: string, githubToken: string): Promise<Date | null> {
+  const octokit = new Octokit({ auth: githubToken });
+  const response = await octokit.request("GET /repos/{owner}/{repo}/commits", { owner, repo, per_page: 1 });
+  const item = (response.data as unknown as CommitListItem[])[0];
+  const when = item?.commit?.committer?.date ?? item?.commit?.author?.date;
+  return when ? new Date(when) : null;
+}

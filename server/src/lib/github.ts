@@ -38,7 +38,7 @@ export interface GitHubProgress {
   member?: { login: string; commits: number; commitDates: string[] };
 }
 
-function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
+export function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   const match = repoUrl
     .replace(/\.git$/, "")
     .match(/(?:github\.com[/:]|^)([^/]+)\/([^/]+)$/);
