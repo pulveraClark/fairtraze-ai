@@ -1,9 +1,9 @@
 import ReactMarkdown from "react-markdown";
-import { BUTTON_SECONDARY, CARD } from "./ui/styles";
+import { CARD } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
-import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
+import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { AiBadge } from "./ui/AiBadge";
 import { BriefCheckCard } from "./BriefCheckCard";
 import type { UseAiReview } from "../hooks/useAiReview";
@@ -25,14 +25,8 @@ interface Props {
 
 export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt }: Props) {
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
-  const { reviewOn, generating, error, generate } = generator ?? own;
+  const { reviewOn, generating, error } = generator ?? own;
 
-  // One button for both: the explanation and, when AI review is on for the class, the work summaries.
-  const buttonLabel = generating
-    ? "Generating…"
-    : narrative
-      ? (reviewOn ? "Regenerate AI explanation & review" : "Regenerate")
-      : (reviewOn ? "Generate AI explanation & review" : "Generate explanation");
   const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
   const statusLine = reviewStatusLine(review?.data ?? null);
   const addressedLine = aiAddressedLine(review?.data ?? null);
@@ -43,26 +37,16 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
 
   return (
     <section aria-labelledby="narrative-title" className={`${CARD} min-w-0 border-l-4 border-l-purple-600 p-4`}>
-      {/* Header: the one AI button lives here, whatever the state */}
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 id="narrative-title" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold text-slate-900">
-            AI report
-            {narrative && !generating && <AiBadge variant="ai" label="AI explanation" />}
-          </h2>
-          <p className="flex items-center gap-1 text-sm leading-normal text-slate-700">
-            Scores computed by formula · explained by AI
-            <InfoTip label="About the AI report" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => generate(!!narrative)}
-          disabled={generating}
-          className={`${BUTTON_SECONDARY} [@media(pointer:coarse)]:min-h-10`}
-        >
-          {buttonLabel}
-        </button>
+      {/* Header: the one AI button now lives in Member contributions */}
+      <div className="mb-4">
+        <h2 id="narrative-title" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold text-slate-900">
+          AI report
+          {narrative && !generating && <AiBadge variant="ai" label="AI explanation" />}
+        </h2>
+        <p className="flex items-center gap-1 text-sm leading-normal text-slate-700">
+          Scores computed by formula · explained by AI
+          <InfoTip label="About the AI report" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
+        </p>
       </div>
 
       {/* Work-summary status: one calm line each, only when there is something to say */}
@@ -74,9 +58,9 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
 
       {/* No narrative yet */}
       {!narrative && !generating && (
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
+        <div className="flex flex-col gap-2 py-2">
           <p className="text-sm leading-normal text-slate-700">
-            The computed scores are ready. Generate an AI explanation when you need it.
+            No AI explanation yet. Use the {aiButtonLabel(false, false, reviewOn)} button in Member contributions above.
           </p>
           {error && (
             <p className="max-w-sm text-sm text-red-800">{error}</p>

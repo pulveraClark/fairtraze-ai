@@ -6,8 +6,12 @@ import { DocSectionProvider } from "../hooks/useDocSectionLink";
 import { MemberWorkSummary } from "./report/AiWorkSummary";
 import { StudentWorkSummaries } from "./StudentWorkSummaries";
 import { Narrative } from "./Narrative";
+import { MemberContributionList } from "./report/MemberContributionList";
+import { useGenerateAiReport } from "../hooks/useGenerateAiReport";
+import type { UseAiReview } from "../hooks/useAiReview";
+import type { AnyScoredMember } from "@shared/types";
 
-vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t", user: { id: 1 } }) }));
+vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t", user: { id: 1 } }), useAuthOptional: () => ({ token: "t", user: { id: 1 } }) }));
 
 const evidence = { files: [{ path: "src/pages/Login.tsx", added: 40, removed: 2 }], docSections: ["Methodology"], commitCount: 3, otherCommits: 2 };
 const ana: AiSummaryView = { userId: 1, name: "Ana Cruz", githubUsername: "anacruz", isYou: true, summary: "Added the login page.", source: "ai", evidence };
@@ -184,12 +188,25 @@ describe("StudentWorkSummaries", () => {
   });
 });
 
-describe("Narrative with AI review", () => {
-  it("the button is renamed when work summaries are on, and one click starts both", async () => {
+const member = { studentName: "Ana Cruz", contributionShare: 1, flags: [] } as unknown as AnyScoredMember;
+
+// The report page: the shared generator feeds the button in Member contributions and the Narrative card.
+function Harness({ review, narrative, onGenerated, allowed = true }: { review: UseAiReview; narrative: string | null; onGenerated: (t: string) => void; allowed?: boolean }) {
+  const generator = useGenerateAiReport(1, review, onGenerated);
+  return (
+    <>
+      <MemberContributionList members={[member]} onOpen={() => {}} generator={allowed ? generator : undefined} hasNarrative={!!narrative} />
+      <Narrative narrative={narrative} projectId={1} onNarrativeGenerated={onGenerated} review={review} generator={generator} />
+    </>
+  );
+}
+
+describe("AI button in Member contributions", () => {
+  it("is renamed when work summaries are on, and one click starts both", async () => {
     const start = vi.fn().mockResolvedValue(true);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ narrative: "Text." }) }));
     const onGenerated = vi.fn();
-    render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={onGenerated} review={{ data: base, error: null, start }} />);
+    render(<Harness review={{ data: base, error: null, start }} narrative={null} onGenerated={onGenerated} />);
     await userEvent.click(screen.getByRole("button", { name: "Generate AI explanation & review" }));
     expect(start).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onGenerated).toHaveBeenCalledWith("Text."));
@@ -198,9 +215,29 @@ describe("Narrative with AI review", () => {
   it("keeps the plain label and starts nothing when AI review is off", async () => {
     const start = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ narrative: "Text." }) }));
-    render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} review={{ data: { enabled: false }, error: null, start }} />);
+    render(<Harness review={{ data: { enabled: false }, error: null, start }} narrative={null} onGenerated={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: "Generate explanation" }));
     expect(start).not.toHaveBeenCalled();
+  });
+
+  it("is a 40px secondary button with the note under it, disabled while generating", async () => {
+    let finish: (v: unknown) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise((r) => { finish = r; })));
+    render(<Harness review={{ data: base, error: null, start: vi.fn() }} narrative={null} onGenerated={() => {}} />);
+    const btn = screen.getByRole("button", { name: "Generate AI explanation & review" });
+    expect(btn.className).toContain("bg-white");
+    expect(btn.className).toContain("min-h-10");
+    expect(screen.getByText("Also updates the AI report below.")).toBeTruthy();
+    await userEvent.click(btn);
+    expect((await screen.findByRole("button", { name: "Generating…" }) as HTMLButtonElement).disabled).toBe(true);
+    finish({ ok: true, json: async () => ({ narrative: "Text." }) });
+    await waitFor(() => expect((screen.getByRole("button", { name: /generate/i }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("is not rendered for a viewer who may not generate (admin)", () => {
+    render(<Harness review={{ data: base, error: null, start: vi.fn() }} narrative={null} onGenerated={() => {}} allowed={false} />);
+    expect(screen.queryByRole("button", { name: /generate|regenerate/i })).toBeNull();
+    expect(screen.queryByText("Also updates the AI report below.")).toBeNull();
   });
 
   it("shows a calm status while writing, a failure line, and the neutral AI-addressed note", () => {
@@ -211,15 +248,17 @@ describe("Narrative with AI review", () => {
     expect(screen.getByText(/Ben Reyes appears to address the AI/)).toBeTruthy();
   });
 
-  it("has exactly one AI button in every state, and the label follows the state", () => {
+  it("has exactly one AI button in every state (none inside the AI card), and the label follows the state", () => {
     const review = { data: base, error: null, start: vi.fn() };
-    const { rerender } = render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} review={review} />);
+    const { rerender } = render(<Harness review={review} narrative={null} onGenerated={() => {}} />);
     expect(screen.getAllByRole("button", { name: /explanation/i })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Generate AI explanation & review" })).toBeTruthy();
-    rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={review} />);
+    expect(screen.getByText(/No AI explanation yet\. Use the Generate AI explanation & review button in Member contributions above\./)).toBeTruthy();
+    rerender(<Harness review={review} narrative="T." onGenerated={() => {}} />);
     expect(screen.getAllByRole("button", { name: /explanation/i })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Regenerate AI explanation & review" }).className).toContain("bg-white");
     expect(screen.queryByRole("button", { name: "Regenerate" })).toBeNull();
+    expect(screen.queryByText(/No AI explanation yet/)).toBeNull();
   });
 
   it("labels the explanation as AI with the full footer", () => {

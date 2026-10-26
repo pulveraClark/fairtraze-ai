@@ -7,22 +7,20 @@ vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t" }) }));
 import { Narrative } from "./Narrative";
 
 describe("Narrative", () => {
-  it("Generate explanation is a secondary button, so Re-analyze stays the only filled button on the report", () => {
+  it("has no button of its own; with nothing generated it points to Member contributions", () => {
     render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} />);
-    const btn = screen.getByRole("button", { name: "Generate explanation" });
-    expect(btn.className).toContain("bg-white");
-    expect(btn.className).not.toContain("bg-indigo-700");
+    expect(screen.queryByRole("button", { name: /generate|regenerate/i })).toBeNull();
+    expect(screen.getByText("No AI explanation yet. Use the Generate explanation button in Member contributions above.")).toBeTruthy();
     expect(BUTTON_SECONDARY).toContain("bg-white");
     expect(BUTTON_PRIMARY).toContain("bg-indigo-700");
   });
 });
 
 describe("Narrative outdated notice", () => {
-  it("tells the instructor the results changed, and keeps the Regenerate button", () => {
+  it("tells the instructor the results changed and keeps the saved text", () => {
     render(<Narrative narrative="Saved text." outdated projectId={1} onNarrativeGenerated={() => {}} />);
     expect(screen.getByText("Results changed. Generate a new explanation.")).toBeTruthy();
     expect(screen.getByText("Saved text.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Regenerate" })).toBeTruthy();
   });
 
   it("shows no notice when the explanation is current or missing", () => {

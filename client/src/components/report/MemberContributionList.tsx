@@ -1,11 +1,13 @@
 import type { AnyScoredMember, MemberRoleInfo } from "@shared/types";
 import { ListRow, StatusPill, CARD } from "../ui";
+import { BUTTON_SECONDARY } from "../ui/styles";
 import { PILL_TONES } from "../ui/StatusPill";
+import type { AiReportGenerator } from "../../hooks/useGenerateAiReport";
 import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
 import { Avatar } from "../Avatar";
 import { InfoTip } from "../ui/InfoTip";
 import { TIPS, helpLink } from "../../lib/helpText";
-import { WORK_SUMMARY_CHIP_TEXT, type WorkSummaryState } from "../../lib/aiReview";
+import { AI_BUTTON_NOTE, WORK_SUMMARY_CHIP_TEXT, aiButtonLabel, type WorkSummaryState } from "../../lib/aiReview";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -17,6 +19,10 @@ interface Props {
   onOpen: (member: AnyScoredMember, opener: HTMLElement) => void;
   /** Instructor only: where the AI work summaries stand. Omit (or null) to show no chip. A text chip, not a button. */
   aiSummaryState?: WorkSummaryState | null;
+  /** The shared AI generate action. Pass it only for viewers who may generate; omit for no button. */
+  generator?: AiReportGenerator;
+  /** An AI explanation already exists (button reads Regenerate). */
+  hasNarrative?: boolean;
 }
 
 /** Role chips: leader + functional roles, text only (context, never a score input). */
@@ -37,7 +43,7 @@ export function RoleChips({ info }: { info: MemberRoleInfo | undefined }) {
   );
 }
 
-export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState }: Props) {
+export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false }: Props) {
   const n = members.length;
   const equalPct = n > 0 ? 100 / n : 0;
   // One shared bar scale so rows are comparable; always wide enough to show the equal-share marker.
@@ -46,16 +52,31 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
 
   return (
     <section aria-labelledby="member-contributions-title" className={CARD}>
-      <div className="border-b border-slate-200 px-4 py-4">
-        <h2 id="member-contributions-title" className="text-lg font-semibold text-slate-900">Member contributions</h2>
-        <p className="mt-1 flex flex-wrap items-center gap-x-1 text-sm leading-normal text-slate-700">
-          Select a member for details.
-          <InfoTip label="About the equal-share marker" helpHref={helpLink("shares")}>{TIPS.equalShareList(equalPct)}</InfoTip>
-        </p>
-        {aiSummaryState && (
-          <p className="mt-2 inline-flex max-w-full flex-wrap items-center rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs font-medium leading-normal text-slate-800">
-            {WORK_SUMMARY_CHIP_TEXT[aiSummaryState]}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-slate-200 px-4 py-4">
+        <div className="min-w-0">
+          <h2 id="member-contributions-title" className="text-lg font-semibold text-slate-900">Member contributions</h2>
+          <p className="mt-1 flex flex-wrap items-center gap-x-1 text-sm leading-normal text-slate-700">
+            Select a member for details.
+            <InfoTip label="About the equal-share marker" helpHref={helpLink("shares")}>{TIPS.equalShareList(equalPct)}</InfoTip>
           </p>
+          {aiSummaryState && (
+            <p className="mt-2 inline-flex max-w-full flex-wrap items-center rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs font-medium leading-normal text-slate-800">
+              {WORK_SUMMARY_CHIP_TEXT[aiSummaryState]}
+            </p>
+          )}
+        </div>
+        {generator && (
+          <div className="flex w-full flex-col items-stretch gap-1 sm:w-auto sm:items-end">
+            <button
+              type="button"
+              onClick={() => generator.generate(hasNarrative)}
+              disabled={generator.generating}
+              className={`${BUTTON_SECONDARY} min-h-10`}
+            >
+              {aiButtonLabel(generator.generating, hasNarrative, generator.reviewOn)}
+            </button>
+            <p className="text-xs leading-normal text-slate-700 sm:text-right">{AI_BUTTON_NOTE}</p>
+          </div>
         )}
       </div>
       <ul className="divide-y divide-slate-200">

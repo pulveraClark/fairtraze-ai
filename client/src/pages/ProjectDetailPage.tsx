@@ -750,8 +750,19 @@ export function ProjectDetailPage({ projectId }: Props) {
               />
             </section>
 
-            {/* AI report: directly under the summary tiles, above the member list */}
-            {/* keyed to projectId so it always reflects the current group */}
+            {/* Member contributions: also holds the one AI generate button (not shown to admins) */}
+            <MemberContributionList
+              members={stored.report.members}
+              memberRoles={stored.memberRoles}
+              disputedMembers={disputedMembers}
+              resolvedFlagOutcomes={resolvedFlagOutcomes}
+              aiSummaryState={aiReview.data?.canGenerate ? workSummaryState(aiReview.data) : null}
+              generator={isAdmin ? undefined : aiGenerator}
+              hasNarrative={!!narrativeText}
+              onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
+            />
+
+            {/* AI report, then the brief check inside it. Keyed to projectId so it always reflects the current group */}
             <Narrative
               key={projectId}
               narrative={narrativeText}
@@ -761,16 +772,6 @@ export function ProjectDetailPage({ projectId }: Props) {
               generator={aiGenerator}
               basedOnAt={stored.analyzedAt}
               onNarrativeGenerated={onNarrativeGenerated}
-            />
-
-            {/* Member contributions — replaces the old bar chart and table */}
-            <MemberContributionList
-              members={stored.report.members}
-              memberRoles={stored.memberRoles}
-              disputedMembers={disputedMembers}
-              resolvedFlagOutcomes={resolvedFlagOutcomes}
-              aiSummaryState={aiReview.data?.canGenerate ? workSummaryState(aiReview.data) : null}
-              onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
             />
 
             {/* Imbalance trend */}

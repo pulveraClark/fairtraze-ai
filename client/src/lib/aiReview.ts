@@ -95,6 +95,15 @@ export const WORK_SUMMARY_CHIP_TEXT: Record<WorkSummaryState, string> = {
   running: "Writing AI summaries…",
 };
 
+/** Label of the one AI button: Generate / Regenerate, and the short form when the class review switch is off. */
+export function aiButtonLabel(generating: boolean, hasNarrative: boolean, reviewOn: boolean): string {
+  if (generating) return "Generating…";
+  if (hasNarrative) return reviewOn ? "Regenerate AI explanation & review" : "Regenerate";
+  return reviewOn ? "Generate AI explanation & review" : "Generate explanation";
+}
+
+export const AI_BUTTON_NOTE = "Also updates the AI report below.";
+
 export function briefStatusLine(data: AiReviewResponse | null): string | null {
   if (!data?.enabled || data.running || !data.briefFailed) return null;
   return "The brief check could not run. Try again later.";
