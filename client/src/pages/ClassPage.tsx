@@ -15,6 +15,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
 import { joinInviteUrl } from "../lib/joinInvite";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
+import { AiReviewSwitch } from "../components/AiReviewSwitch";
 import { BriefEditor } from "../components/BriefEditor";
 import { EditAssignmentModal, UploadFailurePanel } from "../components/EditAssignmentModal";
 import { emptyDraft, retryUploads, syncBrief, type BriefDraft, type DraftItem } from "../lib/briefAttachments";
@@ -38,6 +39,7 @@ interface ClassInfo {
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
   joinCode: string | null;
+  aiReviewEnabled?: boolean;
   createdAt: string;
 }
 
@@ -658,6 +660,14 @@ export function ClassPage({ classId }: Props) {
             {/* Class-level join code — students use this to enroll */}
             {classInfo?.joinCode && !isAdmin && (
               <ClassJoinCodeBadge code={classInfo.joinCode} />
+            )}
+            {classInfo && !isAdmin && (
+              <AiReviewSwitch
+                classId={classInfo.id}
+                enabled={classInfo.aiReviewEnabled !== false}
+                token={token}
+                onChanged={(next) => setClassInfo((c) => (c ? { ...c, aiReviewEnabled: next } : c))}
+              />
             )}
             {isAdmin && (
               <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">

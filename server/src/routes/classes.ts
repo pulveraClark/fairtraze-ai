@@ -98,6 +98,30 @@ classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (re
   res.json({ message: "Class section deleted" });
 });
 
+// PATCH /api/classes/:id/ai-review - the owning instructor turns AI work summaries on or off for the
+// class. Off: no AI calls for its groups and the summaries are hidden from everyone (stored rows are
+// kept, not served). Admins are read-only.
+classesRouter.patch("/api/classes/:id/ai-review", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid class section id" });
+    return;
+  }
+  const body = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "enabled must be true or false" });
+    return;
+  }
+  const cls = await assertOwnsClass(req, res, idResult.data);
+  if (!cls) return;
+  const updated = await prisma.classSection.update({
+    where: { id: cls.id },
+    data: { aiReviewEnabled: body.data.enabled },
+    select: { id: true, aiReviewEnabled: true },
+  });
+  res.json(updated);
+});
+
 // GET /api/classes — list the instructor's class sections with assignments and group counts
 classesRouter.get("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const instructorId = req.user!.sub;
@@ -146,6 +170,7 @@ classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "
       edpCode:     cls.edpCode,
       type:        cls.type,
       joinCode:    cls.joinCode,
+      aiReviewEnabled: cls.aiReviewEnabled,
       createdAt:   cls.createdAt,
     },
     assignments,
