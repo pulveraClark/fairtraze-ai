@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { analyzeRouter } from "./routes/analyze.js";
+import { internalRouter } from "./routes/internal.js";
 import { projectsRouter } from "./routes/projects.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
@@ -82,6 +83,9 @@ export function createApp() {
   app.get("/api/config", (_req, res) => {
     res.json({ emailEnabled: isEmailEnabled() });
   });
+
+  // Scheduler endpoint: has its own limiter and a secret, and must not use up the visitors' shared budget.
+  app.use(internalRouter);
 
   app.use(globalLimiter);
 

@@ -125,6 +125,15 @@ export const analysisLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Scheduler endpoint: a handful of calls a night (plus retries), so 20 per hour per IP is generous
+// and still stops a guessing attempt on the secret.
+export const internalLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+});
+
 // Personal-data export (RA 10173 access/portability): a heavy, many-table read, so 5 per hour
 // per user. Needs authenticateToken to have run first (see app.ts) to key by user id.
 export const exportLimiter = rateLimit({
