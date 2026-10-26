@@ -678,7 +678,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number };
+  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto" };
   if (!stored.report) {
     res.json({ ...base, hasReport: false, report: null });
     return;
@@ -763,6 +763,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       gini:        teamReport.gini,
       teamHealth:  teamReport.teamHealth,
       analyzedAt:  latestReport.generatedAt.toISOString(),
+      trigger:     stored.trigger ?? null,
       noActivity:  hasNoRecordedActivity(teamReport.members),
       quietSource: hasNoRecordedActivity(teamReport.members) ? null : quietSource(teamReport.members),
       memberCount: teamReport.memberCount,

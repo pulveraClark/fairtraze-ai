@@ -252,6 +252,8 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
         unmatchedLogins?: string[];
         scoringConfig?: ProjectScoringConfig;
         scoringRulesVersion?: number;
+        trigger?: "manual" | "auto";
+        narrativeOutdated?: boolean;
       })
     : {};
 
@@ -303,6 +305,8 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     memberRoles,
     docsDataApproximate: await docsDataApproximateFor(projectId, project.assignment?.sourceType),
     rulesOutdated: isRulesOutdated(stored),
+    trigger: stored.trigger ?? null,
+    narrativeOutdated: stored.narrativeOutdated === true,
     repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
   };

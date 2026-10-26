@@ -29,6 +29,9 @@ import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth, quietSource, 
 import { NoActivityPill } from "../components/NoActivityPill";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
+import { LastAnalyzed } from "../components/LastAnalyzed";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
+import { requestReportRefresh } from "../lib/refreshReport";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
 import { helpLink } from "../lib/helpText";
 import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
@@ -52,6 +55,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
   const [stored, setStored]               = useState<StoredReportResponse | null>(null);
   const [narrativeText, setNarrativeText] = useState<string | null>(null);
+  const [narrativeOutdated, setNarrativeOutdated] = useState(false);
   const [fetchError, setFetchError]       = useState<string | null>(null);
   const [notFound, setNotFound]           = useState(false);
   const [loading, setLoading]             = useState(true);
@@ -107,21 +111,30 @@ export function ProjectDetailPage({ projectId }: Props) {
     : [];
 
   // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
+  // The analysis time of the report on screen, for the quiet re-read to compare against.
+  const storedAnalyzedAt = useRef<string | undefined>(undefined);
   const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
   // Expanded by default — the card itself is already gated on having 2+ runs; this only
   // controls whether its body (the chart) is shown within that card.
   const [trendExpanded, setTrendExpanded] = useState(true);
 
-  const fetchStored = useCallback(async () => {
-    setFetchError(null);
-    setNotFound(false);
-    setStored(null);
-    setNarrativeText(null);   // clear immediately so no previous group's text bleeds through
-    setReportStale(false);
+  // quiet: a background re-read (automatic refresh). It keeps the page as it is, replaces the report
+  // only when a new one has arrived, and ignores failures - the report already on screen stays.
+  const fetchStored = useCallback(async (opts: { quiet?: boolean } = {}) => {
+    const quiet = opts.quiet === true;
+    if (!quiet) {
+      setFetchError(null);
+      setNotFound(false);
+      setStored(null);
+      setNarrativeText(null);   // clear immediately so no previous group's text bleeds through
+      setNarrativeOutdated(false);
+      setReportStale(false);
+    }
     try {
       const res = await fetch(`/api/projects/${projectId}/report`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (quiet && !res.ok) return;
       if (res.status === 404) { setNotFound(true); return; }
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
@@ -129,13 +142,15 @@ export function ProjectDetailPage({ projectId }: Props) {
         return;
       }
       const data = (await res.json()) as StoredReportResponse;
+      if (quiet && data.analyzedAt === storedAnalyzedAt.current) return;
       setStored(data);
       setNarrativeText(data.narrative ?? null);
+      setNarrativeOutdated(data.narrativeOutdated === true);
       setReportStale(!!data.scoringConfigChangedAt || !!data.membershipChangedAt || !!data.rulesOutdated);
     } catch {
-      setFetchError("Network error — could not reach the server.");
+      if (!quiet) setFetchError("Network error — could not reach the server.");
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [projectId, token]);
 
@@ -207,6 +222,27 @@ export function ProjectDetailPage({ projectId }: Props) {
     void fetchDisputes();
     void fetchHistory();
   }, [fetchStored, fetchDisputes, fetchHistory]);
+
+  useEffect(() => { storedAnalyzedAt.current = stored?.analyzedAt; }, [stored?.analyzedAt]);
+
+  // Open a report older than an hour in an active project: the server refreshes it in the background.
+  const { updating } = useAutoRefresh({
+    key: projectId,
+    enabled: !!stored,
+    analyzedAt: stored?.analyzedAt,
+    request: () => requestReportRefresh(projectId, token),
+    refetch: () => fetchStored({ quiet: true }),
+  });
+  // A new report adds a point to the trend chart and may change the group's health label in the switcher.
+  const seenAnalyzedAt = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const at = stored?.analyzedAt;
+    if (seenAnalyzedAt.current && at && at !== seenAnalyzedAt.current) {
+      void fetchHistory();
+      void summaryQuery.refetch();
+    }
+    seenAnalyzedAt.current = at;
+  }, [stored?.analyzedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAnalyze() {
     if (analyzeLock.current) return;
@@ -512,7 +548,7 @@ export function ProjectDetailPage({ projectId }: Props) {
                           : "Fetching GitHub data…"}
                       </>
                     ) : (
-                      notFound ? "Analyze" : "Re-analyze"
+                      notFound ? "Analyze" : "Re-analyze now"
                     )}
                   </button>
                 )}
@@ -545,6 +581,11 @@ export function ProjectDetailPage({ projectId }: Props) {
       </div>
 
       <main className={`print:hidden flex-1 ${effectiveTab === "tasks" ? "max-w-7xl" : "max-w-6xl"} w-full mx-auto px-4 sm:px-8 py-4 space-y-4 min-w-0`}>
+
+        {/* How fresh the report is, and "Updating…" while a background refresh runs */}
+        {stored && !reanalyzing && (
+          <LastAnalyzed analyzedAt={stored.analyzedAt} trigger={stored.trigger} updating={updating} />
+        )}
 
         {/* Analysis panel: live while running, completed state while the report reloads */}
         {(reanalyzing || loadingReport) && (
@@ -710,8 +751,9 @@ export function ProjectDetailPage({ projectId }: Props) {
                 <Narrative
                   key={projectId}
                   narrative={narrativeText}
+                  outdated={narrativeOutdated}
                   projectId={projectId}
-                  onNarrativeGenerated={(text) => setNarrativeText(text)}
+                  onNarrativeGenerated={(text) => { setNarrativeText(text); setNarrativeOutdated(false); }}
                 />
               </div>
               {/* Imbalance trend — omitted until there are at least 2 runs, since a single point isn't a trend. */}

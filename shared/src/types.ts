@@ -321,6 +321,10 @@ export interface StoredReportResponse {
   rulesOutdated?: boolean;
   // Computed at read time: the linked repository was changed after this report was generated.
   repoChanged?: boolean;
+  // Who started the analysis that produced this report (null for reports saved before this was recorded).
+  trigger?: "manual" | "auto" | null;
+  // An automatic run changed the results after the AI explanation was written; the text is kept but no longer matches.
+  narrativeOutdated?: boolean;
   docsDataFixedAt?: string; // ISO date of the fix, for the notice text
 }
 

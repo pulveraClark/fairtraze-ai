@@ -5,14 +5,17 @@ import { useAuth } from "../context/AuthContext";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
+import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 
 interface Props {
   narrative: string | null;
+  /** An automatic run changed the results after this text was written. */
+  outdated?: boolean;
   projectId: number;
   onNarrativeGenerated: (text: string) => void;
 }
 
-export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props) {
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated }: Props) {
   const { token } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [error, setError]           = useState<string | null>(null);
@@ -95,6 +98,11 @@ export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props)
       {/* Narrative */}
       {narrative && !generating && (
         <>
+          {outdated && (
+            <p role="status" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
+              {NARRATIVE_OUTDATED_TEXT}
+            </p>
+          )}
           <div className="text-sm leading-relaxed text-slate-800 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-200">
             <ReactMarkdown>{narrative}</ReactMarkdown>
           </div>

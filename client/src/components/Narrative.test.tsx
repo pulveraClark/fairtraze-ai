@@ -17,6 +17,22 @@ describe("Narrative", () => {
   });
 });
 
+describe("Narrative outdated notice", () => {
+  it("tells the instructor the results changed, and keeps the Regenerate button", () => {
+    render(<Narrative narrative="Saved text." outdated projectId={1} onNarrativeGenerated={() => {}} />);
+    expect(screen.getByText("Results changed. Generate a new explanation.")).toBeTruthy();
+    expect(screen.getByText("Saved text.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeTruthy();
+  });
+
+  it("shows no notice when the explanation is current or missing", () => {
+    const { rerender } = render(<Narrative narrative="Saved text." projectId={1} onNarrativeGenerated={() => {}} />);
+    expect(screen.queryByText(/Results changed/)).toBeNull();
+    rerender(<Narrative narrative={null} outdated projectId={1} onNarrativeGenerated={() => {}} />);
+    expect(screen.queryByText(/Results changed/)).toBeNull();
+  });
+});
+
 describe("StatTile hero", () => {
   it("makes the value the largest text on the tile", () => {
     render(<StatTile hero label="Team health" value="Healthy" />);
