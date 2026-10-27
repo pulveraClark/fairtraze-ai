@@ -6,6 +6,7 @@ import { buildPseudonymEntries, scrubFreeText } from "../geminiPseudonyms.js";
 import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
 import { aiFailureOf, attemptNote } from "../aiFailureText.js";
 import { keepLastGood } from "./keepLastGood.js";
+import { adoptReviewForReport, findReusableReview, inputFingerprint } from "./inputFingerprint.js";
 import type { AiBriefContent, AiBriefSources, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
 import { fetchRepoTree, fetchRepoFileText } from "./repoFiles.js";
@@ -190,6 +191,29 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   const input = fitBriefInput({ brief: briefText, paths, files, docs });
   for (const f of input.files) fileText.set(f.path, f.excerpt);
 
+  // Nothing changed? Decided from reads only, before the AI call. The fingerprint covers exactly what would
+  // be sent (instructions, file list, key files, Docs sections), the attachments, the commits behind the file
+  // links, the prompt version and the model. Only a clean last run (OK, no failure note) can be reused.
+  const inputHash = inputFingerprint({
+    version: BRIEF_PROMPT_VERSION,
+    model: modelName(),
+    brief: hash,
+    input,
+    attached: briefFiles.usable.map((f) => f.filename),
+    commits: [...commitsByPath.entries()].sort(([a], [b]) => (a < b ? -1 : 1)),
+  });
+  if (errors.length === 0) {
+    const prev = await findReusableReview(projectId, "BRIEF_COMPARISON");
+    if (prev && prev.inputHash === inputHash) {
+      const { lastAttempt: _note, ...content } = prev.content;
+      return {
+        status: "OK", errorCode: null, retryAfterMs: null, briefHash: hash, inputHash,
+        reused: { rowId: prev.id, since: prev.createdAt.toISOString() },
+        content: content as unknown as AiBriefContent,
+      };
+    }
+  }
+
   // The names of the attached files go in the DATA block so the AI can name one as a requirement's source.
   const ask = (attached: typeof briefFiles.usable) =>
     deps.generate({
@@ -244,6 +268,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     status: errors.length > 0 ? "PARTIAL" : "OK",
     errorCode: errors[0] ?? null,
     briefHash: hash,
+    inputHash,
     content: { requirements, aiAddressedCount: injected, sources: briefSources },
   };
 }
@@ -252,6 +277,10 @@ export async function generateBriefComparison(projectId: number, deps?: BriefDep
   const report = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER], select: { id: true } });
   if (!report) return null;
   const result = await runBriefComparison(projectId, deps);
+  if (result.reused) {
+    await adoptReviewForReport(result.reused.rowId, "BRIEF_COMPARISON", report.id);
+    return { reportId: report.id, result };
+  }
   const lastAttempt = attemptNote(result);
   if (result.status === "FAILED" && lastAttempt && (await keepLastGood(projectId, "BRIEF_COMPARISON", lastAttempt))) {
     return { reportId: report.id, result };
@@ -261,7 +290,11 @@ export async function generateBriefComparison(projectId: number, deps?: BriefDep
     promptVersion: BRIEF_PROMPT_VERSION,
     model: modelName(),
     briefHash: result.briefHash,
-    content: { ...result.content, ...(lastAttempt ? { lastAttempt } : {}) } as object,
+    content: {
+      ...result.content,
+      ...(result.inputHash ? { inputHash: result.inputHash } : {}),
+      ...(lastAttempt ? { lastAttempt } : {}),
+    } as object,
     errorCode: result.errorCode,
   };
   await prisma.aiReportReview.upsert({

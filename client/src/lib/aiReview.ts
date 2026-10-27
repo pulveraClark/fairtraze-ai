@@ -46,6 +46,8 @@ export interface AiRefreshNote {
 
 export interface AiReviewResponse {
   enabled: boolean;
+  // Instructor only: the last Regenerate found nothing changed and made no AI call (briefly after it).
+  upToDate?: { since: string };
   refreshFailed?: { findings?: AiRefreshNote; brief?: AiRefreshNote };
   // Canonical link of the group's repository (links on file evidence are built by the server).
   repoUrl?: string | null;
@@ -109,6 +111,32 @@ export function quotaStillBlocked(retryAt: string | null | undefined, now: Date 
   if (!retryAt) return false;
   const t = Date.parse(retryAt);
   return Number.isFinite(t) && t > now.getTime();
+}
+
+/** "Oct 27, 3:00 PM" in the viewer's own clock; null for a missing or invalid time. */
+export function formatSince(iso: string | null | undefined, timeZone?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(timeZone ? { timeZone } : {}) });
+}
+
+/**
+ * What a Regenerate click says when it changed nothing. Both parts must have found nothing new: the
+ * explanation (`narrativeSince`) and, when AI review is on, the member findings and instructions check
+ * (`reviewSince`, from the server's upToDate). The time is the most recent of the saved results.
+ */
+export function upToDateLine(
+  narrativeSince: string | null | undefined,
+  reviewOn: boolean,
+  reviewSince: string | null | undefined,
+  timeZone?: string,
+): string | null {
+  if (!narrativeSince) return null;
+  if (reviewOn && !reviewSince) return null;
+  const latest = reviewOn && reviewSince && reviewSince > narrativeSince ? reviewSince : narrativeSince;
+  const when = formatSince(latest, timeZone);
+  return when ? `Already up to date. Nothing changed since ${when}.` : "Already up to date. Nothing changed.";
 }
 
 /** "The last check could not be refreshed. Showing the check from Oct 26." (plus the daily-limit sentence when it applies). */

@@ -5,6 +5,8 @@ import { afterAll, afterEach, vi } from "vitest";
 // test branch which we do want to exercise for real.
 vi.mock("../src/lib/gemini.js", () => ({
   generateFairnessNarrative: vi.fn().mockResolvedValue("Mocked fairness narrative for testing."),
+  // Varies with the inputs like the real hash, so "nothing changed" only holds when they really match.
+  narrativeInputHash: vi.fn((name: string, report: unknown, brief?: string | null) => JSON.stringify([name, report, brief ?? null])),
 }));
 
 vi.mock("../src/lib/github.js", () => ({

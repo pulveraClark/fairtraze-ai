@@ -252,6 +252,8 @@ export interface NarrativeResponse {
   // Set with `warning`/errors when the AI's daily limit is the reason; `retryAt` (ISO) is when it resets.
   code?: string;
   retryAt?: string;
+  // Regenerate found nothing changed since the saved text (ISO): no AI call was made.
+  upToDate?: { since: string };
 }
 
 // Dashboard summary — returned by GET /api/projects/summary.

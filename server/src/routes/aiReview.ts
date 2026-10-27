@@ -5,7 +5,7 @@ import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/au
 import { loadGroup, isInstructorOf, type LoadedGroup } from "../lib/groupAccess.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 import { aiReviewEnabled } from "../lib/geminiClient.js";
-import { isReviewRunning, startReview } from "../lib/aiReview/reviewLock.js";
+import { isReviewRunning, lastUpToDate, recordUpToDate, startReview } from "../lib/aiReview/reviewLock.js";
 import { generateMemberSummaries } from "../lib/aiReview/memberSummaries.js";
 import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
 import { briefFingerprint } from "../lib/aiReview/briefEvidence.js";
@@ -248,6 +248,9 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   const memberAttempt = (review?.content as { lastAttempt?: AiLastAttempt } | null)?.lastAttempt;
   const limit = viewer === "instructor" ? activeQuotaLimit([memberAttempt, briefAttempt]) : null;
   const aiLimit = limit ? { aiLimit: limit } : {};
+  // "Already up to date": the last Regenerate found nothing changed and made no AI call (instructor only).
+  const upToDateOutcome = viewer === "instructor" ? lastUpToDate(project.id) : null;
+  const upToDate = upToDateOutcome ? { upToDate: upToDateOutcome } : {};
   // A failed refresh that left the previous good result in place: the page shows it with a small note.
   const findingsNote = refreshNote(memberAttempt, review?.createdAt);
   const briefNote = refreshNote(briefAttempt, briefStored?.createdAt);
@@ -256,7 +259,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     : {};
 
   if (!review) {
-    res.json({ ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit, ...refreshFailed });
+    res.json({ ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit, ...refreshFailed, ...upToDate });
     return;
   }
 
@@ -273,6 +276,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     ...brief,
     ...aiLimit,
     ...refreshFailed,
+    ...upToDate,
     ...(viewer === "instructor"
       ? { status: review.status, errorCode: review.errorCode, aiAddressed: shaped.aiAddressed }
       : {}),
@@ -311,13 +315,23 @@ aiReviewRouter.post("/api/groups/:id/ai-review", ...requireRole("INSTRUCTOR"), r
   }
   const started = startReview(project.id, async () => {
     // Two independent parts; one failing never stops the other.
+    let reusedParts = 0;
+    let otherParts = 0;
+    let since = "";
     for (const part of [generateMemberSummaries, generateBriefComparison]) {
       try {
-        await part(project.id);
+        const out = await part(project.id);
+        if (out?.result.reused) {
+          reusedParts++;
+          if (out.result.reused.since > since) since = out.result.reused.since;
+        } else if (out && out.result.status !== "SKIPPED") otherParts++;
       } catch (err) {
+        otherParts++;
         console.error(`[ai-review] group ${project.id} ${part.name} failed:`, err);
       }
     }
+    // Every part that exists was reused: no AI call was made, and the page can say nothing changed.
+    if (reusedParts > 0 && otherParts === 0) recordUpToDate(project.id, since);
   });
   if (!started) {
     res.status(409).json({ code: "REVIEW_IN_PROGRESS", error: "A review of this group is already running." });

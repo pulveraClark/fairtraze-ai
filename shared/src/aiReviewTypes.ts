@@ -56,6 +56,8 @@ export interface AiMemberSummariesContent {
   members: AiMemberSummary[];
   aiAddressed: AiAddressedNote[];
   lastAttempt?: AiLastAttempt;
+  // Hash of the inputs this run used; a later run with the same hash is "nothing changed" (server only).
+  inputHash?: string;
 }
 
 export type AiReviewStatus = "OK" | "PARTIAL" | "FAILED" | "SKIPPED";
@@ -112,4 +114,5 @@ export interface AiBriefContent {
   // Count of lines of student text that addressed the AI and were replaced before sending.
   aiAddressedCount: number;
   lastAttempt?: AiLastAttempt;
+  inputHash?: string;
 }

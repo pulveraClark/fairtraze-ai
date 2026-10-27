@@ -6,6 +6,7 @@ import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
 import { generateJson, modelName } from "../geminiClient.js";
 import { aiFailureOf, attemptNote } from "../aiFailureText.js";
 import { keepLastGood } from "./keepLastGood.js";
+import { adoptReviewForReport, findReusableReview, inputFingerprint } from "./inputFingerprint.js";
 import type { AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { fetchCommitEvidence, MAX_REMOVED_LINES_PER_FILE, type CommitEvidence } from "./commitEvidence.js";
 import { loadGroupDocEvidence, memberDocEvidence } from "./docsEvidence.js";
@@ -58,6 +59,11 @@ export interface ReviewResult<C> {
   errorCode: string | null;
   // What the provider said about when a daily quota resets (set only with AI_QUOTA_DAILY).
   retryAfterMs?: number | null;
+  // Set when nothing changed since the last good run: the stored result was reused and no AI call was made.
+  // `rowId` is the stored review that was reused; `since` is when it was written (ISO).
+  reused?: { rowId: number; since: string };
+  // Hash of the inputs this run used; stored with the review so the next run can compare.
+  inputHash?: string;
   content: C;
 }
 
@@ -148,6 +154,8 @@ export async function runMemberSummaries(
   const otherCommits = new Map<number, number>();
 
   const repo = project.repoUrl ? checkRepoUrl(project.repoUrl) : null;
+  let selected: Array<{ userId: number; list: Array<{ sha: string; authorLogin: string }> }> = [];
+  let commitsListed = false;
   if (usesGithub && repo?.ok && deps.githubToken) {
     try {
       const all = await deps.listCommits(repo.owner, repo.repo, deps.githubToken, COMMIT_PAGES);
@@ -160,7 +168,66 @@ export async function runMemberSummaries(
         picked.set(userId, list);
       }
       for (const [userId, list] of picked) otherCommits.set(userId, Math.max(0, list.length - COMMITS_PER_MEMBER));
-      const selected = [...picked.entries()].map(([userId, list]) => ({ userId, list: list.slice(0, COMMITS_PER_MEMBER) }));
+      selected = [...picked.entries()].map(([userId, list]) => ({ userId, list: list.slice(0, COMMITS_PER_MEMBER) }));
+      commitsListed = true;
+    } catch {
+      errors.push("GITHUB_UNAVAILABLE");
+    }
+  } else if (usesGithub && project.repoUrl && !deps.githubToken) {
+    errors.push("GITHUB_UNAVAILABLE");
+  }
+
+  // ── Docs (reads only) ─────────────────────────────────────────────────────
+  const docs = new Map<number, { headings: string[]; excerpt: string }>();
+  if (usesDocs) {
+    try {
+      const ev = await deps.loadDocs(projectId);
+      for (const p of people) {
+        const mine = memberDocEvidence(ev.pieces, ev.spans, p.userId);
+        if (mine.chars === 0) continue;
+        const s = sanitizeForAi(mine.excerpt, entries);
+        noteInjection(p.userId, "docs", s.injected);
+        docs.set(p.userId, { headings: mine.headings, excerpt: s.text });
+      }
+    } catch {
+      errors.push("DOCS_UNAVAILABLE");
+    }
+  }
+
+  // ── Nothing changed? Decided from reads only, before any AI call (stage 1 included) ──
+  // The fingerprint covers the commit shas, the Docs text, the prompt versions and the model. Only a clean
+  // last run (status OK, no failure note) can be reused; a failed or partial one never counts as unchanged.
+  const inputHash = inputFingerprint({
+    versions: [AI_REVIEW_PROMPT_VERSION, COMMIT_PROMPT_VERSION],
+    model: modelName(),
+    usesGithub,
+    usesDocs,
+    members: people.map((p) => ({
+      id: p.userId,
+      shas: (selected.find((s) => s.userId === p.userId)?.list ?? []).map((c) => c.sha),
+      older: otherCommits.get(p.userId) ?? 0,
+      docs: docs.get(p.userId) ?? null,
+    })),
+  });
+  if (errors.length === 0) {
+    const prev = await findReusableReview(projectId, "MEMBER_SUMMARIES");
+    if (prev && prev.inputHash === inputHash) {
+      const { lastAttempt: _note, ...content } = prev.content;
+      return {
+        status: "OK",
+        errorCode: null,
+        retryAfterMs: null,
+        inputHash,
+        reused: { rowId: prev.id, since: prev.createdAt.toISOString() },
+        content: content as unknown as AiMemberSummariesContent,
+      };
+    }
+  }
+
+  // ── Stage 1: judge each commit once (AI) ──────────────────────────────────
+  let digestFallback = false;
+  if (commitsListed && repo?.ok && deps.githubToken) {
+    try {
       const shas = selected.flatMap((s) => s.list.map((c) => c.sha));
 
       const cached = await prisma.aiCommitDigest.findMany({
@@ -208,7 +275,8 @@ export async function runMemberSummaries(
             toStore.push({ projectId, sha: e.sha, promptVersion: COMMIT_PROMPT_VERSION, model: modelName(), authorLogin: e.authorLogin, summary: text, files });
             digestBySha.set(e.sha, { sha: e.sha, summary: text, files });
           } else {
-            // Not stored, so the next Generate tries this commit again.
+            // Not stored, so the next Generate tries this commit again (and this run is never "unchanged").
+            digestFallback = true;
             const paths = files.slice(0, 3).map((f) => f.path).join(", ");
             digestBySha.set(e.sha, { sha: e.sha, summary: paths ? `Changed ${paths}.` : "Changed files.", files });
           }
@@ -221,25 +289,6 @@ export async function runMemberSummaries(
       }
     } catch {
       errors.push("GITHUB_UNAVAILABLE");
-    }
-  } else if (usesGithub && project.repoUrl && !deps.githubToken) {
-    errors.push("GITHUB_UNAVAILABLE");
-  }
-
-  // ── Docs ──────────────────────────────────────────────────────────────────
-  const docs = new Map<number, { headings: string[]; excerpt: string }>();
-  if (usesDocs) {
-    try {
-      const ev = await deps.loadDocs(projectId);
-      for (const p of people) {
-        const mine = memberDocEvidence(ev.pieces, ev.spans, p.userId);
-        if (mine.chars === 0) continue;
-        const s = sanitizeForAi(mine.excerpt, entries);
-        noteInjection(p.userId, "docs", s.injected);
-        docs.set(p.userId, { headings: mine.headings, excerpt: s.text });
-      }
-    } catch {
-      errors.push("DOCS_UNAVAILABLE");
     }
   }
 
@@ -322,6 +371,7 @@ export async function runMemberSummaries(
     status,
     errorCode,
     retryAfterMs: errorCode === "AI_QUOTA_DAILY" ? retryAfterMs : null,
+    inputHash: digestFallback ? undefined : inputHash,
     content: { members, aiAddressed: [...addressed.values()] },
   };
 }
@@ -334,6 +384,10 @@ export async function generateMemberSummaries(
   const report = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER], select: { id: true } });
   if (!report) return null;
   const result = await runMemberSummaries(projectId, deps);
+  if (result.reused) {
+    await adoptReviewForReport(result.reused.rowId, "MEMBER_SUMMARIES", report.id);
+    return { reportId: report.id, result };
+  }
   const lastAttempt = attemptNote(result);
   if (result.status === "FAILED" && lastAttempt && (await keepLastGood(projectId, "MEMBER_SUMMARIES", lastAttempt))) {
     return { reportId: report.id, result };
@@ -342,7 +396,11 @@ export async function generateMemberSummaries(
     status: result.status,
     promptVersion: AI_REVIEW_PROMPT_VERSION,
     model: modelName(),
-    content: { ...result.content, ...(lastAttempt ? { lastAttempt } : {}) } as object,
+    content: {
+      ...result.content,
+      ...(result.inputHash ? { inputHash: result.inputHash } : {}),
+      ...(lastAttempt ? { lastAttempt } : {}),
+    } as object,
     errorCode: result.errorCode,
   };
   await prisma.aiReportReview.upsert({

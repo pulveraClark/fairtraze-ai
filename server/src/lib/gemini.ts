@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createHash } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 import type { TeamReport, AnyScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types.js";
 import { buildPseudonymEntries, pseudonymizeReport, scrubFreeText, restoreNames } from "./geminiPseudonyms.js";
@@ -146,16 +147,39 @@ async function callOnce(
   return response.text ?? "";
 }
 
+// Only pseudonyms leave the server; real names are restored in the returned text.
+function prepareForModel(
+  realProjectName: string,
+  realTeamReport: TeamReport<AnyScoredMember>,
+  realBriefDescription?: string | null
+) {
+  const entries = buildPseudonymEntries(realTeamReport.members);
+  const teamReport = pseudonymizeReport(realTeamReport, entries);
+  const projectName = scrubFreeText(realProjectName, entries);
+  const briefDescription = realBriefDescription == null ? realBriefDescription : scrubFreeText(realBriefDescription, entries);
+  return { entries, teamReport, projectName, briefDescription };
+}
+
+// Hash of exactly what a narrative call would send (instructions, prompt, model). Computed with no AI call:
+// the same hash as the stored narrative's means nothing changed, so there is nothing to regenerate.
+export function narrativeInputHash(
+  realProjectName: string,
+  realTeamReport: TeamReport<AnyScoredMember>,
+  realBriefDescription?: string | null
+): string {
+  const { teamReport, projectName, briefDescription } = prepareForModel(realProjectName, realTeamReport, realBriefDescription);
+  return createHash("sha256")
+    .update(JSON.stringify([MODEL, SYSTEM_INSTRUCTION, formatPrompt(projectName, teamReport, briefDescription)]))
+    .digest("hex")
+    .slice(0, 32);
+}
+
 export async function generateFairnessNarrative(
   realProjectName: string,
   realTeamReport: TeamReport<AnyScoredMember>,
   realBriefDescription?: string | null
 ): Promise<string> {
-  // Only pseudonyms leave the server; real names are restored in the returned text.
-  const entries = buildPseudonymEntries(realTeamReport.members);
-  const teamReport = pseudonymizeReport(realTeamReport, entries);
-  const projectName = scrubFreeText(realProjectName, entries);
-  const briefDescription = realBriefDescription == null ? realBriefDescription : scrubFreeText(realBriefDescription, entries);
+  const { entries, teamReport, projectName, briefDescription } = prepareForModel(realProjectName, realTeamReport, realBriefDescription);
 
   try {
     return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries);

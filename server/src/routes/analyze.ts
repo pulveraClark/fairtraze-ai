@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
-import { generateFairnessNarrative } from "../lib/gemini.js";
+import { generateFairnessNarrative, narrativeInputHash } from "../lib/gemini.js";
 import { aiFailureOf, plainAiFailure } from "../lib/aiFailureText.js";
 import { logReadability } from "../lib/aiReview/readability.js";
 import { runAnalysis, type ProgressEmitter } from "../lib/analysisRunner.js";
@@ -144,7 +144,9 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
   }
 
   const stored = latestReport.content
-    ? (JSON.parse(latestReport.content) as { report?: TeamReport; narrative?: string })
+    ? (JSON.parse(latestReport.content) as {
+        report?: TeamReport; narrative?: string; narrativeOutdated?: boolean; narrativeInputHash?: string; narrativeAt?: string;
+      })
     : {};
 
   // Return cached narrative if present and not regenerating
@@ -158,17 +160,27 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
     return;
   }
 
+  const groupLabel = project.groupName || `Group ${projectId}`;
+  const briefContext = project.assignment?.description ?? null; // context only; never affects scores
+
+  // Regenerate with nothing changed: the saved text was written from exactly these inputs (numbers, brief,
+  // prompt, model), so skip the AI call. A narrative the results have moved past (narrativeOutdated), or one
+  // saved before the fingerprint existed, is never "unchanged".
+  const inputHash = narrativeInputHash(groupLabel, stored.report, briefContext);
+  if (stored.narrative && regenerate && !stored.narrativeOutdated && stored.narrativeAt && stored.narrativeInputHash === inputHash) {
+    res.json({ narrative: stored.narrative, cached: true, upToDate: { since: stored.narrativeAt } });
+    return;
+  }
+
   // Generate via Gemini
   try {
-    const narrative = await generateFairnessNarrative(
-      project.groupName || `Group ${projectId}`,
-      stored.report,
-      project.assignment?.description ?? null // context only; never affects scores
-    );
+    const narrative = await generateFairnessNarrative(groupLabel, stored.report, briefContext);
     logReadability(`score explanation (group ${projectId})`, [narrative]); // log only
     await prisma.report.update({
       where: { id: latestReport.id },
-      data: { content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined }) },
+      data: {
+        content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined, narrativeInputHash: inputHash, narrativeAt: new Date().toISOString() }),
+      },
     });
     res.json({ narrative, cached: false });
   } catch (err) {

@@ -40,7 +40,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   // The sentence to mark in the instructions window; null while it is closed.
   const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
-  const { generating, error, generate, busy, slow } = generator ?? own;
+  const { generating, error, generate, busy, slow, upToDate } = generator ?? own;
   const anyError = error ?? review?.error ?? null;
 
   const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
@@ -103,6 +103,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           busy={busy && !slow}
         />
       )}
+      {upToDate && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{upToDate}</p>}
       {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
       {briefLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{briefLine}</p>}

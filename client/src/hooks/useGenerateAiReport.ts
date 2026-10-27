@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NarrativeResponse } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
-import { AI_SLOW_MS, quotaResetLine } from "../lib/aiReview";
+import { AI_SLOW_MS, quotaResetLine, upToDateLine } from "../lib/aiReview";
 import type { UseAiReview } from "./useAiReview";
 import { useSlowAfter } from "./useSlowAfter";
 
@@ -11,6 +11,8 @@ export interface AiReportGenerator {
   generating: boolean;
   error: string | null;
   generate: (regenerate?: boolean) => Promise<void>;
+  /** "Already up to date. Nothing changed since …" after a Regenerate that changed nothing; null otherwise. */
+  upToDate: string | null;
   /** Something is being written: the explanation request or the background member findings. */
   busy: boolean;
   /** Busy for more than 90 s: the wording changes and the button is usable again. */
@@ -32,11 +34,14 @@ export function useGenerateAiReport(
   const { token } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When the saved explanation was written, if the last click found it unchanged (the server made no AI call).
+  const [narrativeSince, setNarrativeSince] = useState<string | null>(null);
   const reviewOn = !!review?.data?.enabled && !!review.data.canGenerate && !!review.data.hasReport;
 
   const generate = useCallback(async (regenerate = false) => {
     setGenerating(true);
     setError(null);
+    setNarrativeSince(null);
     // The review runs in the background; it never delays or blocks the explanation.
     if (reviewOn) void review!.start();
     try {
@@ -48,6 +53,7 @@ export function useGenerateAiReport(
         setError(data.code === "AI_QUOTA_DAILY" ? quotaResetLine(data.retryAt) : (data.error ?? "Could not generate AI findings."));
       } else if (data.narrative) {
         onNarrativeGenerated(data.narrative);
+        setNarrativeSince(data.upToDate?.since ?? null);
       }
     } catch {
       setError("Network error — could not reach the server.");
@@ -73,5 +79,7 @@ export function useGenerateAiReport(
     }
   }, [busy, failed]);
 
-  return { reviewOn, generating, error, generate, busy, slow, announcement };
+  const upToDate = busy || failed ? null : upToDateLine(narrativeSince, reviewOn, review?.data?.upToDate?.since);
+
+  return { reviewOn, generating, error, generate, upToDate, busy, slow, announcement };
 }
