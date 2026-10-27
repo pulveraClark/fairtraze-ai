@@ -22,6 +22,9 @@ const WORD_RES = JUDGING_WORDS.map((w) => ({ w, re: new RegExp(`\\b${w.replace("
 const RULES: Array<{ reason: string; re: RegExp }> = [
   { reason: "percentage", re: /\d\s*%|\bper\s*cent\b|\bpercent(?:age)?\b/i },
   { reason: "score or share", re: /\b(?:scores?|shares?|gini|contribution|team\s+health|rating|rank(?:ed|ing)?)\b/i },
+  // Team-level measures never appear in a member's findings. Only these: coefficient and concentration are ordinary code words,
+  // and "index" alone is fine (index.html).
+  { reason: "team measure", re: /\b(?:gini|inequality)\b|\bband\s+(?:of\s+)?\d|\d(?:\.\d+)?\s+band\b|\bindex\s+(?:of\s+)?\d|\bteam\s+index\b/i },
   { reason: "flag", re: /\b(?:flags?|flagged|free-?rider|overload(?:ed)?|inactive|deadline-?driven)\b/i },
   { reason: "comparison", re: /\b(?:more|less|fewer|greater|higher|lower)\s+than\b|\bcompared\s+(?:to|with)\b|\b(?:most|least|fewest)\b|\bthan\s+(?:the\s+)?(?:others?|teammates?|peers?)\b/i },
   { reason: "other members", re: /\bMember\s+[A-Z]{1,2}\b|\b(?:other|another)\s+(?:members?|students?)\b|\bteammates?\b|\beveryone\b|\bthe\s+(?:rest|team)\b/i },

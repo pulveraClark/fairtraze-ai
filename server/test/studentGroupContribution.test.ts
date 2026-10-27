@@ -5,7 +5,8 @@ import type {
 } from "@shared/types.js";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
-import { studentNarrative } from "../src/lib/studentNarrative.js";
+import { studentNarrative, NO_TEAM_COMMENT } from "../src/lib/studentNarrative.js";
+import { checkTone } from "../src/lib/aiReview/toneGuard.js";
 import {
   createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership,
 } from "./factories.js";
@@ -286,9 +287,42 @@ describe("GET /api/student/group/:projectId — team-level AI explanation (leade
     expect(JSON.stringify(asMember.body)).not.toContain("Alice made most commits");
   });
 
-  it("studentNarrative keeps the text, drops only Gini sentences, and is null when nothing is left", () => {
+  it("studentNarrative drops every sentence that states a team measure and keeps clean ones", () => {
+    const drop = [
+      "Gini is 0.31.",
+      "The inequality score is 0.31.",
+      "Work concentration is high.",
+      "The coefficient looks low.",
+      "The team is in the 0.4 band.",
+      "The team index is 3.",
+      "Contribution index of 12 was reached.",
+      "Spread is 0.31 overall.",
+    ];
+    for (const sentence of drop) expect(studentNarrative(`Everyone contributed. ${sentence} Alice made most commits.`), sentence).toBe("Everyone contributed. Alice made most commits.");
+    expect(studentNarrative("Alice added the login page.")).toBe("Alice added the login page.");
     expect(studentNarrative(TEXT)).toBe(SHOWN);
-    expect(studentNarrative("The Gini coefficient is 0.3.")).toBeNull();
-    expect(studentNarrative(null)).toBeNull();
   });
+
+  it("keeps ordinary words that only look close: index.html, a husband, a band name", () => {
+    expect(studentNarrative("Alice edited index.html and the Band page.")).toBe("Alice edited index.html and the Band page.");
+  });
+
+  it("shows the fixed line when nothing clean is left, and nothing when there was no text", () => {
+    const fixed = "The AI has no extra comment on the team this time.";
+    expect(NO_TEAM_COMMENT).toBe(fixed);
+    expect(studentNarrative("Gini is 0.31. The inequality score is 0.31. Work concentration is high.")).toBe(fixed);
+    expect(studentNarrative("The Gini coefficient is 0.3.")).toBe(fixed);
+    expect(studentNarrative(null)).toBeNull();
+    expect(studentNarrative("   ")).toBeNull();
+  });
+
+  it("a member's own findings never carry the Gini value, a band or the team index; code words stay allowed", () => {
+    for (const bad of ["Gini is 0.31.", "The inequality score is 0.31.", "In the 0.4 band.", "Moved into band 3.", "The team index is 3.", "The index of 12 rose."]) {
+      expect(checkTone(bad).ok, bad).toBe(false);
+    }
+    for (const fine of ["Added a coefficient field to the calculator.", "Fixed the load concentration formula.", "Added index.html and fixed two form errors.", "Fixed 2 index pages."]) {
+      expect(checkTone(fine).ok, fine).toBe(true);
+    }
+  });
+
 });

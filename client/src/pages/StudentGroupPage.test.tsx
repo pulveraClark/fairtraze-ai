@@ -460,4 +460,16 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect(card.textContent).not.toContain("Project instructions check");
     expect(card.textContent).toMatch(/Updates every night\./);
   });
+
+  it("a plain member never sees the Gini value, a band or the team index, in the Team overview or in their window", async () => {
+    state.data = groupFixture();
+    renderPage();
+    const overview = (await screen.findByText("Team overview")).closest("section")!;
+    await userEvent.click(screen.getByRole("button", { name: "See your details" }));
+    const dialog = await screen.findByRole("dialog", { name: /Ana Cruz/ });
+    await screen.findByText("Added the login page.");
+    const MEASURE = /gini|inequality|coefficient|concentration|band|team index|0\.3\d\d/i;
+    expect(overview.textContent).not.toMatch(MEASURE);
+    expect(dialog.textContent).not.toMatch(MEASURE);
+  });
 });
