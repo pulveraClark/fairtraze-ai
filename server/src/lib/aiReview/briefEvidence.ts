@@ -45,6 +45,33 @@ export function isImportOnly(quote: string): boolean {
   return lines.length > 0 && lines.every((l) => IMPORT_LINE.test(l));
 }
 
+const IMPORT_WORDS = new Set(["import", "from", "as", "const", "let", "var", "require", "include", "using", "use", "static", "type"]);
+const MIN_IMPORT_NAME_CHARS = 3;
+
+/** The library / module / tool names an import-only quote brings in ("import tkinter as tk" gives "tkinter"). */
+export function importedNames(quote: string): string[] {
+  const names = new Set<string>();
+  for (const line of quote.split(/\r?\n/)) {
+    // The alias after "as" is the author's own name, not the library's.
+    const words = line.replace(/\bas\s+[\w$]+/gi, " ").match(/[A-Za-z_$][\w$]*/g) ?? [];
+    for (const w of words) {
+      if (!IMPORT_WORDS.has(w.toLowerCase()) && w.length >= MIN_IMPORT_NAME_CHARS) names.add(w.toLowerCase());
+    }
+  }
+  return [...names];
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * True when the requirement names a library or tool that the import-only quote brings in (case does not
+ * matter; whole words only). "Use a Tkinter GUI" is proved by `import tkinter`; "Build a route planner" is not.
+ */
+export function requirementNamesImport(quote: string, requirementText: string): boolean {
+  const hay = requirementText.toLowerCase();
+  return importedNames(quote).some((n) => new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(n)}(?![\\p{L}\\p{N}_])`, "u").test(hay));
+}
+
 /** Paths worth sending as a list: skip rules applied, shallow first, capped. */
 export function selectTreePaths(paths: string[]): string[] {
   return paths
@@ -228,7 +255,8 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
             if (!ctx.paths.has(e.ref)) { reject("ref"); continue; }
             const text = ctx.fileText.get(e.ref);
             if (q && (!text || !normalize(text).includes(q))) { reject("quote"); continue; }
-            if (isImportOnly(quote)) { reject("quote"); continue; }
+            // An import proves a library is used. That is proof only for a requirement that names the library.
+            if (isImportOnly(quote) && !requirementNamesImport(quote, `${r.text} ${r.sourceQuote ?? ""}`)) { reject("quote"); continue; }
             evidence.push({ type: "file", ref: e.ref, quote });
           } else {
             const nq = normalizeQuote(quote);

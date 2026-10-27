@@ -34,7 +34,7 @@ async function setup(opts: { status?: "OK" | "FAILED" | "SKIPPED"; requirements?
   ];
   await prisma.aiReportReview.create({
     data: {
-      reportId: report.id, kind: "BRIEF_COMPARISON", status: opts.status ?? "OK", promptVersion: "brief-2", model: "m",
+      reportId: report.id, kind: "BRIEF_COMPARISON", status: opts.status ?? "OK", promptVersion: "brief-3", model: "m",
       briefHash: briefHash(BRIEF), errorCode: opts.status === "FAILED" ? "AI_UNAVAILABLE" : null,
       content: { requirements, aiAddressedCount: 2 },
     },

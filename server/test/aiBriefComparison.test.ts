@@ -293,7 +293,7 @@ describe("runBriefComparison", () => {
     await generateBriefComparison(project.id, d());
     const rows = await prisma.aiReportReview.findMany({ where: { reportId: report.id, kind: "BRIEF_COMPARISON" } });
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: "OK", promptVersion: "brief-2" });
+    expect(rows[0]).toMatchObject({ status: "OK", promptVersion: "brief-3" });
     expect(rows[0]!.briefHash).toMatch(/^[0-9a-f]{32}$/);
     expect((await prisma.report.findUnique({ where: { id: report.id } }))!.content).toBe("{}");
   });

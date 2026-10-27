@@ -74,6 +74,6 @@ describe("plain-English rules in the prompts", () => {
   it("versions: member findings are bumped, the commit cache and the brief prompt are not", () => {
     expect(AI_REVIEW_PROMPT_VERSION).toBe("ai-review-3");
     expect(COMMIT_PROMPT_VERSION).toBe("ai-review-2");
-    expect(BRIEF_PROMPT_VERSION).toBe("brief-2");
+    expect(BRIEF_PROMPT_VERSION).toBe("brief-3");
   });
 });
