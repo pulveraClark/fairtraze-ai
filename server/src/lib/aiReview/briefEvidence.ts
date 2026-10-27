@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { AiBriefEvidence, AiBriefRequirement } from "@shared/aiReviewTypes.js";
 import type { AuthorshipSpan } from "../../collab/authorshipMap.js";
 import type { DocPiece } from "./docsEvidence.js";
-import { indexOfQuote, normalizeInstructions, normalizeQuote } from "@shared/quoteMatch.js";
+import { indexOfQuote, normalizeInstructions, normalizeQuote, normalizeWithMap } from "@shared/quoteMatch.js";
 import { skipReason } from "./skipRules.js";
 import type { RawRequirement } from "./prompts.js";
 
@@ -162,15 +162,45 @@ export interface BriefVerifyContext {
   spans: AuthorshipSpan[];
 }
 
-function authorsOf(piece: DocPiece, ctx: BriefVerifyContext): number[] {
-  return [...new Set(ctx.spans.filter((s) => s.start < piece.end && s.end > piece.start).map((s) => s.userId))];
+/** Everyone who wrote any of the pieces the quote touches. */
+function authorsOf(pieces: DocPiece[], ctx: BriefVerifyContext): number[] {
+  return [...new Set(pieces.flatMap((piece) => ctx.spans.filter((s) => s.start < piece.end && s.end > piece.start).map((s) => s.userId)))];
 }
 
-/** The first real piece of the document (title, heading, paragraph, list item, table cell) that holds the quote. */
-function findDocPiece(q: string, ref: string, ctx: BriefVerifyContext): DocPiece | null {
-  const has = (p: DocPiece) => indexOfQuote(normalizeInstructions(p.text), q) !== -1;
-  // The cited section first, so a quote that appears twice stays where the AI pointed.
-  return ctx.pieces.find((p) => (p.heading ?? NO_HEADING) === ref && has(p)) ?? ctx.pieces.find(has) ?? null;
+interface DocHit {
+  // The nearest heading above the quote (NO_HEADING before the first one).
+  heading: string;
+  // Every piece the quote overlaps, in document order.
+  pieces: DocPiece[];
+}
+
+/**
+ * Where the quote is in the real document (title, headings, paragraphs, list items, table cells). The cited
+ * section is searched first, its pieces joined with line breaks as the prompt showed them, so a quote that runs
+ * across two paragraphs or items matches. Then every piece of the document on its own, so a wrong ref still
+ * finds a real quote.
+ */
+function findInDocument(q: string, ref: string, ctx: BriefVerifyContext): DocHit | null {
+  const section = ctx.pieces.filter((p) => (p.heading ?? NO_HEADING) === ref);
+  if (section.length > 0) {
+    const starts: number[] = [];
+    let joined = "";
+    for (const p of section) {
+      if (joined) joined += "\n";
+      starts.push(joined.length);
+      joined += p.text;
+    }
+    const { text, map } = normalizeWithMap(joined);
+    const at = indexOfQuote(text, q);
+    if (at !== -1) {
+      const from = map[at]!;
+      const to = map[at + q.length - 1]! + 1;
+      const hit = section.filter((p, i) => starts[i]! < to && starts[i]! + p.text.length > from);
+      if (hit.length > 0) return { heading: ref, pieces: hit };
+    }
+  }
+  const one = ctx.pieces.find((p) => indexOfQuote(normalizeInstructions(p.text), q) !== -1);
+  return one ? { heading: one.heading ?? NO_HEADING, pieces: [one] } : null;
 }
 
 export interface ProofCheckCount {
@@ -272,9 +302,9 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
             if (nq.length < MIN_SOURCE_QUOTE_CHARS) { reject("quote"); continue; }
             // Anywhere in the real document text counts (title, headings, body, list items, table cells),
             // not only the body of the cited section. A wrong ref is re-anchored to the nearest heading above.
-            const piece = findDocPiece(nq, e.ref, ctx);
-            if (piece) {
-              evidence.push({ type: "doc", ref: piece.heading ?? NO_HEADING, quote, authors: authorsOf(piece, ctx) });
+            const hit = findInDocument(nq, e.ref, ctx);
+            if (hit) {
+              evidence.push({ type: "doc", ref: hit.heading, quote, authors: authorsOf(hit.pieces, ctx) });
               continue;
             }
             // No pieces to search (older callers): the cited section's text is all there is.
