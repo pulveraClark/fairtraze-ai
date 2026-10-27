@@ -126,7 +126,7 @@ async function upsertMark(
 }
 
 // POST .../requirement-marks/claim - "We have this": the LEADER of this group, on an item the AI could not
-// confirm. Sending again after "The instructor wants a closer look" replaces the note.
+// confirm. Sending again after "The instructor has not accepted this yet" replaces the note.
 requirementMarksRouter.post("/api/groups/:id/requirement-marks/claim", requireAuth, async (req, res) => {
   const project = await openGroup(req, res, req.params.id);
   if (!project) return;

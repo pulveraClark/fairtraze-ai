@@ -28,7 +28,7 @@ export interface RequirementMark {
 export const MARK_NOTE_MAX = 140;
 
 export const LEADER_WAITING = "You said this is covered. Waiting for the instructor.";
-export const LEADER_DECLINED = "The instructor wants a closer look.";
+export const LEADER_DECLINED = "The instructor has not accepted this yet. You can add a note or a picture.";
 export const INSTRUCTOR_WAITING = "Leader says this is covered. Waiting for you";
 export const MARK_STALE = "Instructions changed. Please check again.";
 

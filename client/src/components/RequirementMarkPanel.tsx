@@ -211,7 +211,7 @@ export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, can
       const declined = leaderMark.status === "LEADER_CLAIM_DECLINED";
       return (
         <Box label="The leader says this is covered">
-          <p className="text-sm font-semibold text-slate-900">{declined ? "You asked for a closer look." : INSTRUCTOR_WAITING}</p>
+          <p className="text-sm font-semibold text-slate-900">{declined ? "You have not accepted this yet. The leader can send more proof." : INSTRUCTOR_WAITING}</p>
           <Who mark={leaderMark} />
           <NoteAndPicture mark={leaderMark} api={api} />
           {api.error && <p role="alert" className="text-xs text-red-800">{api.error}</p>}

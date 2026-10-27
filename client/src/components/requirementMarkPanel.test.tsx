@@ -109,7 +109,7 @@ describe("leader", () => {
     expect(a.remove).toHaveBeenCalledWith(1);
   });
 
-  it("a declined claim reads 'The instructor wants a closer look.' and can be sent again", async () => {
+  it("a declined claim reads 'The instructor has not accepted this yet.' and can be sent again", async () => {
     render(<BriefCheckCard check={check()} marks={api("leader", [mark({ markedByYou: true, status: "LEADER_CLAIM_DECLINED" })])} />);
     await open();
     expect(screen.getByText(LEADER_DECLINED)).toBeTruthy();
@@ -139,6 +139,12 @@ describe("instructor", () => {
     expect(a.decline).toHaveBeenCalledWith(1);
     await userEvent.click(box.getByRole("button", { name: "Confirm" }));
     expect(a.confirm).toHaveBeenCalledWith(K, "");
+  });
+
+  it("after 'Not yet' the instructor reads that they have not accepted it and the leader can send more proof", async () => {
+    render(<BriefCheckCard check={check()} instructor marks={api("instructor", [mark({ status: "LEADER_CLAIM_DECLINED" })])} />);
+    await open();
+    expect(screen.getByText("You have not accepted this yet. The leader can send more proof.")).toBeTruthy();
   });
 
   it("can mark an item 'I checked: covered' with an optional note", async () => {
