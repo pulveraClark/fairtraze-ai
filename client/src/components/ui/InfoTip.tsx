@@ -9,10 +9,12 @@ interface Props {
   children: ReactNode;
   /** Optional deep link into the Help page (e.g. "/help#shares"). Adds a small "More in Help" link. */
   helpHref?: string;
+  /** A 40px button instead of the compact 24px one (for a header with room to spare). */
+  large?: boolean;
 }
 
 /** Small (i) button that opens a click-toggled popover; closes on outside click or Esc. */
-export function InfoTip({ label, children, helpHref }: Props) {
+export function InfoTip({ label, children, helpHref, large = false }: Props) {
   const { open, setOpen, ref, triggerRef } = usePopover();
   const id = useId();
   const popRef = useRef<HTMLDivElement>(null);
@@ -37,7 +39,7 @@ export function InfoTip({ label, children, helpHref }: Props) {
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => setOpen(!open)}
-        className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-700 hover:bg-slate-900/10 ${FOCUS_LIGHT}`}
+        className={`inline-flex ${large ? "h-10 w-10" : "h-6 w-6"} items-center justify-center rounded-full text-slate-700 hover:bg-slate-900/10 ${FOCUS_LIGHT}`}
       >
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
           <circle cx="12" cy="12" r="9" />

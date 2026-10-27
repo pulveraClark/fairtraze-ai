@@ -8,7 +8,7 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
-import { BriefCheckCard } from "./BriefCheckCard";
+import { BriefCheckCard, CheckHeaderActions } from "./BriefCheckCard";
 import { StatusPill } from "./ui/StatusPill";
 import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
@@ -49,19 +49,22 @@ interface Props {
   gini?: number | null;
 }
 
-const ROW_CLS = `flex min-h-11 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-50 ${FOCUS_LIGHT}`;
+const ROW_BTN = `flex min-h-11 min-w-0 flex-1 basis-56 items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-50 ${FOCUS_LIGHT}`;
 
-/** A 44px collapsed row with a ▸ marker. The body is rendered only while open. */
-function Disclosure({ title, open, onToggle, buttonRef, children }: {
-  title: string; open: boolean; onToggle: () => void; buttonRef?: React.Ref<HTMLButtonElement>; children: React.ReactNode;
+/** A 44px collapsed row with a ▸ marker; `actions` sit on its right (a link or tip can't live inside the button). */
+function Disclosure({ title, open, onToggle, buttonRef, actions, children }: {
+  title: string; open: boolean; onToggle: () => void; buttonRef?: React.Ref<HTMLButtonElement>; actions?: React.ReactNode; children: React.ReactNode;
 }) {
   const id = useId();
   return (
     <div>
-      <button type="button" ref={buttonRef} aria-expanded={open} aria-controls={id} onClick={onToggle} className={ROW_CLS}>
-        <span aria-hidden="true" className={`shrink-0 text-slate-700 transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
-        <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
-      </button>
+      <div className="flex flex-wrap items-center gap-x-2 rounded-lg border border-slate-200 bg-white pr-2">
+        <button type="button" ref={buttonRef} aria-expanded={open} aria-controls={id} onClick={onToggle} className={ROW_BTN}>
+          <span aria-hidden="true" className={`shrink-0 text-slate-700 transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
+        </button>
+        {actions && <div className="ml-auto flex shrink-0 items-center gap-x-2 pl-8 sm:pl-0">{actions}</div>}
+      </div>
       {open && <div id={id}>{children}</div>}
     </div>
   );
@@ -79,11 +82,12 @@ function InstructionsSection({ projectId, check, failedNote, ...card }: {
   const rowRef = useRef<HTMLButtonElement>(null);
   const summary = instructionsSummary(check.requirements, marks.marks);
   const unavailable = !!failedNote;
+  const actions = <CheckHeaderActions sources={check.sources} instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} />;
   if (check.nothingRead) {
     return (
       <div className="mt-3 space-y-2">
         {failedNote}
-        <Disclosure title="Project instructions check · nothing could be read" open={open} onToggle={() => setOpen((v) => !v)} buttonRef={rowRef}>
+        <Disclosure title="Project instructions check · nothing could be read" open={open} onToggle={() => setOpen((v) => !v)} buttonRef={rowRef} actions={actions}>
           <BriefCheckCard check={check} instructor marks={marks} embedded {...card} />
         </Disclosure>
       </div>
@@ -127,6 +131,7 @@ function InstructionsSection({ projectId, check, failedNote, ...card }: {
           open={open}
           onToggle={() => setOpen((v) => !v)}
           buttonRef={rowRef}
+          actions={actions}
         >
           <BriefCheckCard check={check} instructor marks={marks} embedded {...card} />
         </Disclosure>

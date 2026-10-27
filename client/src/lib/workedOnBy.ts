@@ -39,3 +39,20 @@ export function workedOn(r: Req, instructor: boolean, keyMarks?: KeyMarks): Work
   if (kind === "COVERED" || kind === "PARTLY") return { type: "text", text: NOT_KNOWN };
   return { type: "text", text: instructor ? NO_ONE_FOUND : NO_ONE_FOUND_LEADER };
 }
+
+/** The long note behind the (i) in the check header. Three short sentences, opened by tap. */
+export const CHECK_TIP_SENTENCES = [
+  "The AI compared the work with the instructions and can be wrong.",
+  "Names show who changed the proof files or wrote the Docs text, not everyone who helped.",
+  "This is not a grade.",
+];
+
+/**
+ * What a row shows. Names always. On a row that is not covered, only the two mark sentences (they say what the
+ * instructor or the leader did). "No one found yet" and "Not known." are left out: nothing is shown instead.
+ */
+export function visibleWorkedOn(line: WorkedOn, kind: string): WorkedOn {
+  if (!line) return null;
+  if (line.type === "names") return line;
+  return kind !== "COVERED" && (line.text === CONFIRMED_BY_INSTRUCTOR || line.text === NOT_KNOWN_LEADER_MARK) ? line : null;
+}

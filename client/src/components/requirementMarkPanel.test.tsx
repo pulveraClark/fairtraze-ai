@@ -7,7 +7,7 @@ URL.createObjectURL = vi.fn(() => "blob:mark");
 URL.revokeObjectURL = vi.fn();
 import type { MarksApi } from "../hooks/useRequirementMarks";
 import {
-  INSTRUCTOR_WAITING, LEADER_DECLINED, LEADER_WAITING, MARK_STALE, confirmedByInstructor, coveredByAiSentence,
+  INSTRUCTOR_WAITING, LEADER_DECLINED, LEADER_WAITING, confirmedByInstructor, coveredByAiSentence,
   marksByKey, staleMarks, waitingClaims, type RequirementMark,
 } from "../lib/requirementMarks";
 import type { AiBriefCheck } from "../lib/aiReview";
@@ -168,10 +168,10 @@ describe("instructor", () => {
     expect(a.remove).toHaveBeenCalledWith(9);
   });
 
-  it("a mark whose instructions changed shows 'Instructions changed. Please check again.'", async () => {
+  it("a mark whose requirement is no longer in the check gets one line after the list, worded by its owner", async () => {
     render(<BriefCheckCard check={check()} instructor marks={api("instructor", [mark({ stale: true, requirementKey: "d".repeat(32) })])} />);
     await open();
-    expect(screen.getByText(MARK_STALE)).toBeTruthy();
+    expect(screen.getByText("Instructions changed. The leader's claim on “Write system documentation” no longer applies.")).toBeTruthy();
   });
 });
 

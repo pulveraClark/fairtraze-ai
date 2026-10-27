@@ -86,7 +86,16 @@ describe("AI findings summary", () => {
     expect(row.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(screen.getByRole("button", { name: "+2 more" }));
     expect(row.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText(/requirements are covered in the work\./)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show the 2 covered requirements" })).toBeTruthy();
+    expect(screen.queryByText(/requirements are covered in the work/)).toBeNull(); // the summary line above says it
+  });
+
+  it("the check's header keeps 'View the instructions' and an (i) on its right, even when collapsed", async () => {
+    renderCard(mixed(), { instructionsHref: "/class/1/assignment/2" });
+    await screen.findByText(/^Instructions: 7 of 9/);
+    expect(screen.getByRole("link", { name: "View the instructions (new tab)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "About the project instructions check" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Project instructions check · all 9, with proof/ }).getAttribute("aria-expanded")).toBe("false");
   });
 
   it("all found: one calm line and no Needs a look block", async () => {

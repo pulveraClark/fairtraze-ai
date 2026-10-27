@@ -80,3 +80,15 @@ export function waitingClaims(marks: RequirementMark[]): number {
 export function markDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+/** Small amber note on a row whose earlier mark no longer applies because the instructions changed. */
+export const STALE_ROW_NOTE = "Instructions changed since your mark. Check again.";
+
+/** The requirement as quoted in a sentence: no trailing full stop, so the sentence does not end in `.”.`. */
+const quotedText = (text: string) => text.trim().replace(/[\s.]+$/, "");
+
+/** One line for a stale mark whose requirement is no longer in the check, worded by who made the mark. */
+export function staleOrphanLine(m: RequirementMark): string {
+  const who = m.role === "INSTRUCTOR" ? "Your mark" : "The leader's claim";
+  return `Instructions changed. ${who} on “${quotedText(m.requirementText)}” no longer applies.`;
+}

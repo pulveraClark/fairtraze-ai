@@ -55,6 +55,27 @@ try {
   check(m.tiny === 0, `expanded: no text under 12px (${m.tiny})`);
   check(/Gini coefficient is 0.122/.test(m.text), "Gini sentence shown inside Team details");
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__ai-findings-expanded-375.png") });
+  // Covered requirements shown, then one proof open: still one line each, no overflow, small targets absent.
+  await page.getByRole("button", { name: /^Show the 6 covered requirements/ }).click();
+  await page.waitForTimeout(150);
+  m = await measure();
+  check(m.scrollW <= 375, `covered shown: no sideways scroll (scrollWidth ${m.scrollW})`);
+  check(m.tiny === 0, `covered shown: no text under 12px (${m.tiny})`);
+  check(m.small.length === 0, `covered shown: buttons >= 40px ${JSON.stringify(m.small)}`);
+  const proofs = await page.getByRole("button", { name: /^Proof/ }).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+  check(proofs.length === 6 && proofs.every((h) => h >= 40), `6 Proof buttons, each >= 40px (${proofs.join(", ")})`);
+  check(m.text.includes("Instructions changed since your mark. Check again."), "stale note on its own row");
+  const tipH = await page.getByRole("button", { name: "About the project instructions check" }).evaluate((e) => Math.round(e.getBoundingClientRect().height));
+  check(tipH >= 40, `(i) button is ${tipH}px tall`);
+  if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__rows-covered-375.png") });
+  await page.getByRole("button", { name: /^Proof/ }).first().click();
+  await page.waitForTimeout(150);
+  m = await measure();
+  check(m.scrollW <= 375, `proof open: no sideways scroll (scrollWidth ${m.scrollW})`);
+  check(m.tiny === 0, `proof open: no text under 12px (${m.tiny})`);
+  if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__rows-proof-375.png") });
+  await page.getByRole("button", { name: "About the project instructions check" }).click();
+  if (shots) await page.screenshot({ path: path.join(shots, "ai-summary__tip-open-375.png") });
   check(errors.length === 0, `no page errors ${errors.join("; ")}`);
 } finally {
   await browser.close();

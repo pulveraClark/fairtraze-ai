@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { FOCUS_LIGHT } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
 import { AiBadge } from "./ui/AiBadge";
@@ -9,8 +9,8 @@ import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 import { RequirementMarkPanel } from "./RequirementMarkPanel";
 import type { MarksApi } from "../hooks/useRequirementMarks";
 import { isMarkable } from "@shared/requirementMarkable";
-import { WORKED_ON_LABEL, WORKED_ON_NOTE, workedOn, type WorkedOn } from "../lib/workedOnBy";
-import { MARK_STALE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, type KeyMarks } from "../lib/requirementMarks";
+import { CHECK_TIP_SENTENCES, WORKED_ON_LABEL, WORKED_ON_NOTE, visibleWorkedOn, workedOn, type WorkedOn } from "../lib/workedOnBy";
+import { STALE_ROW_NOTE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, staleOrphanLine, type KeyMarks } from "../lib/requirementMarks";
 import {
   ATTENTION_ORDER, NOTHING_READ_TITLE, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
   coveredToggleLabel, droppedSentence, highlightHash, kindOf, nothingReadAdvice, otherCountsSentence, pillLabel, readLine, skippedLine,
@@ -80,17 +80,6 @@ export const quoted = (text: string) => text.trim().replace(/[\s.]+$/, "");
 const hasSource = (r: Req) => !!(r.sourceQuote || r.sourceFile);
 const fileSource = (r: Req) => `${r.sourceFile}${r.sourcePage ? `, page ${r.sourcePage}` : ""}`;
 
-/** "Project instructions: "<sentence>"" or "From: <file>, page 2", then the link. Nothing for older checks. */
-function FromLine({ r, access }: { r: Req; access: InstructionsAccess }) {
-  if (!hasSource(r)) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 [overflow-wrap:anywhere]">
-      {r.sourceQuote ? <span>Project instructions: “{truncateQuote(r.sourceQuote, 200)}”</span> : <span>From: {fileSource(r)}</span>}
-      <SeeInInstructions quote={r.sourceQuote} access={access} />
-    </div>
-  );
-}
-
 // Where to look when the proof could not be confirmed: the Docs tab and the repository, whichever the page can open.
 function LookIn({ repoUrl, docs }: { repoUrl?: string | null; docs: boolean }) {
   const canOpenDocs = useOpenDocSection() !== null && docs;
@@ -113,56 +102,74 @@ function LookIn({ repoUrl, docs }: { repoUrl?: string | null; docs: boolean }) {
   );
 }
 
-/** Closed by default. Covered rows start with where in the instructions the requirement comes from. */
-function Proof({ r, access, showSource }: { r: Req; access: InstructionsAccess; showSource: boolean }) {
-  // The same file is shown once per row, however many quotes pointed at it.
+/** The distinct evidence of a requirement: the same file is shown once per row, however many quotes pointed at it. */
+function evidenceOf(r: Req) {
   const seen = new Set<string>();
-  const evidence = r.evidence.filter((e) => {
+  return r.evidence.filter((e) => {
     if (e.type !== "file") return true;
     if (seen.has(e.ref)) return false;
     seen.add(e.ref);
     return true;
   });
+}
+
+/** Covered rows start their proof with where in the instructions the requirement comes from; other rows show that as a link on their line. */
+const hasProof = (r: Req, showSource: boolean) => evidenceOf(r).length > 0 || (showSource && hasSource(r));
+
+/** What opens under a row's "Proof" button. */
+function ProofBody({ r, access, showSource }: { r: Req; access: InstructionsAccess; showSource: boolean }) {
+  const evidence = evidenceOf(r);
   const withSource = showSource && hasSource(r);
-  if (evidence.length === 0 && !withSource) return null;
   return (
-    <details className="mt-1">
-      <summary className={`flex min-h-10 cursor-pointer items-center text-xs font-semibold text-indigo-900 underline underline-offset-2 ${FOCUS_LIGHT}`}>See proof</summary>
-      <div className="space-y-2 pb-1">
-        {withSource && (
-          <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-800">
-            <span>From the project instructions{r.sourceFile ? ` (${fileSource(r)})` : ""}:</span>
-            <SeeInInstructions quote={r.sourceQuote} access={access} />
-          </div>
-        )}
-        {evidence.length > 0 && (
-          <ul className="space-y-2">
-            {evidence.map((e, j) => (
-              <li key={j} className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-normal">
-                {e.type === "file" ? (
+    <div className="space-y-2 pb-1">
+      {withSource && (
+        <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-800">
+          <span>From the project instructions{r.sourceFile ? ` (${fileSource(r)})` : ""}:</span>
+          <SeeInInstructions quote={r.sourceQuote} access={access} />
+        </div>
+      )}
+      {evidence.length > 0 && (
+        <ul className="space-y-2">
+          {evidence.map((e, j) => (
+            <li key={j} className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-normal">
+              {e.type === "file" ? (
+                <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
+                  <span>Code:</span>
+                  <FileEvidenceLink path={e.ref} href={e.href} isCommit={e.isCommit} />
+                </div>
+              ) : (
+                <>
                   <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
-                    <span>Code:</span>
-                    <FileEvidenceLink path={e.ref} href={e.href} isCommit={e.isCommit} />
+                    <span>Docs section:</span>
+                    <DocSectionLink heading={e.ref} />
                   </div>
-                ) : (
-                  <>
-                    <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
-                      <span>Docs section:</span>
-                      <DocSectionLink heading={e.ref} />
-                    </div>
-                    {e.quoteHidden ? (
-                      <p className="text-xs text-slate-700">Text written by another member is not shown.</p>
-                    ) : e.quote ? (
-                      <blockquote className="mt-0.5 border-l-2 border-slate-300 pl-2 text-slate-900 [overflow-wrap:anywhere]">{truncateQuote(e.quote)}</blockquote>
-                    ) : null}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </details>
+                  {e.quoteHidden ? (
+                    <p className="text-xs text-slate-700">Text written by another member is not shown.</p>
+                  ) : e.quote ? (
+                    <blockquote className="mt-0.5 border-l-2 border-slate-300 pl-2 text-slate-900 [overflow-wrap:anywhere]">{truncateQuote(e.quote)}</blockquote>
+                  ) : null}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** "Proof ▾": opens the row's proof under it. A native button, so Enter and Space work; aria-expanded tells the state. */
+function ProofButton({ open, onToggle, controls }: { open: boolean; onToggle: () => void; controls: string }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls={controls}
+      onClick={onToggle}
+      className={`order-3 ml-auto inline-flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 sm:order-4 text-xs font-semibold text-indigo-900 underline underline-offset-2 hover:bg-slate-100 ${FOCUS_LIGHT}`}
+    >
+      Proof <span aria-hidden="true" className={`transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+    </button>
   );
 }
 
@@ -180,11 +187,11 @@ function Grid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   );
 }
 
-/** "Worked on by" + up to 2 name chips + "+N more", or one plain sentence. One wrapping row. */
-function WorkedOnBy({ line }: { line: WorkedOn }) {
+/** "Worked on by" + up to 2 name chips + "+N", or one plain mark sentence. Nothing is rendered without a line. */
+function WorkedOnBy({ line, inline = false }: { line: WorkedOn; inline?: boolean }) {
   if (!line) return null;
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] leading-normal text-slate-700">
+    <div className={`${inline ? "" : "mt-1 "}flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] leading-normal text-slate-700`}>
       <span className="font-semibold">{WORKED_ON_LABEL}</span>
       {line.type === "names" ? (
         <>
@@ -194,7 +201,7 @@ function WorkedOnBy({ line }: { line: WorkedOn }) {
               <span className="[overflow-wrap:anywhere]">{n}</span>
             </span>
           ))}
-          {line.more > 0 && <span>+{line.more} more</span>}
+          {line.more > 0 && <span>+{line.more}</span>}
         </>
       ) : (
         <span className="min-w-0 [overflow-wrap:anywhere]">{line.text}</span>
@@ -203,35 +210,47 @@ function WorkedOnBy({ line }: { line: WorkedOn }) {
   );
 }
 
-function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks }: {
+function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks, staleNote }: {
   r: Req; instructor: boolean; access: InstructionsAccess; repoUrl?: string | null; docs: boolean;
-  marks?: MarksApi; keyMarks?: KeyMarks;
+  marks?: MarksApi; keyMarks?: KeyMarks; staleNote?: boolean;
 }) {
   const kind = kindOf(r);
+  const covered = kind === "COVERED";
+  const [proofOpen, setProofOpen] = useState(false);
+  const proofId = useId();
+  const line = visibleWorkedOn(workedOn(r, instructor, keyMarks), kind);
+  // Covered and partly covered rows get the Proof button; a row that needs a check shows its Why / Look in instead.
+  const proof = (covered || kind === "PARTLY") && hasProof(r, covered);
   return (
     <li className="min-w-0 py-2">
-      <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-        <Pill kind={kind} instructor={instructor} />
-        <p className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{r.text}</p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {covered ? (
+          <>
+            <span aria-hidden="true" className="order-1 shrink-0 font-semibold text-emerald-800">✓</span>
+            <span className="sr-only order-1">Covered</span>
+          </>
+        ) : (
+          <Pill kind={kind} instructor={instructor} />
+        )}
+        <p className={`min-w-0 flex-1 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere] ${covered ? "order-2 basis-40" : "basis-48"}`}>{r.text}</p>
+        {/* On a narrow screen the names wrap under the line and Proof stays beside the text. */}
+        {covered && line && <div className="order-4 basis-full sm:order-3 sm:basis-auto"><WorkedOnBy line={line} inline /></div>}
+        {!covered && !r.sourceQuote && r.sourceFile && <span className="text-xs text-slate-800">From: {fileSource(r)}</span>}
+        {!covered && hasSource(r) && <SeeInInstructions quote={r.sourceQuote} access={access} />}
+        {proof && <ProofButton open={proofOpen} onToggle={() => setProofOpen((v) => !v)} controls={proofId} />}
       </div>
-      {kind === "CHECK" ? (
+      {kind === "CHECK" && (
         <Grid
           rows={[
             ["Check", instructor ? `Does the work include “${quoted(r.text)}”?` : `Is “${quoted(r.text)}” in your work?`],
-            ...(hasSource(r) ? [["From", <FromLine key="from" r={r} access={access} />] as [string, React.ReactNode]] : []),
             ["Why", NOT_CONFIRMED_WHY],
             ["Look in", <LookIn key="look" repoUrl={repoUrl} docs={docs} />],
           ]}
         />
-      ) : (
-        <>
-          {kind !== "COVERED" && hasSource(r) && (
-            <div className="mt-1 text-xs leading-normal text-slate-800"><FromLine r={r} access={access} /></div>
-          )}
-          <Proof r={r} access={access} showSource={kind === "COVERED"} />
-        </>
       )}
-      <WorkedOnBy line={workedOn(r, instructor, keyMarks)} />
+      {proof && proofOpen && <div id={proofId} className="mt-1"><ProofBody r={r} access={access} showSource={covered} /></div>}
+      {!covered && line && <WorkedOnBy line={line} />}
+      {staleNote && <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>}
       {marks && r.key && (
         <RequirementMarkPanel
           requirementKey={r.key}
@@ -246,8 +265,18 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks 
 }
 
 /** What the AI read and which attached files it skipped. Older checks have no `sources` and show nothing. */
-function ReadLines({ sources }: { sources: AiBriefCheck["sources"] }) {
+function ReadLines({ sources, onlyProblems = false }: { sources: AiBriefCheck["sources"]; onlyProblems?: boolean }) {
   if (!sources) return null;
+  // In the instructor's summary card the routine "The AI read…" and scan notes live in the (i) tip; only a problem shows here.
+  if (onlyProblems) {
+    if (sources.skipped.length === 0) return null;
+    return (
+      <div className="space-y-0.5 text-xs leading-normal text-slate-700 [overflow-wrap:anywhere]">
+        {sources.skipped.map((s, i) => <p key={i}>{skippedLine(s)}</p>)}
+        <p>{SKIPPED_NOT_CHECKED}</p>
+      </div>
+    );
+  }
   const read = readLine(sources);
   if (!read && sources.skipped.length === 0) return null;
   return (
@@ -286,7 +315,7 @@ function Shell({ embedded, children }: { embedded?: boolean; children: React.Rea
 export function BriefCheckCard({
   check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions, marks, embedded = false,
 }: {
-  /** Render the body without its own heading row (the caller supplies one). */
+  /** Render the body without its own heading row, intro, headline or disclaimer (the instructor's summary card has them). */
   embedded?: boolean;
   check: AiBriefCheck;
   instructor?: boolean;
@@ -326,37 +355,49 @@ export function BriefCheckCard({
   const docs = sourceType !== "GITHUB";
   const keyMarks = marks ? marksByKey(marks.marks) : undefined;
   const confirmed = marks ? confirmedByInstructor(check.requirements, marks.marks) : 0;
-  const changed = marks ? staleMarks(marks.marks) : [];
+  // A stale mark goes on the row it is about; when that requirement is no longer in the check, on a line after the list.
+  const stale = marks ? staleMarks(marks.marks) : [];
+  const liveKeys = new Set(check.requirements.map((r) => r.key).filter(Boolean));
+  const staleKeys = new Set(stale.filter((m) => liveKeys.has(m.requirementKey)).map((m) => m.requirementKey));
+  const orphans = stale.filter((m) => !liveKeys.has(m.requirementKey));
   // An item the instructor confirmed no longer needs a check, so it is left out of "needs your check".
   const stillOpen = keyMarks ? check.requirements.filter((r) => !(kindOf(r) !== "COVERED" && r.key && keyMarks.get(r.key)?.instructor)) : check.requirements;
   const others = otherCountsSentence(countKinds(stillOpen), instructor);
+  const row = (r: Req, i: number) => (
+    <RequirementRow
+      key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} marks={marks}
+      keyMarks={r.key ? keyMarks?.get(r.key) : undefined} staleNote={!!r.key && staleKeys.has(r.key)}
+    />
+  );
 
   return (
     <Shell embedded={embedded}>
       <div className={`space-y-3 px-3 py-3 ${embedded ? "" : "border-t border-slate-200"}`}>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-slate-700">
-          <span className="flex min-w-0 items-center gap-1">
-            {comparedSentence(sourceType)}
-            <InfoTip label="About the project instructions check" helpHref={helpLink("ai")}>{TIPS.briefCheck}</InfoTip>
-          </span>
-          {instructionsHref && !onViewInstructions && (
-            <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label="View the instructions (new tab)" className={LINK_CLS}>View the instructions</a>
-          )}
-          {onViewInstructions && (
-            <button type="button" onClick={() => onViewInstructions()} className={LINK_CLS}>View the instructions</button>
-          )}
-        </div>
-        <ReadLines sources={check.sources} />
-        <p className="text-sm font-semibold leading-normal text-slate-900">
-          {confirmed > 0 ? coveredByAiSentence(counts.COVERED, total, confirmed) : coveredSentence(counts.COVERED, total)}
-          {others && !allCovered ? ` ${others}` : ""}
-        </p>
-        {!allCovered && attention.length > 0 && (
-          <ul className="divide-y divide-slate-100">
-            {attention.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} marks={marks} keyMarks={r.key ? keyMarks?.get(r.key) : undefined} />)}
-          </ul>
+        {!embedded && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-slate-700">
+            <span className="flex min-w-0 items-center gap-1">
+              {comparedSentence(sourceType)}
+              <InfoTip label="About the project instructions check" helpHref={helpLink("ai")}>{TIPS.briefCheck}</InfoTip>
+            </span>
+            {instructionsHref && !onViewInstructions && (
+              <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label="View the instructions (new tab)" className={LINK_CLS}>View the instructions</a>
+            )}
+            {onViewInstructions && (
+              <button type="button" onClick={() => onViewInstructions()} className={LINK_CLS}>View the instructions</button>
+            )}
+          </div>
         )}
-        {!allCovered && covered.length > 0 && (
+        <ReadLines sources={check.sources} onlyProblems={embedded} />
+        {!embedded && (
+          <p className="text-sm font-semibold leading-normal text-slate-900">
+            {confirmed > 0 ? coveredByAiSentence(counts.COVERED, total, confirmed) : coveredSentence(counts.COVERED, total)}
+            {others && !allCovered ? ` ${others}` : ""}
+          </p>
+        )}
+        {!allCovered && attention.length > 0 && (
+          <ul className="divide-y divide-slate-100">{attention.map(row)}</ul>
+        )}
+        {covered.length > 0 && (
           <>
             <button
               type="button"
@@ -367,34 +408,58 @@ export function BriefCheckCard({
             >
               {coveredToggleLabel(showCovered, covered.length)}
             </button>
-            {showCovered && (
-              <ul id="instructions-covered-list" className="divide-y divide-slate-100">
-                {covered.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} marks={marks} keyMarks={r.key ? keyMarks?.get(r.key) : undefined} />)}
-              </ul>
-            )}
+            {showCovered && <ul id="instructions-covered-list" className="divide-y divide-slate-100">{covered.map(row)}</ul>}
           </>
         )}
-        {check.requirements.some((r) => r.contributors) && (
+        {!embedded && check.requirements.some((r) => r.contributors) && (
           <p className="text-xs leading-normal text-slate-700">{WORKED_ON_NOTE}</p>
         )}
-        {changed.length > 0 && (
+        {orphans.length > 0 && (
           <div className="space-y-1">
-            {changed.map((m) => (
-              <p key={m.requirementKey} className="text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">
-                <span className="font-semibold">{MARK_STALE}</span> Earlier mark on “{m.requirementText}”.
+            {orphans.map((m) => (
+              <p key={m.requirementKey} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950 [overflow-wrap:anywhere]">
+                {staleOrphanLine(m)}
               </p>
             ))}
           </div>
         )}
         {dropped > 0 && <p className="text-xs leading-normal text-slate-700">{droppedSentence(dropped)}</p>}
-        <p className="text-xs leading-normal text-slate-700">
-          May be wrong{when ? ` · Based on the analysis of ${when}` : ""}.
-          {check.outdated ? " The project instructions or the analysis changed since. Generate again to update it." : ""}
-        </p>
+        {!embedded && (
+          <p className="text-xs leading-normal text-slate-700">
+            May be wrong{when ? ` · Based on the analysis of ${when}` : ""}.
+            {check.outdated ? " The project instructions or the analysis changed since. Generate again to update it." : ""}
+          </p>
+        )}
+        {embedded && check.outdated && (
+          <p className="text-xs leading-normal text-slate-700">The project instructions or the analysis changed since. Generate again to update it.</p>
+        )}
         {instructor && (check.aiAddressedCount ?? 0) > 0 && (
           <p className="text-xs leading-normal text-slate-700">Some text in the group's work appears to address the AI. It was not used.</p>
         )}
       </div>
     </Shell>
+  );
+}
+
+/** Right side of the check's header in the instructor's summary card: "View the instructions" and the (i) tip (opens on tap). */
+export function CheckHeaderActions({ sources, instructionsHref, onViewInstructions }: {
+  sources?: AiBriefCheck["sources"];
+  instructionsHref?: string;
+  onViewInstructions?: (quote?: string) => void;
+}) {
+  const read = readLine(sources);
+  return (
+    <>
+      {onViewInstructions && <button type="button" onClick={() => onViewInstructions()} className={LINK_CLS}>View the instructions</button>}
+      {instructionsHref && !onViewInstructions && (
+        <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label="View the instructions (new tab)" className={LINK_CLS}>View the instructions</a>
+      )}
+      <InfoTip label="About the project instructions check" helpHref={helpLink("ai")} large>
+        <p>{CHECK_TIP_SENTENCES.join(" ")}</p>
+        {(read || (sources?.filesRead ?? 0) > 0) && (
+          <p className="mt-1.5">{[read, sources && sources.filesRead > 0 ? SCANNED_NOTE : null].filter(Boolean).join(" ")}</p>
+        )}
+      </InfoTip>
+    </>
   );
 }

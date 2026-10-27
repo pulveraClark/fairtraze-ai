@@ -47,30 +47,33 @@ describe("Worked on by", () => {
     expect(row.getByText("Aldren B.")).toBeTruthy();
     expect(row.getByText("Maya")).toBeTruthy();
     expect(row.queryByText("Zed Z.")).toBeNull();
-    expect(row.getByText("+1 more")).toBeTruthy();
+    expect(row.getByText("+1")).toBeTruthy();
   });
 
-  it("a covered requirement with no matched author says 'Not known.', never 'No one found yet.'", async () => {
+  it("a covered requirement with no matched author shows no 'Worked on by' at all", async () => {
     render(<BriefCheckCard check={check} instructor />);
     await open();
     await userEvent.click(screen.getByRole("button", { name: /covered/i }));
     const row = within(rowOf("Covered, nobody matched."));
-    expect(row.getByText(NOT_KNOWN)).toBeTruthy();
+    expect(row.queryByText("Worked on by")).toBeNull();
+    expect(row.queryByText(NOT_KNOWN)).toBeNull();
     expect(row.queryByText(NO_ONE_FOUND)).toBeNull();
   });
 
-  it("a requirement that is not covered or not clear says 'No one found yet.' (instructor wording)", async () => {
+  it("a requirement that is not covered or not clear shows no 'Worked on by' line when there are no names", async () => {
     render(<BriefCheckCard check={check} instructor />);
     await open();
-    expect(within(rowOf("Not covered one.")).getByText(NO_ONE_FOUND)).toBeTruthy();
-    expect(within(rowOf("Not clear one.")).getByText(NO_ONE_FOUND)).toBeTruthy();
+    for (const t of ["Not covered one.", "Not clear one."]) {
+      expect(within(rowOf(t)).queryByText("Worked on by")).toBeNull();
+      expect(within(rowOf(t)).queryByText(NO_ONE_FOUND)).toBeNull();
+    }
   });
 
-  it("the leader's version keeps the second sentence", async () => {
+  it("the leader's card shows no empty 'Worked on by' either", async () => {
     render(<BriefCheckCard check={check} />);
     await open();
-    expect(within(rowOf("Not covered one.")).getByText(NO_ONE_FOUND_LEADER)).toBeTruthy();
-    expect(within(rowOf("Not clear one.")).getByText(NO_ONE_FOUND_LEADER)).toBeTruthy();
+    expect(screen.queryByText(NO_ONE_FOUND_LEADER)).toBeNull();
+    expect(screen.queryByText("Worked on by")).toBeNull();
   });
 
   it("a leader claim not yet confirmed reads 'Not known. Marked by the leader.' and a declined one does not", async () => {
@@ -79,7 +82,7 @@ describe("Worked on by", () => {
     expect(within(rowOf("Not covered one.")).getByText(NOT_KNOWN_LEADER_MARK)).toBeTruthy();
     rerender(<BriefCheckCard check={check} marks={api("leader", [mark({ status: "LEADER_CLAIM_DECLINED" })])} />);
     expect(within(rowOf("Not covered one.")).queryByText(NOT_KNOWN_LEADER_MARK)).toBeNull();
-    expect(within(rowOf("Not covered one.")).getByText(NO_ONE_FOUND_LEADER)).toBeTruthy();
+    expect(within(rowOf("Not covered one.")).queryByText("Worked on by")).toBeNull();
   });
 
   it("after the instructor confirms it reads 'Confirmed by the instructor.' with no invented name", async () => {

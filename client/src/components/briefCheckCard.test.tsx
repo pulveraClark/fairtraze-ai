@@ -2,8 +2,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocSectionProvider } from "../hooks/useDocSectionLink";
-import { BriefCheckCard, NOT_CONFIRMED_WHY, CHECK_WORK_LINE, quoted, truncateQuote } from "./BriefCheckCard";
+import { BriefCheckCard, CheckHeaderActions, NOT_CONFIRMED_WHY, CHECK_WORK_LINE, quoted, truncateQuote } from "./BriefCheckCard";
 import { Narrative } from "./Narrative";
+import type { MarksApi } from "../hooks/useRequirementMarks";
+import type { RequirementMark } from "../lib/requirementMarks";
 import { briefStatusLine, type AiBriefCheck, type AiReviewResponse } from "../lib/aiReview";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
 
@@ -75,13 +77,14 @@ describe("BriefCheckCard", () => {
     expect(screen.queryByText(/not covered yet/)).toBeNull();
   });
 
-  it("all covered: one sentence, no list and no toggle", async () => {
+  it("all covered: one sentence and the covered list stays one click away", async () => {
     const all = { ...check, requirements: [check.requirements[0]!, check.requirements[1]!] };
     render(<BriefCheckCard check={all} />);
     await open();
     expect(screen.getByText("All 2 requirements are covered in the work.")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
-    expect(screen.queryByRole("button", { name: /covered requirement/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show the 2 covered requirements" }));
+    expect(screen.getByText("Has a login page")).toBeTruthy();
   });
 
   it("pills carry an icon and text; the instructor sees 'Needs your check', the leader 'Not clear yet'", async () => {
@@ -113,7 +116,11 @@ describe("BriefCheckCard", () => {
     expect(screen.getByRole("button", { name: "Hide the 2 covered requirements" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("Has a login page")).toBeTruthy();
     expect(screen.getByText("Has a survey")).toBeTruthy();
-    expect(screen.getAllByText((_c, el) => el?.tagName === "SPAN" && el.textContent === "✓Covered").length).toBe(2);
+    // One line per covered row: a plain tick with a hidden "Covered", no chip, and a Proof button.
+    expect(screen.queryByText((_c, el) => typeof el?.className === "string" && el.className.includes("rounded-full") && el.textContent?.endsWith("Covered") === true)).toBeNull();
+    expect(screen.getAllByText("Covered").every((el) => String(el.className).includes("sr-only"))).toBe(true);
+    expect(screen.getAllByRole("button", { name: /^Proof/ })).toHaveLength(2);
+    expect(screen.queryByText("See proof")).toBeNull();
   });
 
   it("covered rows keep their proof closed; it starts with where it comes from; code is a file link only, docs show one short quote", async () => {
@@ -121,10 +128,12 @@ describe("BriefCheckCard", () => {
     render(<DocSectionProvider value={openDoc}><BriefCheckCard check={check} instructionsHref="/class/1/assignment/2" /></DocSectionProvider>);
     await open();
     await userEvent.click(screen.getByRole("button", { name: "Show the 2 covered requirements" }));
-    const proofs = screen.getAllByText("See proof").map((s) => s.closest("details")!);
+    const proofs = screen.getAllByRole("button", { name: /^Proof/ });
     expect(proofs.length).toBe(2);
-    expect(proofs.every((d) => !d.open)).toBe(true);
-    for (const s of screen.getAllByText("See proof")) await userEvent.click(s);
+    expect(proofs.every((b) => b.getAttribute("aria-expanded") === "false" && b.className.includes("min-h-10"))).toBe(true);
+    expect(screen.queryByText("From the project instructions:")).toBeNull();
+    for (const b of proofs) await userEvent.click(b);
+    expect(proofs.every((b) => b.getAttribute("aria-expanded") === "true")).toBe(true);
 
     const login = within(rowOf("Has a login page"));
     expect(login.getByText("From the project instructions:")).toBeTruthy();
@@ -166,7 +175,8 @@ describe("BriefCheckCard", () => {
       const row = within(rowOf("Has tests"));
       expect(row.getByText("Check")).toBeTruthy();
       expect(row.getByText("Does the work include “Has tests”?")).toBeTruthy();
-      expect(row.getByText(`Project instructions: “${TESTS_QUOTE}”`)).toBeTruthy();
+      expect(row.queryByText(/^Project instructions:/)).toBeNull(); // the quote is reached through "See in the instructions"
+      expect(row.queryByText("From")).toBeNull();
       expect(row.getByText("Why")).toBeTruthy();
       expect(row.getByText(NOT_CONFIRMED_WHY)).toBeTruthy();
       expect(NOT_CONFIRMED_WHY).toBe("The AI could not confirm this one. It may still be there. Open the Docs or the repository to check.");
@@ -235,7 +245,7 @@ describe("BriefCheckCard", () => {
       expect(within(rowOf("Has tests")).getByText("From: brief.pdf, page 3")).toBeTruthy();
       const none = within(rowOf("Has a README"));
       expect(none.queryByText(/From/)).toBeNull();
-      expect(none.queryByText("See proof")).toBeNull();
+      expect(none.queryByRole("button", { name: /^Proof/ })).toBeNull();
     });
   });
 
@@ -434,5 +444,85 @@ describe("project instructions check placement", () => {
       renderWith({ ...base, canGenerate: false, hasInstructions: false });
       expect(screen.queryByText(NO_INSTRUCTIONS_LINE)).toBeNull();
     });
+  });
+});
+
+describe("lighter rows", () => {
+  const withNames: AiBriefCheck = {
+    ...check,
+    requirements: check.requirements.map((r) => ({ ...r, key: r.text, contributors: r.text === "Has a login page" ? ["Ana R.", "Ben C.", "Cy D."] : [] })),
+  };
+  const mark = (over: Partial<RequirementMark>): RequirementMark => ({
+    id: 1, requirementKey: "Has tests", requirementText: "Has tests.", role: "INSTRUCTOR", status: "INSTRUCTOR_CONFIRMED", note: null,
+    hasImage: false, imageUrl: null, markedBy: { id: 2, name: "Ida" }, markedByYou: false, createdAt: "2026-10-26T01:00:00Z",
+    updatedAt: "2026-10-26T01:00:00Z", stale: true, ...over,
+  });
+  const api = (role: "leader" | "instructor", marks: RequirementMark[] = []): MarksApi => ({
+    marks, role, error: null, claim: vi.fn(async () => true), confirm: vi.fn(async () => true), decline: vi.fn(async () => true),
+    remove: vi.fn(async () => true), loadImage: vi.fn(async () => new Blob(["x"])),
+  });
+  const openCovered = () => userEvent.click(screen.getByRole("button", { name: /^Show the 2 covered requirements/ }));
+
+  it("a covered row is one line: tick, text, up to 2 names then +N, and a Proof button; no chip, no 'See proof'", async () => {
+    render(<BriefCheckCard check={withNames} instructor embedded />);
+    await openCovered();
+    const row = within(rowOf("Has a login page"));
+    expect(row.getByText("Ana R.")).toBeTruthy();
+    expect(row.getByText("Ben C.")).toBeTruthy();
+    expect(row.queryByText("Cy D.")).toBeNull();
+    expect(row.getByText("+1")).toBeTruthy();
+    expect(row.getByRole("button", { name: /^Proof/ })).toBeTruthy();
+    expect(row.queryByText("See proof")).toBeNull();
+    // A covered row with no known names shows no "Worked on by" label at all.
+    expect(within(rowOf("Has a survey")).queryByText("Worked on by")).toBeNull();
+  });
+
+  it("a not-covered row without names has no 'Worked on by' and no 'No one found yet'", () => {
+    render(<BriefCheckCard check={withNames} instructor embedded />);
+    const row = within(rowOf("Has a README"));
+    expect(row.queryByText("Worked on by")).toBeNull();
+    expect(screen.queryByText(/No one found yet/)).toBeNull();
+  });
+
+  it("embedded drops the intro, the headline and the second disclaimer; the normal card keeps them", () => {
+    const { unmount } = render(<BriefCheckCard check={withNames} instructor embedded />);
+    expect(screen.queryByText(/The AI compared/)).toBeNull();
+    expect(screen.queryByText(/requirements are covered in the work/)).toBeNull();
+    expect(screen.queryByText(/May be wrong/)).toBeNull();
+    unmount();
+    render(<BriefCheckCard check={withNames} instructor />);
+    expect(screen.getByText(/The AI compared/)).toBeTruthy();
+    expect(screen.getByText(/requirements are covered in the work/)).toBeTruthy();
+    expect(screen.getByText(/May be wrong/)).toBeTruthy();
+  });
+
+  it("a stale mark sits on its own row, not at the bottom, and its text has no double period", () => {
+    render(<BriefCheckCard check={withNames} instructor embedded marks={api("instructor", [mark({})])} />);
+    const note = within(rowOf("Has tests")).getByText("Instructions changed since your mark. Check again.");
+    expect(note).toBeTruthy();
+    expect(screen.getAllByText(/Instructions changed/)).toHaveLength(1);
+    expect(note.textContent).not.toMatch(/\.\.|\.”\./);
+  });
+
+  it("a stale mark with no row left gets one line after the list, with the quoted text's full stop removed", () => {
+    render(<BriefCheckCard check={withNames} instructor embedded marks={api("instructor", [mark({ requirementKey: "gone", requirementText: "Old one." })])} />);
+    expect(screen.getByText("Instructions changed. Your mark on “Old one” no longer applies.")).toBeTruthy();
+  });
+
+  it("the (i) tip opens on tap and holds the long note in three short sentences", async () => {
+    render(<CheckHeaderActions sources={undefined} instructionsHref="/c/1" />);
+    const tip = screen.getByRole("button", { name: "About the project instructions check" });
+    expect(tip.className).toContain("h-10");
+    await userEvent.click(tip);
+    const text = screen.getByRole("group", { name: "About the project instructions check" }).textContent ?? "";
+    expect(text).toContain("Names show who changed the proof files or wrote the Docs text, not everyone who helped.");
+    expect(text).toContain("This is not a grade.");
+    expect(screen.getByRole("link", { name: "View the instructions (new tab)" })).toBeTruthy();
+  });
+
+  it("the leader's card keeps its claim flow on a row that needs a check", async () => {
+    render(<BriefCheckCard check={withNames} marks={api("leader")} />);
+    await open();
+    expect(within(rowOf("Has tests")).getByRole("button", { name: "We have this" })).toBeTruthy();
   });
 });

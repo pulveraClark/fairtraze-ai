@@ -16,13 +16,22 @@ window.fetch = (async (input: RequestInfo | URL) => {
   const url = String(input);
   if (url.includes("/api/auth/refresh")) return json({ token: "t", user });
   if (url.includes("/api/auth/me")) return json(user);
+  if (url.includes("requirement-marks")) {
+    return json({ marks: [{
+      id: 1, requirementKey: "Has automated tests", requirementText: "Has automated tests.", role: "INSTRUCTOR", status: "INSTRUCTOR_CONFIRMED", note: null,
+      hasImage: false, imageUrl: null, markedBy: { id: 2, name: "Ida" }, markedByYou: false, createdAt: "2026-10-26T01:00:00Z", updatedAt: "2026-10-26T01:00:00Z", stale: true,
+    }] });
+  }
   return json([]);
 }) as typeof fetch;
 
 const long = "Document the whole deployment process, including environment variables and rollback steps for the team";
-const req = (text: string, status: "FOUND" | "NOT_FOUND" | "PARTLY_FOUND", unverified = false) => ({ text, status, unverified, key: text, evidence: [] });
+const req = (text: string, status: "FOUND" | "NOT_FOUND" | "PARTLY_FOUND", unverified = false, contributors: string[] = []) => ({
+  text, status, unverified, key: text, contributors, sourceQuote: `${text} (from the instructions)`,
+  evidence: status === "FOUND" ? [{ type: "file", ref: "src/App.tsx", href: "https://github.com/example/app/blob/HEAD/src/App.tsx", isCommit: false }] : [],
+});
 const requirements = [
-  ...Array.from({ length: 6 }, (_, i) => req(`Requirement ${i + 1} is met`, "FOUND")),
+  ...Array.from({ length: 6 }, (_, i) => req(`Requirement ${i + 1} is met`, "FOUND", false, i < 4 ? ["Ana R.", "Ben C.", "Cy D."] : [])),
   req(long, "NOT_FOUND"), req("Has automated tests", "NOT_FOUND", true), req("Has a README", "NOT_FOUND"),
 ] as AiBriefCheck["requirements"];
 const data: AiReviewResponse = {
@@ -36,7 +45,7 @@ function Page() {
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4">
       <Narrative narrative={"This project has a team health of Healthy.\n\nThe Gini coefficient is 0.122."} projectId={1} onNarrativeGenerated={() => {}}
-        review={review} generator={generator} basedOnAt="2026-10-26T01:00:00Z" teamHealth="Healthy" gini={0.122} />
+        review={review} generator={generator} instructionsHref="/class/1/assignment/2" basedOnAt="2026-10-26T01:00:00Z" teamHealth="Healthy" gini={0.122} />
     </div>
   );
 }
