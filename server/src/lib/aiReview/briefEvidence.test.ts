@@ -321,3 +321,47 @@ describe("brief prompt: only what is written, and proof that shows the feature",
     expect(strong.evidence).toHaveLength(1);
   });
 });
+
+describe("a heading of the document proves a whole-document requirement", () => {
+  const docCtx = () => ctx({
+    docs: [
+      { heading: "Route Finder: System Documentation", text: "" },
+      { heading: "GUI Overview", text: "The interface is built with Tkinter." },
+    ],
+    pieces: [
+      piece(0, "Route Finder: System Documentation", "Route Finder: System Documentation", true),
+      piece(34, "GUI Overview", "GUI Overview", true),
+      piece(46, "The interface is built with Tkinter.", "GUI Overview"),
+    ],
+    spans: [{ userId: 7, start: 0, end: 80 }],
+  });
+
+  it("keeps a real heading cited as its own quote, shown as heading proof with no quote", () => {
+    const [r] = verifyRequirements([req({ text: "Write system documentation.", evidence: [
+      { type: "doc", ref: "Route Finder: System Documentation", quote: "route finder: system   documentation" },
+    ] })], docCtx()).requirements;
+    expect(r!.status).toBe("FOUND");
+    expect(r!.unverified).toBeUndefined();
+    expect(r!.evidence).toEqual([{ type: "doc", ref: "Route Finder: System Documentation", quote: "", heading: true }]);
+  });
+
+  it("still drops an invented heading, a quote that is not the heading, and the before-the-first-heading label", () => {
+    const run = (ref: string, quote: string) =>
+      verifyRequirements([req({ evidence: [{ type: "doc", ref, quote }] })], docCtx()).requirements[0]!;
+    expect(run("Invented Title", "Invented Title")).toMatchObject({ status: "NOT_FOUND", unverified: true });
+    expect(run("GUI Overview", "Something else entirely")).toMatchObject({ status: "NOT_FOUND", unverified: true });
+    expect(run("(before the first heading)", "(before the first heading)")).toMatchObject({ status: "NOT_FOUND", unverified: true });
+  });
+
+  it("body quotes still work, and the top heading stays in what is sent even with no text under it", () => {
+    const ok = verifyRequirements([req({ evidence: [{ type: "doc", ref: "GUI Overview", quote: "built with Tkinter" }] })], docCtx()).requirements[0]!;
+    expect(ok.evidence[0]).toMatchObject({ type: "doc", ref: "GUI Overview", authors: [7] });
+    const sections = buildDocSections([piece(0, "Route Finder: System Documentation", "Route Finder: System Documentation", true)]);
+    expect(sections).toEqual([{ heading: "Route Finder: System Documentation", text: "" }]);
+  });
+
+  it("the prompt allows citing a heading for a whole-document requirement", () => {
+    expect(BRIEF_SYSTEM).toMatch(/requirement about the document as a whole/);
+    expect(BRIEF_SYSTEM).toMatch(/quote set to the same heading text/);
+  });
+});

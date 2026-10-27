@@ -62,6 +62,9 @@ export interface AiBriefEvidence {
   commits?: string[];
   // Short text copied from that file or section. Verified in code before it is stored.
   quote: string;
+  // Docs only: true when the proof is the section heading itself (a requirement about the whole document);
+  // `ref` is then a real heading of the document outline and `quote` is empty.
+  heading?: boolean;
   // Docs only: ids of the members who wrote the quoted text. Used to hide other members' Docs words
   // from the leader; never sent to the client.
   authors?: number[];

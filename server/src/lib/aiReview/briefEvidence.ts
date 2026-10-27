@@ -207,7 +207,14 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
             evidence.push({ type: "file", ref: e.ref, quote });
           } else {
             const section = ctx.docs.find((d) => d.heading === e.ref);
-            if (!section || !q || !normalize(section.text).includes(q)) continue;
+            if (!section || !q) continue;
+            // A requirement about the whole document ("write system documentation") is proved by a real
+            // heading of the document: the quote is the heading itself, checked against the real outline.
+            if (e.ref !== NO_HEADING && q === normalize(e.ref)) {
+              evidence.push({ type: "doc", ref: e.ref, quote: "", heading: true });
+              continue;
+            }
+            if (!normalize(section.text).includes(q)) continue;
             evidence.push({ type: "doc", ref: e.ref, quote, authors: authorsOf(q, e.ref, ctx) });
           }
         }

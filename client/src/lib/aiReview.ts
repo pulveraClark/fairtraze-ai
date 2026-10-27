@@ -14,7 +14,7 @@ export interface AiBriefCheck {
     text: string;
     status: "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
     unverified: boolean;
-    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean } & AiFileLinks>;
+    evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean; heading?: boolean } & AiFileLinks>;
     // Where the requirement comes from: the sentence of the written brief, or the attached file's name
     // (and page). Absent on checks stored before sources were required.
     sourceQuote?: string;

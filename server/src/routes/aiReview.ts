@@ -121,9 +121,9 @@ export function shapeBriefForViewer(
     ...(r.sourceFile ? { sourceFile: r.sourceFile } : {}),
     ...(r.sourceFile && r.sourcePage ? { sourcePage: r.sourcePage } : {}),
     evidence: r.evidence.map((e) => {
-      const othersWrote = e.type === "doc" && viewer === "leader" && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
+      const othersWrote = e.type === "doc" && viewer === "leader" && !!e.quote && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
       const links = e.type === "file" ? (linkFile(repo, e.ref, e.commits) ?? {}) : {};
-      return { type: e.type, ref: e.ref, quote: othersWrote ? "" : e.quote, quoteHidden: othersWrote, ...links };
+      return { type: e.type, ref: e.ref, quote: othersWrote ? "" : e.quote, quoteHidden: othersWrote, ...(e.heading ? { heading: true } : {}), ...links };
     }),
   }));
   return {
