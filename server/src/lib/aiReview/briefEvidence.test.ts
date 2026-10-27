@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  briefFingerprint, briefHash, buildDocSections, fitBriefInput, inputSize, selectKeyFiles, selectTreePaths, verifyRequirements,
+  briefFingerprint, briefHash, buildDocSections, fitBriefInput, inputSize, isImportOnly, selectKeyFiles, selectTreePaths, verifyRequirements,
   MAX_KEY_FILES, MAX_TREE_PATHS, MAX_REQUIREMENTS, type BriefVerifyContext,
 } from "./briefEvidence.js";
-import { validateBriefOutput, type RawRequirement } from "./prompts.js";
+import { BRIEF_SYSTEM, validateBriefOutput, type RawRequirement } from "./prompts.js";
 import type { DocPiece } from "./docsEvidence.js";
 
 const piece = (start: number, text: string, heading: string | null, isHeading = false): DocPiece => ({
@@ -288,5 +288,36 @@ describe("validateBriefOutput", () => {
     expect(validateBriefOutput({ requirements: [{ text: "x", status: "GOOD", evidence: [] }] })).toBeNull();
     expect(validateBriefOutput({ requirements: [{ text: "x", status: "FOUND", evidence: [{ type: "web", ref: "a", quote: "" }] }] })).toBeNull();
     expect(validateBriefOutput({ nope: 1 })).toBeNull();
+  });
+});
+
+describe("brief prompt: only what is written, and proof that shows the feature", () => {
+  it("tells the AI to list only written requirements, few for a short brief, split only on a clear and/comma", () => {
+    expect(BRIEF_SYSTEM).toMatch(/ONLY requirements that are actually written/);
+    expect(BRIEF_SYSTEM).toMatch(/Do not invent/);
+    expect(BRIEF_SYSTEM).toMatch(/one sentence gives one to three/);
+    expect(BRIEF_SYSTEM).toMatch(/only at a clear "and" or comma/);
+    expect(BRIEF_SYSTEM).toMatch(/GraphHopper route planner with a Tkinter GUI/);
+  });
+
+  it("tells the AI to quote the code that shows the feature, never imports", () => {
+    expect(BRIEF_SYSTEM).toMatch(/never import lines or setup/);
+  });
+
+  it("isImportOnly: import blocks are, real code is not", () => {
+    expect(isImportOnly("import os\nimport requests\nimport tkinter as tk\nfrom tkinter import ttk, messagebox")).toBe(true);
+    expect(isImportOnly("const fs = require(\"fs\");")).toBe(true);
+    expect(isImportOnly("import os\ndef route(a, b):\n    return graphhopper.get(a, b)")).toBe(false);
+    expect(isImportOnly("")).toBe(false);
+  });
+
+  it("evidence made only of import lines is dropped, so a Found answer becomes Not found, flagged", () => {
+    const text = "import os\nimport requests\n\ndef plan():\n    return requests.get(URL)";
+    const c = ctx({ paths: new Set(["Graphhopper.py"]), fileText: new Map([["Graphhopper.py", text]]) });
+    const weak = verifyRequirements([req({ evidence: [{ type: "file", ref: "Graphhopper.py", quote: "import os\nimport requests" }] })], c).requirements[0]!;
+    expect(weak).toMatchObject({ status: "NOT_FOUND", evidence: [], unverified: true });
+    const strong = verifyRequirements([req({ evidence: [{ type: "file", ref: "Graphhopper.py", quote: "def plan():\n    return requests.get(URL)" }] })], c).requirements[0]!;
+    expect(strong.status).toBe("FOUND");
+    expect(strong.evidence).toHaveLength(1);
   });
 });

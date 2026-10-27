@@ -36,6 +36,15 @@ export function briefFingerprint(description: string, attachments: Array<{ id: n
 
 const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
 
+// A line that only brings a library in (import, from x import y, require, #include, using, use).
+const IMPORT_LINE = /^\s*(import\b|from\s+\S+\s+import\b|(const|let|var)\s+.*=\s*require\(|#include\b|using\s+[\w.]+;|use\s+[\w:]+;)/i;
+
+/** True when every non-empty line of the quote is an import: that proves a library is used, not the feature. */
+export function isImportOnly(quote: string): boolean {
+  const lines = quote.split(/\r?\n/).filter((l) => l.trim() !== "");
+  return lines.length > 0 && lines.every((l) => IMPORT_LINE.test(l));
+}
+
 /** Paths worth sending as a list: skip rules applied, shallow first, capped. */
 export function selectTreePaths(paths: string[]): string[] {
   return paths
@@ -194,6 +203,7 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
             if (!ctx.paths.has(e.ref)) continue;
             const text = ctx.fileText.get(e.ref);
             if (q && (!text || !normalize(text).includes(q))) continue;
+            if (isImportOnly(quote)) continue;
             evidence.push({ type: "file", ref: e.ref, quote });
           } else {
             const section = ctx.docs.find((d) => d.heading === e.ref);
