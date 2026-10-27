@@ -468,8 +468,11 @@ describe("StudentGroupPage: member window and team overview", () => {
     await userEvent.click(screen.getByRole("button", { name: "See your details" }));
     const dialog = await screen.findByRole("dialog", { name: /Ana Cruz/ });
     await screen.findByText("Added the login page.");
-    const MEASURE = /gini|inequality|coefficient|concentration|band|team index|0\.3\d\d/i;
+    const MEASURE = /gini|inequality|coefficient|concentration|\bband\b|team index|0\.3\d\d/i;
     expect(overview.textContent).not.toMatch(MEASURE);
     expect(dialog.textContent).not.toMatch(MEASURE);
+    // The word boundary matters: "husband" is not a band, a real band still is one.
+    expect("A husband and his handbook").not.toMatch(MEASURE);
+    expect("In the 0.4 band").toMatch(MEASURE);
   });
 });
