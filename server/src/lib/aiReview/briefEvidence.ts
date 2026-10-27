@@ -222,21 +222,45 @@ export function maxRequirementsFor(instructions: string): number {
   return Math.min(MAX_REQUIREMENTS, units + separators + 1);
 }
 
+export type RejectReason = "import only" | "too short" | "quote not found" | "ref not found";
+
+/** One evidence item the AI gave that could not be confirmed. Log only; never stored or shown. */
+export interface Rejection {
+  requirement: string;
+  type: "file" | "doc";
+  reason: RejectReason;
+  quote: string;
+}
+
 export interface ProofCheckCount {
   // Requirements the AI marked Found / Partly found, and how many of them ended up unverified.
   claimed: number;
   demoted: number;
+  // Why the demoted ones were demoted (the first rejected evidence item of each).
+  importOnly: number;
+  tooShort: number;
   quoteNotFound: number;
   refNotFound: number;
   // Past the cap, after the source check (discarded, not shown, not counted as "left out").
   capped: number;
+  // Items the AI listed that the instructions do not contain (the instructor's "left out" count).
+  droppedNoSource: number;
 }
 
-/** One log line per run (log only, nothing stored). */
-export function logProofCheck(label: string, p: ProofCheckCount): ProofCheckCount {
+const oneLine = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);
+const MAX_REJECTION_LINES = 30;
+
+/** The log line for one rejected evidence item: requirement (60 chars), type, reason, quote (80 chars). */
+export function rejectionLine(label: string, x: Rejection): string {
+  return `[ai-review] proof rejected ${label}: ${JSON.stringify(oneLine(x.requirement, 60))} ${x.type} ${x.reason}: ${JSON.stringify(oneLine(x.quote, 80))}`;
+}
+
+/** One summary line per run plus one line per rejected evidence item (log only, nothing stored). */
+export function logProofCheck(label: string, p: ProofCheckCount, rejections: Rejection[] = []): ProofCheckCount {
   console.info(
-    `[ai-review] proof check ${label}: ${p.claimed} marked found or partly found, ${p.demoted} demoted to unverified (quote not found ${p.quoteNotFound}, ref not found ${p.refNotFound}), ${p.capped} over the cap`,
+    `[ai-review] proof check ${label}: ${p.claimed} marked found or partly found, ${p.demoted} demoted to unverified (import only ${p.importOnly}, too short ${p.tooShort}, quote not found ${p.quoteNotFound}, ref not found ${p.refNotFound}), capped ${p.capped}, dropped for no source ${p.droppedNoSource}`,
   );
+  for (const x of rejections.slice(0, MAX_REJECTION_LINES)) console.info(rejectionLine(label, x));
   return p;
 }
 
@@ -275,6 +299,7 @@ export interface VerifiedBrief {
   // Requirements the AI returned whose source could not be confirmed (or had none); they are not shown.
   droppedCount: number;
   proof: ProofCheckCount;
+  rejections: Rejection[];
 }
 
 /**
@@ -294,27 +319,34 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
   // The cap comes after the source check and keeps the AI's order, so an invented item can never push out a
   // real one. With attached files the instructions cannot be counted, so only MAX_REQUIREMENTS applies.
   const cap = ctx.source.files.length > 0 ? MAX_REQUIREMENTS : maxRequirementsFor(ctx.source.instructions);
-  const proof: ProofCheckCount = { claimed: 0, demoted: 0, quoteNotFound: 0, refNotFound: 0, capped: Math.max(0, sourced.length - cap) };
+  const proof: ProofCheckCount = {
+    claimed: 0, demoted: 0, importOnly: 0, tooShort: 0, quoteNotFound: 0, refNotFound: 0,
+    capped: Math.max(0, sourced.length - cap), droppedNoSource: droppedCount,
+  };
+  const rejections: Rejection[] = [];
   const requirements = sourced
     .slice(0, cap)
     .map(({ r, source }) => {
       const evidence: AiBriefEvidence[] = [];
-      let firstRejection: "quote" | "ref" | null = null;
-      const reject = (why: "quote" | "ref") => { firstRejection ??= why; };
+      let firstRejection: RejectReason | null = null;
+      const reject = (type: "file" | "doc", reason: RejectReason, quote: string) => {
+        firstRejection ??= reason;
+        rejections.push({ requirement: r.text, type, reason, quote });
+      };
       if (r.status !== "NOT_FOUND") {
         for (const e of r.evidence.slice(0, 3)) {
           const quote = e.quote.trim().slice(0, MAX_QUOTE_CHARS);
           const q = normalize(quote);
           if (e.type === "file") {
-            if (!ctx.paths.has(e.ref)) { reject("ref"); continue; }
+            if (!ctx.paths.has(e.ref)) { reject("file", "ref not found", quote); continue; }
             const text = ctx.fileText.get(e.ref);
-            if (q && (!text || !normalize(text).includes(q))) { reject("quote"); continue; }
+            if (q && (!text || !normalize(text).includes(q))) { reject("file", "quote not found", quote); continue; }
             // An import proves a library is used. That is proof only for a requirement that names the library.
-            if (isImportOnly(quote) && !requirementNamesImport(quote, `${r.text} ${r.sourceQuote ?? ""}`)) { reject("quote"); continue; }
+            if (isImportOnly(quote) && !requirementNamesImport(quote, `${r.text} ${r.sourceQuote ?? ""}`)) { reject("file", "import only", quote); continue; }
             evidence.push({ type: "file", ref: e.ref, quote });
           } else {
             const nq = normalizeQuote(quote);
-            if (!nq) { reject("quote"); continue; }
+            if (!nq) { reject("doc", "quote not found", quote); continue; }
             // A requirement about the whole document ("write system documentation") is proved by a real
             // heading (or the title) of the document: the quote is that whole heading, checked against the
             // real outline. This is the only way a quote shorter than the minimum is accepted.
@@ -323,7 +355,7 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
               evidence.push({ type: "doc", ref: heading.text.trim(), quote: "", heading: true });
               continue;
             }
-            if (nq.length < MIN_SOURCE_QUOTE_CHARS) { reject("quote"); continue; }
+            if (nq.length < MIN_SOURCE_QUOTE_CHARS) { reject("doc", "too short", quote); continue; }
             // Anywhere in the real document text counts (title, headings, body, list items, table cells),
             // not only the body of the cited section. A wrong ref is re-anchored to the nearest heading above.
             const hit = findInDocument(nq, e.ref, ctx);
@@ -337,7 +369,7 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
               evidence.push({ type: "doc", ref: e.ref, quote, authors: [] });
               continue;
             }
-            reject("quote");
+            reject("doc", "quote not found", quote);
           }
         }
       }
@@ -345,11 +377,13 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
       if (found) proof.claimed++;
       if (found && evidence.length === 0) {
         proof.demoted++;
-        if (firstRejection === "ref") proof.refNotFound++;
+        if (firstRejection === "ref not found") proof.refNotFound++;
+        else if (firstRejection === "import only") proof.importOnly++;
+        else if (firstRejection === "too short") proof.tooShort++;
         else proof.quoteNotFound++;
         return { text: r.text.slice(0, 200), status: "NOT_FOUND" as const, evidence: [], unverified: true, ...source };
       }
       return { text: r.text.slice(0, 200), status: r.status, evidence, ...source };
     });
-  return { requirements, droppedCount, proof };
+  return { requirements, droppedCount, proof, rejections };
 }

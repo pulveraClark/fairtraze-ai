@@ -223,7 +223,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     source: { instructions: brief ? input.brief : "", files: sentFiles.map((f) => f.filename) },
     paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans,
   });
-  logProofCheck(`brief (group ${projectId})`, verified.proof);
+  logProofCheck(`brief (group ${projectId})`, verified.proof, verified.rejections);
   briefSources = { ...briefSources, droppedCount: verified.droppedCount };
   // The AI answered but every requirement lacked a confirmable source: report a failure rather than hide the card.
   if (verified.requirements.length === 0 && verified.droppedCount > 0) {
