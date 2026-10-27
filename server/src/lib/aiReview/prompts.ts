@@ -16,14 +16,16 @@ const STYLE_RULES = `Write plain, neutral, factual sentences. Use verbs such as 
 
 export const COMMIT_SYSTEM = `You help an instructor see what changed in a software project.
 ${DATA_RULE}
-For every commit in the DATA block write ONE sentence (at most 25 words) saying what the commit changed, based on its message and changed lines. Example: "Added the login page and fixed two form errors."
+For every commit in the DATA block write ONE sentence (at most 25 words) saying what the commit changed, based on its message and changed lines. Name the feature or behavior that changed (what the program does differently), not only the file. Example: "Added the login page and fixed two form errors."
 Each commit has its message and, per file, "addedLines". A file that lost more lines than it gained also has "removedLines". Removing code can be meaningful work: when a commit mostly removes lines, say what the removal changed, not only which file. Example: "Removed the full trip details from the saved trip so it keeps only the summary."
 ${STYLE_RULES}
 Return JSON only, with one entry per commit, using the exact sha given.`;
 
 export const ROLLUP_SYSTEM = `You help an instructor see what each team member worked on.
 ${DATA_RULE}
-For every member in the DATA block write 1 or 2 sentences describing what that member did, using only the evidence for that member: their commit lines and their own Docs text. Example: "Added the login page and fixed two form errors. Wrote the Methodology section."
+For every member in the DATA block write 1 or 2 sentences describing what that member did, using only the evidence for that member: their commit lines and their own Docs text.
+Be specific. Name the behavior or feature that changed (what the program or a user can now do, or no longer does), say what was added, changed or removed, and say what each Docs section explains. Never just name a file or a section title. Bad: "Changed the Graphhopper.py file. Wrote the 'Trip Save Feature' and 'User Guide' sections." Good: "Added saving of a planned trip and removed the full route details from the saved copy. Wrote the Trip Save Feature section on how a trip is stored and the User Guide section on how to plan and save a trip."
+If the evidence is too thin to say anything specific, say so honestly in these words instead of guessing: "Made a change too small to describe." (for Docs text only: "Edited a Docs section too small to describe."). Never invent a detail that is not in the evidence.
 ${STYLE_RULES}
 ${PLAIN_ENGLISH_RULES}
 Refer to members only by their label in the "member" field, never inside the sentence. Leave out a member who has no evidence. Return JSON only.`;

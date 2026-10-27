@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { redactSecrets, REDACTED } from "./redact.js";
 import { screenInjection, addressesTheAi, INJECTION_PLACEHOLDER } from "./injection.js";
 import { checkTone } from "./toneGuard.js";
+import { COMMIT_SYSTEM, ROLLUP_SYSTEM } from "./prompts.js";
 import { skipReason, shouldSend } from "./skipRules.js";
 
 // Fixtures are assembled at runtime so no real-looking secret sits in the source file.
@@ -156,5 +157,29 @@ describe("skip rules", () => {
     expect(shouldSend("art/small.svg", { patchChars: 100 })).toBe(true);
     expect(shouldSend(".env.example")).toBe(true);
     expect(shouldSend("src/pages/Login.tsx", { hasPatch: true })).toBe(true);
+  });
+});
+
+describe("member findings must be specific", () => {
+  it("the prompt asks for the behavior or feature, what was added or removed, and what each Docs section explains", () => {
+    expect(ROLLUP_SYSTEM).toMatch(/Name the behavior or feature that changed/);
+    expect(ROLLUP_SYSTEM).toMatch(/what was added, changed or removed/);
+    expect(ROLLUP_SYSTEM).toMatch(/what each Docs section explains/);
+    expect(ROLLUP_SYSTEM).toMatch(/Never just name a file or a section title/);
+    expect(COMMIT_SYSTEM).toMatch(/Name the feature or behavior that changed/);
+  });
+
+  it("the prompt gives an honest fallback and forbids invented detail", () => {
+    expect(ROLLUP_SYSTEM).toMatch(/too small to describe/);
+    expect(ROLLUP_SYSTEM).toMatch(/Never invent a detail/);
+  });
+
+  it("the tone guard accepts the specific wording and the fallback sentences", () => {
+    const good = [
+      "Added saving of a planned trip and removed the full route details from the saved copy. Wrote the Trip Save Feature section on how a trip is stored.",
+      "Made a change too small to describe.",
+      "Edited a Docs section too small to describe.",
+    ];
+    for (const g of good) expect(checkTone(g)).toEqual({ ok: true, reasons: [] });
   });
 });
