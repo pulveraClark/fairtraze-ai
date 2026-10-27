@@ -7,6 +7,7 @@ import { notify, activeAdminIds, resolveNotifications } from "../lib/notify.js";
 import { anonymizeUser } from "../lib/anonymizeUser.js";
 import { toCsv } from "../lib/csv.js";
 import { EDP_TAKEN_MESSAGE, SEMESTERS, isValidSchoolYear } from "@shared/schoolTerm.js";
+import { exportedByLine } from "@shared/exportFooter.js";
 import { parseAdminUsersFilters, buildUserFilters, buildUserOrderBy } from "../lib/adminUsersQuery.js";
 
 export const adminRouter = Router();
@@ -100,19 +101,26 @@ adminRouter.get("/api/admin/users/export.csv", ...requireRole("ADMIN"), async (r
     return;
   }
 
+  const actorName = await getActorName(req.user!.sub);
+  const exporter = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true, email: true } });
+
+  // A blank row, then who exported it and when (the same line the report PDFs carry).
   const csv = toCsv(
     ["Name", "Email", "Role", "Status", "Joined", "Last active"],
-    users.map((u) => [
-      u.name,
-      u.email,
-      u.systemRole,
-      u.deletedAt ? "Deleted account" : u.active ? "Active" : "Inactive",
-      u.createdAt.toISOString(),
-      u.lastLoginAt ? u.lastLoginAt.toISOString() : "Never",
-    ]),
+    [
+      ...users.map((u) => [
+        u.name,
+        u.email,
+        u.systemRole,
+        u.deletedAt ? "Deleted account" : u.active ? "Active" : "Inactive",
+        u.createdAt.toISOString(),
+        u.lastLoginAt ? u.lastLoginAt.toISOString() : "Never",
+      ]),
+      [],
+      [exportedByLine({ name: exporter?.name ?? actorName, email: exporter?.email ?? req.user!.email }, new Date())],
+    ],
   );
 
-  const actorName = await getActorName(req.user!.sub);
   await prisma.auditLog.create({
     data: {
       actorId:    req.user!.sub,

@@ -1,5 +1,7 @@
 import type { StoredReportResponse, Flag, ScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types";
 import logoUrl from "../assets/logo_transparent.png";
+import { useAuth } from "../context/AuthContext";
+import { exportedByLine } from "@shared/exportFooter";
 
 const SOURCE_LABEL: Record<string, string> = {
   GITHUB:   "GitHub",
@@ -61,6 +63,9 @@ interface Props {
 
 export function PrintableReport({ stored, narrative, assignmentLabel, showFooter = true }: Props) {
   const { report, groupName, repoUrl, analyzedAt, sourceType, scoringConfig } = stored;
+  // Who printed this, on every page: "Exported by [name], [email], [date]".
+  const { user } = useAuth();
+  const exportedBy = user ? exportedByLine(user, new Date()) : null;
   const isDocumentReport = sourceType === "EDITOR";
   const isCombinedReport = sourceType === "COMBINED";
   const healthStyle = HEALTH_STYLE[report.teamHealth] ?? HEALTH_STYLE["Healthy"];
@@ -102,8 +107,10 @@ export function PrintableReport({ stored, narrative, assignmentLabel, showFooter
           padding: "7px 24px",
           borderTop: "1px solid #e2e8f0",
           display: "flex",
+          flexWrap: "wrap",
           justifyContent: "space-between",
           alignItems: "center",
+          rowGap: "2px",
           fontSize: "8px",
           color: "#94a3b8",
           background: "#fff",
@@ -115,6 +122,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel, showFooter
           instructor judgment; not a final grade.
         </span>
         <span>Generated {printDate}</span>
+        {exportedBy && <span data-testid="exported-by" style={{ flexBasis: "100%" }}>{exportedBy}</span>}
       </div>
       )}
 
@@ -578,7 +586,7 @@ export function PrintableReport({ stored, narrative, assignmentLabel, showFooter
       )}
 
       {/* Spacer above fixed footer */}
-      <div style={{ height: 36 }} />
+      <div style={{ height: 48 }} />
     </div>
   );
 }

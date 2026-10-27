@@ -41,7 +41,11 @@ describe("GET /api/admin/users/export.csv", () => {
     expect(res.headers["content-disposition"]).toMatch(/attachment; filename="fairtraze-users-\d{4}-\d{2}-\d{2}\.csv"/);
     const lines = res.text.replace(/^\uFEFF/, "").trim().split("\r\n");
     expect(lines[0]).toBe("Name,Email,Role,Status,Joined,Last active");
-    expect(lines).toHaveLength(2);
+    // header, one user, a blank row, then who exported it
+    expect(lines).toHaveLength(4);
+    expect(lines[2]).toBe("");
+    expect(lines[3]).toMatch(/^"Exported by .+, .+@.+, \d{4}-\d{2}-\d{2}"$/);
+    expect(lines[3]).toContain(admin.email);
     expect(lines[1]).toContain(`${tag} =Danger`);
     expect(lines[1]).toContain(",STUDENT,Active,");
     expect(lines[1]).toContain("2026-10-01T00:00:00.000Z");
