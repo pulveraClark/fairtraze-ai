@@ -56,7 +56,7 @@ try {
   check(/Gini coefficient is 0.122/.test(m.text), "Gini sentence shown inside Team details");
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__ai-findings-expanded-375.png") });
   // Covered requirements shown, then one proof open: still one line each, no overflow, small targets absent.
-  await page.getByRole("button", { name: /^Show the 6 covered requirements/ }).click();
+  await page.getByRole("button", { name: /^6 covered requirements · show/ }).click();
   await page.waitForTimeout(150);
   m = await measure();
   check(m.scrollW <= 375, `covered shown: no sideways scroll (scrollWidth ${m.scrollW})`);
@@ -66,6 +66,13 @@ try {
   check(proofs.length === 6 && proofs.every((h) => h >= 40), `6 Proof buttons, each >= 40px (${proofs.join(", ")})`);
   const open = await page.getByRole("button", { name: "Open file (new tab)" }).evaluate((e) => Math.round(e.getBoundingClientRect().height));
   check(open >= 40, `Open file button is ${open}px tall`);
+  // The quiet instructor action and the disclosure row.
+  const disclosure = await page.getByRole("button", { name: /^6 covered requirements · hide/ }).evaluate((e) => ({ h: Math.round(e.getBoundingClientRect().height), w: Math.round(e.getBoundingClientRect().width), pw: Math.round(e.parentElement.getBoundingClientRect().width), exp: e.getAttribute("aria-expanded") }));
+  check(disclosure.h >= 44 && disclosure.exp === "true" && disclosure.w >= disclosure.pw - 25 /* the card pads its content by 12px a side */, `covered disclosure row is full width and ${disclosure.h}px tall, aria-expanded=${disclosure.exp} w=${disclosure.w} parent=${disclosure.pw}`);
+  const mark = page.getByRole("button", { name: "Mark as covered" }).first();
+  const markInfo = await mark.evaluate((e) => ({ h: Math.round(e.getBoundingClientRect().height), fs: parseFloat(getComputedStyle(e).fontSize), sameLine: !!e.parentElement.querySelector("a, button:not([aria-label='x'])") }));
+  check(markInfo.h >= 40 && markInfo.fs >= 12, `"Mark as covered" is ${markInfo.h}px tall, ${markInfo.fs}px text`);
+  if (shots) await mark.locator("xpath=ancestor::li").screenshot({ path: path.join(shots, "instructions-check__mark-as-covered-375.png") });
   check(m.text.includes("From attached file: Final-Project-Instructions"), "long file name shown after 'From attached file:'");
   check(m.text.includes("Instructions changed since your mark. Check again."), "stale note on its own row");
   const tipH = await page.getByRole("button", { name: "About the project instructions check" }).evaluate((e) => Math.round(e.getBoundingClientRect().height));
@@ -79,6 +86,24 @@ try {
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__rows-proof-375.png") });
   await page.getByRole("button", { name: "About the project instructions check" }).click();
   if (shots) await page.screenshot({ path: path.join(shots, "ai-summary__tip-open-375.png") });
+  if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "instructions-check__covered-list-open-375.png") });
+
+  // The leader's row with its claim panel open: nothing squeezed.
+  const lp = await ctx.newPage();
+  await lp.goto(`http://localhost:${PORT}/e2e/aiSummaryCard.html?leader=1`);
+  await lp.getByText("Project instructions check").first().click();
+  await lp.getByRole("button", { name: "We have this" }).first().click();
+  await lp.waitForTimeout(200);
+  const lm = await lp.evaluate(() => {
+    const card = document.querySelector("#leader-card");
+    const tiny = [...card.querySelectorAll("*")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 11.99).length;
+    const small = [...card.querySelectorAll("button, input")].filter((b) => b.getBoundingClientRect().height > 0 && b.getBoundingClientRect().height < 40 && b.type !== "file" && !b.closest("[role=tooltip]") && b.getAttribute("aria-label") !== "About the project instructions check").map((b) => b.textContent.trim().slice(0, 30));
+    return { scrollW: document.documentElement.scrollWidth, tiny, small };
+  });
+  check(lm.scrollW <= 375, `leader claim panel: no sideways scroll (scrollWidth ${lm.scrollW})`);
+  check(lm.tiny === 0, `leader claim panel: no text under 12px (${lm.tiny})`);
+  check(lm.small.length === 0, `leader claim panel: targets >= 40px ${JSON.stringify(lm.small)}`);
+  if (shots) await lp.locator("#leader-card").screenshot({ path: path.join(shots, "instructions-check__leader-claim-open-375.png") });
   check(errors.length === 0, `no page errors ${errors.join("; ")}`);
 } finally {
   await browser.close();

@@ -83,7 +83,7 @@ describe("BriefCheckCard", () => {
     await open();
     expect(screen.getByText("All 2 requirements are covered in the work.")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Show the 2 covered requirements" }));
+    await userEvent.click(screen.getByRole("button", { name: "2 covered requirements · show" }));
     expect(screen.getByText("Has a login page")).toBeTruthy();
   });
 
@@ -109,11 +109,12 @@ describe("BriefCheckCard", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(screen.queryByText("Has a login page")).toBeNull();
 
-    const toggle = screen.getByRole("button", { name: "Show the 2 covered requirements" });
+    const toggle = screen.getByRole("button", { name: "2 covered requirements · show" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle.className).toContain("min-h-10");
+    expect(toggle.className).toContain("min-h-11"); // a 44px full-width disclosure row
+    expect(toggle.className).toContain("w-full");
     await userEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Hide the 2 covered requirements" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "2 covered requirements · hide" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("Has a login page")).toBeTruthy();
     expect(screen.getByText("Has a survey")).toBeTruthy();
     // One line per covered row: a plain tick with a hidden "Covered", no chip, and a Proof button.
@@ -127,7 +128,7 @@ describe("BriefCheckCard", () => {
     const openDoc = vi.fn();
     render(<DocSectionProvider value={openDoc}><BriefCheckCard check={check} instructionsHref="/class/1/assignment/2" /></DocSectionProvider>);
     await open();
-    await userEvent.click(screen.getByRole("button", { name: "Show the 2 covered requirements" }));
+    await userEvent.click(screen.getByRole("button", { name: "2 covered requirements · show" }));
     const proofs = screen.getAllByRole("button", { name: /^Proof/ });
     expect(proofs.length).toBe(2);
     expect(proofs.every((b) => b.getAttribute("aria-expanded") === "false" && b.className.includes("min-h-10"))).toBe(true);
@@ -478,7 +479,7 @@ describe("lighter rows", () => {
     marks, role, error: null, claim: vi.fn(async () => true), confirm: vi.fn(async () => true), decline: vi.fn(async () => true),
     remove: vi.fn(async () => true), loadImage: vi.fn(async () => new Blob(["x"])),
   });
-  const openCovered = () => userEvent.click(screen.getByRole("button", { name: /^Show the 2 covered requirements/ }));
+  const openCovered = () => userEvent.click(screen.getByRole("button", { name: /^2 covered requirements · show/ }));
 
   it("a covered row is one line: tick, text, up to 2 names then +N, and a Proof button; no chip, no 'See proof'", async () => {
     render(<BriefCheckCard check={withNames} instructor embedded />);

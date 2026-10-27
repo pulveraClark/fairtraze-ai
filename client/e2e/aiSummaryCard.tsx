@@ -5,6 +5,8 @@ import "../src/index.css";
 import { RouterProvider } from "../src/router";
 import { AuthProvider } from "../src/context/AuthContext";
 import { Narrative } from "../src/components/Narrative";
+import { BriefCheckCard } from "../src/components/BriefCheckCard";
+import type { MarksApi } from "../src/hooks/useRequirementMarks";
 import type { UseAiReview } from "../src/hooks/useAiReview";
 import type { AiBriefCheck, AiReviewResponse } from "../src/lib/aiReview";
 
@@ -42,7 +44,22 @@ const data: AiReviewResponse = {
 const review: UseAiReview = { data, error: null, start: async () => true };
 const generator = { generating: false, error: null, generate: async () => {}, busy: false, slow: false, upToDate: null, announcement: "" } as never;
 
+// ?leader=1: the leader's card (no Narrative), "We have this" on the first row, to check the claim panel at 375px.
+const leaderMode = new URLSearchParams(location.search).has("leader");
+const leaderApi: MarksApi = {
+  marks: [], role: "leader", error: null,
+  claim: async () => true, confirm: async () => true, decline: async () => true, remove: async () => true,
+  loadImage: async () => new Blob(),
+};
+
 function Page() {
+  if (leaderMode) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-4 p-4">
+        <div id="leader-card"><BriefCheckCard check={data.briefCheck!} marks={leaderApi} instructionsHref="/class/1/assignment/2" /></div>
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4">
       <Narrative narrative={"This project has a team health of Healthy.\n\nThe Gini coefficient is 0.122."} projectId={1} onNarrativeGenerated={() => {}}

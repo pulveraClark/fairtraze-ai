@@ -58,7 +58,7 @@ export function otherCountsSentence(counts: KindCounts, instructor: boolean): st
 }
 
 export function coveredToggleLabel(shown: boolean, covered: number): string {
-  return `${shown ? "Hide" : "Show"} the ${covered} covered requirement${covered === 1 ? "" : "s"}`;
+  return `${covered} covered requirement${covered === 1 ? "" : "s"} · ${shown ? "hide" : "show"}`;
 }
 
 export function droppedSentence(count: number): string {

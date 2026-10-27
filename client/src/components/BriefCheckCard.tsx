@@ -7,7 +7,7 @@ import { FileEvidenceLink } from "./ui/ExternalEvidenceLink";
 import { DocSectionLink, DocsTabLink, useOpenDocSection } from "../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
-import { RequirementMarkPanel } from "./RequirementMarkPanel";
+import { LINK_CLS, RequirementMarkPanel } from "./RequirementMarkPanel";
 import type { MarksApi } from "../hooks/useRequirementMarks";
 import { isMarkable } from "@shared/requirementMarkable";
 import { CHECK_TIP_SENTENCES, WORKED_ON_LABEL, WORKED_ON_NOTE, visibleWorkedOn, workedOn, type WorkedOn } from "../lib/workedOnBy";
@@ -36,8 +36,6 @@ export function truncateQuote(q: string, max = QUOTE_MAX): string {
   const at = cut.lastIndexOf(" ");
   return `${(at > max * 0.6 ? cut.slice(0, at) : cut).trimEnd()}…`;
 }
-
-const LINK_CLS = `inline-flex min-h-10 min-w-0 max-w-full items-center text-sm font-medium text-blue-800 underline decoration-blue-800/40 underline-offset-2 hover:decoration-blue-800 ${FOCUS_LIGHT}`;
 
 /** How a reader opens the project instructions: a link to the page that shows them (instructor) or a window (leader, student). */
 interface InstructionsAccess {
@@ -257,6 +255,11 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
   const line = visibleWorkedOn(workedOn(r, instructor, keyMarks), kind);
   // Covered and partly covered rows get the Proof button; a row that needs a check shows its Why / Look in instead.
   const proof = (covered || kind === "PARTLY") && hasProof(r, covered);
+  // "See in the instructions" / "Open file" sit on the action line under the requirement (before "Mark as covered").
+  const showSee = !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
+  const showOpen = !covered && fromFileOnly(r) && !!access.openFile;
+  const lead = showSee ? <SeeInInstructions quote={r.sourceQuote} access={access} />
+    : showOpen ? <OpenFile file={r.sourceFile!} access={access} /> : null;
   return (
     <li className="min-w-0 py-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -272,12 +275,8 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
         {/* On a narrow screen the names wrap under the line and Proof stays beside the text. */}
         {covered && line && <div className="order-4 basis-full sm:order-3 sm:basis-auto"><WorkedOnBy line={line} inline /></div>}
         {!covered && fromFileOnly(r) && (
-          <>
-            <span className="min-w-0 text-xs text-slate-800 [overflow-wrap:anywhere]">{FROM_FILE} {r.sourceFile}</span>
-            <OpenFile file={r.sourceFile!} access={access} />
-          </>
+          <span className="min-w-0 text-xs text-slate-800 [overflow-wrap:anywhere]">{FROM_FILE} {r.sourceFile}</span>
         )}
-        {!covered && hasSource(r) && !fromFileOnly(r) && <SeeInInstructions quote={r.sourceQuote} access={access} />}
         {proof && <ProofButton open={proofOpen} onToggle={() => setProofOpen((v) => !v)} controls={proofId} />}
       </div>
       {kind === "CHECK" && (
@@ -292,14 +291,17 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
       {proof && proofOpen && <div id={proofId} className="mt-1"><ProofBody r={r} access={access} showSource={covered} /></div>}
       {!covered && line && <WorkedOnBy line={line} />}
       {staleNote && <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>}
-      {marks && r.key && (
+      {marks && r.key ? (
         <RequirementMarkPanel
           requirementKey={r.key}
           marks={keyMarks}
           api={marks}
           canClaim={marks.role === "leader" && isMarkable(r)}
           canCheck={marks.role === "instructor" && isMarkable(r)}
+          lead={lead}
         />
+      ) : (
+        lead && <div className="mt-1 flex flex-wrap items-center gap-x-2">{lead}</div>
       )}
     </li>
   );
@@ -447,9 +449,10 @@ export function BriefCheckCard({
               aria-expanded={showCovered}
               aria-controls="instructions-covered-list"
               onClick={() => setShowCovered((v) => !v)}
-              className={`inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 ${FOCUS_LIGHT}`}
+              className={`flex min-h-11 w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-left text-sm font-medium text-slate-900 hover:bg-slate-100 ${FOCUS_LIGHT}`}
             >
-              {coveredToggleLabel(showCovered, covered.length)}
+              <span aria-hidden="true" className="shrink-0 text-slate-700">{showCovered ? "▾" : "▸"}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{coveredToggleLabel(showCovered, covered.length)}</span>
             </button>
             {showCovered && <ul id="instructions-covered-list" className="divide-y divide-slate-100">{covered.map(row)}</ul>}
           </>

@@ -42,9 +42,9 @@ describe("instructionsCheck wording", () => {
   });
 
   it("toggle label and dropped sentence handle singular and plural", () => {
-    expect(coveredToggleLabel(false, 12)).toBe("Show the 12 covered requirements");
-    expect(coveredToggleLabel(true, 12)).toBe("Hide the 12 covered requirements");
-    expect(coveredToggleLabel(false, 1)).toBe("Show the 1 covered requirement");
+    expect(coveredToggleLabel(false, 12)).toBe("12 covered requirements · show");
+    expect(coveredToggleLabel(true, 12)).toBe("12 covered requirements · hide");
+    expect(coveredToggleLabel(false, 1)).toBe("1 covered requirement · show");
     expect(droppedSentence(1)).toBe("1 item the AI listed was not found in the project instructions and was left out.");
     expect(droppedSentence(2)).toBe("2 items the AI listed were not found in the project instructions and were left out.");
   });

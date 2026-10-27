@@ -86,7 +86,7 @@ describe("AI findings summary", () => {
     expect(row.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(screen.getByRole("button", { name: "+2 more" }));
     expect(row.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("button", { name: "Show the 2 covered requirements" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "2 covered requirements · show" })).toBeTruthy();
     expect(screen.queryByText(/requirements are covered in the work/)).toBeNull(); // the summary line above says it
   });
 

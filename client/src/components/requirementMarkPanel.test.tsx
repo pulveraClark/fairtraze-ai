@@ -147,14 +147,51 @@ describe("instructor", () => {
     expect(screen.getByText("You have not accepted this yet. The leader can send more proof.")).toBeTruthy();
   });
 
-  it("can mark an item 'I checked: covered' with an optional note", async () => {
+  it("'Mark as covered' is a quiet text button that opens the same note form and confirms as before", async () => {
     const a = api("instructor");
     render(<BriefCheckCard check={check()} instructor marks={a} />);
     await open();
-    await userEvent.click(screen.getByRole("button", { name: "I checked: covered" }));
+    await userEvent.click(screen.getByRole("button", { name: "Mark as covered" }));
     await userEvent.type(screen.getByLabelText(/Note \(optional\)/), "Looked in the repo");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(a.confirm).toHaveBeenCalledWith(K, "Looked in the repo");
+  });
+
+  it("'Mark as covered' sits on a second line after 'See in the instructions' and a hidden dot, in the same link style, 40px tall", async () => {
+    render(<BriefCheckCard check={check()} instructor instructionsHref="/class/1/assignment/2" marks={api("instructor")} />);
+    await open();
+    const action = screen.getByRole("button", { name: "Mark as covered" });
+    const see = screen.getByRole("link", { name: "See in the instructions (new tab)" });
+    expect(action.tagName).toBe("BUTTON");
+    expect(action.className).toContain("min-h-10");
+    expect(action.className).toContain("underline");
+    expect(action.className).not.toContain("border-slate-300");
+    expect(action.parentElement).toBe(see.parentElement);
+    const dot = within(action.parentElement!).getByText("·");
+    expect(dot.getAttribute("aria-hidden")).toBe("true");
+    expect(see.compareDocumentPosition(dot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dot.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("the covered list is a disclosure row that toggles, and it is still there when every requirement is covered", async () => {
+    const allCovered = check([req({ status: "FOUND", unverified: false })]);
+    render(<BriefCheckCard check={allCovered} instructor marks={api("instructor")} />);
+    await open();
+    const row = screen.getByRole("button", { name: "1 covered requirement · show" });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(row);
+    expect(screen.getByRole("button", { name: "1 covered requirement · hide" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Write system documentation.")).toBeTruthy();
+  });
+
+  it("the leader's claim button keeps its outlined style, and her row also shows the see-link on its own line", async () => {
+    render(<BriefCheckCard check={check()} instructionsHref="/class/1/assignment/2" marks={api("leader")} />);
+    await open();
+    const claim = screen.getByRole("button", { name: "We have this" });
+    expect(claim.className).toContain("border-slate-300");
+    expect(screen.queryByRole("button", { name: "Mark as covered" })).toBeNull();
+    expect(screen.queryByText("·")).toBeNull();
+    expect(screen.getByRole("link", { name: "See in the instructions (new tab)" })).toBeTruthy();
   });
 
   it("after confirming, the summary reads '1 of 2 covered by the AI, 1 confirmed by the instructor.' and the AI result stays", async () => {
@@ -180,6 +217,6 @@ describe("members", () => {
     render(<BriefCheckCard check={check()} />);
     await open();
     expect(screen.queryByRole("button", { name: "We have this" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "I checked: covered" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark as covered" })).toBeNull();
   });
 });
