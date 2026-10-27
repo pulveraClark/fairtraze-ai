@@ -341,8 +341,8 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
             if (!ctx.paths.has(e.ref)) { reject("file", "ref not found", quote); continue; }
             const text = ctx.fileText.get(e.ref);
             if (q && (!text || !normalize(text).includes(q))) { reject("file", "quote not found", quote); continue; }
-            // An import proves a library is used. That is proof only for a requirement that names the library.
-            if (isImportOnly(quote) && !requirementNamesImport(quote, `${r.text} ${r.sourceQuote ?? ""}`)) { reject("file", "import only", quote); continue; }
+            // An import proves a library is used. That is proof only when the requirement's own text names the library (not its source sentence, not the file name).
+            if (isImportOnly(quote) && !requirementNamesImport(quote, r.text)) { reject("file", "import only", quote); continue; }
             evidence.push({ type: "file", ref: e.ref, quote });
           } else {
             const nq = normalizeQuote(quote);

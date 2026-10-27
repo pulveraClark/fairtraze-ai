@@ -30,8 +30,31 @@ describe("an import proves a requirement only when it names that library", () =>
     expect(requirementNamesImport("from graphhopper import Client", "Build a GraphHopper route planner.")).toBe(true);
   });
 
-  it("names it through the requirement's source sentence too", () => {
-    expect(run("Has a window", "Use a Tkinter GUI.").status).toBe("FOUND");
+  it("does not borrow the source sentence: the requirement's own text must name the library", () => {
+    // Both requirements come from the same sentence, which names GraphHopper and Tkinter.
+    const c = ctx();
+    c.source.instructions = "Build a GraphHopper route planner with a Tkinter GUI.";
+    const sentence = "Build a GraphHopper route planner with a Tkinter GUI.";
+    const prove = (text: string, quote: string) =>
+      verifyRequirements([{ text, status: "FOUND", sourceQuote: sentence, evidence: [{ type: "file", ref: "gui.py", quote }] } as RawRequirement], c).requirements[0]!;
+    expect(prove("Use a Tkinter GUI.", "import tkinter as tk").status).toBe("FOUND");
+    expect(prove("Build a GraphHopper route planner.", "import tkinter as tk")).toMatchObject({ status: "NOT_FOUND", unverified: true });
+    expect(prove("Build a GraphHopper route planner.", "root = tk.Tk()").status).toBe("FOUND");
+    c.fileText.set("gui.py", `${IMPORTS}
+client = graphhopper.Client(KEY)`);
+    expect(prove("Build a GraphHopper route planner.", "client = graphhopper.Client(KEY)").status).toBe("FOUND");
+  });
+
+  it("a file named Graphhopper.py with only 'import requests' does not prove the planner", () => {
+    const c = ctx();
+    c.source.instructions = "Build a GraphHopper route planner.";
+    c.paths = new Set(["Graphhopper.py"]);
+    c.fileText = new Map([["Graphhopper.py", "import os\nimport requests\n\ndef plan():\n    pass"]]);
+    const r = verifyRequirements([{
+      text: "Build a GraphHopper route planner.", status: "FOUND", sourceQuote: "Build a GraphHopper route planner.",
+      evidence: [{ type: "file", ref: "Graphhopper.py", quote: "import os\nimport requests" }],
+    } as RawRequirement], c).requirements[0]!;
+    expect(r).toMatchObject({ status: "NOT_FOUND", unverified: true });
   });
 
   it("still rejects imports for a general requirement", () => {
