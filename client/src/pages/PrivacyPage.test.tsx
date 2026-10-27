@@ -54,4 +54,16 @@ describe("PrivacyPage", () => {
     expect(text).not.toMatch(/AI work summar|brief comparison|project brief|assignment brief/i);
     expect(screen.getByRole("link", { name: "privacy.gov.ph" })).toHaveAttribute("href", "https://privacy.gov.ph");
   });
+
+  it("says leaders and instructors can attach a short note and a screenshot to an instructions item, who sees it, and that it is deleted with the group", () => {
+    vi.mocked(AuthContextModule.useAuth).mockReturnValue({
+      user: null, token: null, loading: false,
+      register: vi.fn(), login: vi.fn(), logout: vi.fn(), refreshUser: vi.fn(),
+    });
+    render(<RouterProvider><PrivacyPage /></RouterProvider>);
+    expect(PRIVACY_NOTICE_VERSION).toBe("1.4");
+    expect(screen.getByText(/Instructions check marks:/)).toBeInTheDocument();
+    expect(screen.getByText(/a short note \(up to 140 characters\) and one screenshot \(JPEG, PNG or WebP, up to 1 MB\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Only your group's members and the class instructor can see them, they are never used in any score or sent to Google, and they are deleted with the group/)).toBeInTheDocument();
+  });
 });
