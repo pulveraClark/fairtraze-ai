@@ -133,7 +133,7 @@ describe("brief upload validation", () => {
 });
 
 describe("brief access control", () => {
-  it("enrolled student, owner and admin can read; other-class student and outsiders cannot", async () => {
+  it("enrolled student and owner can read; admin, other-class student and outsiders cannot", async () => {
     const { instructor, cls, asg } = await setup();
     const up = await upload(instructor, asg.id, PDF(), "application/pdf", 'evil"\r\n../name.pdf');
     const attId = up.body.id as number;
@@ -154,7 +154,7 @@ describe("brief access control", () => {
 
     expect((await get(enrolled)).status).toBe(200);
     expect((await get(instructor)).status).toBe(200);
-    expect((await get(admin)).status).toBe(200);
+    expect((await get(admin)).status).toBe(403);
     expect((await get(otherStudent)).status).toBe(403);
     expect((await get(outsider)).status).toBe(403);
     expect((await get(otherInstructor)).status).toBe(403);

@@ -142,7 +142,7 @@ assignmentsRouter.delete("/api/assignments/:id", ...requireRole("INSTRUCTOR"), a
 });
 
 // GET /api/assignments/:id — one assignment with its groups (ownership-verified; ADMIN bypasses ownership)
-assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMIN"), async (req, res) => {
+assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid assignment id" });

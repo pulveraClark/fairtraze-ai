@@ -43,7 +43,7 @@ export function resolveTaskActor(user: { sub: number; role: string }, project: L
   };
 }
 
-export const canViewBoard = (a: TaskActor) => a.isMember || a.isAdmin || a.isOwningInstructor;
+export const canViewBoard = (a: TaskActor) => a.isMember || a.isOwningInstructor;
 export const canCreateTask = (a: TaskActor) => a.isMember;
 /** Milestones, labels, bulk edit, assigning, deleting. */
 export const canManageBoard = (a: TaskActor) => a.isLeader;

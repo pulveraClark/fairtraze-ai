@@ -22,8 +22,9 @@ const unassigned = { assignedToUserId: null, status: "TODO" as const };
 const done = { assignedToUserId: 2, status: "DONE" as const };
 
 describe("viewing and creating", () => {
-  it("members, the owning instructor and admins can view; outsiders cannot", () => {
-    expect([leader, assignee, instructor, admin].every(canViewBoard)).toBe(true);
+  it("members and the owning instructor can view; admins and outsiders cannot", () => {
+    expect([leader, assignee, instructor].every(canViewBoard)).toBe(true);
+    expect(canViewBoard(admin)).toBe(false);
     expect(canViewBoard(outsider)).toBe(false);
   });
   it("any member can create a task; instructor, admin and outsiders cannot", () => {

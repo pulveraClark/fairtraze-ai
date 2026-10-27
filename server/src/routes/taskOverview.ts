@@ -22,13 +22,13 @@ const toSummaryTask = (t: { status: SummaryTask["status"]; assignedToUserId: num
   milestoneId: t.milestoneId,
 });
 
-// GET /api/groups/:id/tasks/workload: the group leader, the instructor who owns the class, and admins.
+// GET /api/groups/:id/tasks/workload: the group leader and the instructor who owns the class.
 taskOverviewRouter.get("/api/groups/:id/tasks/workload", requireAuth, async (req: Request, res: Response) => {
   const ctx = await openGroup(req, res);
   if (!ctx) return;
   const { actor, project, groupId } = ctx;
-  if (!(actor.isLeader || actor.isOwningInstructor || actor.isAdmin)) {
-    res.status(403).json({ error: "Only the group leader, the class instructor and admins can see the workload." });
+  if (!(actor.isLeader || actor.isOwningInstructor)) {
+    res.status(403).json({ error: "Only the group leader and the class instructor can see the workload." });
     return;
   }
   const tasks = await prisma.task.findMany({
@@ -41,8 +41,8 @@ taskOverviewRouter.get("/api/groups/:id/tasks/workload", requireAuth, async (req
   res.json(computeWorkload(groupId, tasks.map(toSummaryTask), members, manilaToday()));
 });
 
-// GET /api/assignments/:id/task-summary: the class page's per-group task cards (owning instructor, admin).
-taskOverviewRouter.get("/api/assignments/:id/task-summary", ...requireRole("INSTRUCTOR", "ADMIN"), async (req: Request, res: Response) => {
+// GET /api/assignments/:id/task-summary: the class page's per-group task cards (owning instructor).
+taskOverviewRouter.get("/api/assignments/:id/task-summary", ...requireRole("INSTRUCTOR"), async (req: Request, res: Response) => {
   const id = z.coerce.number().int().positive().safeParse(req.params.id);
   if (!id.success) { res.status(400).json({ error: "Invalid assignment id" }); return; }
   const assignment = await assertOwnsAssignment(req, res, id.data);

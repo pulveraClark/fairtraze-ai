@@ -701,7 +701,7 @@ documentsRouter.get("/api/groups/:id/document/headings", requireAuth, async (req
     res.status(404).json({ error: "Group not found." });
     return;
   }
-  if (!isMemberOf(req, project) && !isInstructorOf(req, project) && req.user!.role !== "ADMIN") {
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
     res.status(403).json({ error: "You do not have access to this document." });
     return;
   }

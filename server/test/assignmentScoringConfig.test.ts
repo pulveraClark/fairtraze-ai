@@ -154,7 +154,7 @@ describe("project-level scoring settings", () => {
     expect(summary.every((s) => s.scoringConfigChangedAt !== null && s.settingsOutdated)).toBe(true);
   });
 
-  it("only the owning instructor can edit; admin can read but not edit", async () => {
+  it("only the owning instructor can edit; an admin can neither edit nor read", async () => {
     const { instructor, assignment } = await setup();
     const { user: other } = await createUser({ systemRole: "INSTRUCTOR" });
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
@@ -169,8 +169,10 @@ describe("project-level scoring settings", () => {
     expect(row.weightCommits).toBe(NEW_CONFIG.weights.commits); // others' attempts changed nothing
 
     const read = await request(app).get(`/api/assignments/${assignment.id}`).set("Authorization", authHeaderFor(admin));
-    expect(read.status).toBe(200);
-    expect(read.body.assignment.scoringConfig.weights).toEqual(NEW_CONFIG.weights);
+    expect(read.status).toBe(403);
+    const ownerRead = await request(app).get(`/api/assignments/${assignment.id}`).set("Authorization", authHeaderFor(instructor));
+    expect(ownerRead.status).toBe(200);
+    expect(ownerRead.body.assignment.scoringConfig.weights).toEqual(NEW_CONFIG.weights);
   });
 
   it("rejects weights or blend that do not sum to 1", async () => {

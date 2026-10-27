@@ -35,12 +35,10 @@ describe("GET /api/groups/:id - teammates' emails", () => {
     }
   });
 
-  it("the owning instructor and an admin still see emails", async () => {
+  it("the owning instructor still sees emails; an admin is refused", async () => {
     const { project, instructor, admin } = await setup();
     const asInstructor = await get(instructor, project.id);
     expect(asInstructor.body.members.map((m: { email: string }) => m.email).sort()).toEqual(["lea@example.test", "max@example.test"]);
-    const asAdmin = await get(admin, project.id);
-    expect(asAdmin.status).toBe(200);
-    expect(asAdmin.body.members.map((m: { email: string }) => m.email).sort()).toEqual(["lea@example.test", "max@example.test"]);
+    expect((await get(admin, project.id)).status).toBe(403);
   });
 });

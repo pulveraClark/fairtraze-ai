@@ -62,7 +62,7 @@ function pageElement(pathname: string) {
   const detailMatch = pathname.match(/^\/project\/(\d+)$/);
   if (detailMatch) {
     return (
-      <ProtectedRoute allowedRoles={["INSTRUCTOR", "ADMIN"]}>
+      <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
         <ProjectDetailPage projectId={parseInt(detailMatch[1], 10)} />
       </ProtectedRoute>
     );
@@ -72,7 +72,7 @@ function pageElement(pathname: string) {
   const assignmentMatch = pathname.match(/^\/class\/(\d+)\/assignment\/(\d+)$/);
   if (assignmentMatch) {
     return (
-      <ProtectedRoute allowedRoles={["INSTRUCTOR", "ADMIN"]}>
+      <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
         <AssignmentPage
           classId={parseInt(assignmentMatch[1], 10)}
           assignmentId={parseInt(assignmentMatch[2], 10)}
@@ -85,7 +85,7 @@ function pageElement(pathname: string) {
   const classMatch = pathname.match(/^\/class\/(\d+)$/);
   if (classMatch) {
     return (
-      <ProtectedRoute allowedRoles={["INSTRUCTOR", "ADMIN"]}>
+      <ProtectedRoute allowedRoles={["INSTRUCTOR"]}>
         <ClassPage classId={parseInt(classMatch[1], 10)} />
       </ProtectedRoute>
     );

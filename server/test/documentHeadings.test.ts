@@ -86,14 +86,15 @@ const get = (u: Parameters<typeof authHeaderFor>[0], id: number) =>
   request(app).get(`/api/groups/${id}/document/headings`).set("Authorization", authHeaderFor(u));
 
 describe("GET /api/groups/:id/document/headings", () => {
-  it("returns the persisted headings for members, the owning instructor and admins; 403 for others", async () => {
+  it("returns the persisted headings for members and the owning instructor; 403 for others, admins included", async () => {
     const { leader, instructor, admin, outsider, otherInstructor, project } = await setup();
     await prisma.document.create({ data: { groupId: project.id, yjsState: Buffer.from(stateWithHeadings()) } });
-    for (const u of [leader, instructor, admin]) {
+    for (const u of [leader, instructor]) {
       const res = await get(u, project.id);
       expect(res.status).toBe(200);
       expect(res.body.headings.map((h: { text: string }) => h.text)).toEqual(["Introduction", "Methods and tools", "Inside a table"]);
     }
+    expect((await get(admin, project.id)).status).toBe(403);
     expect((await get(outsider, project.id)).status).toBe(403);
     expect((await get(otherInstructor, project.id)).status).toBe(403);
     expect((await request(app).get(`/api/groups/${project.id}/document/headings`)).status).toBe(401);

@@ -59,7 +59,6 @@ export async function canViewBrief(
     select: { classSectionId: true, classSection: { select: { instructorId: true } } },
   });
   if (!asg) return "not-found";
-  if (user.role === "ADMIN") return "ok";
   if (user.role === "INSTRUCTOR") {
     return asg.classSection.instructorId === user.sub ? "ok" : "forbidden";
   }

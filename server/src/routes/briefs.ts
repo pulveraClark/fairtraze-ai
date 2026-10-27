@@ -134,7 +134,7 @@ briefsRouter.delete("/api/assignments/:id/attachments/:attId", ...requireRole("I
   res.json({ ok: true });
 });
 
-const readRoles = requireRole("INSTRUCTOR", "ADMIN", "STUDENT");
+const readRoles = requireRole("INSTRUCTOR", "STUDENT");
 
 // GET /api/assignments/:id/attachments — metadata only.
 briefsRouter.get("/api/assignments/:id/attachments", ...readRoles, async (req, res) => {

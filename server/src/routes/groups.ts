@@ -59,14 +59,13 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     return;
   }
 
-  const isAdmin  = req.user!.role === "ADMIN";
   const isMember = project.groupMemberships.some((m) => m.userId === req.user!.sub);
-  if (!isAdmin && !isMember && !isInstructorOf(req, project)) {
+  if (!isMember && !isInstructorOf(req, project)) {
     res.status(403).json({ error: "You do not have access to this group." });
     return;
   }
 
-  const seesEmails = isAdmin || isInstructorOf(req, project);
+  const seesEmails = isInstructorOf(req, project);
 
   res.json({
     id:          project.id,
@@ -77,7 +76,7 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     members: project.groupMemberships.map((m) => ({
       userId:          m.user.id,
       name:            m.user.name,
-      // Email is for the instructor/admin only; teammates see display names and GitHub usernames.
+      // Email is for the owning instructor only; teammates see display names and GitHub usernames.
       ...(seesEmails ? { email: m.user.email } : {}),
       githubUsername:  m.user.githubUsername,
       role:            m.role,
