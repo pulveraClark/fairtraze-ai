@@ -135,10 +135,31 @@ export interface BriefVerifyContext {
   spans: AuthorshipSpan[];
 }
 
-function authorsOf(quoteNorm: string, heading: string, ctx: BriefVerifyContext): number[] {
-  const piece = ctx.pieces.find((p) => (p.heading ?? NO_HEADING) === heading && normalize(p.text).includes(quoteNorm));
-  if (!piece) return [];
+function authorsOf(piece: DocPiece, ctx: BriefVerifyContext): number[] {
   return [...new Set(ctx.spans.filter((s) => s.start < piece.end && s.end > piece.start).map((s) => s.userId))];
+}
+
+/** The first real piece of the document (title, heading, paragraph, list item, table cell) that holds the quote. */
+function findDocPiece(q: string, ref: string, ctx: BriefVerifyContext): DocPiece | null {
+  const has = (p: DocPiece) => indexOfQuote(normalizeInstructions(p.text), q) !== -1;
+  // The cited section first, so a quote that appears twice stays where the AI pointed.
+  return ctx.pieces.find((p) => (p.heading ?? NO_HEADING) === ref && has(p)) ?? ctx.pieces.find(has) ?? null;
+}
+
+export interface ProofCheckCount {
+  // Requirements the AI marked Found / Partly found, and how many of them ended up unverified.
+  claimed: number;
+  demoted: number;
+  quoteNotFound: number;
+  refNotFound: number;
+}
+
+/** One log line per run (log only, nothing stored). */
+export function logProofCheck(label: string, p: ProofCheckCount): ProofCheckCount {
+  console.info(
+    `[ai-review] proof check ${label}: ${p.claimed} marked found or partly found, ${p.demoted} demoted to unverified (quote not found ${p.quoteNotFound}, ref not found ${p.refNotFound})`,
+  );
+  return p;
 }
 
 type RequirementSource = Pick<AiBriefRequirement, "sourceQuote" | "sourceFile" | "sourcePage">;
@@ -175,6 +196,7 @@ export interface VerifiedBrief {
   requirements: AiBriefRequirement[];
   // Requirements the AI returned whose source could not be confirmed (or had none); they are not shown.
   droppedCount: number;
+  proof: ProofCheckCount;
 }
 
 /**
@@ -191,39 +213,61 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
     if (source) sourced.push({ r, source });
     else droppedCount++;
   }
+  const proof: ProofCheckCount = { claimed: 0, demoted: 0, quoteNotFound: 0, refNotFound: 0 };
   const requirements = sourced
     .slice(0, MAX_REQUIREMENTS)
     .map(({ r, source }) => {
       const evidence: AiBriefEvidence[] = [];
+      let firstRejection: "quote" | "ref" | null = null;
+      const reject = (why: "quote" | "ref") => { firstRejection ??= why; };
       if (r.status !== "NOT_FOUND") {
         for (const e of r.evidence.slice(0, 3)) {
           const quote = e.quote.trim().slice(0, MAX_QUOTE_CHARS);
           const q = normalize(quote);
           if (e.type === "file") {
-            if (!ctx.paths.has(e.ref)) continue;
+            if (!ctx.paths.has(e.ref)) { reject("ref"); continue; }
             const text = ctx.fileText.get(e.ref);
-            if (q && (!text || !normalize(text).includes(q))) continue;
-            if (isImportOnly(quote)) continue;
+            if (q && (!text || !normalize(text).includes(q))) { reject("quote"); continue; }
+            if (isImportOnly(quote)) { reject("quote"); continue; }
             evidence.push({ type: "file", ref: e.ref, quote });
           } else {
-            const section = ctx.docs.find((d) => d.heading === e.ref);
-            if (!section || !q) continue;
+            const nq = normalizeQuote(quote);
+            if (!nq) { reject("quote"); continue; }
             // A requirement about the whole document ("write system documentation") is proved by a real
-            // heading of the document: the quote is the heading itself, checked against the real outline.
-            if (e.ref !== NO_HEADING && q === normalize(e.ref)) {
-              evidence.push({ type: "doc", ref: e.ref, quote: "", heading: true });
+            // heading (or the title) of the document: the quote is that whole heading, checked against the
+            // real outline. This is the only way a quote shorter than the minimum is accepted.
+            const heading = ctx.pieces.find((p) => p.isHeading && p.text.trim() !== "" && normalizeQuote(p.text) === nq);
+            if (heading) {
+              evidence.push({ type: "doc", ref: heading.text.trim(), quote: "", heading: true });
               continue;
             }
-            if (!normalize(section.text).includes(q)) continue;
-            evidence.push({ type: "doc", ref: e.ref, quote, authors: authorsOf(q, e.ref, ctx) });
+            if (nq.length < MIN_SOURCE_QUOTE_CHARS) { reject("quote"); continue; }
+            // Anywhere in the real document text counts (title, headings, body, list items, table cells),
+            // not only the body of the cited section. A wrong ref is re-anchored to the nearest heading above.
+            const piece = findDocPiece(nq, e.ref, ctx);
+            if (piece) {
+              evidence.push({ type: "doc", ref: piece.heading ?? NO_HEADING, quote, authors: authorsOf(piece, ctx) });
+              continue;
+            }
+            // No pieces to search (older callers): the cited section's text is all there is.
+            const section = ctx.pieces.length === 0 ? ctx.docs.find((d) => d.heading === e.ref) : undefined;
+            if (section && indexOfQuote(normalizeInstructions(section.text), nq) !== -1) {
+              evidence.push({ type: "doc", ref: e.ref, quote, authors: [] });
+              continue;
+            }
+            reject("quote");
           }
         }
       }
       const found = r.status !== "NOT_FOUND";
+      if (found) proof.claimed++;
       if (found && evidence.length === 0) {
+        proof.demoted++;
+        if (firstRejection === "ref") proof.refNotFound++;
+        else proof.quoteNotFound++;
         return { text: r.text.slice(0, 200), status: "NOT_FOUND" as const, evidence: [], unverified: true, ...source };
       }
       return { text: r.text.slice(0, 200), status: r.status, evidence, ...source };
     });
-  return { requirements, droppedCount };
+  return { requirements, droppedCount, proof };
 }

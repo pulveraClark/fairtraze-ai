@@ -113,7 +113,7 @@ describe("verifyRequirements", () => {
     const [r] = verify([req({ evidence: [
       { type: "file", ref: "src/Made.tsx", quote: "" },
       { type: "file", ref: "src/Login.tsx", quote: "a line that is not there" },
-      { type: "doc", ref: "Conclusion", quote: "We surveyed" },
+      { type: "doc", ref: "Conclusion", quote: "We interviewed teachers" },
       { type: "doc", ref: "Methodology", quote: "invented sentence" },
     ] })], ctx());
     expect(r).toMatchObject({ status: "NOT_FOUND", evidence: [], unverified: true });

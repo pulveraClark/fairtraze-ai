@@ -13,7 +13,7 @@ import { sanitizeForAi } from "./sanitize.js";
 import { redactSecrets } from "./redact.js";
 import { BRIEF_PROMPT_VERSION, BRIEF_SCHEMA, BRIEF_SYSTEM, NO_WRITTEN_BRIEF, dataBlock, validateBriefOutput } from "./prompts.js";
 import {
-  KEY_FILE_CHARS, briefFingerprint, buildDocSections, fitBriefInput, selectKeyFiles, selectTreePaths, verifyRequirements,
+  KEY_FILE_CHARS, briefFingerprint, buildDocSections, fitBriefInput, logProofCheck, selectKeyFiles, selectTreePaths, verifyRequirements,
   type BriefInput,
 } from "./briefEvidence.js";
 import type { ReviewResult } from "./memberSummaries.js";
@@ -223,6 +223,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     source: { instructions: brief ? input.brief : "", files: sentFiles.map((f) => f.filename) },
     paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans,
   });
+  logProofCheck(`brief (group ${projectId})`, verified.proof);
   briefSources = { ...briefSources, droppedCount: verified.droppedCount };
   // The AI answered but every requirement lacked a confirmable source: report a failure rather than hide the card.
   if (verified.requirements.length === 0 && verified.droppedCount > 0) {
