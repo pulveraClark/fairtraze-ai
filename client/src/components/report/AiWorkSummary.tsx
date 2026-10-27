@@ -3,6 +3,7 @@ import { FOCUS_LIGHT } from "../ui";
 import { BUTTON_SECONDARY } from "../ui/styles";
 import { InfoTip } from "../ui/InfoTip";
 import { AiBadge } from "../ui/AiBadge";
+import { SkeletonLines } from "../ui/Spinner";
 import { FileEvidenceLink } from "../ui/ExternalEvidenceLink";
 import { DocSectionLink } from "../../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../../lib/helpText";
@@ -123,7 +124,10 @@ export function MemberWorkSummary({
         <InfoTip label="About the AI findings" helpHref={helpLink("ai")}>{TIPS.workSummary}</InfoTip>
       </h3>
       {review.running && !summary ? (
-        <AiBadge variant="writing" />
+        <div className="min-h-24">
+          <AiBadge variant="writing" />
+          <SkeletonLines className="mt-3" />
+        </div>
       ) : summary ? (
         <WorkSummaryBlock summary={summary} data={review} instructor onRegenerate={onGenerate} sourceType={sourceType} />
       ) : review.canGenerate && review.hasReport && onGenerate ? (

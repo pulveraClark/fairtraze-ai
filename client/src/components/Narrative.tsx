@@ -1,10 +1,11 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { CARD } from "./ui/styles";
+import { BUTTON_SECONDARY, CARD } from "./ui/styles";
+import { SkeletonLines, Spinner } from "./ui/Spinner";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
-import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
+import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
 import { BriefCheckWithMarks } from "./BriefCheckWithMarks";
 import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
@@ -38,7 +39,8 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   // The sentence to mark in the instructions window; null while it is closed.
   const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
-  const { generating, error } = generator ?? own;
+  const { generating, error, generate, busy, slow } = generator ?? own;
+  const anyError = error ?? review?.error ?? null;
 
   const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
   const statusLine = reviewStatusLine(review?.data ?? null);
@@ -65,43 +67,60 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       </div>
 
       {/* Work-summary status: one calm line each, only when there is something to say */}
-      {summaryState && WORK_SUMMARY_STATUS_TEXT[summaryState] && (
-        <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>
+      {summaryState === "running" ? (
+        // Not a live region: the one in Member contributions announces the change.
+        <div className="mb-3 min-h-24">
+          <p className="flex items-center gap-2 text-sm leading-normal text-slate-700">
+            <Spinner className="text-indigo-700" />
+            {WORK_SUMMARY_STATUS_TEXT.running}
+          </p>
+          <p className="mt-1 text-xs leading-normal text-slate-700">{slow ? AI_SLOW_TEXT : AI_WRITING_HINT}</p>
+          <SkeletonLines className="mt-3" />
+        </div>
+      ) : (
+        summaryState && WORK_SUMMARY_STATUS_TEXT[summaryState] && (
+          <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>
+        )
       )}
-      {review?.error && <p role="alert" className="mb-3 text-sm text-red-800">{review.error}</p>}
+      {anyError && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-red-800">
+          <span className="min-w-0 [overflow-wrap:anywhere]">{anyError}</span>
+          <button
+            type="button"
+            onClick={() => void generate(!!narrative)}
+            disabled={busy && !slow}
+            className={`${BUTTON_SECONDARY} min-h-10`}
+          >
+            Try again
+          </button>
+        </div>
+      )}
       {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
       {briefLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{briefLine}</p>}
 
       {/* No narrative yet */}
-      {!narrative && !generating && (
+      {!narrative && !generating && summaryState !== "running" && (
         <div className="flex flex-col gap-2 py-2">
           <p className="text-sm leading-normal text-slate-700">
             No AI findings yet. Use the {aiButtonLabel(false, false)} button in Member contributions above.
           </p>
-          {error && (
-            <p className="max-w-sm text-sm text-red-800">{error}</p>
-          )}
         </div>
       )}
 
       {/* Loading */}
       {generating && (
-        <div role="status" className="flex items-center gap-3 py-6 text-sm text-slate-700">
-          <svg
-            className="h-5 w-5 shrink-0 text-indigo-700 motion-safe:animate-spin"
-            fill="none"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <span>Generating AI findings…</span>
+        <div className="min-h-24 py-2 text-sm text-slate-700">
+          <p className="flex items-center gap-3">
+            <Spinner className="text-indigo-700" />
+            <span>Generating AI findings…</span>
+          </p>
+          {summaryState !== "running" && (
+            <>
+              <p className="mt-1 text-xs leading-normal text-slate-700">{slow ? AI_SLOW_TEXT : AI_WRITING_HINT}</p>
+              <SkeletonLines className="mt-3" />
+            </>
+          )}
         </div>
       )}
 
@@ -116,9 +135,6 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           <div className="text-sm leading-relaxed text-slate-800 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-200">
             <ReactMarkdown>{narrative}</ReactMarkdown>
           </div>
-          {error && (
-            <p className="mt-3 text-sm text-red-800">{error}</p>
-          )}
           <p className="mt-4 text-sm italic leading-normal text-slate-700">
             May be wrong{when ? ` · Based on the analysis of ${when}` : ""}. Informational only; it does not assign grades or replace instructor judgment.
           </p>

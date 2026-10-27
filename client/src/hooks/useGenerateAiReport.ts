@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { NarrativeResponse } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
+import { AI_SLOW_MS } from "../lib/aiReview";
 import type { UseAiReview } from "./useAiReview";
+import { useSlowAfter } from "./useSlowAfter";
 
 export interface AiReportGenerator {
   /** True when the one button also writes the work summaries (AI review on, instructor, report exists). */
@@ -9,6 +11,12 @@ export interface AiReportGenerator {
   generating: boolean;
   error: string | null;
   generate: (regenerate?: boolean) => Promise<void>;
+  /** Something is being written: the explanation request or the background member findings. */
+  busy: boolean;
+  /** Busy for more than 90 s: the wording changes and the button is usable again. */
+  slow: boolean;
+  /** What a screen reader hears. "updated" only after a run finished during this page visit. */
+  announcement: "" | "writing" | "updated";
 }
 
 /**
@@ -47,5 +55,22 @@ export function useGenerateAiReport(
     }
   }, [projectId, token, reviewOn, review, onNarrativeGenerated]);
 
-  return { reviewOn, generating, error, generate };
+  const busy = generating || !!review?.data?.running;
+  const slow = useSlowAfter(busy, AI_SLOW_MS);
+  const failed = !!(error ?? review?.error);
+
+  // Running to done within this visit. First load with nothing running announces nothing.
+  const [announcement, setAnnouncement] = useState<"" | "writing" | "updated">("");
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (busy) {
+      wasBusy.current = true;
+      setAnnouncement("writing");
+    } else if (wasBusy.current) {
+      wasBusy.current = false;
+      setAnnouncement(failed ? "" : "updated");
+    }
+  }, [busy, failed]);
+
+  return { reviewOn, generating, error, generate, busy, slow, announcement };
 }

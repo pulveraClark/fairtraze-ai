@@ -7,7 +7,11 @@ import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
 import { Avatar } from "../Avatar";
 import { InfoTip } from "../ui/InfoTip";
 import { TIPS, helpLink } from "../../lib/helpText";
-import { AI_BUTTON_NOTE, WORK_SUMMARY_CHIP_TEXT, aiButtonLabel, type WorkSummaryState } from "../../lib/aiReview";
+import { Spinner } from "../ui/Spinner";
+import {
+  AI_BUTTON_NOTE, AI_LEAVE_HINT, AI_SLOW_TEXT, AI_UPDATED_TEXT, AI_WRITING_HINT, WORK_SUMMARY_CHIP_TEXT, aiButtonLabel,
+  type WorkSummaryState,
+} from "../../lib/aiReview";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -44,6 +48,11 @@ export function RoleChips({ info }: { info: MemberRoleInfo | undefined }) {
 }
 
 export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false }: Props) {
+  // Busy until 90 s have passed; then the button works again and the wording changes.
+  const slow = !!generator?.slow;
+  const reviewRunning = aiSummaryState === "running";
+  const busy = !!generator?.busy || reviewRunning;
+  const running = busy && !slow;
   const n = members.length;
   const equalPct = n > 0 ? 100 / n : 0;
   // One shared bar scale so rows are comparable; always wide enough to show the equal-share marker.
@@ -60,20 +69,33 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
             <InfoTip label="About the equal-share marker" helpHref={helpLink("shares")}>{TIPS.equalShareList(equalPct)}</InfoTip>
           </p>
           {aiSummaryState && (
-            <p className="mt-2 inline-flex max-w-full flex-wrap items-center rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs font-medium leading-normal text-slate-800">
+            <p className="mt-2 inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs font-medium leading-normal text-slate-800">
+              {aiSummaryState === "running" && <Spinner />}
               {WORK_SUMMARY_CHIP_TEXT[aiSummaryState]}
+            </p>
+          )}
+          {busy && (
+            <p className="mt-1.5 text-xs leading-normal text-slate-700">
+              {slow ? AI_SLOW_TEXT : AI_WRITING_HINT}
+              {!slow && reviewRunning && <> {AI_LEAVE_HINT}</>}
             </p>
           )}
         </div>
         {generator && (
           <div className="flex w-full flex-col items-stretch gap-1 sm:w-auto sm:items-end">
+            {/* Always in the page, so a screen reader hears the change. Focus never moves. */}
+            <p role="status" aria-live="polite" className="sr-only">
+              {generator.announcement === "writing" ? "Writing AI findings" : generator.announcement === "updated" ? AI_UPDATED_TEXT : ""}
+            </p>
             <button
               type="button"
               onClick={() => generator.generate(hasNarrative)}
-              disabled={generator.generating}
+              disabled={running}
+              aria-busy={running}
               className={`${BUTTON_SECONDARY} min-h-10`}
             >
-              {aiButtonLabel(generator.generating, hasNarrative)}
+              {running && <Spinner />}
+              {aiButtonLabel(running, hasNarrative)}
             </button>
             <p className="text-xs leading-normal text-slate-700 sm:text-right">{AI_BUTTON_NOTE}</p>
           </div>

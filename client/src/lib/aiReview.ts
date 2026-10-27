@@ -111,6 +111,13 @@ export const WORK_SUMMARY_CHIP_TEXT: Record<WorkSummaryState, string> = {
   running: "Writing AI findings…",
 };
 
+export const AI_SLOW_MS = 90_000;
+export const AI_WRITING_HINT = "This can take up to a minute.";
+// Only where the background member-findings job runs. It lives in server memory, so "usually".
+export const AI_LEAVE_HINT = "You can usually leave this page; the member findings keep being written.";
+export const AI_SLOW_TEXT = "This is taking longer than usual. You can try again.";
+export const AI_UPDATED_TEXT = "AI findings updated";
+
 /** Label of the one AI button; the same whether or not the class switch for member findings is on. */
 export function aiButtonLabel(generating: boolean, hasExisting: boolean): string {
   if (generating) return "Generating…";
