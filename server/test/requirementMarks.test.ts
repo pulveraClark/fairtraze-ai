@@ -233,3 +233,28 @@ describe("requirement marks: the screenshot", () => {
     expect((await prisma.requirementMark.findUniqueOrThrow({ where: { id: s.markId } })).imageData).toBeNull();
   });
 });
+
+describe("requirement marks: nobody outside the group or the class gets in", () => {
+  it("another group's leader and an instructor who does not own the class get 403 on claim, confirm and read", async () => {
+    const s = await setup();
+    // A leader of a different group (a different class and instructor).
+    const { user: otherOwner } = await createUser({ systemRole: "INSTRUCTOR" });
+    const otherCls = await createClassSection(otherOwner.id);
+    const otherAsg = await createAssignment(otherCls.id);
+    const otherProject = await createProject({ assignmentId: otherAsg.id });
+    const { user: otherLeader } = await createUser({ systemRole: "STUDENT" });
+    await createMembership(otherLeader.id, otherProject.id, "LEADER");
+
+    const key = requirementKey({ sourceQuote: Q_LOGIN })!;
+    for (const [who, user] of [["another group's leader", otherLeader], ["a non-owning instructor", s.otherInstructor]] as const) {
+      expect((await request(app).post(`${s.base}/claim`).set(s.as(user)).send({ requirementKey: key })).status, `claim: ${who}`).toBe(403);
+      expect((await request(app).post(`${s.base}/confirm`).set(s.as(user)).send({ requirementKey: key })).status, `confirm: ${who}`).toBe(403);
+      expect((await request(app).get(s.base).set(s.as(user))).status, `read: ${who}`).toBe(403);
+    }
+    expect(await prisma.requirementMark.count()).toBe(0);
+
+    // The real leader still can, and only for their own group.
+    expect((await request(app).post(`${s.base}/claim`).set(s.as(s.leader)).send({ requirementKey: key })).status).toBe(201);
+    expect((await request(app).post(`/api/groups/${otherProject.id}/requirement-marks/claim`).set(s.as(s.leader)).send({ requirementKey: key })).status).toBe(403);
+  });
+});
