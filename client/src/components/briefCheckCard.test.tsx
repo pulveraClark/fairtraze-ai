@@ -150,7 +150,9 @@ describe("BriefCheckCard", () => {
     expect(login.getByText(/Text written by another member is not shown/)).toBeTruthy();
 
     const survey = within(rowOf("Has a survey"));
-    expect(survey.getByText(/From the project instructions \(brief\.pdf, page 2\):/)).toBeTruthy();
+    expect(survey.getByText("From attached file: brief.pdf")).toBeTruthy();
+    expect(survey.getByRole("link", { name: "Open file (new tab)" })).toBeTruthy();
+    expect(survey.queryByText(/page/i)).toBeNull();
     const quote = survey.getByText((_c, el) => el?.tagName === "BLOCKQUOTE")!;
     expect(quote.textContent!.length).toBeLessThanOrEqual(141);
     expect(quote.textContent!.endsWith("…")).toBe(true);
@@ -238,11 +240,22 @@ describe("BriefCheckCard", () => {
       expect(grid?.className).toContain("items-baseline");
     });
 
-    it("a file source reads 'From: <file>, page N'; a requirement with no source has no From line (older checks)", async () => {
+    it("a file source reads 'From attached file: <file>' with 'Open file' and never a page; no source, no From line (older checks)", async () => {
       const fromFile = { ...check, requirements: [{ ...check.requirements[4]!, sourceQuote: undefined, sourceFile: "brief.pdf", sourcePage: 3 }, check.requirements[3]!] };
+      const { unmount } = render(<BriefCheckCard check={fromFile} instructor instructionsHref="/class/1/assignment/2" />);
+      await open();
+      const tests = within(rowOf("Has tests"));
+      expect(tests.getByText("From attached file: brief.pdf")).toBeTruthy();
+      expect(tests.getByRole("link", { name: "Open file (new tab)" })).toBeTruthy();
+      expect(tests.queryByText(/page/i)).toBeNull();
+      expect(tests.queryByRole("link", { name: /See in the instructions/ })).toBeNull(); // replaced, not doubled
+      // Where the role cannot open the instructions there is no Open file link, but the file name still shows.
+      unmount();
       render(<BriefCheckCard check={fromFile} instructor />);
       await open();
-      expect(within(rowOf("Has tests")).getByText("From: brief.pdf, page 3")).toBeTruthy();
+      expect(within(rowOf("Has tests")).getByText("From attached file: brief.pdf")).toBeTruthy();
+      expect(screen.queryByRole("link", { name: /Open file/ })).toBeNull();
+      expect(screen.queryByText(/page 3/i)).toBeNull();
       const none = within(rowOf("Has a README"));
       expect(none.queryByText(/From/)).toBeNull();
       expect(none.queryByRole("button", { name: /^Proof/ })).toBeNull();

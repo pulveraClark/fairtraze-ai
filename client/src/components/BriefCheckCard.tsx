@@ -53,10 +53,10 @@ function Pill({ kind, instructor }: { kind: RequirementKind; instructor: boolean
   );
 }
 
-/** "See in the instructions": highlights the sentence the requirement comes from, when there is one. */
-function SeeInInstructions({ quote, access }: { quote?: string; access: InstructionsAccess }) {
+/** "See in the instructions" (highlights the sentence the requirement comes from) or, for a file source, "Open file". */
+function SeeInInstructions({ quote, access, label = "See in the instructions" }: { quote?: string; access: InstructionsAccess; label?: string }) {
   if (access.onViewInstructions) {
-    return <button type="button" onClick={() => access.onViewInstructions!(quote)} className={LINK_CLS}>See in the instructions</button>;
+    return <button type="button" onClick={() => access.onViewInstructions!(quote)} className={LINK_CLS}>{label}</button>;
   }
   if (access.instructionsHref) {
     return (
@@ -64,10 +64,10 @@ function SeeInInstructions({ quote, access }: { quote?: string; access: Instruct
         href={`${access.instructionsHref}${quote ? highlightHash(quote) : ""}`}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="See in the instructions (new tab)"
+        aria-label={`${label} (new tab)`}
         className={LINK_CLS}
       >
-        See in the instructions
+        {label}
       </a>
     );
   }
@@ -78,7 +78,10 @@ function SeeInInstructions({ quote, access }: { quote?: string; access: Instruct
 export const quoted = (text: string) => text.trim().replace(/[\s.]+$/, "");
 
 const hasSource = (r: Req) => !!(r.sourceQuote || r.sourceFile);
-const fileSource = (r: Req) => `${r.sourceFile}${r.sourcePage ? `, page ${r.sourcePage}` : ""}`;
+// A requirement that comes from an attached file (and not from a sentence of the written instructions). The page the
+// AI named is never shown: the card has no way to check it against the file.
+const fromFileOnly = (r: Req) => !r.sourceQuote && !!r.sourceFile;
+const FROM_FILE = "From attached file:";
 
 // Where to look when the proof could not be confirmed: the Docs tab and the repository, whichever the page can open.
 function LookIn({ repoUrl, docs }: { repoUrl?: string | null; docs: boolean }) {
@@ -124,8 +127,17 @@ function ProofBody({ r, access, showSource }: { r: Req; access: InstructionsAcce
     <div className="space-y-2 pb-1">
       {withSource && (
         <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-800">
-          <span>From the project instructions{r.sourceFile ? ` (${fileSource(r)})` : ""}:</span>
-          <SeeInInstructions quote={r.sourceQuote} access={access} />
+          {fromFileOnly(r) ? (
+            <>
+              <span className="[overflow-wrap:anywhere]">{FROM_FILE} {r.sourceFile}</span>
+              <SeeInInstructions access={access} label="Open file" />
+            </>
+          ) : (
+            <>
+              <span>From the project instructions:</span>
+              <SeeInInstructions quote={r.sourceQuote} access={access} />
+            </>
+          )}
         </div>
       )}
       {evidence.length > 0 && (
@@ -235,8 +247,13 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
         <p className={`min-w-0 flex-1 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere] ${covered ? "order-2 basis-40" : "basis-48"}`}>{r.text}</p>
         {/* On a narrow screen the names wrap under the line and Proof stays beside the text. */}
         {covered && line && <div className="order-4 basis-full sm:order-3 sm:basis-auto"><WorkedOnBy line={line} inline /></div>}
-        {!covered && !r.sourceQuote && r.sourceFile && <span className="text-xs text-slate-800">From: {fileSource(r)}</span>}
-        {!covered && hasSource(r) && <SeeInInstructions quote={r.sourceQuote} access={access} />}
+        {!covered && fromFileOnly(r) && (
+          <>
+            <span className="min-w-0 text-xs text-slate-800 [overflow-wrap:anywhere]">{FROM_FILE} {r.sourceFile}</span>
+            <SeeInInstructions access={access} label="Open file" />
+          </>
+        )}
+        {!covered && hasSource(r) && !fromFileOnly(r) && <SeeInInstructions quote={r.sourceQuote} access={access} />}
         {proof && <ProofButton open={proofOpen} onToggle={() => setProofOpen((v) => !v)} controls={proofId} />}
       </div>
       {kind === "CHECK" && (
