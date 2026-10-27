@@ -69,9 +69,9 @@ export function contributorsFor(evidence: ContributorEvidence[], lookup: Contrib
       for (const id of authors) ids.add(id);
     }
   }
-  return [...ids]
-    .map((id) => lookup.names.get(id))
-    .filter((n): n is string => !!n && n.trim() !== "")
-    .map(shortName)
-    .sort((a, b) => a.localeCompare(b));
+  const full = [...ids].map((id) => lookup.names.get(id)?.trim()).filter((n): n is string => !!n);
+  // Two members who shorten to the same "First L." show their full names (only those two); the rest stay short.
+  const counts = new Map<string, number>();
+  for (const n of full) counts.set(shortName(n), (counts.get(shortName(n)) ?? 0) + 1);
+  return full.map((n) => ((counts.get(shortName(n)) ?? 0) > 1 ? n : shortName(n))).sort((a, b) => a.localeCompare(b));
 }

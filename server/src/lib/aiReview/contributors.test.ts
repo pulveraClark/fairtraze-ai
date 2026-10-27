@@ -23,6 +23,14 @@ describe("contributorsFor", () => {
     expect(out).toEqual(["Aldren B.", "Maya", "Zed Z."]);
   });
 
+  it("members whose short names clash show full names; everyone else stays 'First L.'", () => {
+    const out = contributorsFor(
+      [{ type: "doc", ref: "Intro", authors: [1, 2, 3] }],
+      lookup({ names: new Map([[1, "Maria Santos"], [2, "Maria Soriano"], [3, "Aldren Bautista"]]) }),
+    );
+    expect(out).toEqual(["Aldren B.", "Maria Santos", "Maria Soriano"]);
+  });
+
   it("leaves out a commit author who is not a member, and never returns a raw login", () => {
     const out = contributorsFor([{ type: "file", ref: "a.ts", commits: ["s3", "unknown-sha"] }], lookup());
     expect(out).toEqual([]);
