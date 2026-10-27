@@ -14,7 +14,7 @@ vi.mock("./aiReview/limiter.js", async (orig) => ({
 }));
 
 import { createLimiter, takeDailyBudget, resetDailyBudgetForTests } from "./aiReview/limiter.js";
-import { generateJson, AiReviewError, parseRetryDelayMs } from "./geminiClient.js";
+import { generateJson, AiReviewError } from "./geminiClient.js";
 
 const schema = { type: "object" };
 const rejection = (p: Promise<unknown>): Promise<AiReviewError> =>
@@ -176,9 +176,38 @@ describe("generateJson", () => {
     });
   });
 
-  it("parses the retry delay Gemini asks for, capped", () => {
-    expect(parseRetryDelayMs(new Error("Please retry in 7.2s."))).toBe(8000);
-    expect(parseRetryDelayMs(new Error("retry in 500s"))).toBe(30000);
-    expect(parseRetryDelayMs(new Error("no hint"))).toBe(5000);
+  const quotaBody = (quotaId: string, retryDelay: string) =>
+    JSON.stringify({
+      error: {
+        code: 429,
+        details: [
+          { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId }] },
+          { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay },
+        ],
+      },
+    });
+
+  it("does not retry a per-day quota: one call, AI_QUOTA_DAILY with the reset delay, no provider text", async () => {
+    generateContent.mockRejectedValue(
+      Object.assign(new Error(quotaBody("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "14309s")), { status: 429 }),
+    );
+    const err = await rejection(generateJson(req));
+    expect(err.code).toBe("AI_QUOTA_DAILY");
+    expect(err.retryAfterMs).toBe(14_309_000);
+    expect(err.message).toBe("AI_QUOTA_DAILY");
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a per-minute limit once, waiting the asked delay capped at 20 s", async () => {
+    vi.useFakeTimers();
+    generateContent
+      .mockRejectedValueOnce(Object.assign(new Error(quotaBody("GenerateRequestsPerMinutePerProjectPerModel", "534036052s")), { status: 429 }))
+      .mockResolvedValueOnce({ text: '{"ok": true}' });
+    const p = generateJson(req);
+    await vi.advanceTimersByTimeAsync(19_000);
+    expect(generateContent).toHaveBeenCalledTimes(1); // still waiting: a huge delay is capped, not skipped
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(p).resolves.toEqual({ ok: true });
+    expect(generateContent).toHaveBeenCalledTimes(2);
   });
 });

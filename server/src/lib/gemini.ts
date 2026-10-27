@@ -3,6 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import type { TeamReport, AnyScoredMember, DocumentScoredMember, CombinedScoredMember } from "@shared/types.js";
 import { buildPseudonymEntries, pseudonymizeReport, scrubFreeText, restoreNames } from "./geminiPseudonyms.js";
 import { NARRATIVE_PLAIN_ENGLISH_EXTRA, PLAIN_ENGLISH_RULES } from "./plainEnglish.js";
+import { parseQuotaError, retryWaitMs } from "./aiQuota.js";
+import { AiReviewError } from "./geminiClient.js";
 
 function isCombinedMember(m: AnyScoredMember): m is CombinedScoredMember {
   return "githubContributionShare" in m;
@@ -158,15 +160,19 @@ export async function generateFairnessNarrative(
   try {
     return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries);
   } catch (err: unknown) {
-    const e = err as { status?: number; message?: string };
-    if (e.status === 429) {
-      // Respect retry delay from error message if present, otherwise wait 5 s
-      const match = (e.message ?? "").match(/(\d+)\s*s/i);
-      const delayMs = match ? parseInt(match[1], 10) * 1000 : 5000;
-      console.warn(`[Gemini] Rate-limited. Retrying in ${delayMs / 1000}s…`);
-      await new Promise((r) => setTimeout(r, delayMs));
+    if ((err as { status?: number } | null)?.status !== 429) throw err;
+    // A per-day quota cannot succeed on retry; a per-minute limit is retried once, after a capped wait.
+    const quota = parseQuotaError(err);
+    if (quota.daily) throw new AiReviewError("AI_QUOTA_DAILY", undefined, quota.retryAfterMs);
+    const delayMs = retryWaitMs(quota);
+    console.warn(`[Gemini] Rate-limited. Retrying in ${delayMs / 1000}s…`);
+    await new Promise((r) => setTimeout(r, delayMs));
+    try {
       return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries); // single retry, then propagate
+    } catch (err2) {
+      if ((err2 as { status?: number } | null)?.status !== 429) throw err2;
+      const again = parseQuotaError(err2);
+      throw new AiReviewError(again.daily ? "AI_QUOTA_DAILY" : "AI_RATE_LIMITED", undefined, again.retryAfterMs);
     }
-    throw err;
   }
 }

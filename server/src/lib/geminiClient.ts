@@ -1,15 +1,18 @@
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import { aiReviewLimiter, takeDailyBudget } from "./aiReview/limiter.js";
+import { parseQuotaError, retryWaitMs } from "./aiQuota.js";
 
 // JSON-only Gemini client for the AI review (member summaries, brief check). Separate from
 // gemini.ts on purpose: the narrative path is untouched. Low randomness: temperature 0, fixed seed.
 // The key is read lazily so importing this file never throws, and a missing key is a soft failure.
 
-export type AiErrorCode = "AI_DISABLED" | "AI_UNAVAILABLE" | "AI_RATE_LIMITED" | "AI_TIMEOUT" | "AI_BAD_OUTPUT" | "AI_BAD_INPUT";
+export type AiErrorCode =
+  | "AI_DISABLED" | "AI_UNAVAILABLE" | "AI_RATE_LIMITED" | "AI_QUOTA_DAILY" | "AI_TIMEOUT" | "AI_BAD_OUTPUT" | "AI_BAD_INPUT";
 
 export class AiReviewError extends Error {
-  constructor(public readonly code: AiErrorCode, message?: string) {
+  // retryAfterMs: what the provider said about when to try again (rate limit and daily quota only).
+  constructor(public readonly code: AiErrorCode, message?: string, public readonly retryAfterMs: number | null = null) {
     super(message ?? code);
     this.name = "AiReviewError";
   }
@@ -48,13 +51,6 @@ export interface JsonRequest<T> {
   // Files sent inline with the prompt (PDF, images). Held in memory for this call only: never logged,
   // stored or put in an error. When Gemini rejects the request as invalid (400), the error is AI_BAD_INPUT.
   files?: Array<{ mimeType: string; data: Buffer }>;
-}
-
-export function parseRetryDelayMs(err: unknown): number {
-  const message = (err as { message?: string } | null)?.message ?? "";
-  const match = message.match(/retry in (\d+(?:\.\d+)?)\s*s/i) ?? message.match(/(\d+)\s*s\b/i);
-  const seconds = match ? Math.min(Number(match[1]), 30) : 5;
-  return Math.max(1, Math.ceil(seconds)) * 1000;
 }
 
 function stripFences(text: string): string {
@@ -104,17 +100,24 @@ async function callOnce(req: JsonRequest<unknown>): Promise<string> {
   }
 }
 
+// A per-day quota gets its own code; the provider's own text is never kept.
+function rateLimitError(err: unknown): AiReviewError {
+  const q = parseQuotaError(err);
+  return new AiReviewError(q.daily ? "AI_QUOTA_DAILY" : "AI_RATE_LIMITED", undefined, q.retryAfterMs);
+}
+
 function classify(err: unknown, hasFiles = false): AiReviewError {
   if (err instanceof AiReviewError) return err;
   const status = (err as { status?: number } | null)?.status;
-  if (status === 429) return new AiReviewError("AI_RATE_LIMITED");
+  if (status === 429) return rateLimitError(err);
   // With files attached, a 400 usually means one of them could not be read; the caller can retry without.
   if (status === 400 && hasFiles) return new AiReviewError("AI_BAD_INPUT");
   return new AiReviewError("AI_UNAVAILABLE");
 }
 
-// One paced, budgeted call. A 429 is retried once after the delay Gemini asks for; everything else
-// is mapped to a small set of codes so no raw provider text reaches users.
+// One paced, budgeted call. A per-minute 429 is retried once after the delay Gemini asks for (capped);
+// a per-day quota is never retried. Everything is mapped to a small set of codes so no raw provider
+// text reaches users.
 export async function generateJson<T>(req: JsonRequest<T>): Promise<T> {
   if (!aiReviewEnabled()) throw new AiReviewError("AI_DISABLED");
   if (!takeDailyBudget()) throw new AiReviewError("AI_RATE_LIMITED", "daily AI review call budget used");
@@ -127,7 +130,9 @@ export async function generateJson<T>(req: JsonRequest<T>): Promise<T> {
   } catch (err) {
     const status = (err as { status?: number } | null)?.status;
     if (status !== 429) throw classify(err, !!req.files?.length);
-    await new Promise((r) => setTimeout(r, parseRetryDelayMs(err)));
+    const quota = parseQuotaError(err);
+    if (quota.daily) throw rateLimitError(err);
+    await new Promise((r) => setTimeout(r, retryWaitMs(quota)));
     try {
       text = await run();
     } catch (err2) {
