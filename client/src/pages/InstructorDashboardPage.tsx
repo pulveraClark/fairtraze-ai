@@ -10,6 +10,7 @@ import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/Clas
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { SEMESTERS, SEMESTER_LABEL, isValidSchoolYear, termOf, type Semester } from "@shared/schoolTerm";
 import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
 import { joinInviteUrl } from "../lib/joinInvite";
 import { useQueryClient } from "@tanstack/react-query";
@@ -105,6 +106,9 @@ function CreateClassModal({
   const [departmentId, setDepartmentId] = useState<number | "">("");
   const [edpCode, setEdpCode]         = useState("");
   const [classType, setClassType]     = useState<"LECTURE" | "LABORATORY">("LECTURE");
+  // Prefilled from today's date (Aug-Dec 1st, Jan-May 2nd, Jun-Jul Summer); the instructor can change it.
+  const [schoolYear, setSchoolYear]   = useState(() => termOf(new Date()).schoolYear);
+  const [semester, setSemester]       = useState<Semester>(() => termOf(new Date()).semester);
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
   // After creation: show the generated class join code before closing
@@ -132,6 +136,10 @@ function CreateClassModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!subjectCode.trim() || !subjectName.trim() || !edpCode.trim() || !departmentId) return;
+    if (!isValidSchoolYear(schoolYear.trim())) {
+      setError("Write the school year like 2026-2027.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -144,6 +152,8 @@ function CreateClassModal({
           departmentId,
           edpCode:      edpCode.trim(),
           type:         classType,
+          schoolYear:   schoolYear.trim(),
+          semester,
         }),
       });
       if (res.ok) {
@@ -317,6 +327,31 @@ function CreateClassModal({
                       ))}
                     </select>
                   )}
+                </div>
+                <div className="col-span-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="class-school-year" className="block text-xs font-medium text-slate-500 mb-1.5">School year</label>
+                    <input
+                      id="class-school-year"
+                      required
+                      inputMode="numeric"
+                      value={schoolYear}
+                      onChange={(e) => setSchoolYear(e.target.value)}
+                      placeholder="2026-2027"
+                      className="w-full min-h-10 rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="class-semester" className="block text-xs font-medium text-slate-500 mb-1.5">Semester</label>
+                    <select
+                      id="class-semester"
+                      value={semester}
+                      onChange={(e) => setSemester(e.target.value as Semester)}
+                      className="w-full min-h-10 rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    >
+                      {SEMESTERS.map((s) => <option key={s} value={s}>{SEMESTER_LABEL[s]}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Type</label>

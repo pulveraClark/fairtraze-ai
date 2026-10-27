@@ -6,6 +6,7 @@ import { requireRole } from "../middleware/auth.js";
 import { notify, activeAdminIds, resolveNotifications } from "../lib/notify.js";
 import { anonymizeUser } from "../lib/anonymizeUser.js";
 import { toCsv } from "../lib/csv.js";
+import { EDP_TAKEN_MESSAGE, SEMESTERS, isValidSchoolYear } from "@shared/schoolTerm.js";
 import { parseAdminUsersFilters, buildUserFilters, buildUserOrderBy } from "../lib/adminUsersQuery.js";
 
 export const adminRouter = Router();
@@ -517,6 +518,46 @@ adminRouter.post("/api/admin/departments", ...requireRole("ADMIN"), async (req, 
   });
 
   res.status(201).json(department);
+});
+
+// ── EDP code changes ──────────────────────────────────────────────────────────
+// An EDP code is unique per term. When it is held by the wrong class the admin changes or releases it here,
+// naming the code and its term. The answer never describes the class or its owner (admins see no class content).
+
+adminRouter.patch("/api/admin/edp-codes", ...requireRole("ADMIN"), async (req, res) => {
+  const body = z.object({
+    edpCode:    z.string().trim().min(1),
+    schoolYear: z.string().refine(isValidSchoolYear, "Use a school year like 2026-2027."),
+    semester:   z.enum(SEMESTERS),
+    // "" releases the code; a new code moves the class to it.
+    newEdpCode: z.string().trim(),
+  }).safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid input", details: body.error.flatten() });
+    return;
+  }
+  const { edpCode, schoolYear, semester, newEdpCode } = body.data;
+  const cls = await prisma.classSection.findFirst({ where: { edpCode, schoolYear, semester }, select: { id: true } });
+  if (!cls) {
+    res.status(404).json({ error: "No class uses that EDP code in that term." });
+    return;
+  }
+  if (newEdpCode && await prisma.classSection.findFirst({ where: { edpCode: newEdpCode, schoolYear, semester }, select: { id: true } })) {
+    res.status(409).json({ code: "EDP_TAKEN", error: EDP_TAKEN_MESSAGE });
+    return;
+  }
+  await prisma.classSection.update({ where: { id: cls.id }, data: { edpCode: newEdpCode } });
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName:  await getActorName(req.user!.sub),
+      action:     newEdpCode ? "EDP_CODE_CHANGED" : "EDP_CODE_RELEASED",
+      targetType: "CLASS",
+      targetId:   String(cls.id),
+      details:    `${edpCode} (${schoolYear}, ${semester}) -> ${newEdpCode || "released"}`,
+    },
+  });
+  res.json({ ok: true });
 });
 
 // ── Instructor approvals ──────────────────────────────────────────────────────

@@ -228,12 +228,23 @@ model Department {
   classSections ClassSection[]
 }
 
+enum ClassSemester {
+  FIRST
+  SECOND
+  SUMMER
+}
+
 model ClassSection {
   id           Int               @id @default(autoincrement())
   subjectCode  String
   subjectName  String
   departmentId Int
   edpCode      String            @default("")
+  // The school term (shared/src/schoolTerm.ts). An EDP code is unique per term across ALL instructors,
+  // empty codes ignored. Prisma cannot declare that partial unique index, so it exists only in the
+  // migration 20261027100000_class_term ("ClassSection_edp_term_key"); do not add @@unique here.
+  schoolYear   String            @default("")
+  semester     ClassSemester     @default(FIRST)
   type         ClassType         @default(LECTURE)
   joinCode     String?           @unique
   instructorId Int
@@ -245,8 +256,6 @@ model ClassSection {
   // AI work summaries / brief check for this class's groups. Off = no AI calls and the UI hides them.
   // Never read by scoring.
   aiReviewEnabled Boolean         @default(true)
-
-  @@unique([instructorId, edpCode])
 }
 
 model ClassEnrollment {

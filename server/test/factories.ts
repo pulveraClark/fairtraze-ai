@@ -48,7 +48,7 @@ export function authHeaderFor(user: { id: number; email: string; name: string; s
 // afterEach truncates every table between tests (see setupEnv.ts), so this must be
 // re-upserted (not cached) each call — a cached id would go stale the moment the
 // Department row it points at gets wiped.
-async function getDefaultTestDepartmentId(): Promise<number> {
+export async function getDefaultTestDepartmentId(): Promise<number> {
   const department = await prisma.department.upsert({
     where:  { id: 1 },
     update: {},
@@ -57,7 +57,7 @@ async function getDefaultTestDepartmentId(): Promise<number> {
   return department.id;
 }
 
-export async function createClassSection(instructorId: number, overrides: { subjectCode?: string; departmentId?: number } = {}) {
+export async function createClassSection(instructorId: number, overrides: { subjectCode?: string; departmentId?: number; edpCode?: string; schoolYear?: string; semester?: "FIRST" | "SECOND" | "SUMMER" } = {}) {
   joinCodeCounter += 1;
   const departmentId = overrides.departmentId ?? (await getDefaultTestDepartmentId());
   return prisma.classSection.create({
@@ -66,7 +66,9 @@ export async function createClassSection(instructorId: number, overrides: { subj
       subjectCode: overrides.subjectCode ?? "CC-TEST",
       subjectName: "Test Subject",
       departmentId,
-      edpCode: `EDP${joinCodeCounter}`,
+      edpCode: overrides.edpCode ?? `EDP${joinCodeCounter}`,
+      ...(overrides.schoolYear ? { schoolYear: overrides.schoolYear } : {}),
+      ...(overrides.semester ? { semester: overrides.semester } : {}),
     },
   });
 }

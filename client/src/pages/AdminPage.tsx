@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { PaginationBar } from "../components/PaginationBar";
 import { InstructorApprovals } from "../components/InstructorApprovals";
+import { EdpCodeTool } from "../components/EdpCodeTool";
 import { DeletionRequests } from "../components/DeletionRequests";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { AdminUserDetails } from "../components/AdminUserDetails";
@@ -874,7 +875,7 @@ export function AdminPage() {
             Hierarchy Management
           </h2>
           <p className="text-xs text-slate-600 mb-5">
-            Create departments and approve new instructor accounts.
+            Create departments, approve new instructor accounts and fix EDP codes.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="border border-slate-200 rounded-lg p-4">
@@ -932,6 +933,7 @@ export function AdminPage() {
               )}
             </div>
             <InstructorApprovals onToast={showToast} />
+            <EdpCodeTool onToast={showToast} />
             <DeletionRequests onToast={showToast} />
           </div>
         </section>
