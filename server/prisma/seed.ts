@@ -73,7 +73,7 @@ async function main() {
   };
 
   const sectionAppsdev = await prisma.classSection.upsert({
-    where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "31400" } },
+    where:  { joinCode: CLASS_JOIN_CODES["31400"] },
     update: { subjectCode: "CC-APPSDEV22", subjectName: "Applications Development", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["31400"] },
     create: {
       subjectCode: "CC-APPSDEV22",
@@ -88,7 +88,7 @@ async function main() {
   console.log(`ClassSection: ${sectionAppsdev.subjectCode} edpCode=${sectionAppsdev.edpCode} joinCode=${sectionAppsdev.joinCode} (id=${sectionAppsdev.id})`);
 
   const sectionImdb = await prisma.classSection.upsert({
-    where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21856" } },
+    where:  { joinCode: CLASS_JOIN_CODES["21856"] },
     update: { subjectCode: "IT-IMDBSYS32", subjectName: "Information Management 2 (Database Systems)", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["21856"] },
     create: {
       subjectCode: "IT-IMDBSYS32",
@@ -103,7 +103,7 @@ async function main() {
   console.log(`ClassSection: ${sectionImdb.subjectCode} edpCode=${sectionImdb.edpCode} joinCode=${sectionImdb.joinCode} (id=${sectionImdb.id})`);
 
   const sectionElec = await prisma.classSection.upsert({
-    where:  { instructorId_edpCode: { instructorId: instructor.id, edpCode: "21936" } },
+    where:  { joinCode: CLASS_JOIN_CODES["21936"] },
     update: { subjectCode: "IT-ELEC 2", subjectName: "IT Elective 2", departmentId: departmentCCS.id, type: "LECTURE", joinCode: CLASS_JOIN_CODES["21936"] },
     create: {
       subjectCode: "IT-ELEC 2",
