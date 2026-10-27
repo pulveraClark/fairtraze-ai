@@ -197,6 +197,13 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     if (mine) aiWorkSummaries.push({ projectId: r.report.projectId, generatedAt: r.createdAt, summary: mine.summary, source: mine.source });
   }
 
+  // The person's own "We have this" marks: text only, never the screenshot bytes.
+  const requirementMarks = (await prisma.requirementMark.findMany({
+    where: { markedById: userId },
+    orderBy: { createdAt: "asc" },
+    select: { projectId: true, requirementText: true, role: true, status: true, note: true, imageData: true, createdAt: true },
+  })).map(({ imageData, ...m }) => ({ ...m, hadPicture: imageData !== null }));
+
   const payload = {
     exportedAt:    new Date().toISOString(),
     noticeVersion: PRIVACY_NOTICE_VERSION,
@@ -205,6 +212,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     classEnrollments: enrollments.map((e) => ({ joinedAt: e.joinedAt, subjectCode: e.classSection.subjectCode, subjectName: e.classSection.subjectName })),
     groups,
     aiWorkSummaries,
+    requirementMarks,
     joinRequests,
     roleSuggestions: roleSuggestions.map((r) => ({ ...r, suggestedRoles: safeJson(r.suggestedRoles) })),
     editorActivity: {

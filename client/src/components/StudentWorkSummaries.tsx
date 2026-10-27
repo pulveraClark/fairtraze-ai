@@ -4,7 +4,7 @@ import { CARD } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { WorkSummaryBlock } from "./report/AiWorkSummary";
-import { BriefCheckCard } from "./BriefCheckCard";
+import { BriefCheckWithMarks } from "./BriefCheckWithMarks";
 
 /**
  * Student report tab. A member sees "AI findings on your work"; the leader sees one entry per member
@@ -52,7 +52,7 @@ export function StudentWorkSummaries({ projectId, isLeader, sourceType, onViewIn
           ) : null}
         </>
       )}
-      {briefCheck && <BriefCheckCard check={briefCheck} repoUrl={data.repoUrl} sourceType={sourceType} onViewInstructions={onViewInstructions} />}
+      {briefCheck && <BriefCheckWithMarks projectId={projectId} check={briefCheck} repoUrl={data.repoUrl} sourceType={sourceType} onViewInstructions={onViewInstructions} />}
     </section>
   );
 }

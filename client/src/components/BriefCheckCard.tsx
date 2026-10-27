@@ -6,6 +6,9 @@ import { FileEvidenceLink } from "./ui/ExternalEvidenceLink";
 import { DocSectionLink, DocsTabLink, useOpenDocSection } from "../hooks/useDocSectionLink";
 import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
+import { RequirementMarkPanel } from "./RequirementMarkPanel";
+import type { MarksApi } from "../hooks/useRequirementMarks";
+import { MARK_STALE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, type KeyMarks } from "../lib/requirementMarks";
 import {
   ATTENTION_ORDER, NOTHING_READ_TITLE, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
   coveredToggleLabel, droppedSentence, highlightHash, kindOf, nothingReadAdvice, otherCountsSentence, pillLabel, readLine, skippedLine,
@@ -175,8 +178,9 @@ function Grid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   );
 }
 
-function RequirementRow({ r, instructor, access, repoUrl, docs }: {
+function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks }: {
   r: Req; instructor: boolean; access: InstructionsAccess; repoUrl?: string | null; docs: boolean;
+  marks?: MarksApi; keyMarks?: KeyMarks;
 }) {
   const kind = kindOf(r);
   return (
@@ -201,6 +205,15 @@ function RequirementRow({ r, instructor, access, repoUrl, docs }: {
           )}
           <Proof r={r} access={access} showSource={kind === "COVERED"} />
         </>
+      )}
+      {marks && r.key && (
+        <RequirementMarkPanel
+          requirementKey={r.key}
+          marks={keyMarks}
+          api={marks}
+          canClaim={marks.role === "leader" && kind === "CHECK"}
+          canCheck={marks.role === "instructor" && kind !== "COVERED"}
+        />
       )}
     </li>
   );
@@ -234,7 +247,7 @@ function Header() {
 }
 
 export function BriefCheckCard({
-  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions,
+  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions, marks,
 }: {
   check: AiBriefCheck;
   instructor?: boolean;
@@ -245,6 +258,8 @@ export function BriefCheckCard({
   instructionsHref?: string;
   /** Leader and students: opens the project instructions window, optionally at one sentence. */
   onViewInstructions?: (quote?: string) => void;
+  /** "We have this" marks and the actions on them (leader and instructor). Absent: the card is read-only. */
+  marks?: MarksApi;
 }) {
   const [showCovered, setShowCovered] = useState(false);
   const when = formatBasedOn(check.generatedAt);
@@ -269,9 +284,14 @@ export function BriefCheckCard({
   const allCovered = counts.COVERED === total;
   const attention = ATTENTION_ORDER.flatMap((k) => check.requirements.filter((r) => kindOf(r) === k));
   const covered = check.requirements.filter((r) => kindOf(r) === "COVERED");
-  const others = otherCountsSentence(counts, instructor);
   const dropped = check.sources?.droppedCount ?? 0;
   const docs = sourceType !== "GITHUB";
+  const keyMarks = marks ? marksByKey(marks.marks) : undefined;
+  const confirmed = marks ? confirmedByInstructor(check.requirements, marks.marks) : 0;
+  const changed = marks ? staleMarks(marks.marks) : [];
+  // An item the instructor confirmed no longer needs a check, so it is left out of "needs your check".
+  const stillOpen = keyMarks ? check.requirements.filter((r) => !(kindOf(r) !== "COVERED" && r.key && keyMarks.get(r.key)?.instructor)) : check.requirements;
+  const others = otherCountsSentence(countKinds(stillOpen), instructor);
 
   return (
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
@@ -291,12 +311,12 @@ export function BriefCheckCard({
         </div>
         <ReadLines sources={check.sources} />
         <p className="text-sm font-semibold leading-normal text-slate-900">
-          {coveredSentence(counts.COVERED, total)}
+          {confirmed > 0 ? coveredByAiSentence(counts.COVERED, total, confirmed) : coveredSentence(counts.COVERED, total)}
           {others && !allCovered ? ` ${others}` : ""}
         </p>
         {!allCovered && attention.length > 0 && (
           <ul className="divide-y divide-slate-100">
-            {attention.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} />)}
+            {attention.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} marks={marks} keyMarks={r.key ? keyMarks?.get(r.key) : undefined} />)}
           </ul>
         )}
         {!allCovered && covered.length > 0 && (
@@ -312,10 +332,19 @@ export function BriefCheckCard({
             </button>
             {showCovered && (
               <ul id="instructions-covered-list" className="divide-y divide-slate-100">
-                {covered.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} />)}
+                {covered.map((r, i) => <RequirementRow key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} marks={marks} keyMarks={r.key ? keyMarks?.get(r.key) : undefined} />)}
               </ul>
             )}
           </>
+        )}
+        {changed.length > 0 && (
+          <div className="space-y-1">
+            {changed.map((m) => (
+              <p key={m.requirementKey} className="text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">
+                <span className="font-semibold">{MARK_STALE}</span> Earlier mark on “{m.requirementText}”.
+              </p>
+            ))}
+          </div>
         )}
         {dropped > 0 && <p className="text-xs leading-normal text-slate-700">{droppedSentence(dropped)}</p>}
         <p className="text-xs leading-normal text-slate-700">

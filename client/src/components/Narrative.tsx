@@ -6,7 +6,7 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
-import { BriefCheckCard } from "./BriefCheckCard";
+import { BriefCheckWithMarks } from "./BriefCheckWithMarks";
 import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
 import type { UseAiReview } from "../hooks/useAiReview";
@@ -125,7 +125,8 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
         </>
       )}
       {briefCheck && !generating && (
-        <BriefCheckCard
+        <BriefCheckWithMarks
+          projectId={projectId}
           check={briefCheck}
           instructor
           repoUrl={repoUrl}

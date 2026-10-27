@@ -154,6 +154,7 @@ model User {
   deletionRequests  DeletionRequest[]
   classSections    ClassSection[]
   groupMemberships GroupMembership[]
+  requirementMarks RequirementMark[]
   classEnrollments ClassEnrollment[]
   alerts           Alert[]           @relation("AlertInstructor")
   receivedAlerts   Alert[]           @relation("AlertRecipient")
@@ -363,6 +364,7 @@ model Project {
   members                  Member[]
   reports                  Report[]
   groupMemberships         GroupMembership[]
+  requirementMarks         RequirementMark[]
   alerts                   Alert[]
   disputes                 Dispute[]
   joinRequests             GroupJoinRequest[]
@@ -613,6 +615,48 @@ model AiReportReview {
   report        Report         @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@unique([reportId, kind])
+}
+
+// "We have this" marks on a project-instructions requirement the AI could not confirm. A group leader can claim
+// it (LEADER_CLAIM, one note and one screenshot) and the owning instructor confirms it (INSTRUCTOR_CONFIRMED)
+// or asks for a closer look (LEADER_CLAIM_DECLINED). A leader claim never counts as covered until the instructor
+// confirms. The key is a hash of the verified source quote (or source file + page), not of the AI's wording, so
+// Regenerate does not orphan a mark. Planning/context only: never read by scoring, flags, Gini, team health or
+// any AI prompt. Deleted with the project.
+enum RequirementMarkRole {
+  LEADER
+  INSTRUCTOR
+}
+
+enum RequirementMarkStatus {
+  LEADER_CLAIM
+  LEADER_CLAIM_DECLINED
+  INSTRUCTOR_CONFIRMED
+}
+
+model RequirementMark {
+  id              Int                   @id @default(autoincrement())
+  projectId       Int
+  requirementKey  String
+  // Copies of what the key came from, so a mark can be told stale when the instructions change.
+  requirementText String
+  sourceQuote     String?
+  sourceFile      String?
+  sourcePage      Int?
+  role            RequirementMarkRole
+  status          RequirementMarkStatus
+  markedById      Int
+  note            String?
+  // One screenshot per mark, kept in Postgres: JPEG, PNG or WebP, at most 1 MB.
+  imageData       Bytes?
+  imageMime       String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  markedBy        User                  @relation(fields: [markedById], references: [id])
+
+  @@unique([projectId, requirementKey, role])
+  @@index([projectId])
 }
 
 // Normalized per-member persistence of a single analysis run's document-side (Editor) scores,

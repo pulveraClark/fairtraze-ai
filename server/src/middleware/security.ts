@@ -182,6 +182,14 @@ export const joinCodeLimiter = rateLimit({
 
 // Task comments (and the @mentions inside them): 30 per minute per user, its own bucket so a burst of
 // comments never eats the task-creation allowance. Needs authenticateToken first (see app.ts).
+export const requirementMarkLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "You're marking too quickly. Please wait a minute and try again." },
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 export const taskCommentLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 60 * 1000,

@@ -251,6 +251,10 @@ export async function anonymizeUser(
         }
       }
 
+      // 3d. "We have this" marks: the person's note and screenshot are removed; the mark itself stays so the
+      // group's check keeps its history.
+      await tx.requirementMark.updateMany({ where: { markedById: userId }, data: { note: null, imageData: null, imageMime: null } });
+
       // 4. Personal rows that have no value once the account is gone.
       await tx.taskNotificationLog.deleteMany({ where: { userId } });
       await tx.taskWatcher.deleteMany({ where: { userId } });

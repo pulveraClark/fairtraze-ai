@@ -25,6 +25,7 @@ import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
 import { avatarRouter, avatarBodyErrors } from "./routes/avatar.js";
 import { briefsRouter, briefBodyErrors, BRIEF_RAW_LIMIT, BRIEF_RAW_TYPES } from "./routes/briefs.js";
+import { requirementMarksRouter, markBodyErrors, MARK_IMAGE_TYPES, MARK_RAW_LIMIT } from "./routes/requirementMarks.js";
 import { authenticateToken } from "./middleware/auth.js";
 import {
   corsOptions,
@@ -38,6 +39,7 @@ import {
   repoLinkLimiter,
   joinCodeLimiter,
   taskCommentLimiter,
+  requirementMarkLimiter,
   globalLimiter,
 } from "./middleware/security.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
@@ -69,6 +71,9 @@ export function createApp() {
   // Task attachments: same raw bodies and limits as the brief; per-kind sizes are enforced in the route.
   app.post("/api/groups/:id/tasks/:taskId/attachments", express.raw({ type: BRIEF_RAW_TYPES, limit: BRIEF_RAW_LIMIT }));
   app.use("/api/groups/:id/tasks/:taskId/attachments", briefBodyErrors);
+  // "We have this" screenshots: a raw JPEG/PNG/WebP body, at most 1 MB (sniffed and re-checked in the route).
+  app.put("/api/groups/:id/requirement-marks/:markId/image", express.raw({ type: MARK_IMAGE_TYPES, limit: MARK_RAW_LIMIT }));
+  app.use("/api/groups/:id/requirement-marks/:markId/image", markBodyErrors);
   app.use(express.json());
   app.use(cookieParser());
   // Registered BEFORE the global limiter on purpose: every open editor tab polls it once a minute, and
@@ -113,6 +118,7 @@ export function createApp() {
   app.get("/api/join/class/:code", authenticateToken, joinCodeLimiter);
   app.post("/api/join/class", authenticateToken, joinCodeLimiter);
   app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
+  app.use("/api/groups/:id/requirement-marks", authenticateToken, requirementMarkLimiter);
 
   app.post("/api/groups/:id/refresh-report", authenticateToken, refreshReportLimiter);
   // AI review starts share the analysis limiter (per instructor).
@@ -122,6 +128,7 @@ export function createApp() {
   app.use(analyzeRouter);
   app.use(refreshReportRouter);
   app.use(aiReviewRouter);
+  app.use(requirementMarksRouter);
   app.use(authRouter);
   app.use(usersRouter);
   app.use(privacyRouter);

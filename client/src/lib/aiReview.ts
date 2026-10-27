@@ -11,6 +11,8 @@ export interface AiSummaryView extends AiMemberSummary {
 
 export interface AiBriefCheck {
   requirements: Array<{
+    // Identifies the requirement for "We have this" marks (a hash of its source); absent on older checks.
+    key?: string;
     text: string;
     status: "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
     unverified: boolean;
