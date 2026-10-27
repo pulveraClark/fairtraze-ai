@@ -22,6 +22,8 @@ export interface AiBriefCheck {
     sourceQuote?: string;
     sourceFile?: string;
     sourcePage?: number;
+    // Instructor and leader only: "First L." names of the members who wrote the proof shown, sorted by name.
+    contributors?: string[];
   }>;
   nothingFound: boolean;
   // Files were attached but none could be read and there is no written brief, so nothing was checked;

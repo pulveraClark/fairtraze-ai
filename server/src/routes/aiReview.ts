@@ -14,6 +14,8 @@ import { activeQuotaLimit } from "../lib/aiFailureText.js";
 import { requirementKeys } from "../lib/requirementMarks.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
 import { canonicalRepoUrl, linkFile, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
+import { contributorsFor, evidenceShas, hasHeadingProof, headingAuthorIds, type ContributorLookup } from "../lib/aiReview/contributors.js";
+import { loadGroupDocEvidence } from "../lib/aiReview/docsEvidence.js";
 import type {
   AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiBriefSources, AiRequirementStatus, AiFileLinks, AiLastAttempt,
 } from "@shared/aiReviewTypes.js";
@@ -76,6 +78,8 @@ export interface AiBriefView {
     sourceQuote?: string;
     sourceFile?: string;
     sourcePage?: number;
+    // Instructor and leader only: "First L." names of the members who wrote the proof shown, sorted by name.
+    contributors?: string[];
   }>;
   // True when no requirement was found (all Not found). The page shows one calm line.
   nothingFound: boolean;
@@ -110,6 +114,7 @@ export function shapeBriefForViewer(
   viewerUserId: number,
   current: { brief: string; attachments?: Array<{ id: number; size: number; mime: string }>; latestReportId: number | null },
   repo: RepoRef | null = null,
+  who?: ContributorLookup,
 ): AiBriefView | null {
   const attachments = current.attachments ?? [];
   if (!row || viewer === "member" || (!current.brief.trim() && attachments.length === 0)) return null;
@@ -132,6 +137,8 @@ export function shapeBriefForViewer(
     ...(r.sourceQuote ? { sourceQuote: r.sourceQuote } : {}),
     ...(r.sourceFile ? { sourceFile: r.sourceFile } : {}),
     ...(r.sourceFile && r.sourcePage ? { sourcePage: r.sourcePage } : {}),
+    // A plain member returned above, so only the instructor and the leader reach this.
+    ...(who ? { contributors: contributorsFor(r.evidence, who) } : {}),
     evidence: r.evidence.map((e) => {
       const othersWrote = e.type === "doc" && viewer === "leader" && !!e.quote && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
       const links = e.type === "file" ? (linkFile(repo, e.ref, e.commits) ?? {}) : {};
@@ -170,6 +177,36 @@ async function classSwitchOn(project: LoadedGroup): Promise<boolean> {
   if (!classSectionId) return false;
   const cs = await prisma.classSection.findUnique({ where: { id: classSectionId }, select: { aiReviewEnabled: true } });
   return !!cs?.aiReviewEnabled;
+}
+
+// Reads for "Worked on by" (instructor and leader only; the caller never runs this for a plain member). Commit
+// authors come from the stored digests (one line per commit) and are matched to the CURRENT members' GitHub
+// usernames; heading-only Docs proof reads the saved document read-only. Any failure just leaves names out.
+async function contributorLookup(project: LoadedGroup, requirements: Array<{ evidence: AiBriefContent["requirements"][number]["evidence"] }>): Promise<ContributorLookup> {
+  const names = new Map(project.groupMemberships.map((m) => [m.userId, m.user.name]));
+  const userByLogin = new Map(
+    project.groupMemberships.filter((m) => m.user.githubUsername).map((m) => [m.user.githubUsername!.toLowerCase(), m.userId]),
+  );
+  const loginBySha = new Map<string, string>();
+  const shas = evidenceShas(requirements);
+  if (shas.length > 0) {
+    try {
+      const rows = await prisma.aiCommitDigest.findMany({ where: { projectId: project.id, sha: { in: shas }, authorLogin: { not: null } }, select: { sha: true, authorLogin: true } });
+      for (const r of rows) if (r.authorLogin) loginBySha.set(r.sha, r.authorLogin);
+    } catch {
+      // No commit authors; the row simply shows "Not known."
+    }
+  }
+  let headingAuthors: ContributorLookup["headingAuthors"];
+  if (hasHeadingProof(requirements)) {
+    try {
+      const { pieces, spans } = await loadGroupDocEvidence(project.id);
+      headingAuthors = (heading) => headingAuthorIds(heading, pieces, spans);
+    } catch {
+      // Unreadable document: heading proof shows no names.
+    }
+  }
+  return { names, userByLogin, loginBySha, headingAuthors };
 }
 
 // GET /api/groups/:id/ai-review - the stored AI review of the group's work, shaped for the caller.
@@ -234,8 +271,9 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     briefStored = briefRow;
     const text = assignment?.description ?? "";
     const attachments = assignment ? (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [] : [];
+    const who = await contributorLookup(project, (briefRow?.content as AiBriefContent | null)?.requirements ?? []);
     const view = shapeBriefForViewer(
-      briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo,
+      briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo, who,
     );
     if (view) brief.briefCheck = view;
     const hasInstructions = !!text.trim() || attachments.length > 0;

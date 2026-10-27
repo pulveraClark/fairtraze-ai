@@ -9,6 +9,7 @@ import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 import { RequirementMarkPanel } from "./RequirementMarkPanel";
 import type { MarksApi } from "../hooks/useRequirementMarks";
 import { isMarkable } from "@shared/requirementMarkable";
+import { WORKED_ON_LABEL, WORKED_ON_NOTE, workedOn, type WorkedOn } from "../lib/workedOnBy";
 import { MARK_STALE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, type KeyMarks } from "../lib/requirementMarks";
 import {
   ATTENTION_ORDER, NOTHING_READ_TITLE, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
@@ -179,6 +180,29 @@ function Grid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   );
 }
 
+/** "Worked on by" + up to 2 name chips + "+N more", or one plain sentence. One wrapping row. */
+function WorkedOnBy({ line }: { line: WorkedOn }) {
+  if (!line) return null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] leading-normal text-slate-700">
+      <span className="font-semibold">{WORKED_ON_LABEL}</span>
+      {line.type === "names" ? (
+        <>
+          {line.shown.map((n) => (
+            <span key={n} className="inline-flex min-w-0 items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-0.5 pr-2 text-slate-900">
+              <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-300 text-xs font-semibold leading-none text-slate-900">{n.charAt(0).toUpperCase()}</span>
+              <span className="[overflow-wrap:anywhere]">{n}</span>
+            </span>
+          ))}
+          {line.more > 0 && <span>+{line.more} more</span>}
+        </>
+      ) : (
+        <span className="min-w-0 [overflow-wrap:anywhere]">{line.text}</span>
+      )}
+    </div>
+  );
+}
+
 function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks }: {
   r: Req; instructor: boolean; access: InstructionsAccess; repoUrl?: string | null; docs: boolean;
   marks?: MarksApi; keyMarks?: KeyMarks;
@@ -207,6 +231,7 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks 
           <Proof r={r} access={access} showSource={kind === "COVERED"} />
         </>
       )}
+      <WorkedOnBy line={workedOn(r, instructor, keyMarks)} />
       {marks && r.key && (
         <RequirementMarkPanel
           requirementKey={r.key}
@@ -337,6 +362,9 @@ export function BriefCheckCard({
               </ul>
             )}
           </>
+        )}
+        {check.requirements.some((r) => r.contributors) && (
+          <p className="text-xs leading-normal text-slate-700">{WORKED_ON_NOTE}</p>
         )}
         {changed.length > 0 && (
           <div className="space-y-1">
