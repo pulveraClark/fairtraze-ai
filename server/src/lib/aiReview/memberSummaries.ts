@@ -3,7 +3,8 @@ import { checkRepoUrl } from "@shared/repoUrl.js";
 import { LATEST_REPORT_ORDER } from "../latestReport.js";
 import { buildPseudonymEntries } from "../geminiPseudonyms.js";
 import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
-import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
+import { generateJson, modelName } from "../geminiClient.js";
+import { aiFailureOf, attemptNote } from "../aiFailureText.js";
 import type { AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { fetchCommitEvidence, MAX_REMOVED_LINES_PER_FILE, type CommitEvidence } from "./commitEvidence.js";
 import { loadGroupDocEvidence, memberDocEvidence } from "./docsEvidence.js";
@@ -54,6 +55,8 @@ const defaultDeps = (): MemberSummaryDeps => ({
 export interface ReviewResult<C> {
   status: AiReviewStatus;
   errorCode: string | null;
+  // What the provider said about when a daily quota resets (set only with AI_QUOTA_DAILY).
+  retryAfterMs?: number | null;
   content: C;
 }
 
@@ -124,6 +127,12 @@ export async function runMemberSummaries(
   );
 
   const errors: string[] = [];
+  let retryAfterMs: number | null = null;
+  const noteAiError = (err: unknown) => {
+    const f = aiFailureOf(err);
+    errors.push(f.code);
+    if (f.code === "AI_QUOTA_DAILY" && f.retryAfterMs !== null) retryAfterMs = Math.max(retryAfterMs ?? 0, f.retryAfterMs);
+  };
   const addressed = new Map<string, AiAddressedNote>();
   const noteInjection = (userId: number, where: "commits" | "docs", count: number) => {
     if (count <= 0) return;
@@ -187,7 +196,7 @@ export async function runMemberSummaries(
           });
           said = new Map(out.map((c) => [c.sha, c.summary]));
         } catch (err) {
-          errors.push(err instanceof AiReviewError ? err.code : "AI_UNAVAILABLE");
+          noteAiError(err);
         }
         const toStore: Array<{ projectId: number; sha: string; promptVersion: string; model: string; authorLogin: string | null; summary: string; files: DigestLine["files"] }> = [];
         for (const e of batch) {
@@ -279,7 +288,7 @@ export async function runMemberSummaries(
       if (rejected.length > 0) rejected = accept(await ask(rejected, STRICTER_REMINDER), rejected);
     } catch (err) {
       rollupFailed = true;
-      errors.push(err instanceof AiReviewError ? err.code : "AI_UNAVAILABLE");
+      noteAiError(err);
     }
   }
 
@@ -307,9 +316,11 @@ export async function runMemberSummaries(
   else if (errors.length > 0 || fromAi < needed) status = "PARTIAL";
   if (needed === 0 && errors.length === 0) status = "SKIPPED";
 
+  const errorCode = errors.includes("AI_QUOTA_DAILY") ? "AI_QUOTA_DAILY" : (errors[0] ?? null);
   return {
     status,
-    errorCode: errors[0] ?? null,
+    errorCode,
+    retryAfterMs: errorCode === "AI_QUOTA_DAILY" ? retryAfterMs : null,
     content: { members, aiAddressed: [...addressed.values()] },
   };
 }
@@ -322,11 +333,12 @@ export async function generateMemberSummaries(
   const report = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER], select: { id: true } });
   if (!report) return null;
   const result = await runMemberSummaries(projectId, deps);
+  const lastAttempt = attemptNote(result);
   const data = {
     status: result.status,
     promptVersion: AI_REVIEW_PROMPT_VERSION,
     model: modelName(),
-    content: result.content as object,
+    content: { ...result.content, ...(lastAttempt ? { lastAttempt } : {}) } as object,
     errorCode: result.errorCode,
   };
   await prisma.aiReportReview.upsert({

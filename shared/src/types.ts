@@ -249,6 +249,9 @@ export interface NarrativeResponse {
   narrative: string;
   cached: boolean;
   warning?: string;
+  // Set with `warning`/errors when the AI's daily limit is the reason; `retryAt` (ISO) is when it resets.
+  code?: string;
+  retryAt?: string;
 }
 
 // Dashboard summary — returned by GET /api/projects/summary.

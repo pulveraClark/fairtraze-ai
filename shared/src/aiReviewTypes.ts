@@ -43,9 +43,17 @@ export interface AiAddressedNote {
   count: number;
 }
 
+// A run that did not fully succeed. `retryAt` (ISO) is set only for a daily quota: when it resets.
+export interface AiLastAttempt {
+  at: string;
+  errorCode: string;
+  retryAt?: string;
+}
+
 export interface AiMemberSummariesContent {
   members: AiMemberSummary[];
   aiAddressed: AiAddressedNote[];
+  lastAttempt?: AiLastAttempt;
 }
 
 export type AiReviewStatus = "OK" | "PARTIAL" | "FAILED" | "SKIPPED";
@@ -101,4 +109,5 @@ export interface AiBriefContent {
   sources?: AiBriefSources;
   // Count of lines of student text that addressed the AI and were replaced before sending.
   aiAddressedCount: number;
+  lastAttempt?: AiLastAttempt;
 }

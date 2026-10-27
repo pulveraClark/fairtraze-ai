@@ -4,6 +4,7 @@ import { attachmentMetaFor, loadBriefFilesForAi } from "../briefAttachments.js";
 import { LATEST_REPORT_ORDER } from "../latestReport.js";
 import { buildPseudonymEntries, scrubFreeText } from "../geminiPseudonyms.js";
 import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
+import { aiFailureOf, attemptNote } from "../aiFailureText.js";
 import type { AiBriefContent, AiBriefSources, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
 import { fetchRepoTree, fetchRepoFileText } from "./repoFiles.js";
@@ -63,9 +64,14 @@ async function commitTimes(deps: BriefDeps, owner: string, repo: string): Promis
 export async function runBriefComparison(projectId: number, deps: BriefDeps = defaultDeps()): Promise<BriefResult> {
   const empty = (
     status: AiReviewStatus, errorCode: string | null = null, hash: string | null = null, sources?: AiBriefSources,
+    retryAfterMs: number | null = null,
   ): BriefResult => ({
-    status, errorCode, briefHash: hash, content: { requirements: [], aiAddressedCount: 0, ...(sources ? { sources } : {}) },
+    status, errorCode, retryAfterMs, briefHash: hash, content: { requirements: [], aiAddressedCount: 0, ...(sources ? { sources } : {}) },
   });
+  const failed = (err: unknown, hash: string | null, sources?: AiBriefSources): BriefResult => {
+    const f = aiFailureOf(err);
+    return empty("FAILED", f.code, hash, sources, f.code === "AI_QUOTA_DAILY" ? f.retryAfterMs : null);
+  };
 
   // The assignment, and so its attachments, always come from the group being reviewed.
   const project = await prisma.project.findUnique({
@@ -199,7 +205,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     raw = await ask(briefFiles.usable);
   } catch (err) {
     if (!(err instanceof AiReviewError && err.code === "AI_BAD_INPUT" && briefFiles.usable.length > 0)) {
-      return empty("FAILED", err instanceof AiReviewError ? err.code : "AI_UNAVAILABLE", hash, briefSources);
+      return failed(err, hash, briefSources);
     }
     // Gemini could not read the attachments and does not say which one: try again on the written brief
     // alone, and say that every attached file could not be read.
@@ -214,7 +220,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     try {
       raw = await ask([]);
     } catch (err2) {
-      return empty("FAILED", err2 instanceof AiReviewError ? err2.code : "AI_UNAVAILABLE", hash, briefSources);
+      return failed(err2, hash, briefSources);
     }
   }
 
@@ -245,12 +251,13 @@ export async function generateBriefComparison(projectId: number, deps?: BriefDep
   const report = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER], select: { id: true } });
   if (!report) return null;
   const result = await runBriefComparison(projectId, deps);
+  const lastAttempt = attemptNote(result);
   const data = {
     status: result.status,
     promptVersion: BRIEF_PROMPT_VERSION,
     model: modelName(),
     briefHash: result.briefHash,
-    content: result.content as object,
+    content: { ...result.content, ...(lastAttempt ? { lastAttempt } : {}) } as object,
     errorCode: result.errorCode,
   };
   await prisma.aiReportReview.upsert({

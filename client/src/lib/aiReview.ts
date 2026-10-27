@@ -52,6 +52,8 @@ export interface AiReviewResponse {
   errorCode?: string | null;
   aiAddressed?: Array<AiAddressedNote & { name: string }>;
   briefFailed?: boolean;
+  // The AI's daily limit is in force; `retryAt` (ISO) is when it resets, null when unknown.
+  aiLimit?: { retryAt: string | null };
   // Instructor only: whether the project has written instructions or an attached file.
   hasInstructions?: boolean;
   // Instructor and group leader only.
@@ -80,9 +82,30 @@ export function formatBasedOn(iso: string | null | undefined): string | null {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/**
+ * The daily-limit sentence with the reset time on the viewer's own clock, from the server's `retryAt` (ISO).
+ * Without a usable time it simply says to try later. `now` and `timeZone` are injectable for tests.
+ */
+export function quotaResetLine(retryAt: string | null | undefined, now: Date = new Date(), timeZone?: string): string {
+  const base = "The AI's daily limit was reached.";
+  const at = retryAt ? new Date(retryAt) : null;
+  if (!at || Number.isNaN(at.getTime()) || at.getTime() <= now.getTime()) return `${base} Try again later.`;
+  const clock = at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", ...(timeZone ? { timeZone } : {}) });
+  const hours = Math.max(1, Math.ceil((at.getTime() - now.getTime()) / 3_600_000));
+  return `${base} It is available again around ${clock} (in about ${hours} ${hours === 1 ? "hour" : "hours"}).`;
+}
+
+/** True while the reset time (if known) has not passed: the Try again button stays disabled until then. */
+export function quotaStillBlocked(retryAt: string | null | undefined, now: Date = new Date()): boolean {
+  if (!retryAt) return false;
+  const t = Date.parse(retryAt);
+  return Number.isFinite(t) && t > now.getTime();
+}
+
 /** One calm line for the Generate area; null when there is nothing to say. Instructor only. */
-export function reviewStatusLine(data: AiReviewResponse | null): string | null {
+export function reviewStatusLine(data: AiReviewResponse | null, now: Date = new Date()): string | null {
   if (!data?.enabled || data.running || !data.summaries) return null;
+  if (data.status === "FAILED" && data.aiLimit) return `${quotaResetLine(data.aiLimit.retryAt, now)} Changed files are shown instead.`;
   if (data.status === "FAILED") return "AI findings could not be written because the AI was unavailable. Changed files are shown instead. Try again later.";
   if (data.status === "PARTIAL") return "Some AI findings show changed files only, because the AI was unavailable or its wording was not used.";
   if (data.outdated) return "AI findings are from an earlier analysis. Generate again to update them.";
@@ -134,8 +157,9 @@ export function aiSourceLine(sourceType: string | null | undefined): string {
   return "Written by AI after reading the work.";
 }
 
-export function briefStatusLine(data: AiReviewResponse | null): string | null {
+export function briefStatusLine(data: AiReviewResponse | null, now: Date = new Date()): string | null {
   if (!data?.enabled || data.running || !data.briefFailed) return null;
+  if (data.aiLimit) return quotaResetLine(data.aiLimit.retryAt, now);
   return "The project instructions check could not run. Try again later.";
 }
 

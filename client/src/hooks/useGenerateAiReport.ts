@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NarrativeResponse } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
-import { AI_SLOW_MS } from "../lib/aiReview";
+import { AI_SLOW_MS, quotaResetLine } from "../lib/aiReview";
 import type { UseAiReview } from "./useAiReview";
 import { useSlowAfter } from "./useSlowAfter";
 
@@ -44,7 +44,8 @@ export function useGenerateAiReport(
       const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const data = (await res.json()) as Partial<NarrativeResponse> & { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Could not generate AI findings.");
+        // The daily limit is worded here, on the viewer's clock; every other message comes from the server.
+        setError(data.code === "AI_QUOTA_DAILY" ? quotaResetLine(data.retryAt) : (data.error ?? "Could not generate AI findings."));
       } else if (data.narrative) {
         onNarrativeGenerated(data.narrative);
       }

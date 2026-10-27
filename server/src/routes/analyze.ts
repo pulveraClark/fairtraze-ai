@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { generateFairnessNarrative } from "../lib/gemini.js";
+import { aiFailureOf, plainAiFailure } from "../lib/aiFailureText.js";
 import { logReadability } from "../lib/aiReview/readability.js";
 import { runAnalysis, type ProgressEmitter } from "../lib/analysisRunner.js";
 import type { Request, Response } from "express";
@@ -172,16 +173,27 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
     res.json({ narrative, cached: false });
   } catch (err) {
     console.error("[Gemini] narrative generation failed:", err);
+    // Only these plain sentences leave the server, never the provider's text.
+    const failure = aiFailureOf(err);
+    const quota = failure.code === "AI_QUOTA_DAILY";
+    const quotaInfo = quota
+      ? {
+          code: failure.code,
+          ...(failure.retryAfterMs ? { retryAt: new Date(Date.now() + failure.retryAfterMs).toISOString() } : {}),
+        }
+      : {};
     if (stored.narrative) {
       // Degrade gracefully: return saved narrative with a warning
       res.json({
         narrative: stored.narrative,
         cached: true,
-        warning: "Generation failed; showing previously saved narrative.",
+        warning: quota ? plainAiFailure(failure.code, failure.retryAfterMs) : "Generation failed; showing previously saved narrative.",
+        ...quotaInfo,
       });
     } else {
-      res.status(503).json({
-        error: "AI explanation temporarily unavailable — showing computed results.",
+      res.status(quota ? 429 : 503).json({
+        error: plainAiFailure(failure.code, failure.retryAfterMs),
+        ...quotaInfo,
       });
     }
   }

@@ -10,11 +10,12 @@ import { generateMemberSummaries } from "../lib/aiReview/memberSummaries.js";
 import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
 import { briefFingerprint } from "../lib/aiReview/briefEvidence.js";
 import { attachmentMetaFor } from "../lib/briefAttachments.js";
+import { activeQuotaLimit } from "../lib/aiFailureText.js";
 import { requirementKeys } from "../lib/requirementMarks.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
 import { canonicalRepoUrl, linkFile, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
 import type {
-  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiBriefSources, AiRequirementStatus, AiFileLinks,
+  AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiBriefContent, AiBriefSources, AiRequirementStatus, AiFileLinks, AiLastAttempt,
 } from "@shared/aiReviewTypes.js";
 
 export const aiReviewRouter = Router();
@@ -203,6 +204,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   // Brief check: instructor and leader only. Computed before the early return so it shows even if
   // the member summaries have not been written.
   let brief: { briefCheck?: AiBriefView; briefFailed?: boolean; hasInstructions?: boolean } = {};
+  let briefAttempt: AiLastAttempt | undefined;
   if (viewer !== "member") {
     // The assignment (and so the attachments) is resolved from this group; no id comes from the client.
     const [assignment, briefRow] = await Promise.all([
@@ -212,6 +214,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }),
     ]);
+    briefAttempt = (briefRow?.content as { lastAttempt?: AiLastAttempt } | null)?.lastAttempt;
     const text = assignment?.description ?? "";
     const attachments = assignment ? (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [] : [];
     const view = shapeBriefForViewer(
@@ -224,8 +227,13 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     if (viewer === "instructor") brief.hasInstructions = hasInstructions;
   }
 
+  // The AI's daily limit, while it is still in force. The page words it in the viewer's own clock.
+  const memberAttempt = (review?.content as { lastAttempt?: AiLastAttempt } | null)?.lastAttempt;
+  const limit = viewer === "instructor" ? activeQuotaLimit([memberAttempt, briefAttempt]) : null;
+  const aiLimit = limit ? { aiLimit: limit } : {};
+
   if (!review) {
-    res.json({ ...base, generatedAt: null, summaries: null, ...brief });
+    res.json({ ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit });
     return;
   }
 
@@ -240,6 +248,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     outdated: review.reportId !== latestReport?.id || review.promptVersion !== AI_REVIEW_PROMPT_VERSION,
     summaries: shaped.summaries,
     ...brief,
+    ...aiLimit,
     ...(viewer === "instructor"
       ? { status: review.status, errorCode: review.errorCode, aiAddressed: shaped.aiAddressed }
       : {}),
