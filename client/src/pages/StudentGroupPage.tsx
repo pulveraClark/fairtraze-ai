@@ -47,6 +47,7 @@ import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamC
 import ReactMarkdown from "react-markdown";
 import { AiBadge } from "../components/ui/AiBadge";
 import { BriefCheckWithMarks } from "../components/BriefCheckWithMarks";
+import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
 import { useAiReview } from "../hooks/useAiReview";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
@@ -963,6 +964,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                           {report.narrativeOutdated ? " Results changed since this was written." : ""}
                         </p>
                       </div>
+                    )}
+                    {isLeader && ai.data?.enabled && ai.data.briefCheck && ai.data.refreshFailed?.brief && (
+                      <RefreshFailedNote note={ai.data.refreshFailed.brief} />
                     )}
                     {isLeader && ai.data?.enabled && ai.data.briefCheck && (
                       <BriefCheckWithMarks

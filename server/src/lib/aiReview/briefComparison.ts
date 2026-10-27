@@ -5,6 +5,7 @@ import { LATEST_REPORT_ORDER } from "../latestReport.js";
 import { buildPseudonymEntries, scrubFreeText } from "../geminiPseudonyms.js";
 import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
 import { aiFailureOf, attemptNote } from "../aiFailureText.js";
+import { keepLastGood } from "./keepLastGood.js";
 import type { AiBriefContent, AiBriefSources, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
 import { fetchRepoTree, fetchRepoFileText } from "./repoFiles.js";
@@ -252,6 +253,9 @@ export async function generateBriefComparison(projectId: number, deps?: BriefDep
   if (!report) return null;
   const result = await runBriefComparison(projectId, deps);
   const lastAttempt = attemptNote(result);
+  if (result.status === "FAILED" && lastAttempt && (await keepLastGood(projectId, "BRIEF_COMPARISON", lastAttempt))) {
+    return { reportId: report.id, result };
+  }
   const data = {
     status: result.status,
     promptVersion: BRIEF_PROMPT_VERSION,

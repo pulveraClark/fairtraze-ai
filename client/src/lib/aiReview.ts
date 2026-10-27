@@ -36,8 +36,17 @@ export interface AiBriefCheck {
   aiAddressedCount?: number;
 }
 
+// A refresh that failed while the previous good result is still shown (instructor and leader).
+export interface AiRefreshNote {
+  at: string;
+  shownFrom: string;
+  errorCode: string;
+  retryAt?: string;
+}
+
 export interface AiReviewResponse {
   enabled: boolean;
+  refreshFailed?: { findings?: AiRefreshNote; brief?: AiRefreshNote };
   // Canonical link of the group's repository (links on file evidence are built by the server).
   repoUrl?: string | null;
   running?: boolean;
@@ -100,6 +109,13 @@ export function quotaStillBlocked(retryAt: string | null | undefined, now: Date 
   if (!retryAt) return false;
   const t = Date.parse(retryAt);
   return Number.isFinite(t) && t > now.getTime();
+}
+
+/** "The last check could not be refreshed. Showing the check from Oct 26." (plus the daily-limit sentence when it applies). */
+export function refreshFailedLine(note: AiRefreshNote, now: Date = new Date()): string {
+  const from = formatBasedOn(note.shownFrom);
+  const base = `The last check could not be refreshed.${from ? ` Showing the check from ${from}.` : ""}`;
+  return note.errorCode === "AI_QUOTA_DAILY" ? `${base} ${quotaResetLine(note.retryAt, now)}` : base;
 }
 
 /** One calm line for the Generate area; null when there is nothing to say. Instructor only. */

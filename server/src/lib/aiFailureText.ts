@@ -46,11 +46,14 @@ export function attemptNote(
   result: { status: string; errorCode: string | null; retryAfterMs?: number | null },
   now: Date = new Date(),
 ): AiLastAttempt | undefined {
-  if ((result.status !== "FAILED" && result.status !== "PARTIAL") || !result.errorCode) return undefined;
-  const wait = result.errorCode === "AI_QUOTA_DAILY" ? result.retryAfterMs : null;
+  if (result.status !== "FAILED" && result.status !== "PARTIAL") return undefined;
+  // A failed run always leaves a note, so it can never silently replace a good review.
+  const errorCode = result.errorCode ?? (result.status === "FAILED" ? "AI_UNAVAILABLE" : null);
+  if (!errorCode) return undefined;
+  const wait = errorCode === "AI_QUOTA_DAILY" ? result.retryAfterMs : null;
   return {
     at: now.toISOString(),
-    errorCode: result.errorCode,
+    errorCode,
     ...(typeof wait === "number" && wait > 0 ? { retryAt: new Date(now.getTime() + wait).toISOString() } : {}),
   };
 }

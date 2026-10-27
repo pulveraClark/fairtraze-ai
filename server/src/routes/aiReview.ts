@@ -148,6 +148,21 @@ export function shapeBriefForViewer(
   };
 }
 
+export interface AiRefreshNote {
+  // When the failed attempt happened, and the date of the check that is still shown (both ISO).
+  at: string;
+  shownFrom: string;
+  errorCode: string;
+  // Daily limit only: when it resets.
+  retryAt?: string;
+}
+
+// Present only when a failed run left the previous good result in place (`keptLast`).
+export function refreshNote(attempt: AiLastAttempt | undefined, shownFrom: Date | undefined): AiRefreshNote | undefined {
+  if (!attempt?.keptLast || !shownFrom) return undefined;
+  return { at: attempt.at, shownFrom: shownFrom.toISOString(), errorCode: attempt.errorCode, ...(attempt.retryAt ? { retryAt: attempt.retryAt } : {}) };
+}
+
 const idParam = z.coerce.number().int().positive();
 
 async function classSwitchOn(project: LoadedGroup): Promise<boolean> {
@@ -205,6 +220,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   // the member summaries have not been written.
   let brief: { briefCheck?: AiBriefView; briefFailed?: boolean; hasInstructions?: boolean } = {};
   let briefAttempt: AiLastAttempt | undefined;
+  let briefStored: { createdAt: Date } | null = null;
   if (viewer !== "member") {
     // The assignment (and so the attachments) is resolved from this group; no id comes from the client.
     const [assignment, briefRow] = await Promise.all([
@@ -215,6 +231,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
       }),
     ]);
     briefAttempt = (briefRow?.content as { lastAttempt?: AiLastAttempt } | null)?.lastAttempt;
+    briefStored = briefRow;
     const text = assignment?.description ?? "";
     const attachments = assignment ? (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [] : [];
     const view = shapeBriefForViewer(
@@ -231,9 +248,15 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   const memberAttempt = (review?.content as { lastAttempt?: AiLastAttempt } | null)?.lastAttempt;
   const limit = viewer === "instructor" ? activeQuotaLimit([memberAttempt, briefAttempt]) : null;
   const aiLimit = limit ? { aiLimit: limit } : {};
+  // A failed refresh that left the previous good result in place: the page shows it with a small note.
+  const findingsNote = refreshNote(memberAttempt, review?.createdAt);
+  const briefNote = refreshNote(briefAttempt, briefStored?.createdAt);
+  const refreshFailed = viewer !== "member" && (findingsNote || briefNote)
+    ? { refreshFailed: { ...(findingsNote ? { findings: findingsNote } : {}), ...(briefNote ? { brief: briefNote } : {}) } }
+    : {};
 
   if (!review) {
-    res.json({ ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit });
+    res.json({ ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit, ...refreshFailed });
     return;
   }
 
@@ -249,6 +272,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     summaries: shaped.summaries,
     ...brief,
     ...aiLimit,
+    ...refreshFailed,
     ...(viewer === "instructor"
       ? { status: review.status, errorCode: review.errorCode, aiAddressed: shaped.aiAddressed }
       : {}),

@@ -48,6 +48,8 @@ export interface AiLastAttempt {
   at: string;
   errorCode: string;
   retryAt?: string;
+  // True when this failed run left the previous good review in place (shown with a note).
+  keptLast?: boolean;
 }
 
 export interface AiMemberSummariesContent {

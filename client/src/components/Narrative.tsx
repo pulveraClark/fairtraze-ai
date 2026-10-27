@@ -8,6 +8,7 @@ import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
 import { BriefCheckWithMarks } from "./BriefCheckWithMarks";
+import { RefreshFailedNote } from "./RefreshFailedNote";
 import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
 import type { UseAiReview } from "../hooks/useAiReview";
@@ -95,6 +96,13 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           </button>
         </div>
       )}
+      {review?.data?.enabled && review.data.refreshFailed?.findings && (
+        <RefreshFailedNote
+          note={review.data.refreshFailed.findings}
+          onTryAgain={review.data.canGenerate ? () => void generate(!!narrative) : undefined}
+          busy={busy && !slow}
+        />
+      )}
       {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
       {briefLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{briefLine}</p>}
@@ -139,6 +147,15 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
             May be wrong{when ? ` · Based on the analysis of ${when}` : ""}. Informational only; it does not assign grades or replace instructor judgment.
           </p>
         </>
+      )}
+      {briefCheck && !generating && review?.data?.refreshFailed?.brief && (
+        <div className="mt-4">
+          <RefreshFailedNote
+            note={review.data.refreshFailed.brief}
+            onTryAgain={review.data.canGenerate ? () => void generate(!!narrative) : undefined}
+            busy={busy && !slow}
+          />
+        </div>
       )}
       {briefCheck && !generating && (
         <BriefCheckWithMarks

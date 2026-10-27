@@ -5,6 +5,7 @@ import { buildPseudonymEntries } from "../geminiPseudonyms.js";
 import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
 import { generateJson, modelName } from "../geminiClient.js";
 import { aiFailureOf, attemptNote } from "../aiFailureText.js";
+import { keepLastGood } from "./keepLastGood.js";
 import type { AiMemberSummariesContent, AiMemberSummary, AiAddressedNote, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { fetchCommitEvidence, MAX_REMOVED_LINES_PER_FILE, type CommitEvidence } from "./commitEvidence.js";
 import { loadGroupDocEvidence, memberDocEvidence } from "./docsEvidence.js";
@@ -334,6 +335,9 @@ export async function generateMemberSummaries(
   if (!report) return null;
   const result = await runMemberSummaries(projectId, deps);
   const lastAttempt = attemptNote(result);
+  if (result.status === "FAILED" && lastAttempt && (await keepLastGood(projectId, "MEMBER_SUMMARIES", lastAttempt))) {
+    return { reportId: report.id, result };
+  }
   const data = {
     status: result.status,
     promptVersion: AI_REVIEW_PROMPT_VERSION,
