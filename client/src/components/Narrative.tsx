@@ -1,3 +1,4 @@
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { CARD } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
@@ -6,6 +7,7 @@ import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
 import { BriefCheckCard } from "./BriefCheckCard";
+import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
 import type { UseAiReview } from "../hooks/useAiReview";
 import { useGenerateAiReport, type AiReportGenerator } from "../hooks/useGenerateAiReport";
@@ -28,9 +30,13 @@ interface Props {
   sourceType?: string | null;
   /** The page that shows (and edits) the project instructions. */
   instructionsHref?: string;
+  /** The assignment whose instructions open in a window over the report (loaded only when opened). */
+  instructionsAssignmentId?: number;
 }
 
-export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref }: Props) {
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref, instructionsAssignmentId }: Props) {
+  // The sentence to mark in the instructions window; null while it is closed.
+  const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
   const { generating, error } = generator ?? own;
 
@@ -119,7 +125,22 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
         </>
       )}
       {briefCheck && !generating && (
-        <BriefCheckCard check={briefCheck} instructor repoUrl={repoUrl} sourceType={sourceType} instructionsHref={instructionsHref} />
+        <BriefCheckCard
+          check={briefCheck}
+          instructor
+          repoUrl={repoUrl}
+          sourceType={sourceType}
+          instructionsHref={instructionsHref}
+          onViewInstructions={instructionsAssignmentId ? (quote) => setViewing({ quote }) : undefined}
+        />
+      )}
+      {viewing && instructionsAssignmentId && (
+        <InstructorInstructionsModal
+          assignmentId={instructionsAssignmentId}
+          quote={viewing.quote}
+          editHref={instructionsHref}
+          onClose={() => setViewing(null)}
+        />
       )}
       {noInstructions && !briefCheck && !generating && (
         <p className="mt-4 flex flex-wrap items-center gap-x-2 text-sm leading-normal text-slate-700">

@@ -774,6 +774,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               repoUrl={sourceType !== "EDITOR" ? stored.repoUrl : null}
               sourceType={sourceType}
               instructionsHref={classId && assignmentId ? assignmentUrl : undefined}
+              instructionsAssignmentId={classId && assignmentId ? assignmentId : undefined}
               onNarrativeGenerated={onNarrativeGenerated}
             />
 

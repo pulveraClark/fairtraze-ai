@@ -242,27 +242,54 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
   );
 }
 
-/** Modal wrapper so students can read the project instructions from the class page before joining a group. */
+/**
+ * The project instructions in a window: students read them from the class page or a report, the instructor from a
+ * report (InstructorInstructionsModal loads them lazily and passes `status`). A full-screen sheet under 640px.
+ * Esc or Close returns focus to whatever opened it.
+ */
 export function BriefModal({
-  assignmentId, title, description, attachments, onClose, highlight = null,
-}: { assignmentId: number; title: string; description: string | null; attachments: BriefAttachment[]; onClose: () => void; highlight?: string | null }) {
+  assignmentId, title, description, attachments, onClose, highlight = null, status = "ready", onRetry, editHref,
+}: {
+  assignmentId: number; title: string; description: string | null; attachments: BriefAttachment[]; onClose: () => void; highlight?: string | null;
+  /** While the text is being fetched, or when that failed. */
+  status?: "loading" | "error" | "ready";
+  onRetry?: () => void;
+  /** Instructor only: a link to the page where the instructions are edited. */
+  editHref?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(true, ref, onClose);
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-stretch justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={`Project instructions: ${title}`}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-4 shadow-xl"
+        className="h-full w-full overflow-y-auto bg-white p-4 shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-sm text-slate-600">{title}</p>
-          <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Close</button>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <p className="min-w-0 flex-1 basis-40 truncate text-sm text-slate-600">{title}</p>
+          <div className="flex items-center gap-2">
+            {editHref && (
+              <a href={editHref} className={`inline-flex min-h-10 items-center text-sm font-medium text-blue-800 underline underline-offset-2 ${FOCUS_LIGHT}`}>
+                Edit the instructions
+              </a>
+            )}
+            <button type="button" onClick={onClose} className={`${BUTTON_SECONDARY_COMPACT} min-h-10`}>Close</button>
+          </div>
         </div>
-        <BriefCard assignmentId={assignmentId} description={description} attachments={attachments} alwaysOpen highlight={highlight} />
+        {status === "loading" && <p role="status" className="py-6 text-center text-sm text-slate-700">Loading the instructions…</p>}
+        {status === "error" && (
+          <div role="alert" className="space-y-2 py-4 text-sm text-slate-900">
+            <p>The instructions could not be loaded.</p>
+            {onRetry && <button type="button" onClick={onRetry} className={`${BUTTON_SECONDARY_COMPACT} min-h-10`}>Try again</button>}
+          </div>
+        )}
+        {status === "ready" && (
+          <BriefCard assignmentId={assignmentId} description={description} attachments={attachments} alwaysOpen highlight={highlight} />
+        )}
       </div>
     </div>
   );
