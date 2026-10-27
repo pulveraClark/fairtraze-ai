@@ -5,7 +5,8 @@ import type { TeamReport, AnyScoredMember, DocumentScoredMember, CombinedScoredM
 import { buildPseudonymEntries, pseudonymizeReport, scrubFreeText, restoreNames } from "./geminiPseudonyms.js";
 import { NARRATIVE_PLAIN_ENGLISH_EXTRA, PLAIN_ENGLISH_RULES } from "./plainEnglish.js";
 import { parseQuotaError, retryWaitMs } from "./aiQuota.js";
-import { AiReviewError } from "./geminiClient.js";
+import { AiReviewError, reserveProviderCall } from "./geminiClient.js";
+import { noteDailyQuotaHit } from "./aiReview/limiter.js";
 
 function isCombinedMember(m: AnyScoredMember): m is CombinedScoredMember {
   return "githubContributionShare" in m;
@@ -139,6 +140,7 @@ async function callOnce(
   teamReport: TeamReport<AnyScoredMember>,
   briefDescription?: string | null
 ): Promise<string> {
+  reserveProviderCall(); // counted against the day's calls; refused up front when the daily limit is reached
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: formatPrompt(projectName, teamReport, briefDescription),
@@ -187,7 +189,10 @@ export async function generateFairnessNarrative(
     if ((err as { status?: number } | null)?.status !== 429) throw err;
     // A per-day quota cannot succeed on retry; a per-minute limit is retried once, after a capped wait.
     const quota = parseQuotaError(err);
-    if (quota.daily) throw new AiReviewError("AI_QUOTA_DAILY", undefined, quota.retryAfterMs);
+    if (quota.daily) {
+      noteDailyQuotaHit(quota.retryAfterMs); // the provider's answer wins over the in-memory counter
+      throw new AiReviewError("AI_QUOTA_DAILY", undefined, quota.retryAfterMs);
+    }
     const delayMs = retryWaitMs(quota);
     console.warn(`[Gemini] Rate-limited. Retrying in ${delayMs / 1000}s…`);
     await new Promise((r) => setTimeout(r, delayMs));
@@ -196,6 +201,7 @@ export async function generateFairnessNarrative(
     } catch (err2) {
       if ((err2 as { status?: number } | null)?.status !== 429) throw err2;
       const again = parseQuotaError(err2);
+      if (again.daily) noteDailyQuotaHit(again.retryAfterMs);
       throw new AiReviewError(again.daily ? "AI_QUOTA_DAILY" : "AI_RATE_LIMITED", undefined, again.retryAfterMs);
     }
   }

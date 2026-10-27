@@ -57,28 +57,83 @@ export function createLimiter(opts: LimiterOptions): Limiter {
 // ~13 requests a minute, two at a time: under the free tier's ~15/min with headroom.
 export const aiReviewLimiter = createLimiter({ minSpacingMs: 4500, concurrency: 2 });
 
-// A daily call budget so a runaway loop cannot burn the free-tier quota. In memory, per process;
-// resets at 00:00 UTC. AI_REVIEW_DAILY_CALL_CAP overrides the default of 600.
-let budgetDay = "";
-let budgetUsed = 0;
+// A daily call budget for EVERY provider call (narrative included), so a run is refused up front instead of
+// failing halfway. In memory, per process, so it restarts at zero when the server restarts: the provider's
+// own "daily limit reached" answer always wins (see noteDailyQuotaHit). The day is the America/Los_Angeles
+// day because Google resets the free quota at midnight Pacific.
+// AI_DAILY_QUOTA sets the limit (default 20, the free tier); set it higher, e.g. 1000, with a paid key.
+// AI_REVIEW_DAILY_CALL_CAP is the older name and is still read when AI_DAILY_QUOTA is not set.
+export const DEFAULT_DAILY_QUOTA = 20;
+const PACIFIC = "America/Los_Angeles";
+const pacificDayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: PACIFIC, year: "numeric", month: "2-digit", day: "2-digit" });
 
-export function dailyCallCap(): number {
-  const n = Number(process.env.AI_REVIEW_DAILY_CALL_CAP);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 600;
+export function pacificDay(at: Date): string {
+  return pacificDayFormat.format(at);
 }
 
-export function takeDailyBudget(at: Date = new Date()): boolean {
-  const day = at.toISOString().slice(0, 10);
+// Milliseconds until the next midnight in Pacific time (exact across daylight-saving changes).
+export function msUntilPacificMidnight(at: Date = new Date()): number {
+  const today = pacificDay(at);
+  let lo = 0; // still today
+  let hi = 26 * 3_600_000; // already tomorrow
+  while (hi - lo > 1000) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (pacificDay(new Date(at.getTime() + mid)) === today) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+
+let budgetDay = "";
+let budgetUsed = 0;
+let blockedUntil = 0; // epoch ms; set when the provider itself says the daily limit is reached
+
+export function dailyCallCap(): number {
+  for (const raw of [process.env.AI_DAILY_QUOTA, process.env.AI_REVIEW_DAILY_CALL_CAP]) {
+    const n = Number(raw);
+    if (raw && Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return DEFAULT_DAILY_QUOTA;
+}
+
+function rollOver(at: Date): void {
+  const day = pacificDay(at);
   if (day !== budgetDay) {
     budgetDay = day;
     budgetUsed = 0;
   }
+}
+
+export function remainingCalls(at: Date = new Date()): number {
+  rollOver(at);
+  return Math.max(0, dailyCallCap() - budgetUsed);
+}
+
+export function takeDailyBudget(at: Date = new Date()): boolean {
+  rollOver(at);
   if (budgetUsed >= dailyCallCap()) return false;
   budgetUsed++;
   return true;
 }
 
+export type QuotaGate = { ok: true } | { ok: false; retryAfterMs: number };
+
+// Can a run that needs `needed` provider calls start now? Not while the provider has said the daily limit is
+// reached (until the time it gave), and not when the counter says the day's calls would run out first.
+export function quotaGate(needed: number, at: Date = new Date()): QuotaGate {
+  if (blockedUntil > at.getTime()) return { ok: false, retryAfterMs: blockedUntil - at.getTime() };
+  if (remainingCalls(at) < needed) return { ok: false, retryAfterMs: msUntilPacificMidnight(at) };
+  return { ok: true };
+}
+
+// The provider said the daily limit is reached: believe it, whatever the counter says, until the time it gave
+// (the next Pacific midnight when it gave none).
+export function noteDailyQuotaHit(retryAfterMs: number | null, at: Date = new Date()): void {
+  blockedUntil = at.getTime() + (retryAfterMs && retryAfterMs > 0 ? retryAfterMs : msUntilPacificMidnight(at));
+}
+
 export function resetDailyBudgetForTests(): void {
   budgetDay = "";
   budgetUsed = 0;
+  blockedUntil = 0;
 }

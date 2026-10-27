@@ -54,12 +54,18 @@ describe("createLimiter", () => {
 
 describe("daily budget", () => {
   afterEach(() => { delete process.env.AI_REVIEW_DAILY_CALL_CAP; resetDailyBudgetForTests(); });
-  it("stops after the cap and resets the next UTC day", () => {
+  it("stops after the cap and resets at midnight Pacific (Google's reset), not UTC", () => {
     process.env.AI_REVIEW_DAILY_CALL_CAP = "2";
     resetDailyBudgetForTests();
     const d1 = new Date("2026-10-26T10:00:00Z");
     expect([takeDailyBudget(d1), takeDailyBudget(d1), takeDailyBudget(d1)]).toEqual([true, true, false]);
-    expect(takeDailyBudget(new Date("2026-10-27T00:00:01Z"))).toBe(true);
+    // UTC midnight is 5 pm Pacific: still the same Pacific day, still no calls left.
+    expect(takeDailyBudget(new Date("2026-10-27T00:00:01Z"))).toBe(false);
+    // A call counted just before Pacific midnight (07:00Z in October) does not count after it.
+    resetDailyBudgetForTests();
+    const before = new Date("2026-10-27T06:59:59Z");
+    expect([takeDailyBudget(before), takeDailyBudget(before), takeDailyBudget(before)]).toEqual([true, true, false]);
+    expect(takeDailyBudget(new Date("2026-10-27T07:00:01Z"))).toBe(true);
   });
 });
 

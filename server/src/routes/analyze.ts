@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { generateFairnessNarrative, narrativeInputHash } from "../lib/gemini.js";
 import { aiFailureOf, plainAiFailure } from "../lib/aiFailureText.js";
+import { quotaGate } from "../lib/aiReview/limiter.js";
 import { logReadability } from "../lib/aiReview/readability.js";
 import { runAnalysis, type ProgressEmitter } from "../lib/analysisRunner.js";
 import type { Request, Response } from "express";
@@ -169,6 +170,20 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
   const inputHash = narrativeInputHash(groupLabel, stored.report, briefContext);
   if (stored.narrative && regenerate && !stored.narrativeOutdated && stored.narrativeAt && stored.narrativeInputHash === inputHash) {
     res.json({ narrative: stored.narrative, cached: true, upToDate: { since: stored.narrativeAt } });
+    return;
+  }
+
+  // Refuse up front when the day's AI calls are used up or the provider said the daily limit is reached:
+  // no call is made, and the saved explanation (if any) stays. Checked after the unchanged check above,
+  // because an unchanged Regenerate costs nothing.
+  const gate = quotaGate(1);
+  if (!gate.ok) {
+    const quotaInfo = { code: "AI_QUOTA_DAILY", retryAt: new Date(Date.now() + gate.retryAfterMs).toISOString() };
+    if (stored.narrative) {
+      res.json({ narrative: stored.narrative, cached: true, warning: plainAiFailure("AI_QUOTA_DAILY", gate.retryAfterMs), ...quotaInfo });
+    } else {
+      res.status(429).json({ error: plainAiFailure("AI_QUOTA_DAILY", gate.retryAfterMs), ...quotaInfo });
+    }
     return;
   }
 

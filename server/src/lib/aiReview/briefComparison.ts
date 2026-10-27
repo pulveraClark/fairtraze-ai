@@ -6,6 +6,7 @@ import { buildPseudonymEntries, scrubFreeText } from "../geminiPseudonyms.js";
 import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
 import { aiFailureOf, attemptNote } from "../aiFailureText.js";
 import { keepLastGood } from "./keepLastGood.js";
+import { quotaGate } from "./limiter.js";
 import { adoptReviewForReport, findReusableReview, inputFingerprint } from "./inputFingerprint.js";
 import type { AiBriefContent, AiBriefSources, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
@@ -223,6 +224,10 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
       validate: validateBriefOutput,
       ...(attached.length > 0 ? { files: attached.map((f) => ({ mimeType: f.mimeType, data: f.data })) } : {}),
     });
+
+  // Refuse up front when the day's AI calls are used up or the provider said the daily limit is reached.
+  const gate = quotaGate(1);
+  if (!gate.ok) return failed(new AiReviewError("AI_QUOTA_DAILY", undefined, gate.retryAfterMs), hash, briefSources);
 
   let raw;
   let sentFiles = briefFiles.usable;

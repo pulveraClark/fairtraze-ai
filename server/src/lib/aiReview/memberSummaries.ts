@@ -3,7 +3,8 @@ import { checkRepoUrl } from "@shared/repoUrl.js";
 import { LATEST_REPORT_ORDER } from "../latestReport.js";
 import { buildPseudonymEntries } from "../geminiPseudonyms.js";
 import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
-import { generateJson, modelName } from "../geminiClient.js";
+import { generateJson, AiReviewError, modelName } from "../geminiClient.js";
+import { quotaGate } from "./limiter.js";
 import { aiFailureOf, attemptNote } from "../aiFailureText.js";
 import { keepLastGood } from "./keepLastGood.js";
 import { adoptReviewForReport, findReusableReview, inputFingerprint } from "./inputFingerprint.js";
@@ -226,6 +227,8 @@ export async function runMemberSummaries(
 
   // ── Stage 1: judge each commit once (AI) ──────────────────────────────────
   let digestFallback = false;
+  let gateChecked = false; // the daily-quota check ran (it covers the findings call too)
+  let quotaRefused = false;
   if (commitsListed && repo?.ok && deps.githubToken) {
     try {
       const shas = selected.flatMap((s) => s.list.map((c) => c.sha));
@@ -237,7 +240,16 @@ export async function runMemberSummaries(
         cached.map((d) => [d.sha, { sha: d.sha, summary: d.summary, files: d.files as DigestLine["files"] }]),
       );
 
-      const missing = selected.flatMap((s) => s.list.filter((c) => !digestBySha.has(c.sha)).map((c) => ({ ...c, userId: s.userId })));
+      const allMissing = selected.flatMap((s) => s.list.filter((c) => !digestBySha.has(c.sha)).map((c) => ({ ...c, userId: s.userId })));
+      // Refuse up front when the day's AI calls cannot cover this whole run (the commit batches plus the
+      // findings call), instead of failing halfway. Nothing is called, the last good result is kept.
+      const gate = quotaGate(Math.ceil(allMissing.length / COMMIT_BATCH_SIZE) + 1);
+      gateChecked = true;
+      if (!gate.ok) {
+        quotaRefused = true;
+        noteAiError(new AiReviewError("AI_QUOTA_DAILY", undefined, gate.retryAfterMs));
+      }
+      const missing = quotaRefused ? [] : allMissing;
       const evidence: Array<CommitEvidence & { userId: number }> = [];
       for (const m of missing) {
         try {
@@ -308,7 +320,17 @@ export async function runMemberSummaries(
   const written = new Map<number, string>();
   let rollupFailed = false;
 
-  if (withEvidence.length > 0) {
+  // No GitHub stage ran the daily-quota check (a Docs-only group): check for the findings call itself.
+  if (withEvidence.length > 0 && !gateChecked) {
+    const gate = quotaGate(1);
+    if (!gate.ok) {
+      quotaRefused = true;
+      noteAiError(new AiReviewError("AI_QUOTA_DAILY", undefined, gate.retryAfterMs));
+    }
+  }
+  if (quotaRefused) rollupFailed = true;
+
+  if (withEvidence.length > 0 && !quotaRefused) {
     const payload = withEvidence.map((p) => ({
       member: label.get(p.userId)!,
       commits: (lines.get(p.userId) ?? []).map((l) => l.summary),

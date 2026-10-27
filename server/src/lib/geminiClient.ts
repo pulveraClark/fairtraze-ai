@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
-import { aiReviewLimiter, takeDailyBudget } from "./aiReview/limiter.js";
+import { aiReviewLimiter, noteDailyQuotaHit, quotaGate, takeDailyBudget } from "./aiReview/limiter.js";
 import { parseQuotaError, retryWaitMs } from "./aiQuota.js";
 
 // JSON-only Gemini client for the AI review (member summaries, brief check). Separate from
@@ -100,9 +100,18 @@ async function callOnce(req: JsonRequest<unknown>): Promise<string> {
   }
 }
 
+// Every provider call goes through here first (the review client and the narrative): refused up front when
+// the provider said the daily limit is reached or the day's call count is used up, otherwise counted.
+export function reserveProviderCall(): void {
+  const gate = quotaGate(1);
+  if (!gate.ok) throw new AiReviewError("AI_QUOTA_DAILY", undefined, gate.retryAfterMs);
+  takeDailyBudget();
+}
+
 // A per-day quota gets its own code; the provider's own text is never kept.
 function rateLimitError(err: unknown): AiReviewError {
   const q = parseQuotaError(err);
+  if (q.daily) noteDailyQuotaHit(q.retryAfterMs);
   return new AiReviewError(q.daily ? "AI_QUOTA_DAILY" : "AI_RATE_LIMITED", undefined, q.retryAfterMs);
 }
 
@@ -120,9 +129,12 @@ function classify(err: unknown, hasFiles = false): AiReviewError {
 // text reaches users.
 export async function generateJson<T>(req: JsonRequest<T>): Promise<T> {
   if (!aiReviewEnabled()) throw new AiReviewError("AI_DISABLED");
-  if (!takeDailyBudget()) throw new AiReviewError("AI_RATE_LIMITED", "daily AI review call budget used");
 
-  const run = async (): Promise<string> => aiReviewLimiter.schedule(() => callOnce(req));
+  // Each attempt is a provider call and is counted, a retry included.
+  const run = async (): Promise<string> => {
+    reserveProviderCall();
+    return aiReviewLimiter.schedule(() => callOnce(req));
+  };
 
   let text: string;
   try {
