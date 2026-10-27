@@ -28,8 +28,28 @@ const uniqueByLabel = (flags: string[]) => flags.filter((f, i) => flags.findInde
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
 
+/** The name cell of a row: a button that opens the member's window when the card can open it. */
+function RowLead({ open, name, children }: { open?: (opener: HTMLElement) => void; name: string; children: React.ReactNode }) {
+  if (!open) return <div className="flex min-w-0 items-start gap-3">{children}</div>;
+  return (
+    <button
+      type="button"
+      data-open-member
+      aria-label={`Open ${name}'s details`}
+      onClick={(e) => open(e.currentTarget)}
+      className="flex min-h-10 min-w-0 items-start gap-3 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+    >
+      {children}
+    </button>
+  );
+}
+
 /** Leader-only team view. The server only sends `team` to the group's leader. */
-export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUserId }: { team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; currentUserId?: number }) {
+export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUserId, onOpenMember }: {
+  team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; currentUserId?: number;
+  /** Opens that member's window. With it, every row is clickable; without it the rows are plain. */
+  onOpenMember?: (userId: number, opener: HTMLElement) => void;
+}) {
   const combined = sourceType === "COMBINED";
   const equalPct = team.length > 0 ? 100 / team.length : 0;
   return (
@@ -41,23 +61,32 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
       <p className="mt-1 text-xs leading-normal text-slate-700">Equal share: {equalPct.toFixed(1)}% each.</p>
       <ul className="mt-3 divide-y divide-slate-200">
         {team.map((m) => (
-          <li key={m.userId} className="grid grid-cols-1 items-start gap-x-4 gap-y-2 py-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_7.5rem]">
-            <div className="flex min-w-0 items-start gap-3">
+          <li
+            key={m.userId}
+            className={`grid grid-cols-1 items-start gap-x-4 gap-y-2 py-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)_7.5rem] ${onOpenMember ? "cursor-pointer rounded-lg hover:bg-slate-50" : ""}`}
+            onClick={onOpenMember ? (e) => {
+              // A click anywhere on the row opens the window; the name button handles its own click.
+              if ((e.target as HTMLElement).closest("button")) return;
+              const opener = e.currentTarget.querySelector<HTMLElement>("button[data-open-member]");
+              if (opener) onOpenMember(m.userId, opener);
+            } : undefined}
+          >
+            <RowLead open={onOpenMember ? (el) => onOpenMember(m.userId, el) : undefined} name={m.name}>
               <Avatar
                 userId={m.userId}
                 name={m.name}
                 avatarUpdatedAt={m.avatarUpdatedAt}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-900"
               />
-              <div className="min-w-0">
-                <p className="break-words text-sm font-semibold text-slate-900">
+              <span className="block min-w-0">
+                <span className="block break-words text-sm font-semibold text-slate-900">
                   {m.name}{m.userId === currentUserId ? <span className="ml-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-900">You</span> : null}{m.isLeader ? <span className="ml-2 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-900">Leader</span> : null}
-                </p>
-                <p className="text-xs text-slate-700">
+                </span>
+                <span className="block text-xs text-slate-700">
                   {m.functionalRoles.map((r) => (r === "DOCUMENTATION" ? "Documentation" : "Developer")).join(" · ") || "No role set"}
-                </p>
-              </div>
-            </div>
+                </span>
+              </span>
+            </RowLead>
             <div className="min-w-0">
               {noActivity ? (
                 <NoActivityPill />

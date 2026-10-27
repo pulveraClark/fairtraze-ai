@@ -31,7 +31,7 @@ import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
-import { studentHealthLabel } from "../lib/studentDisplay";
+import { studentHealthLabel, evennessLine } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
 import type { BriefAttachment } from "../lib/briefAttachments";
@@ -44,7 +44,11 @@ import { NextStepLine } from "../components/NextStepLine";
 import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
-import { StudentWorkSummaries } from "../components/StudentWorkSummaries";
+import ReactMarkdown from "react-markdown";
+import { AiBadge } from "../components/ui/AiBadge";
+import { BriefCheckWithMarks } from "../components/BriefCheckWithMarks";
+import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
+import { useAiReview } from "../hooks/useAiReview";
 import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -77,6 +81,9 @@ interface GroupDetail {
     myContribution: MyContribution | null;
     /** Present only when the caller is this group's leader (enforced server-side). */
     team?: LeaderTeamMember[];
+    /** Leader only: the instructor's team-level AI explanation (without the Gini sentence). */
+    narrative?: string | null;
+    narrativeOutdated?: boolean;
   } | null;
 }
 
@@ -291,6 +298,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   );
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
+  // The AI findings and (for the leader) the instructions check; read here so the member window and the team card share one read.
+  const ai = useAiReview(projectId, token);
+  // Whose window is open (a leader opens anyone, a member only themselves), and the row that opened it.
+  const [openMemberId, setOpenMemberId] = useState<number | null>(null);
+  const memberOpener = useRef<HTMLElement | null>(null);
   // The sentence of the project instructions to mark when the window opens from the instructions check.
   const [briefHighlight, setBriefHighlight] = useState<string | null>(null);
   // Functional role suggestion state
@@ -451,6 +463,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const { classSection, assignment, project, membership, hasReport, report } = data;
 
   const sourceType = assignment.sourceType;
+  const isLeader = membership.role === "LEADER";
   const visibleTabs: Tab[] = groupTabs("student", sourceType);
   const effectiveTab: Tab = resolveTab(activeTab, visibleTabs);
 
@@ -484,6 +497,37 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
           }}
         />
       )}
+
+      {openMemberId !== null && report && (() => {
+        const views: StudentMemberView[] = report.team
+          ? report.team.map((m) => ({ ...m, tasks: m.tasks }))
+          : report.myContribution && user
+            ? [{
+                userId: user.id, name: user.name, isLeader, functionalRoles: membership.functionalRoles, avatarUpdatedAt: null,
+                contributionShare: report.myContribution.contributionShare,
+                githubContributionShare: "githubContributionShare" in report.myContribution ? report.myContribution.githubContributionShare : null,
+                documentContributionShare: "documentContributionShare" in report.myContribution ? report.myContribution.documentContributionShare : null,
+                flags: report.myContribution.flags, tasks: null,
+              }]
+            : [];
+        // A member opens only their own row; a leader any row. Anything else closes the window.
+        const open = views.find((v) => v.userId === openMemberId && (isLeader || v.userId === user?.id));
+        if (!open) return null;
+        return (
+          <StudentMemberWindow
+            member={open}
+            members={isLeader ? views : [open]}
+            currentUserId={user?.id}
+            memberCount={report.memberCount}
+            sourceType={sourceType}
+            noActivity={!!report.noActivity}
+            ai={ai.data}
+            onSelect={setOpenMemberId}
+            onClose={() => setOpenMemberId(null)}
+            restoreFocusTo={memberOpener.current}
+          />
+        );
+      })()}
 
       {showBrief && (
         <BriefModal
@@ -857,7 +901,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
                 {/* Members see their own overall share in one compact tile; the leader's is the "You" row below */}
                 {report.myContribution && !report.noActivity && membership.role === "MEMBER" && (
-                  <YourShareTile share={report.myContribution.contributionShare} memberCount={report.memberCount} />
+                  <YourShareTile share={report.myContribution.contributionShare} memberCount={report.memberCount} onOpen={(el) => { memberOpener.current = el; setOpenMemberId(user?.id ?? null); }} />
                 )}
 
                 {/* Stats grid */}
@@ -884,24 +928,21 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   );
                 })()}
 
-                {/* AI work summaries: a member sees their own; the leader sees every member (the server decides) */}
-                <StudentWorkSummaries
-                  projectId={projectId}
-                  isLeader={membership.role === "LEADER"}
-                  sourceType={sourceType}
-                  onViewInstructions={assignment.description || assignment.attachments.length > 0
-                    ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
-                    : undefined}
-                />
-
                 {/* Leader-only: every member's share, so work can be rebalanced */}
-                {report.team && <LeaderTeamCard team={report.team} currentUserId={user?.id} sourceType={sourceType} noActivity={report.noActivity} />}
+                {report.team && (
+                  <LeaderTeamCard
+                    team={report.team}
+                    currentUserId={user?.id}
+                    sourceType={sourceType}
+                    noActivity={report.noActivity}
+                    onOpenMember={(id, el) => { memberOpener.current = el; setOpenMemberId(id); }}
+                  />
+                )}
 
-                {/* Team context */}
+                {/* Team overview: evenness, the leader's team-level AI text and instructions check, then when it was analyzed */}
                 {!report.noActivity && (
-                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Team Overview</h3>
-                  <div className="flex items-start gap-6 flex-wrap">
+                  <section aria-labelledby="team-overview-title" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                    <h3 id="team-overview-title" className="text-sm font-semibold text-slate-900">Team overview</h3>
                     <div>
                       <p className="mb-1.5 flex items-center gap-1 text-xs text-slate-700">
                         How evenly work is shared
@@ -910,13 +951,33 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
                         {studentHealthLabel(report.teamHealth)}
                       </span>
+                      <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.teamHealth)}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-600 mb-1.5">Last analyzed</p>
-                      <LastAnalyzed className="font-medium" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} />
-                    </div>
-                  </div>
-                </div>
+                    {isLeader && report.narrative && (
+                      <div>
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1"><AiBadge variant="ai" /></p>
+                        <div className="mt-1.5 text-sm leading-relaxed text-slate-800 [&_p]:mb-0 [&_p]:mt-2 [&_p:first-child]:mt-0">
+                          <ReactMarkdown>{report.narrative}</ReactMarkdown>
+                        </div>
+                        <p className="mt-2 text-xs leading-normal text-slate-700">
+                          May be wrong. Informational only; it does not assign grades or replace instructor judgment.
+                          {report.narrativeOutdated ? " Results changed since this was written." : ""}
+                        </p>
+                      </div>
+                    )}
+                    {isLeader && ai.data?.enabled && ai.data.briefCheck && (
+                      <BriefCheckWithMarks
+                        projectId={projectId}
+                        check={ai.data.briefCheck}
+                        repoUrl={ai.data.repoUrl}
+                        sourceType={sourceType}
+                        onViewInstructions={assignment.description || assignment.attachments.length > 0
+                          ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
+                          : undefined}
+                      />
+                    )}
+                    <LastAnalyzed variant="student" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} />
+                  </section>
                 )}
 
                 {/* Your flags */}

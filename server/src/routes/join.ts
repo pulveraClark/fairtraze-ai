@@ -1,3 +1,4 @@
+import { studentNarrative } from "../lib/studentNarrative.js";
 import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -678,7 +679,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto" };
+  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean };
   if (!stored.report) {
     res.json({ ...base, hasReport: false, report: null });
     return;
@@ -770,6 +771,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       deadlineWindowBasis: teamReport.deadlineWindowBasis,
       myContribution,
       ...(team ? { team } : {}),
+      // The leader reads the same team-level AI explanation as the instructor (without the Gini sentence).
+      ...(team ? { narrative: studentNarrative(stored.narrative), narrativeOutdated: stored.narrativeOutdated === true } : {}),
     },
   });
 });

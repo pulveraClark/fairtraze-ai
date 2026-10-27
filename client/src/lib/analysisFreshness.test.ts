@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLastAnalyzed, relativeTime } from "./analysisFreshness";
+import { formatLastAnalyzed, formatLastAnalyzedStudent, relativeTime } from "./analysisFreshness";
 
 const NOW = new Date("2026-10-26T12:00:00Z");
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -31,5 +31,12 @@ describe("formatLastAnalyzed", () => {
   });
   it("does not say 'every night' (it also refreshes when a report is opened)", () => {
     expect(formatLastAnalyzed(ago(HOUR), "auto", NOW)).not.toMatch(/night/i);
+  });
+});
+
+describe("student last-analyzed line", () => {
+  it("reads 'Last analyzed 14 hours ago. Updates every night.'", () => {
+    const now = new Date("2026-10-27T12:00:00Z");
+    expect(formatLastAnalyzedStudent("2026-10-26T22:00:00Z", now)).toBe("Last analyzed 14 hours ago. Updates every night.");
   });
 });

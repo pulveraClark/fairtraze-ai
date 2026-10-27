@@ -3,7 +3,6 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocSectionProvider } from "../hooks/useDocSectionLink";
 import { BriefCheckCard, NOT_CONFIRMED_WHY, CHECK_WORK_LINE, quoted, truncateQuote } from "./BriefCheckCard";
-import { StudentWorkSummaries } from "./StudentWorkSummaries";
 import { Narrative } from "./Narrative";
 import { briefStatusLine, type AiBriefCheck, type AiReviewResponse } from "../lib/aiReview";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
@@ -398,24 +397,6 @@ describe("BriefCheckCard", () => {
 const base: AiReviewResponse = { enabled: true, running: false, canGenerate: true, hasReport: true, summaries: [] };
 
 describe("project instructions check placement", () => {
-  it("leader view shows the check even before any summary exists, and wires the instructions window", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...base, canGenerate: false, briefCheck: check }) }));
-    const onView = vi.fn();
-    render(<StudentWorkSummaries projectId={5} isLeader onViewInstructions={onView} />);
-    await waitFor(() => expect(screen.getByText("Project instructions check")).toBeTruthy());
-    expect(screen.queryByText("What each member worked on")).toBeNull();
-    await userEvent.click(screen.getByText("Project instructions check"));
-    await userEvent.click(screen.getByRole("button", { name: "View the instructions" }));
-    expect(onView).toHaveBeenCalled();
-  });
-
-  it("a member response without a check renders nothing", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...base, canGenerate: false }) }));
-    const { container } = render(<StudentWorkSummaries projectId={5} isLeader={false} />);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(container.innerHTML).toBe("");
-  });
-
   it("instructor: the check sits in the AI findings card; a failed run gets one calm line", () => {
     const start = vi.fn();
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} />);

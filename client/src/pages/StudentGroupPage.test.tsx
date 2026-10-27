@@ -375,3 +375,89 @@ describe("StudentGroupPage - Set up your group", () => {
     window.localStorage.clear();
   });
 });
+
+
+describe("StudentGroupPage: member window and team overview", () => {
+  const leaderFixture = (over: Record<string, unknown> = {}) => groupFixture({
+    membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null },
+    report: {
+      ...(groupFixture().report as object),
+      teamHealth: "Healthy",
+      narrative: "The team shares the work fairly evenly.",
+      team: [
+        { userId: 1, name: "Ana Cruz", isLeader: true, functionalRoles: ["DEVELOPER"], hasAvatar: false, avatarUpdatedAt: null, contributionShare: 0.4, githubContributionShare: 0.5, documentContributionShare: 0.3, flags: [], tasks: { open: 0, done: 0 } },
+        { userId: 2, name: "Ben Lim", isLeader: false, functionalRoles: ["DEVELOPER"], hasAvatar: false, avatarUpdatedAt: null, contributionShare: 0.6, githubContributionShare: 0.5, documentContributionShare: 0.7, flags: [], tasks: { open: 1, done: 1 } },
+      ],
+      ...over,
+    },
+  });
+  const aiBody = {
+    enabled: true, running: false, canGenerate: false, hasReport: true, generatedAt: "2026-10-26T01:00:00Z", basedOnReportAt: "2026-10-24T01:00:00Z", outdated: false,
+    summaries: [
+      { userId: 1, name: "Ana Cruz", githubUsername: "ana", isYou: true, summary: "Added the login page.", source: "ai", evidence: { files: [], docSections: [], commitCount: 1, otherCommits: 0 } },
+      { userId: 2, name: "Ben Lim", githubUsername: "ben", isYou: false, summary: "Wrote the User Guide.", source: "ai", evidence: { files: [], docSections: [], commitCount: 0, otherCommits: 0 } },
+    ],
+  };
+  beforeEach(() => {
+    window.history.pushState({}, "", REPORT);
+    state.notes = [];
+    state.setup = undefined;
+    state.tasks = [];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => aiBody }));
+  });
+
+  it("a leader opens any member's window from the Team contributions rows, with arrows, and Esc returns focus to the row", async () => {
+    state.data = leaderFixture();
+    renderPage();
+    const row = screen.getByRole("button", { name: "Open Ben Lim's details" });
+    row.focus();
+    await userEvent.click(row);
+    const dialog = await screen.findByRole("dialog", { name: /Ben Lim/ });
+    expect(dialog).toBeTruthy();
+    expect(await screen.findByText("Wrote the User Guide.")).toBeTruthy();
+    expect(screen.getByText("Member 2 of 2")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Previous member" }));
+    expect(await screen.findByText("Added the login page.")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: /Ana Cruz|Ben Lim/ })).toBeNull();
+  });
+
+  it("a member opens only their own window: no arrows, no other member's findings", async () => {
+    state.data = groupFixture();
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: "See your details" }));
+    expect(await screen.findByRole("dialog", { name: /Ana Cruz/ })).toBeTruthy();
+    expect(await screen.findByText("Added the login page.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Next member" })).toBeNull();
+    expect(screen.queryByText("Wrote the User Guide.")).toBeNull();
+  });
+
+  it("the separate summary card is gone", async () => {
+    state.data = leaderFixture();
+    renderPage();
+    await screen.findByText("Team overview");
+    expect(screen.queryByText("What each member worked on")).toBeNull();
+    expect(screen.queryByText("AI findings on your work")).toBeNull();
+    expect(screen.queryByText("Summary of your work")).toBeNull();
+  });
+
+  it("Team overview: the evenness chip and line, the leader's AI text, then the grey last-analyzed line, in that order", async () => {
+    state.data = leaderFixture();
+    renderPage();
+    const card = (await screen.findByText("Team overview")).closest("section")!;
+    const text = card.textContent ?? "";
+    const order = ["Work is evenly shared", "No one is far above or below the others.", "The team shares the work fairly evenly.", "Last analyzed"].map((t) => text.indexOf(t));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(text).toMatch(/Last analyzed .*\. Updates every night\./);
+  });
+
+  it("a member's Team overview has no AI text and no instructions check", async () => {
+    state.data = groupFixture();
+    renderPage();
+    const card = (await screen.findByText("Team overview")).closest("section")!;
+    expect(card.textContent).not.toContain("The team shares");
+    expect(card.textContent).not.toContain("Project instructions check");
+    expect(card.textContent).toMatch(/Updates every night\./);
+  });
+});

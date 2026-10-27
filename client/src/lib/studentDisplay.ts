@@ -17,6 +17,17 @@ const HEALTH_WORDS: Record<string, string> = {
   "High Risk": "Work is very uneven",
 };
 
+const EVENNESS_LINE: Record<string, string> = {
+  Healthy: "No one is far above or below the others.",
+  "Moderate Risk": "Some members are a bit above or below the others.",
+  "High Risk": "Some members are far above or below the others.",
+};
+
+/** The one plain line under the evenness chip, finishing the sentence the chip starts ("Work is evenly shared"). */
+export function evennessLine(teamHealth: string): string {
+  return EVENNESS_LINE[teamHealth] ?? "";
+}
+
 /** Plain words for the team health label on student screens ("Moderate Risk" becomes "Work is a bit uneven"). */
 export function studentHealthLabel(teamHealth: string): string {
   return HEALTH_WORDS[teamHealth] ?? teamHealth;

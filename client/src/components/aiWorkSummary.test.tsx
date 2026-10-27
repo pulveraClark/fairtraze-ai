@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { summaryFor, reviewStatusLine, aiAddressedLine, workSummaryState, type AiReviewResponse, type AiSummaryView } from "../lib/aiReview";
 import { DocSectionProvider } from "../hooks/useDocSectionLink";
 import { MemberWorkSummary } from "./report/AiWorkSummary";
-import { StudentWorkSummaries } from "./StudentWorkSummaries";
+import { StudentMemberWindow, type StudentMemberView } from "./StudentMemberWindow";
 import { Narrative } from "./Narrative";
 import { MemberContributionList } from "./report/MemberContributionList";
 import { useGenerateAiReport } from "../hooks/useGenerateAiReport";
@@ -149,10 +149,9 @@ describe("source line", () => {
     expect(line("Written by AI after reading the work\.")).toBeTruthy();
   });
 
-  it("is passed through to the student and leader views", async () => {
-    stubReview({ ...base, canGenerate: false, summaries: [ana] });
-    render(<StudentWorkSummaries projectId={5} isLeader={false} sourceType="EDITOR" />);
-    await waitFor(() => expect(screen.getByText(/Written by AI after reading the Docs\. May be wrong/)).toBeTruthy());
+  it("is passed through to the member window", () => {
+    render(<StudentMemberWindow {...windowProps({ member: anaView, members: [anaView], ai: { ...base, canGenerate: false, summaries: [ana] }, sourceType: "EDITOR" })} />);
+    expect(screen.getByText(/Written by AI after reading the Docs\. May be wrong/)).toBeTruthy();
   });
 
   it("is absent from the facts state", () => {
@@ -172,44 +171,63 @@ describe("work summary state", () => {
   });
 });
 
-function stubReview(body: unknown) {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => body }));
+const anaView: StudentMemberView = {
+  userId: 1, name: "Ana Cruz", isLeader: false, functionalRoles: ["DEVELOPER"], avatarUpdatedAt: null,
+  contributionShare: 0.6, githubContributionShare: null, documentContributionShare: null, flags: [], tasks: null,
+};
+const benView: StudentMemberView = { ...anaView, userId: 2, name: "Ben Reyes", isLeader: true, contributionShare: 0.4, tasks: { open: 1, done: 2 } };
+
+function windowProps(over: Partial<React.ComponentProps<typeof StudentMemberWindow>> = {}): React.ComponentProps<typeof StudentMemberWindow> {
+  return {
+    member: anaView, members: [anaView], currentUserId: 1, memberCount: 2, sourceType: "GITHUB", noActivity: false,
+    ai: { ...base, canGenerate: false }, onSelect: () => {}, onClose: () => {}, ...over,
+  };
 }
 
-describe("StudentWorkSummaries", () => {
-  it("a member sees 'AI findings on your work' with only their own entry", async () => {
-    stubReview({ ...base, canGenerate: false, summaries: [ana] });
-    render(<StudentWorkSummaries projectId={5} isLeader={false} />);
-    await waitFor(() => expect(screen.getByText("AI findings on your work")).toBeTruthy());
+describe("StudentMemberWindow: the AI findings", () => {
+  it("a member opens their own window: 'What you worked on', only their own entry, no arrows, no Generate", () => {
+    render(<StudentMemberWindow {...windowProps()} />);
+    expect(screen.getByText("What you worked on")).toBeTruthy();
     expect(screen.getByText("Added the login page.")).toBeTruthy();
-    expect(screen.queryByText(/Ben Reyes/)).toBeNull();
-    expect(screen.queryByRole("button", { name: /generate/i })).toBeNull();
+    expect(screen.queryByText(/Wrote the Methodology section/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /generate|regenerate/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next member" })).toBeNull();
     expect(screen.getByText("AI findings")).toBeTruthy();
     expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
   });
 
-  it("the leader sees every member by name", async () => {
-    stubReview({ ...base, canGenerate: false });
-    render(<StudentWorkSummaries projectId={5} isLeader />);
-    await waitFor(() => expect(screen.getByText("What each member worked on")).toBeTruthy());
-    expect(screen.getByText("Ana Cruz (you)")).toBeTruthy();
-    expect(screen.getByText("Ben Reyes")).toBeTruthy();
-    // Ana's is AI-written, Ben's is the facts fallback: one AI badge, one grey pill, and no Regenerate for a leader.
-    expect(screen.getAllByText("AI findings")).toHaveLength(1);
-    expect(screen.getAllByText("Changed files only")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Regenerate" })).toBeNull();
+  it("the leader opens another member: their findings (facts fallback is marked) and the arrows", () => {
+    const onSelect = vi.fn();
+    render(<StudentMemberWindow {...windowProps({ member: benView, members: [anaView, benView], onSelect })} />);
+    expect(screen.getByText("What this member worked on")).toBeTruthy();
+    expect(screen.getByText("Wrote the Methodology section.")).toBeTruthy();
+    expect(screen.getByText("Changed files only")).toBeTruthy();
+    expect(screen.getByText("Member 2 of 2")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Next member" }) as HTMLButtonElement).disabled).toBe(true);
+    screen.getByRole("button", { name: "Previous member" }).click();
+    expect(onSelect).toHaveBeenCalledWith(1);
   });
 
-  it("renders nothing when AI review is off or the request fails", async () => {
-    stubReview({ enabled: false });
-    const { container, unmount } = render(<StudentWorkSummaries projectId={5} isLeader={false} />);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(container.innerHTML).toBe("");
-    unmount();
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
-    const again = render(<StudentWorkSummaries projectId={5} isLeader={false} />);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(again.container.innerHTML).toBe("");
+  it("shows only AI findings, shares, flags and tasks: no commit impact and no raw numbers", () => {
+    render(<StudentMemberWindow {...windowProps({ member: { ...benView, flags: ["free-rider"] }, members: [anaView, benView] })} />);
+    expect(screen.getByText("40.0%")).toBeTruthy();
+    expect(screen.getByText("Low contribution")).toBeTruthy();
+    expect(screen.getByText("2 of 3 done")).toBeTruthy();
+    expect(screen.queryByText(/commit impact|lines added|additions|sessions|churn|active days/i)).toBeNull();
+  });
+
+  it("says so when AI findings are off or this member has none yet", () => {
+    const off = render(<StudentMemberWindow {...windowProps({ ai: { enabled: false } })} />);
+    expect(screen.getByText("AI findings are not turned on for this class.")).toBeTruthy();
+    off.unmount();
+    render(<StudentMemberWindow {...windowProps({ ai: { ...base, summaries: [] } })} />);
+    expect(screen.getByText(/No AI findings for this member yet/)).toBeTruthy();
+  });
+
+  it("is a full-screen dialog on a phone, with a 40px close button", () => {
+    render(<StudentMemberWindow {...windowProps()} />);
+    expect(screen.getByRole("dialog").className).toContain("h-full");
+    expect(screen.getByRole("button", { name: "Close" }).className).toContain("h-10");
   });
 });
 

@@ -22,5 +22,10 @@ export function formatLastAnalyzed(iso: string, trigger?: "manual" | "auto" | nu
   return `Last analyzed ${relativeTime(iso, now)}${who} · Updates automatically`;
 }
 
+/** The students' line: "Last analyzed 14 hours ago. Updates every night." */
+export function formatLastAnalyzedStudent(iso: string, now: Date = new Date()): string {
+  return `Last analyzed ${relativeTime(iso, now)}. Updates every night.`;
+}
+
 export const UPDATING_TEXT = "Updating…";
 export const NARRATIVE_OUTDATED_TEXT = "Results changed. Generate new AI findings.";

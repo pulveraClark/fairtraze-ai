@@ -5,6 +5,7 @@ import type {
 } from "@shared/types.js";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
+import { studentNarrative } from "../src/lib/studentNarrative.js";
 import {
   createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership,
 } from "./factories.js";
@@ -258,5 +259,36 @@ describe("GET /api/student/group/:projectId — leader team view", () => {
     await createMembership(outsider.id, other.id, "LEADER");
     const res = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(outsider));
     expect(res.status).toBe(403);
+  });
+});
+
+describe("GET /api/student/group/:projectId — team-level AI explanation (leader only)", () => {
+  const TEXT = "The team shares the work fairly evenly. The Gini coefficient is 0.12, so contribution is spread evenly.\n\nAlice made most commits.";
+  const SHOWN = "The team shares the work fairly evenly.\n\nAlice made most commits.";
+
+  it("the leader gets the explanation without the sentence that states the Gini value; a member gets none of it", async () => {
+    const { project, studentA, studentB } = await setup("EDITOR"); // A = member, B = leader
+    const report = teamReport([
+      documentScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.6 }),
+      documentScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.4 }),
+    ]);
+    await prisma.report.create({
+      data: { projectId: project.id, gini: report.gini, teamHealth: report.teamHealth, content: JSON.stringify({ report, narrative: TEXT, narrativeOutdated: true }) },
+    });
+
+    const asLeader = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));
+    expect(asLeader.body.report.narrative).toBe(SHOWN);
+    expect(asLeader.body.report.narrativeOutdated).toBe(true);
+    expect(asLeader.body.report.narrative).not.toMatch(/gini/i);
+
+    const asMember = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentA));
+    expect(asMember.body.report.narrative).toBeUndefined();
+    expect(JSON.stringify(asMember.body)).not.toContain("Alice made most commits");
+  });
+
+  it("studentNarrative keeps the text, drops only Gini sentences, and is null when nothing is left", () => {
+    expect(studentNarrative(TEXT)).toBe(SHOWN);
+    expect(studentNarrative("The Gini coefficient is 0.3.")).toBeNull();
+    expect(studentNarrative(null)).toBeNull();
   });
 });
