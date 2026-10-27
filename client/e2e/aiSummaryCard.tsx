@@ -33,6 +33,7 @@ const req = (text: string, status: "FOUND" | "NOT_FOUND" | "PARTLY_FOUND", unver
 const requirements = [
   ...Array.from({ length: 6 }, (_, i) => req(`Requirement ${i + 1} is met`, "FOUND", false, i < 4 ? ["Ana R.", "Ben C.", "Cy D."] : [])),
   req(long, "NOT_FOUND"), req("Has automated tests", "NOT_FOUND", true), req("Has a README", "NOT_FOUND"),
+  { ...req("Matches the wireframes in the design file", "NOT_FOUND", true), sourceQuote: undefined, sourceFile: "Final-Project-Instructions-Section-B-Group-Deliverables-2026-Semester-1-v3.pdf" },
 ] as AiBriefCheck["requirements"];
 const data: AiReviewResponse = {
   enabled: true, running: false, canGenerate: true, hasReport: true, summaries: [],
@@ -45,7 +46,7 @@ function Page() {
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4">
       <Narrative narrative={"This project has a team health of Healthy.\n\nThe Gini coefficient is 0.122."} projectId={1} onNarrativeGenerated={() => {}}
-        review={review} generator={generator} instructionsHref="/class/1/assignment/2" basedOnAt="2026-10-26T01:00:00Z" teamHealth="Healthy" gini={0.122} />
+        review={review} generator={generator} instructionsHref="/class/1/assignment/2" instructionsAssignmentId={1} basedOnAt="2026-10-26T01:00:00Z" teamHealth="Healthy" gini={0.122} />
     </div>
   );
 }

@@ -151,7 +151,7 @@ describe("BriefCheckCard", () => {
 
     const survey = within(rowOf("Has a survey"));
     expect(survey.getByText("From attached file: brief.pdf")).toBeTruthy();
-    expect(survey.getByRole("link", { name: "Open file (new tab)" })).toBeTruthy();
+    expect(survey.queryByRole("button", { name: /Open file/ })).toBeNull(); // no way to open it was given
     expect(survey.queryByText(/page/i)).toBeNull();
     const quote = survey.getByText((_c, el) => el?.tagName === "BLOCKQUOTE")!;
     expect(quote.textContent!.length).toBeLessThanOrEqual(141);
@@ -242,18 +242,22 @@ describe("BriefCheckCard", () => {
 
     it("a file source reads 'From attached file: <file>' with 'Open file' and never a page; no source, no From line (older checks)", async () => {
       const fromFile = { ...check, requirements: [{ ...check.requirements[4]!, sourceQuote: undefined, sourceFile: "brief.pdf", sourcePage: 3 }, check.requirements[3]!] };
-      const { unmount } = render(<BriefCheckCard check={fromFile} instructor instructionsHref="/class/1/assignment/2" />);
+      const openFile = vi.fn(async () => "ok" as const);
+      const { unmount } = render(<BriefCheckCard check={fromFile} instructor instructionsHref="/class/1/assignment/2" onOpenFile={openFile} />);
       await open();
       const tests = within(rowOf("Has tests"));
       expect(tests.getByText("From attached file: brief.pdf")).toBeTruthy();
-      expect(tests.getByRole("link", { name: "Open file (new tab)" })).toBeTruthy();
+      // "Open file" opens the attached file itself, by name; it is not the instructions window or page.
+      await userEvent.click(tests.getByRole("button", { name: "Open file (new tab)" }));
+      expect(openFile).toHaveBeenCalledWith("brief.pdf");
       expect(tests.queryByText(/page/i)).toBeNull();
       expect(tests.queryByRole("link", { name: /See in the instructions/ })).toBeNull(); // replaced, not doubled
-      // Where the role cannot open the instructions there is no Open file link, but the file name still shows.
+      // Where the role cannot open the file there is no Open file control (even with the instructions link), but the name still shows.
       unmount();
       render(<BriefCheckCard check={fromFile} instructor />);
       await open();
       expect(within(rowOf("Has tests")).getByText("From attached file: brief.pdf")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Open file/ })).toBeNull();
       expect(screen.queryByRole("link", { name: /Open file/ })).toBeNull();
       expect(screen.queryByText(/page 3/i)).toBeNull();
       const none = within(rowOf("Has a README"));
@@ -522,6 +526,15 @@ describe("lighter rows", () => {
     expect(screen.getByText("Instructions changed. Your mark on “Old one” no longer applies.")).toBeTruthy();
   });
 
+  it("'Open file' says so when the file is gone or cannot be loaded", async () => {
+    const fromFile = { ...check, requirements: [{ ...check.requirements[4]!, sourceQuote: undefined, sourceFile: "brief.pdf" }] };
+    const openFile = vi.fn(async () => "missing" as const);
+    render(<BriefCheckCard check={fromFile} instructor onOpenFile={openFile} />);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Open file (new tab)" }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "This file is no longer attached.");
+  });
+
   it("the (i) tip opens on tap and holds the long note in three short sentences", async () => {
     render(<CheckHeaderActions sources={undefined} instructionsHref="/c/1" />);
     const tip = screen.getByRole("button", { name: "About the project instructions check" });
@@ -530,7 +543,15 @@ describe("lighter rows", () => {
     const text = screen.getByRole("group", { name: "About the project instructions check" }).textContent ?? "";
     expect(text).toContain("Names show who changed the proof files or wrote the Docs text, not everyone who helped.");
     expect(text).toContain("This is not a grade.");
+    expect(text).toContain("Requirements from attached files are read by the AI and are not quote-checked. Open the file to confirm.");
     expect(screen.getByRole("link", { name: "View the instructions (new tab)" })).toBeTruthy();
+  });
+
+  it("the leader's card tip carries the attached-file sentence too", async () => {
+    render(<BriefCheckCard check={withNames} />);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "About the project instructions check" }));
+    expect(screen.getByRole("group", { name: "About the project instructions check" }).textContent).toContain("are not quote-checked. Open the file to confirm.");
   });
 
   it("the leader's card keeps its claim flow on a row that needs a check", async () => {

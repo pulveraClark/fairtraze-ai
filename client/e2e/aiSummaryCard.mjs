@@ -24,7 +24,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://localhost:${PORT}/e2e/aiSummaryCard.html`);
   await page.getByRole("heading", { name: "AI findings" }).waitFor();
-  await page.getByText(/^Instructions: 6 of 9/).waitFor();
+  await page.getByText(/^Instructions: 6 of 10/).waitFor();
   await page.waitForTimeout(300);
 
   const measure = () => page.evaluate(() => {
@@ -44,11 +44,11 @@ try {
   check(m.small.length === 0, `buttons >= 40px ${JSON.stringify(m.small)}`);
   check(m.rows.length === 2 && m.rows.every((h) => h >= 44), `two disclosure rows >= 44px (${m.rows.join(", ")})`);
   check(!m.text.includes("0.122".replace("0.122", "The Gini")) && !/Gini coefficient is/.test(m.text), "Gini sentence hidden until Team details opens");
-  check(m.text.includes("Needs a look") && m.text.includes("+1 more"), "Needs a look with 2 items and +1 more");
+  check(m.text.includes("Needs a look") && m.text.includes("+2 more"), "Needs a look with 2 items and +2 more");
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__ai-findings-375.png") });
 
   await page.getByRole("button", { name: /^Team details/ }).click();
-  await page.getByRole("button", { name: /Project instructions check · all 9/ }).click();
+  await page.getByRole("button", { name: /Project instructions check · all 10/ }).click();
   await page.waitForTimeout(200);
   m = await measure();
   check(m.scrollW <= 375, `expanded: no sideways scroll (scrollWidth ${m.scrollW})`);
@@ -64,6 +64,9 @@ try {
   check(m.small.length === 0, `covered shown: buttons >= 40px ${JSON.stringify(m.small)}`);
   const proofs = await page.getByRole("button", { name: /^Proof/ }).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
   check(proofs.length === 6 && proofs.every((h) => h >= 40), `6 Proof buttons, each >= 40px (${proofs.join(", ")})`);
+  const open = await page.getByRole("button", { name: "Open file (new tab)" }).evaluate((e) => Math.round(e.getBoundingClientRect().height));
+  check(open >= 40, `Open file button is ${open}px tall`);
+  check(m.text.includes("From attached file: Final-Project-Instructions"), "long file name shown after 'From attached file:'");
   check(m.text.includes("Instructions changed since your mark. Check again."), "stale note on its own row");
   const tipH = await page.getByRole("button", { name: "About the project instructions check" }).evaluate((e) => Math.round(e.getBoundingClientRect().height));
   check(tipH >= 40, `(i) button is ${tipH}px tall`);

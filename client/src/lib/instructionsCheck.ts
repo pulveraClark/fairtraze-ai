@@ -137,3 +137,9 @@ export function nothingReadAdvice(instructor: boolean): string {
     ? "Add the project instructions as text, or attach a smaller file."
     : "Ask your instructor to add the project instructions as text, or attach a smaller file.";
 }
+
+/** Added to the check's tips: a requirement that comes from an attached file has no sentence to check a quote against. */
+export const ATTACHED_FILE_TIP = "Requirements from attached files are read by the AI and are not quote-checked. Open the file to confirm.";
+
+export const OPEN_FILE_MISSING = "This file is no longer attached.";
+export const OPEN_FILE_FAILED = "Could not open the file. Try again.";

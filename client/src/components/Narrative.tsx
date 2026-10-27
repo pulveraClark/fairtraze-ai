@@ -12,6 +12,7 @@ import { BriefCheckCard, CheckHeaderActions } from "./BriefCheckCard";
 import { StatusPill } from "./ui/StatusPill";
 import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
+import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
 import { useRequirementMarks } from "../hooks/useRequirementMarks";
 import { giniBandsText } from "../lib/giniBands";
 import { healthSentence, instructionsSummary } from "../lib/aiSummary";
@@ -73,11 +74,26 @@ function Disclosure({ title, open, onToggle, buttonRef, actions, children }: {
 type CardProps = Parameters<typeof BriefCheckCard>[0];
 
 /** Instructions line, "Needs a look" and the check row. Reads the instructor's marks once and shares them. */
-function InstructionsSection({ projectId, check, failedNote, ...card }: {
-  projectId: number; check: AiBriefCheck; failedNote: React.ReactNode;
-} & Omit<CardProps, "check" | "marks" | "instructor" | "embedded">) {
+function InstructionsSection({ projectId, assignmentId, check, failedNote, ...card }: {
+  projectId: number;
+  /** The assignment whose attachments "Open file" opens (instructor route, read when the link is clicked). */
+  assignmentId?: number; check: AiBriefCheck; failedNote: React.ReactNode;
+} & Omit<CardProps, "check" | "marks" | "instructor" | "embedded" | "onOpenFile">) {
   const { token } = useAuth();
   const marks = useRequirementMarks(projectId, token, "instructor");
+  // "Open file" opens the attached PDF or image itself through the existing attachment route; the list is read on click.
+  const onOpenFile = assignmentId && token
+    ? async (filename: string): Promise<OpenFileResult> => {
+        try {
+          const res = await fetch(`/api/assignments/${assignmentId}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (!res.ok) return "failed";
+          const json = (await res.json()) as { assignment: { attachments?: BriefAttachment[] } };
+          return openAttachmentByName(assignmentId, json.assignment.attachments ?? [], filename, token);
+        } catch {
+          return "failed";
+        }
+      }
+    : undefined;
   const [open, setOpen] = useState(false);
   const rowRef = useRef<HTMLButtonElement>(null);
   const summary = instructionsSummary(check.requirements, marks.marks);
@@ -88,7 +104,7 @@ function InstructionsSection({ projectId, check, failedNote, ...card }: {
       <div className="mt-3 space-y-2">
         {failedNote}
         <Disclosure title="Project instructions check · nothing could be read" open={open} onToggle={() => setOpen((v) => !v)} buttonRef={rowRef} actions={actions}>
-          <BriefCheckCard check={check} instructor marks={marks} embedded {...card} />
+          <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
         </Disclosure>
       </div>
     );
@@ -133,7 +149,7 @@ function InstructionsSection({ projectId, check, failedNote, ...card }: {
           buttonRef={rowRef}
           actions={actions}
         >
-          <BriefCheckCard check={check} instructor marks={marks} embedded {...card} />
+          <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
         </Disclosure>
       </div>
     </>
@@ -251,6 +267,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       {briefCheck && !generating && (
         <InstructionsSection
           projectId={projectId}
+          assignmentId={instructionsAssignmentId}
           check={briefCheck}
           failedNote={
             review?.data?.refreshFailed?.brief ? (

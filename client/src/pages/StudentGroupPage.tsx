@@ -34,7 +34,7 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { studentHealthLabel, evennessLine } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
-import type { BriefAttachment } from "../lib/briefAttachments";
+import { openAttachmentByName, type BriefAttachment } from "../lib/briefAttachments";
 import { RULES_OUTDATED_STUDENT_NOTICE } from "@shared/scoringRules";
 import { SetupNudgeBar } from "../components/SetupNudgeBar";
 import { SetupGate } from "../components/SetupGate";
@@ -975,6 +975,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         check={ai.data.briefCheck}
                         repoUrl={ai.data.repoUrl}
                         sourceType={sourceType}
+                        onOpenFile={token ? (name) => openAttachmentByName(assignment.id, assignment.attachments, name, token) : undefined}
                         onViewInstructions={assignment.description || assignment.attachments.length > 0
                           ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
                           : undefined}

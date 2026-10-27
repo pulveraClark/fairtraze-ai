@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import type { OpenFileResult } from "../lib/briefAttachments";
 import { FOCUS_LIGHT } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
 import { AiBadge } from "./ui/AiBadge";
@@ -12,7 +13,7 @@ import { isMarkable } from "@shared/requirementMarkable";
 import { CHECK_TIP_SENTENCES, WORKED_ON_LABEL, WORKED_ON_NOTE, visibleWorkedOn, workedOn, type WorkedOn } from "../lib/workedOnBy";
 import { STALE_ROW_NOTE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, staleOrphanLine, type KeyMarks } from "../lib/requirementMarks";
 import {
-  ATTENTION_ORDER, NOTHING_READ_TITLE, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
+  ATTACHED_FILE_TIP, ATTENTION_ORDER, NOTHING_READ_TITLE, OPEN_FILE_FAILED, OPEN_FILE_MISSING, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
   coveredToggleLabel, droppedSentence, highlightHash, kindOf, nothingReadAdvice, otherCountsSentence, pillLabel, readLine, skippedLine,
   type RequirementKind,
 } from "../lib/instructionsCheck";
@@ -42,6 +43,8 @@ const LINK_CLS = `inline-flex min-h-10 min-w-0 max-w-full items-center text-sm f
 interface InstructionsAccess {
   instructionsHref?: string;
   onViewInstructions?: (quote?: string) => void;
+  /** Opens the attached file itself (not the instructions window). Absent: the role cannot open it, so no link. */
+  openFile?: (filename: string) => Promise<OpenFileResult>;
 }
 
 function Pill({ kind, instructor }: { kind: RequirementKind; instructor: boolean }) {
@@ -72,6 +75,27 @@ function SeeInInstructions({ quote, access, label = "See in the instructions" }:
     );
   }
   return null;
+}
+
+/** "Open file": opens the attached PDF or image itself in a new tab. Nothing is rendered when the role cannot open it. */
+function OpenFile({ file, access }: { file: string; access: InstructionsAccess }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!access.openFile) return null;
+  const open = access.openFile;
+  async function click() {
+    setBusy(true);
+    setError(null);
+    const result = await open(file);
+    setBusy(false);
+    if (result !== "ok") setError(result === "missing" ? OPEN_FILE_MISSING : OPEN_FILE_FAILED);
+  }
+  return (
+    <>
+      <button type="button" disabled={busy} onClick={() => void click()} aria-label="Open file (new tab)" className={LINK_CLS}>Open file</button>
+      {error && <span role="alert" className="text-xs text-red-800">{error}</span>}
+    </>
+  );
 }
 
 /** A requirement read inside quotation marks, without its closing full stop ("Write system documentation." becomes "Write system documentation"). */
@@ -130,7 +154,7 @@ function ProofBody({ r, access, showSource }: { r: Req; access: InstructionsAcce
           {fromFileOnly(r) ? (
             <>
               <span className="[overflow-wrap:anywhere]">{FROM_FILE} {r.sourceFile}</span>
-              <SeeInInstructions access={access} label="Open file" />
+              <OpenFile file={r.sourceFile!} access={access} />
             </>
           ) : (
             <>
@@ -250,7 +274,7 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
         {!covered && fromFileOnly(r) && (
           <>
             <span className="min-w-0 text-xs text-slate-800 [overflow-wrap:anywhere]">{FROM_FILE} {r.sourceFile}</span>
-            <SeeInInstructions access={access} label="Open file" />
+            <OpenFile file={r.sourceFile!} access={access} />
           </>
         )}
         {!covered && hasSource(r) && !fromFileOnly(r) && <SeeInInstructions quote={r.sourceQuote} access={access} />}
@@ -330,7 +354,7 @@ function Shell({ embedded, children }: { embedded?: boolean; children: React.Rea
 }
 
 export function BriefCheckCard({
-  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions, marks, embedded = false,
+  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions, onOpenFile, marks, embedded = false,
 }: {
   /** Render the body without its own heading row, intro, headline or disclaimer (the instructor's summary card has them). */
   embedded?: boolean;
@@ -343,6 +367,8 @@ export function BriefCheckCard({
   instructionsHref?: string;
   /** Leader and students: opens the project instructions window, optionally at one sentence. */
   onViewInstructions?: (quote?: string) => void;
+  /** Opens an attached file by name (the attachment route). Absent: no "Open file" link. */
+  onOpenFile?: (filename: string) => Promise<OpenFileResult>;
   /** "We have this" marks and the actions on them (leader and instructor). Absent: the card is read-only. */
   marks?: MarksApi;
 }) {
@@ -363,7 +389,7 @@ export function BriefCheckCard({
   }
   if (total === 0) return null;
 
-  const access: InstructionsAccess = { instructionsHref, onViewInstructions };
+  const access: InstructionsAccess = { instructionsHref, onViewInstructions, openFile: onOpenFile };
   const counts = countKinds(check.requirements);
   const allCovered = counts.COVERED === total;
   const attention = ATTENTION_ORDER.flatMap((k) => check.requirements.filter((r) => kindOf(r) === k));
@@ -394,7 +420,7 @@ export function BriefCheckCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-slate-700">
             <span className="flex min-w-0 items-center gap-1">
               {comparedSentence(sourceType)}
-              <InfoTip label="About the project instructions check" helpHref={helpLink("ai")}>{TIPS.briefCheck}</InfoTip>
+              <InfoTip label="About the project instructions check" helpHref={helpLink("ai")}>{TIPS.briefCheck} {ATTACHED_FILE_TIP}</InfoTip>
             </span>
             {instructionsHref && !onViewInstructions && (
               <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label="View the instructions (new tab)" className={LINK_CLS}>View the instructions</a>
@@ -472,7 +498,7 @@ export function CheckHeaderActions({ sources, instructionsHref, onViewInstructio
         <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label="View the instructions (new tab)" className={LINK_CLS}>View the instructions</a>
       )}
       <InfoTip label="About the project instructions check" helpHref={helpLink("ai")} large>
-        <p>{CHECK_TIP_SENTENCES.join(" ")}</p>
+        <p>{CHECK_TIP_SENTENCES.join(" ")} {ATTACHED_FILE_TIP}</p>
         {(read || (sources?.filesRead ?? 0) > 0) && (
           <p className="mt-1.5">{[read, sources && sources.filesRead > 0 ? SCANNED_NOTE : null].filter(Boolean).join(" ")}</p>
         )}

@@ -98,6 +98,28 @@ describe("AI findings summary", () => {
     expect(screen.getByRole("button", { name: /Project instructions check · all 9, with proof/ }).getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("'Open file' reads the attachment list and then opens the file through the attachment route, not the instructions window", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.endsWith("/api/assignments/9")) return { ok: true, json: async () => ({ assignment: { attachments: [{ id: 5, kind: "PDF", mime: "application/pdf", filename: "Brief.pdf", size: 10, order: 0 }] } }) };
+      if (url.includes("/attachments/5")) return { ok: true, arrayBuffer: async () => new ArrayBuffer(4) };
+      return { ok: true, json: async () => ({ marks: [] }) };
+    }));
+    const openTab = vi.fn();
+    vi.stubGlobal("open", openTab);
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    const data: AiReviewResponse = { ...base, briefCheck: mkCheck([req("From the file", "NOT_FOUND", { sourceFile: "brief.pdf" })]) };
+    render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} instructionsAssignmentId={9} instructionsHref="/c/1/a/9" review={{ data, error: null, start: vi.fn() }} />);
+    await userEvent.click(await screen.findByRole("button", { name: /Project instructions check · all 1/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Open file (new tab)" }));
+    await vi.waitFor(() => expect(openTab).toHaveBeenCalledWith("blob:x", "_blank", "noopener,noreferrer"));
+    expect(urls.some((u) => u.includes("/api/assignments/9/attachments/5"))).toBe(true);
+    expect(screen.queryByRole("dialog")).toBeNull(); // the instructions window did not open
+  });
+
   it("all found: one calm line and no Needs a look block", async () => {
     renderCard(found(9));
     expect(await screen.findByText("Instructions: 9 of 9 found in the work. Nothing needs your check.")).toBeTruthy();

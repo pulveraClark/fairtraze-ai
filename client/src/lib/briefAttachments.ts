@@ -153,3 +153,26 @@ export async function retryUploads(assignmentId: number, items: DraftItem[], tok
   }
   return { failed };
 }
+
+export type OpenFileResult = "ok" | "missing" | "failed";
+
+/**
+ * Opens one attached file (PDF or image) of an assignment in a new tab, by the name the AI gave as a requirement's
+ * source. Uses the same authenticated attachment route and cached loader as the instructions window; the blob type
+ * comes from the fixed allow-list, never from the response. "missing" = no attachment has that name any more.
+ */
+export async function openAttachmentByName(
+  assignmentId: number, attachments: BriefAttachment[], filename: string, token: string,
+): Promise<OpenFileResult> {
+  const att = attachments.find((a) => a.filename.toLowerCase() === filename.toLowerCase());
+  if (!att) return "missing";
+  try {
+    const blob = await loadAttachmentBlob(assignmentId, att, token);
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return "ok";
+  } catch {
+    return "failed";
+  }
+}
