@@ -69,7 +69,6 @@ interface GroupDetail {
   rulesOutdated?: boolean;
   docsDataFixedAt?: string;
   report: {
-    gini:        number;
     teamHealth:  string;
     /** Server flag: no member has any recorded activity yet (display only). */
     noActivity?: boolean;

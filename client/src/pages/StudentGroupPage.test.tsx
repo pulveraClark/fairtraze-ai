@@ -37,7 +37,7 @@ export function groupFixture(over: Record<string, unknown> = {}) {
     membership: { role: "MEMBER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null },
     hasReport: true,
     report: {
-      gini: 0.3, teamHealth: "Moderate Risk", analyzedAt: "2026-10-18T00:00:00Z", memberCount: 3,
+      teamHealth: "Moderate Risk", analyzedAt: "2026-10-18T00:00:00Z", memberCount: 3,
       deadlineWindowBasis: "activity-span",
       myContribution: {
         sourceType: "COMBINED", contributionShare: 0.4, githubContributionShare: 0.5, documentContributionShare: 0.3,

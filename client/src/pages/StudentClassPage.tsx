@@ -35,7 +35,7 @@ interface MyGroup {
   repoUrl: string | null;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
-  report: { gini: number | null; teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
+  report: { teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
 }
 
 interface MyRequest {

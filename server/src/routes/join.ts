@@ -107,7 +107,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
                   reports: {
                     orderBy: [...LATEST_REPORT_ORDER],
                     take: 1,
-                    select: { gini: true, teamHealth: true, generatedAt: true, content: true },
+                    select: { teamHealth: true, generatedAt: true, content: true },
                   },
                 },
               },
@@ -148,7 +148,6 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
                 role:      myMembership.role,
                 report:    myProject.reports[0]
                   ? {
-                      gini:        myProject.reports[0].gini,
                       teamHealth:  myProject.reports[0].teamHealth,
                       generatedAt: myProject.reports[0].generatedAt.toISOString(),
                       noActivity:  contentHasNoRecordedActivity(myProject.reports[0].content),
@@ -200,7 +199,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
               reports: {
                 orderBy: [...LATEST_REPORT_ORDER],
                 take: 1,
-                select: { gini: true, teamHealth: true, generatedAt: true, content: true },
+                select: { teamHealth: true, generatedAt: true, content: true },
               },
             },
           },
@@ -276,7 +275,6 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
             pendingRequestCount:  pendingCountByProject.get(myProject.id) ?? 0,
             report:               myProject.reports[0]
               ? {
-                  gini:        myProject.reports[0].gini,
                   teamHealth:  myProject.reports[0].teamHealth,
                   generatedAt: myProject.reports[0].generatedAt.toISOString(),
                   noActivity:  contentHasNoRecordedActivity(myProject.reports[0].content),
@@ -761,7 +759,6 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     rulesOutdated: isRulesOutdated(stored),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     report: {
-      gini:        teamReport.gini,
       teamHealth:  teamReport.teamHealth,
       analyzedAt:  latestReport.generatedAt.toISOString(),
       trigger:     stored.trigger ?? null,
