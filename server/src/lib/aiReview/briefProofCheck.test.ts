@@ -9,7 +9,7 @@ const piece = (start: number, text: string, heading: string | null, isHeading = 
 
 const TITLE = "Route Finder: System Documentation";
 const ctx = (): BriefVerifyContext => ({
-  source: { instructions: "Write system documentation.", files: [] },
+  source: { instructions: "Write system documentation. Add tests. Build a GUI.", files: [] },
   paths: new Set(),
   fileText: new Map(),
   // What the prompt carried: body text only, shortened. The proof check must not depend on it.
@@ -107,15 +107,15 @@ describe("proof check counter", () => {
       req([{ type: "file", ref: "src/missing.ts", quote: "" }]),
       req([], "NOT_FOUND"),
     ], ctx());
-    expect(out.proof).toEqual({ claimed: 3, demoted: 2, quoteNotFound: 1, refNotFound: 1 });
+    expect(out.proof).toEqual({ claimed: 3, demoted: 2, quoteNotFound: 1, refNotFound: 1, capped: 0 });
   });
 
   it("writes one log line and stores nothing", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    logProofCheck("brief (group 3)", { claimed: 5, demoted: 1, quoteNotFound: 1, refNotFound: 0 });
+    logProofCheck("brief (group 3)", { claimed: 5, demoted: 1, quoteNotFound: 1, refNotFound: 0, capped: 0 });
     expect(info).toHaveBeenCalledTimes(1);
     expect(info.mock.calls[0]![0]).toBe(
-      "[ai-review] proof check brief (group 3): 5 marked found or partly found, 1 demoted to unverified (quote not found 1, ref not found 0)",
+      "[ai-review] proof check brief (group 3): 5 marked found or partly found, 1 demoted to unverified (quote not found 1, ref not found 0), 0 over the cap",
     );
   });
 });

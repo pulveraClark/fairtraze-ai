@@ -90,6 +90,14 @@ export interface AiBriefView {
   aiAddressedCount?: number;
 }
 
+// How many listed items were left out because the instructions do not contain them is a note about the AI's
+// answer for the instructor only; the leader never receives the count.
+function sourcesFor<S extends { droppedCount?: number }>(sources: S, viewer: AiViewer): S {
+  if (viewer === "instructor") return sources;
+  const { droppedCount: _dropped, ...rest } = sources;
+  return rest as S;
+}
+
 // The brief check is for the owning instructor and the group leader, never other members.
 // Same wording and evidence for both; the leader sees only the section heading, not the quoted words,
 // for Docs text written by anyone else. Returns null (card hidden) when there is no brief (no text and no
@@ -111,7 +119,7 @@ export function shapeBriefForViewer(
   if (row.status === "SKIPPED") {
     const s = content.sources;
     if (!s || s.writtenBrief || s.filesRead > 0 || s.skipped.length === 0) return null;
-    return { requirements: [], nothingFound: false, nothingRead: true, generatedAt: row.createdAt.toISOString(), outdated, sources: s };
+    return { requirements: [], nothingFound: false, nothingRead: true, generatedAt: row.createdAt.toISOString(), outdated, sources: sourcesFor(s, viewer) };
   }
   if (!content.requirements?.length) return null;
   const keys = requirementKeys(content.requirements);
@@ -134,7 +142,7 @@ export function shapeBriefForViewer(
     nothingFound: requirements.every((r) => r.status === "NOT_FOUND"),
     generatedAt: row.createdAt.toISOString(),
     outdated,
-    ...(content.sources ? { sources: content.sources } : {}),
+    ...(content.sources ? { sources: sourcesFor(content.sources, viewer) } : {}),
     ...(viewer === "instructor" ? { aiAddressedCount: content.aiAddressedCount ?? 0 } : {}),
   };
 }

@@ -203,18 +203,39 @@ function findInDocument(q: string, ref: string, ctx: BriefVerifyContext): DocHit
   return one ? { heading: one.heading ?? NO_HEADING, pieces: [one] } : null;
 }
 
+/**
+ * The most requirements the written instructions can support: sentences, lines or list items, plus every
+ * " and ", "," and ";" that could join separate things, plus one. "Build a GraphHopper route planner with a
+ * Tkinter GUI and write its system documentation." is 1 sentence + 1 " and " = 2 clauses, so the cap is 3.
+ * Capped at MAX_REQUIREMENTS. Empty instructions (the brief is only in attached files) cannot be counted: no cap
+ * below MAX_REQUIREMENTS.
+ */
+export function maxRequirementsFor(instructions: string): number {
+  const text = instructions.trim();
+  if (!text) return MAX_REQUIREMENTS;
+  let units = 0;
+  for (const line of text.split(/\r?\n/)) {
+    if (line.trim() === "") continue;
+    units += Math.max(1, line.split(/[.!?]+(?:\s+|$)/).filter((s) => s.trim() !== "").length);
+  }
+  const separators = (text.match(/\band\b/gi)?.length ?? 0) + (text.match(/[,;]/g)?.length ?? 0);
+  return Math.min(MAX_REQUIREMENTS, units + separators + 1);
+}
+
 export interface ProofCheckCount {
   // Requirements the AI marked Found / Partly found, and how many of them ended up unverified.
   claimed: number;
   demoted: number;
   quoteNotFound: number;
   refNotFound: number;
+  // Past the cap, after the source check (discarded, not shown, not counted as "left out").
+  capped: number;
 }
 
 /** One log line per run (log only, nothing stored). */
 export function logProofCheck(label: string, p: ProofCheckCount): ProofCheckCount {
   console.info(
-    `[ai-review] proof check ${label}: ${p.claimed} marked found or partly found, ${p.demoted} demoted to unverified (quote not found ${p.quoteNotFound}, ref not found ${p.refNotFound})`,
+    `[ai-review] proof check ${label}: ${p.claimed} marked found or partly found, ${p.demoted} demoted to unverified (quote not found ${p.quoteNotFound}, ref not found ${p.refNotFound}), ${p.capped} over the cap`,
   );
   return p;
 }
@@ -270,9 +291,12 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
     if (source) sourced.push({ r, source });
     else droppedCount++;
   }
-  const proof: ProofCheckCount = { claimed: 0, demoted: 0, quoteNotFound: 0, refNotFound: 0 };
+  // The cap comes after the source check and keeps the AI's order, so an invented item can never push out a
+  // real one. With attached files the instructions cannot be counted, so only MAX_REQUIREMENTS applies.
+  const cap = ctx.source.files.length > 0 ? MAX_REQUIREMENTS : maxRequirementsFor(ctx.source.instructions);
+  const proof: ProofCheckCount = { claimed: 0, demoted: 0, quoteNotFound: 0, refNotFound: 0, capped: Math.max(0, sourced.length - cap) };
   const requirements = sourced
-    .slice(0, MAX_REQUIREMENTS)
+    .slice(0, cap)
     .map(({ r, source }) => {
       const evidence: AiBriefEvidence[] = [];
       let firstRejection: "quote" | "ref" | null = null;
