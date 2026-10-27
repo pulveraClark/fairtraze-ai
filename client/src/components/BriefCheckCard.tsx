@@ -16,9 +16,8 @@ import {
 // (the server decides; this file never filters by role). It says whether each requirement of the project
 // instructions is covered in the group's work. It is not a grade, a score or a judgment of quality.
 
-// The AI said yes but none of its proof could be found in the work (instructor), or it found no proof (leader).
-export const CHECK_WHY = "The AI said yes, but the proof it gave could not be found in the work.";
-export const NOT_CLEAR_WHY = "The AI could not find proof of it. If your group did it, make sure it is in the Docs or the repository.";
+// The same sentence for everyone: no blame, and a way to check.
+export const NOT_CONFIRMED_WHY = "The AI could not confirm this one. It may still be there. Open the Docs or the repository to check.";
 export const CHECK_WORK_LINE = "Please check the group's work for this one.";
 const QUOTE_MAX = 140;
 
@@ -69,6 +68,9 @@ function SeeInInstructions({ quote, access }: { quote?: string; access: Instruct
   }
   return null;
 }
+
+/** A requirement read inside quotation marks, without its closing full stop ("Write system documentation." becomes "Write system documentation"). */
+export const quoted = (text: string) => text.trim().replace(/[\s.]+$/, "");
 
 const hasSource = (r: Req) => !!(r.sourceQuote || r.sourceFile);
 const fileSource = (r: Req) => `${r.sourceFile}${r.sourcePage ? `, page ${r.sourcePage}` : ""}`;
@@ -162,7 +164,7 @@ function Proof({ r, access, showSource }: { r: Req; access: InstructionsAccess; 
 /** A small label/value grid (label column about 64px), used for the "check" rows. */
 function Grid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   return (
-    <dl className="mt-1 grid grid-cols-[4rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs leading-normal text-slate-800">
+    <dl className="mt-1 grid grid-cols-[4rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1 text-xs leading-normal text-slate-800">
       {rows.map(([label, value]) => (
         <div key={label} className="contents">
           <dt className="font-semibold text-slate-700">{label}</dt>
@@ -186,10 +188,10 @@ function RequirementRow({ r, instructor, access, repoUrl, docs }: {
       {kind === "CHECK" ? (
         <Grid
           rows={[
-            ["Check", instructor ? `Does the work include “${r.text}”?` : `Is “${r.text}” in your work?`],
+            ["Check", instructor ? `Does the work include “${quoted(r.text)}”?` : `Is “${quoted(r.text)}” in your work?`],
             ...(hasSource(r) ? [["From", <FromLine key="from" r={r} access={access} />] as [string, React.ReactNode]] : []),
-            ["Why", instructor ? CHECK_WHY : NOT_CLEAR_WHY],
-            ...(instructor ? [["Look in", <LookIn key="look" repoUrl={repoUrl} docs={docs} />] as [string, React.ReactNode]] : []),
+            ["Why", NOT_CONFIRMED_WHY],
+            ["Look in", <LookIn key="look" repoUrl={repoUrl} docs={docs} />],
           ]}
         />
       ) : (

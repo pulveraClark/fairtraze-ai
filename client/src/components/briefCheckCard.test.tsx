@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocSectionProvider } from "../hooks/useDocSectionLink";
-import { BriefCheckCard, CHECK_WHY, NOT_CLEAR_WHY, CHECK_WORK_LINE, truncateQuote } from "./BriefCheckCard";
+import { BriefCheckCard, NOT_CONFIRMED_WHY, CHECK_WORK_LINE, quoted, truncateQuote } from "./BriefCheckCard";
 import { StudentWorkSummaries } from "./StudentWorkSummaries";
 import { Narrative } from "./Narrative";
 import { briefStatusLine, type AiBriefCheck, type AiReviewResponse } from "../lib/aiReview";
@@ -169,8 +169,8 @@ describe("BriefCheckCard", () => {
       expect(row.getByText("Does the work include “Has tests”?")).toBeTruthy();
       expect(row.getByText(`Project instructions: “${TESTS_QUOTE}”`)).toBeTruthy();
       expect(row.getByText("Why")).toBeTruthy();
-      expect(row.getByText(CHECK_WHY)).toBeTruthy();
-      expect(CHECK_WHY).toBe("The AI said yes, but the proof it gave could not be found in the work.");
+      expect(row.getByText(NOT_CONFIRMED_WHY)).toBeTruthy();
+      expect(NOT_CONFIRMED_WHY).toBe("The AI could not confirm this one. It may still be there. Open the Docs or the repository to check.");
       expect(row.getByText("Look in")).toBeTruthy();
       await userEvent.click(row.getByRole("link", { name: "Open FairTraze Docs" }));
       expect(openDocs).toHaveBeenCalledWith("");
@@ -199,15 +199,34 @@ describe("BriefCheckCard", () => {
       expect(CHECK_WORK_LINE).toBe("Please check the group's work for this one.");
     });
 
-    it("leader and students: 'Not clear yet' with Check / From / Why and no Look in", async () => {
-      render(<BriefCheckCard check={check} />);
+    it("leader and students: 'Not clear yet' with the same wording and the same Docs and repository links", async () => {
+      const openDocs = vi.fn();
+      render(
+        <DocSectionProvider value={openDocs}>
+          <BriefCheckCard check={check} repoUrl="https://github.com/example/Trips" />
+        </DocSectionProvider>,
+      );
       await open();
       const row = within(rowOf("Has tests"));
       expect(row.getByText("Is “Has tests” in your work?")).toBeTruthy();
-      expect(row.getByText(NOT_CLEAR_WHY)).toBeTruthy();
-      expect(NOT_CLEAR_WHY).toBe("The AI could not find proof of it. If your group did it, make sure it is in the Docs or the repository.");
-      expect(row.queryByText("Look in")).toBeNull();
-      expect(row.queryByText(CHECK_WHY)).toBeNull();
+      expect(row.getByText(NOT_CONFIRMED_WHY)).toBeTruthy();
+      expect(row.getByText("Look in")).toBeTruthy();
+      expect(row.getByRole("link", { name: "Open FairTraze Docs" })).toBeTruthy();
+      expect(row.getByRole("link", { name: "Open the repository on GitHub (new tab)" }).getAttribute("href")).toBe("https://github.com/example/Trips");
+      expect(row.queryByText(/said yes|blame|fault/i)).toBeNull();
+    });
+
+    it("the quoted requirement in the Check line loses its closing full stop", () => {
+      expect(quoted("Write system documentation.")).toBe("Write system documentation");
+      expect(quoted("Use Python 3.11")).toBe("Use Python 3.11");
+      expect(quoted("  Has tests. ")).toBe("Has tests");
+    });
+
+    it("the Check / From / Why / Look in labels line up with the first line of their text", async () => {
+      render(<BriefCheckCard check={check} instructor />);
+      await open();
+      const grid = rowOf("Has tests").querySelector("dl");
+      expect(grid?.className).toContain("items-baseline");
     });
 
     it("a file source reads 'From: <file>, page N'; a requirement with no source has no From line (older checks)", async () => {

@@ -52,7 +52,7 @@ export function StudentWorkSummaries({ projectId, isLeader, sourceType, onViewIn
           ) : null}
         </>
       )}
-      {briefCheck && <BriefCheckCard check={briefCheck} sourceType={sourceType} onViewInstructions={onViewInstructions} />}
+      {briefCheck && <BriefCheckCard check={briefCheck} repoUrl={data.repoUrl} sourceType={sourceType} onViewInstructions={onViewInstructions} />}
     </section>
   );
 }
