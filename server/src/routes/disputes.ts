@@ -257,7 +257,7 @@ disputesRouter.get("/api/projects/:id/disputes", ...requireRole("INSTRUCTOR"), a
     return;
   }
 
-  if (project.assignment && project.assignment.classSection.instructorId !== instructorId) {
+  if (project.assignment?.classSection.instructorId !== instructorId) {
     res.status(403).json({ error: "You do not have access to this project." });
     return;
   }

@@ -127,12 +127,10 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
     return;
   }
 
-  // Ownership: if the project belongs to an assignment, the instructor must own that class
-  if (project.assignment) {
-    if (project.assignment.classSection.instructorId !== req.user!.sub) {
-      res.status(403).json({ error: "You do not have access to this project" });
-      return;
-    }
+  // Ownership: the instructor must own the class. A project with no assignment has no owner.
+  if (project.assignment?.classSection.instructorId !== req.user!.sub) {
+    res.status(403).json({ error: "You do not have access to this project" });
+    return;
   }
 
   const latestReport = await prisma.report.findFirst({

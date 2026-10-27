@@ -235,11 +235,9 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     return { status: 404, body: { error: `Project ${projectId} not found` }, streamed: false };
   }
 
-  // Ownership: if the project belongs to an assignment, the instructor must own that class
-  if (project.assignment && actorInstructorId !== null) {
-    if (project.assignment.classSection.instructorId !== actorInstructorId) {
-      return { status: 403, body: { error: "You do not have access to this project" }, streamed: false };
-    }
+  // Ownership: the instructor must own the class. A project with no assignment has no owner.
+  if (actorInstructorId !== null && project.assignment?.classSection.instructorId !== actorInstructorId) {
+    return { status: 403, body: { error: "You do not have access to this project" }, streamed: false };
   }
 
   const sourceType = project.assignment?.sourceType ?? null;

@@ -64,15 +64,11 @@ export function buildTaskSummary(
 
 // GET /api/projects — list all projects (used by legacy selector, kept for compat)
 // requireRole(INSTRUCTOR) + scoped to the requesting instructor's own projects.
-// TODO: assignment-less projects (assignmentId: null) are accessible to any
-// authenticated instructor by design for now — known gap, not fixed here.
+// Assignment-less projects have no owning instructor, so no instructor sees them.
 projectsRouter.get("/api/projects", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const projects = await prisma.project.findMany({
     where: {
-      OR: [
-        { assignmentId: null },
-        { assignment: { classSection: { instructorId: req.user!.sub } } },
-      ],
+      assignment: { classSection: { instructorId: req.user!.sub } },
     },
     include: { members: true },
     orderBy: { id: "asc" },
@@ -82,15 +78,11 @@ projectsRouter.get("/api/projects", ...requireRole("INSTRUCTOR"), async (req, re
 
 // GET /api/projects/summary — dashboard summary from stored reports, no GitHub call
 // requireRole(INSTRUCTOR) + scoped to the requesting instructor's own projects.
-// TODO: assignment-less projects (assignmentId: null) are accessible to any
-// authenticated instructor by design for now — known gap, not fixed here.
+// Assignment-less projects have no owning instructor, so no instructor sees them.
 projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const projects = await prisma.project.findMany({
     where: {
-      OR: [
-        { assignmentId: null },
-        { assignment: { classSection: { instructorId: req.user!.sub } } },
-      ],
+      assignment: { classSection: { instructorId: req.user!.sub } },
     },
     include: {
       members: true,
@@ -179,11 +171,9 @@ projectsRouter.get("/api/projects/:id/report/history", ...requireRole("INSTRUCTO
     return;
   }
 
-  if (project.assignment) {
-    if (project.assignment.classSection.instructorId !== req.user!.sub) {
-      res.status(403).json({ error: "You do not have access to this project" });
-      return;
-    }
+  if (project.assignment?.classSection.instructorId !== req.user!.sub) {
+    res.status(403).json({ error: "You do not have access to this project" });
+    return;
   }
 
   const reports = await prisma.report.findMany({
@@ -226,14 +216,10 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     return;
   }
 
-  // Ownership: if the project belongs to an assignment, the instructor must own that class
-  // TODO: assignment-less projects (assignmentId: null) are accessible to any
-  // authenticated instructor by design for now — known gap, not fixed here.
-  if (project.assignment) {
-    if (project.assignment.classSection.instructorId !== req.user!.sub) {
-      res.status(403).json({ error: "You do not have access to this project" });
-      return;
-    }
+  // Ownership: the instructor must own the class. A project with no assignment has no owner.
+  if (project.assignment?.classSection.instructorId !== req.user!.sub) {
+    res.status(403).json({ error: "You do not have access to this project" });
+    return;
   }
 
   const latestReport = await prisma.report.findFirst({
