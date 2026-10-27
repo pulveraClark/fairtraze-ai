@@ -6,7 +6,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "../lib/groupAccess.js";
 import type { LoadedGroup } from "../lib/groupAccess.js";
 import { attachmentMetaFor, sniffBriefMime } from "../lib/briefAttachments.js";
-import { cleanNote, isMarkStale, requirementKey, MARK_IMAGE_MAX_BYTES } from "../lib/requirementMarks.js";
+import { cleanNote, isMarkStale, requirementKeys, MARK_IMAGE_MAX_BYTES } from "../lib/requirementMarks.js";
+import { isMarkable, MARK_ALREADY_COVERED, MARK_ITEM_MISSING } from "@shared/requirementMarkable.js";
 import type { AiBriefContent, AiBriefRequirement } from "@shared/aiReviewTypes.js";
 
 // "We have this" marks on project-instructions requirements the AI could not confirm. The leader of the group
@@ -56,11 +57,10 @@ async function latestRequirements(projectId: number): Promise<Array<{ key: strin
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { content: true },
   });
+  const reqs = (row?.content as unknown as AiBriefContent | undefined)?.requirements ?? [];
+  const keys = requirementKeys(reqs);
   const out: Array<{ key: string; r: AiBriefRequirement }> = [];
-  for (const r of ((row?.content as unknown as AiBriefContent | undefined)?.requirements ?? [])) {
-    const key = requirementKey(r);
-    if (key) out.push({ key, r });
-  }
+  reqs.forEach((r, i) => { const key = keys[i]; if (key) out.push({ key, r }); });
   return out;
 }
 
@@ -76,14 +76,17 @@ const owningInstructor = (req: Request, project: LoadedGroup) => req.user!.role 
 requirementMarksRouter.get("/api/groups/:id/requirement-marks", requireAuth, async (req, res) => {
   const project = await openGroup(req, res, req.params.id);
   if (!project) return;
-  const [rows, current] = await Promise.all([
+  const [rows, current, latest] = await Promise.all([
     prisma.requirementMark.findMany({
       where: { projectId: project.id },
       orderBy: { createdAt: "asc" },
       include: { markedBy: { select: { id: true, name: true } } },
     }),
     currentInstructions(project.id),
+    latestRequirements(project.id),
   ]);
+  // A mark whose key is no longer in the latest check (a sibling the AI reworded) reads stale, never moves.
+  const liveKeys = new Set(latest.map((x) => x.key));
   res.set("Cache-Control", "private, no-cache");
   res.json({
     marks: rows.map((m) => ({
@@ -99,7 +102,7 @@ requirementMarksRouter.get("/api/groups/:id/requirement-marks", requireAuth, asy
       markedByYou: m.markedById === req.user!.sub,
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
-      stale: isMarkStale(m, current),
+      stale: isMarkStale(m, current) || (liveKeys.size > 0 && !liveKeys.has(m.requirementKey)),
     })),
   });
 });
@@ -134,8 +137,8 @@ requirementMarksRouter.post("/api/groups/:id/requirement-marks/claim", requireAu
   const body = keyBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const found = (await latestRequirements(project.id)).find((x) => x.key === body.data.requirementKey);
-  if (!found) { res.status(404).json({ error: "That item is not in the latest check." }); return; }
-  if (!found.r.unverified) { res.status(409).json({ error: "Only an item the AI could not confirm can be marked." }); return; }
+  if (!found) { res.status(404).json({ error: MARK_ITEM_MISSING }); return; }
+  if (!isMarkable(found.r)) { res.status(409).json({ error: MARK_ALREADY_COVERED }); return; }
   const confirmed = await prisma.requirementMark.findUnique({
     where: { projectId_requirementKey_role: { projectId: project.id, requirementKey: found.key, role: "INSTRUCTOR" } },
     select: { id: true },
@@ -157,7 +160,7 @@ requirementMarksRouter.post("/api/groups/:id/requirement-marks/confirm", require
   const body = keyBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const found = (await latestRequirements(project.id)).find((x) => x.key === body.data.requirementKey);
-  if (!found) { res.status(404).json({ error: "That item is not in the latest check." }); return; }
+  if (!found) { res.status(404).json({ error: MARK_ITEM_MISSING }); return; }
   const mark = await upsertMark(project, req.user!.sub, "INSTRUCTOR", "INSTRUCTOR_CONFIRMED", found, cleanNote(body.data.note));
   res.status(201).json({ id: mark.id });
 });

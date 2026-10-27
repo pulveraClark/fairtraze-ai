@@ -8,6 +8,7 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { formatBasedOn, type AiBriefCheck } from "../lib/aiReview";
 import { RequirementMarkPanel } from "./RequirementMarkPanel";
 import type { MarksApi } from "../hooks/useRequirementMarks";
+import { isMarkable } from "@shared/requirementMarkable";
 import { MARK_STALE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, type KeyMarks } from "../lib/requirementMarks";
 import {
   ATTENTION_ORDER, NOTHING_READ_TITLE, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
@@ -211,8 +212,8 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks 
           requirementKey={r.key}
           marks={keyMarks}
           api={marks}
-          canClaim={marks.role === "leader" && kind === "CHECK"}
-          canCheck={marks.role === "instructor" && kind !== "COVERED"}
+          canClaim={marks.role === "leader" && isMarkable(r)}
+          canCheck={marks.role === "instructor" && isMarkable(r)}
         />
       )}
     </li>

@@ -19,11 +19,34 @@ interface Source {
  * so a mark stays on its requirement. Null for an old check that has no source.
  */
 export function requirementKey(r: Source): string | null {
+  const basis = sourceBasis(r);
+  return basis ? hashKey(basis) : null;
+}
+
+function sourceBasis(r: Source): string | null {
   const quote = (r.sourceQuote ?? "").trim();
   const file = (r.sourceFile ?? "").trim().toLowerCase();
   if (!quote && !file) return null;
-  const basis = quote ? `q:${normalizeQuote(quote)}` : `f:${file}#${r.sourcePage ?? ""}`;
-  return createHash("sha256").update(basis).digest("hex").slice(0, 32);
+  return quote ? `q:${normalizeQuote(quote)}` : `f:${file}#${r.sourcePage ?? ""}`;
+}
+
+const hashKey = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32);
+
+/**
+ * Keys for a whole check, in order. One sentence of the instructions can give several requirements; a
+ * requirement alone on its sentence keeps the plain `requirementKey`, and siblings that share a sentence get the
+ * sentence plus their own normalised text, so each key belongs to one item (never to its position). If the AI
+ * rewords a sibling, its old mark no longer matches and reads stale; it is never moved to another item.
+ */
+export function requirementKeys(rs: Array<Source & { text: string }>): Array<string | null> {
+  const bases = rs.map(sourceBasis);
+  const counts = new Map<string, number>();
+  for (const b of bases) if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
+  return rs.map((r, i) => {
+    const b = bases[i];
+    if (!b) return null;
+    return counts.get(b)! > 1 ? hashKey(`${b}|t:${normalizeQuote(r.text)}`) : hashKey(b);
+  });
 }
 
 /**

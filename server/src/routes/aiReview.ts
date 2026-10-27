@@ -10,7 +10,7 @@ import { generateMemberSummaries } from "../lib/aiReview/memberSummaries.js";
 import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
 import { briefFingerprint } from "../lib/aiReview/briefEvidence.js";
 import { attachmentMetaFor } from "../lib/briefAttachments.js";
-import { requirementKey } from "../lib/requirementMarks.js";
+import { requirementKeys } from "../lib/requirementMarks.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
 import { canonicalRepoUrl, linkFile, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
 import type {
@@ -114,8 +114,9 @@ export function shapeBriefForViewer(
     return { requirements: [], nothingFound: false, nothingRead: true, generatedAt: row.createdAt.toISOString(), outdated, sources: s };
   }
   if (!content.requirements?.length) return null;
-  const requirements = content.requirements.map((r) => ({
-    key: requirementKey(r) ?? undefined,
+  const keys = requirementKeys(content.requirements);
+  const requirements = content.requirements.map((r, i) => ({
+    key: keys[i] ?? undefined,
     text: r.text,
     status: r.status,
     unverified: !!r.unverified,

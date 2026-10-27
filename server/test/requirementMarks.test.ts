@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
-import { requirementKey, isMarkStale } from "../src/lib/requirementMarks.js";
+import { requirementKey, requirementKeys, isMarkStale } from "../src/lib/requirementMarks.js";
 import { createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 
 const app = createApp();
@@ -53,6 +53,23 @@ describe("requirement key", () => {
     expect(requirementKey({})).toBeNull();
   });
 
+  it("siblings on one sentence get keys from the sentence plus their own text; a lone requirement keeps the old key", () => {
+    const Q = "Build a planner with a GUI and write its documentation.";
+    const gui = { text: "Use a GUI.", sourceQuote: Q };
+    const docs = { text: "Write system documentation.", sourceQuote: Q };
+    const lone = { text: "Has a login page.", sourceQuote: Q_LOGIN };
+    const [kGui, kDocs, kLone] = requirementKeys([gui, docs, lone]);
+    expect(kGui).not.toBe(kDocs);
+    expect(kGui).not.toBe(requirementKey({ sourceQuote: Q }));
+    expect(kLone).toBe(requirementKey({ sourceQuote: Q_LOGIN }));
+    // Swapping the order keeps each key with its own text.
+    const [kDocs2, kLone2, kGui2] = requirementKeys([docs, lone, gui]);
+    expect([kDocs2, kGui2, kLone2]).toEqual([kDocs, kGui, kLone]);
+    // A reworded sibling gets another key, so its old key matches nothing.
+    const [, reworded] = requirementKeys([gui, { ...docs, text: "Provide a manual." }]);
+    expect(reworded).not.toBe(kDocs);
+  });
+
   it("a mark is stale only when its sentence (or file) is gone from the current instructions", () => {
     const cur = { description: BRIEF, attachmentNames: ["brief.pdf"] };
     expect(isMarkStale({ sourceQuote: Q_LOGIN }, cur)).toBe(false);
@@ -74,8 +91,12 @@ describe("requirement marks: claim, confirm, decline", () => {
     expect((await post(s.outsider, key)).status).toBe(403);
     expect((await post(s.instructor, key)).status).toBe(403);
     expect((await post(s.admin, key)).status).toBe(403);
-    expect((await post(s.leader, survey)).status).toBe(409); // the AI already found it
-    expect((await post(s.leader, "0".repeat(32))).status).toBe(404);
+    const covered = await post(s.leader, survey); // the AI already found it
+    expect(covered.status).toBe(409);
+    expect(covered.body.error).toBe("This item is already marked covered by the AI.");
+    const missing = await post(s.leader, "0".repeat(32));
+    expect(missing.status).toBe(404);
+    expect(missing.body.error).toBe("We could not find this item in the latest check. Please refresh the page.");
 
     const ok = await post(s.leader, key, "  It is in   src/Login.tsx  ");
     expect(ok.status).toBe(201);
@@ -126,6 +147,49 @@ describe("requirement marks: claim, confirm, decline", () => {
     const again = await request(app).post(`${s.base}/claim`).set(s.as(s.leader)).send({ requirementKey: key, note: "second" });
     expect(again.body.id).toBe(claim.body.id);
     expect(await prisma.requirementMark.findUniqueOrThrow({ where: { id: claim.body.id } })).toMatchObject({ status: "LEADER_CLAIM", note: "second" });
+  });
+});
+
+describe("requirement marks: items that share one sentence", () => {
+  const Q = "Build a GraphHopper route planner with a Tkinter GUI and write its system documentation.";
+  const covered = { text: "Use a Tkinter GUI.", status: "FOUND", evidence: [], sourceQuote: Q };
+  const open = { text: "Write system documentation.", status: "NOT_FOUND", evidence: [], unverified: true, sourceQuote: Q };
+
+  it("the open sibling can be claimed and confirmed; the covered sibling is refused for the leader", async () => {
+    const s = await setup();
+    await prisma.assignment.update({ where: { id: s.asg.id }, data: { description: Q } });
+    await s.review([covered, open]);
+    const [kCovered, kOpen] = requirementKeys([covered, open]) as string[];
+    expect(kCovered).not.toBe(kOpen);
+    const claim = (k: string) => request(app).post(`${s.base}/claim`).set(s.as(s.leader)).send({ requirementKey: k, note: "ok" });
+
+    expect((await claim(kCovered!)).status).toBe(409);
+    const ok = await claim(kOpen!);
+    expect(ok.status).toBe(201);
+    expect(await prisma.requirementMark.findUniqueOrThrow({ where: { id: ok.body.id } })).toMatchObject({ requirementText: open.text, requirementKey: kOpen });
+    expect((await request(app).post(`${s.base}/confirm`).set(s.as(s.instructor)).send({ requirementKey: kOpen })).status).toBe(201);
+    const marks = (await request(app).get(s.base).set(s.as(s.instructor))).body.marks as Array<{ requirementKey: string; stale: boolean }>;
+    expect(marks.every((m) => m.requirementKey === kOpen && !m.stale)).toBe(true);
+  });
+
+  it("a verified 'not found' item can be claimed too", async () => {
+    const s = await setup();
+    const plain = { text: "Has a README.", status: "NOT_FOUND", evidence: [], sourceQuote: "Add a README." };
+    await s.review([plain]);
+    const res = await request(app).post(`${s.base}/claim`).set(s.as(s.leader)).send({ requirementKey: requirementKey(plain) });
+    expect(res.status).toBe(201);
+  });
+
+  it("a sibling the AI reworded reads stale and the mark is not moved to another item", async () => {
+    const s = await setup();
+    await prisma.assignment.update({ where: { id: s.asg.id }, data: { description: Q } });
+    await s.review([covered, open]);
+    const [, kOpen] = requirementKeys([covered, open]) as string[];
+    await request(app).post(`${s.base}/claim`).set(s.as(s.leader)).send({ requirementKey: kOpen });
+    await s.review([covered, { ...open, text: "Provide a user manual." }]);
+    const marks = (await request(app).get(s.base).set(s.as(s.leader))).body.marks as Array<{ requirementKey: string; stale: boolean }>;
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toMatchObject({ requirementKey: kOpen, stale: true });
   });
 });
 

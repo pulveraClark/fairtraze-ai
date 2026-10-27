@@ -184,8 +184,8 @@ const Box = ({ children, label }: { children: React.ReactNode; label: string }) 
 );
 
 /**
- * `canClaim`: this row is "Not clear yet" (the leader's item). `canCheck`: any row the AI did not mark covered
- * (the instructor's "I checked: covered").
+ * `canClaim` (leader) and `canCheck` (instructor, "I checked: covered"): both come from the shared `isMarkable`,
+ * so a row the AI did not confirm; one it marked covered gets neither.
  */
 export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, canCheck }: {
   requirementKey: string; marks: KeyMarks | undefined; api: MarksApi; canClaim: boolean; canCheck: boolean;
