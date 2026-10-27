@@ -25,6 +25,8 @@ interface Props {
   aiSummaryState?: WorkSummaryState | null;
   /** The shared AI generate action. Pass it only for viewers who may generate; omit for no button. */
   generator?: AiReportGenerator;
+  /** One calm line about the member findings (for example, some show changed files only). Shown only when it applies. */
+  findingsNote?: string | null;
   /** AI findings already exist (button reads Regenerate). */
   hasNarrative?: boolean;
 }
@@ -47,7 +49,7 @@ export function RoleChips({ info }: { info: MemberRoleInfo | undefined }) {
   );
 }
 
-export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false }: Props) {
+export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false, findingsNote }: Props) {
   // Busy until 90 s have passed; then the button works again and the wording changes.
   const slow = !!generator?.slow;
   const reviewRunning = aiSummaryState === "running";
@@ -74,6 +76,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
               {WORK_SUMMARY_CHIP_TEXT[aiSummaryState]}
             </p>
           )}
+          {findingsNote && <p className="mt-1.5 text-xs leading-normal text-slate-700">{findingsNote}</p>}
           {busy && (
             <p className="mt-1.5 text-xs leading-normal text-slate-700">
               {slow ? AI_SLOW_TEXT : AI_WRITING_HINT}

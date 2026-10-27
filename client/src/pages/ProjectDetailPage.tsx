@@ -18,7 +18,7 @@ import { Narrative } from "../components/Narrative";
 import { MemberWorkSummary } from "../components/report/AiWorkSummary";
 import { useAiReview } from "../hooks/useAiReview";
 import { useGenerateAiReport } from "../hooks/useGenerateAiReport";
-import { workSummaryState } from "../lib/aiReview";
+import { reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { AnalysisStepper } from "../components/AnalysisStepper";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
@@ -759,6 +759,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               aiSummaryState={aiReview.data?.canGenerate ? workSummaryState(aiReview.data) : null}
               generator={isAdmin ? undefined : aiGenerator}
               hasNarrative={!!narrativeText}
+              findingsNote={aiReview.data?.enabled && aiReview.data.status === "PARTIAL" ? reviewStatusLine(aiReview.data) : null}
               onOpen={(m, el) => { setDrawerOpener(el); setOpenedName(m.studentName); setSelectedName(m.studentName); }}
             />
 
@@ -771,6 +772,8 @@ export function ProjectDetailPage({ projectId }: Props) {
               review={aiReview}
               generator={aiGenerator}
               basedOnAt={stored.analyzedAt}
+              teamHealth={noActivity ? null : stored.report.teamHealth}
+              gini={noActivity ? null : stored.report.gini}
               repoUrl={sourceType !== "EDITOR" ? stored.repoUrl : null}
               sourceType={sourceType}
               instructionsHref={classId && assignmentId ? assignmentUrl : undefined}

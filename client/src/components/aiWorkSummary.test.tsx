@@ -316,7 +316,8 @@ describe("AI button in Member contributions", () => {
   it("status line: ready and writing; nothing extra before anything is generated", () => {
     const mk = (data: AiReviewResponse) => ({ data, error: null, start: vi.fn() });
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk(base)} />);
-    expect(screen.getByText("Select a member above to read their AI findings.")).toBeTruthy();
+    // The hint moved to the member list ("Select a member for details."); the card no longer says it.
+    expect(screen.queryByText(/Select a member above/)).toBeNull();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={mk({ ...base, summaries: null })} />);
     expect(screen.queryByText(/Select a member above|not generated yet|Writing AI findings/)).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();

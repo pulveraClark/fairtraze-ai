@@ -400,9 +400,9 @@ describe("project instructions check placement", () => {
   it("instructor: the check sits in the AI findings card; a failed run gets one calm line", () => {
     const start = vi.fn();
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} />);
-    expect(screen.getByText("Project instructions check")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Project instructions check · all 5, with proof/ })).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefFailed: true }, error: null, start }} />);
-    expect(screen.queryByText("Project instructions check")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Project instructions check/ })).toBeNull();
     expect(screen.getByText("The project instructions check could not run. Try again later.")).toBeTruthy();
     expect(briefStatusLine({ ...base, briefFailed: true, running: true })).toBeNull();
   });

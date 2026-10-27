@@ -169,7 +169,7 @@ export function workSummaryState(data: AiReviewResponse | null | undefined): Wor
 
 // The line in the AI findings card. Nothing is said before anything is generated.
 export const WORK_SUMMARY_STATUS_TEXT: Record<WorkSummaryState, string | null> = {
-  ready: "Select a member above to read their AI findings.",
+  ready: null, // the member list already says "Select a member for details."
   none: null,
   running: "Writing AI findings…",
 };

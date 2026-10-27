@@ -272,9 +272,22 @@ function Header() {
   );
 }
 
+/** The collapsible frame. `embedded` drops it when a parent row already provides the heading. */
+function Shell({ embedded, children }: { embedded?: boolean; children: React.ReactNode }) {
+  if (embedded) return <div className="mt-2 rounded-xl border border-slate-200 bg-white">{children}</div>;
+  return (
+    <details className="mt-4 rounded-xl border border-slate-200 bg-white">
+      <Header />
+      {children}
+    </details>
+  );
+}
+
 export function BriefCheckCard({
-  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions, marks,
+  check, instructor = false, repoUrl, sourceType, instructionsHref, onViewInstructions, marks, embedded = false,
 }: {
+  /** Render the body without its own heading row (the caller supplies one). */
+  embedded?: boolean;
   check: AiBriefCheck;
   instructor?: boolean;
   repoUrl?: string | null;
@@ -293,14 +306,13 @@ export function BriefCheckCard({
   // Files were attached but none could be read and there is no written text: nothing was checked, and why.
   if (check.nothingRead) {
     return (
-      <details className="mt-4 rounded-xl border border-slate-200 bg-white">
-        <Header />
-        <div className="space-y-3 border-t border-slate-200 px-3 py-3">
+      <Shell embedded={embedded}>
+        <div className={`space-y-3 px-3 py-3 ${embedded ? "" : "border-t border-slate-200"}`}>
           <p className="text-sm font-semibold leading-normal text-slate-900">{NOTHING_READ_TITLE}</p>
           <ReadLines sources={check.sources} />
           <p className="text-sm leading-normal text-slate-900">{nothingReadAdvice(instructor)}</p>
         </div>
-      </details>
+      </Shell>
     );
   }
   if (total === 0) return null;
@@ -320,9 +332,8 @@ export function BriefCheckCard({
   const others = otherCountsSentence(countKinds(stillOpen), instructor);
 
   return (
-    <details className="mt-4 rounded-xl border border-slate-200 bg-white">
-      <Header />
-      <div className="space-y-3 border-t border-slate-200 px-3 py-3">
+    <Shell embedded={embedded}>
+      <div className={`space-y-3 px-3 py-3 ${embedded ? "" : "border-t border-slate-200"}`}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-normal text-slate-700">
           <span className="flex min-w-0 items-center gap-1">
             {comparedSentence(sourceType)}
@@ -384,6 +395,6 @@ export function BriefCheckCard({
           <p className="text-xs leading-normal text-slate-700">Some text in the group's work appears to address the AI. It was not used.</p>
         )}
       </div>
-    </details>
+    </Shell>
   );
 }
