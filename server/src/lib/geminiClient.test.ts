@@ -13,7 +13,9 @@ vi.mock("./aiReview/limiter.js", async (orig) => ({
   aiReviewLimiter: { schedule: <T,>(fn: () => Promise<T>) => fn() },
 }));
 
-import { createLimiter, takeDailyBudget, resetDailyBudgetForTests } from "./aiReview/limiter.js";
+import {
+  createLimiter, takeDailyBudget, resetDailyBudgetForTests, quotaGate, noteDailyQuotaHit, remainingCalls, msUntilPacificMidnight,
+} from "./aiReview/limiter.js";
 import { generateJson, AiReviewError } from "./geminiClient.js";
 
 const schema = { type: "object" };
@@ -67,6 +69,56 @@ describe("daily budget", () => {
     expect([takeDailyBudget(before), takeDailyBudget(before), takeDailyBudget(before)]).toEqual([true, true, false]);
     expect(takeDailyBudget(new Date("2026-10-27T07:00:01Z"))).toBe(true);
   });
+
+  it("AI_DAILY_QUOTA sets the limit (default 20) and wins over the older AI_REVIEW_DAILY_CALL_CAP", () => {
+    resetDailyBudgetForTests();
+    const at = new Date("2026-10-26T10:00:00Z");
+    expect(remainingCalls(at)).toBe(20);
+    process.env.AI_REVIEW_DAILY_CALL_CAP = "5";
+    process.env.AI_DAILY_QUOTA = "3";
+    expect(remainingCalls(at)).toBe(3);
+    delete process.env.AI_DAILY_QUOTA;
+  });
+
+  it("counts down to Pacific midnight exactly, including across the daylight-saving change", () => {
+    const within = (actual: number, expected: number) => expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1000);
+    within(msUntilPacificMidnight(new Date("2026-10-28T06:00:00Z")), 3_600_000); // 11 pm PDT -> 1 hour
+    within(msUntilPacificMidnight(new Date("2026-11-01T12:00:00Z")), 20 * 3_600_000); // 4 am PST on the 25-hour day
+  });
+});
+
+describe("daily quota gate", () => {
+  afterEach(() => { delete process.env.AI_DAILY_QUOTA; resetDailyBudgetForTests(); });
+
+  it("refuses a run that needs more calls than are left, with the time to Pacific midnight", () => {
+    process.env.AI_DAILY_QUOTA = "3";
+    resetDailyBudgetForTests();
+    const at = new Date("2026-10-28T06:00:00Z");
+    takeDailyBudget(at);
+    expect(quotaGate(2, at)).toEqual({ ok: true });
+    const refused = quotaGate(3, at);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(Math.abs(refused.retryAfterMs - 3_600_000)).toBeLessThanOrEqual(1000);
+  });
+
+  it("blocked-until: after the provider reports the daily limit, nothing runs until the time it gave, whatever the counter says", () => {
+    process.env.AI_DAILY_QUOTA = "100";
+    resetDailyBudgetForTests();
+    const at = new Date("2026-10-27T12:00:00Z");
+    expect(quotaGate(1, at)).toEqual({ ok: true });
+    noteDailyQuotaHit(60_000, at);
+    expect(quotaGate(1, new Date(at.getTime() + 30_000))).toEqual({ ok: false, retryAfterMs: 30_000 });
+    expect(quotaGate(1, new Date(at.getTime() + 61_000))).toEqual({ ok: true });
+  });
+
+  it("blocked-until falls back to the next Pacific midnight when the provider gave no delay", () => {
+    resetDailyBudgetForTests();
+    const at = new Date("2026-10-28T06:00:00Z");
+    noteDailyQuotaHit(null, at);
+    const gate = quotaGate(1, at);
+    expect(gate.ok).toBe(false);
+    if (!gate.ok) expect(Math.abs(gate.retryAfterMs - 3_600_000)).toBeLessThanOrEqual(1000);
+  });
 });
 
 describe("generateJson", () => {
@@ -76,7 +128,7 @@ describe("generateJson", () => {
     process.env.AI_REVIEW_ENABLED = "true";
     process.env.GEMINI_API_KEY = "test-key";
   });
-  afterEach(() => { vi.useRealTimers(); delete process.env.AI_REVIEW_ENABLED; });
+  afterEach(() => { vi.useRealTimers(); delete process.env.AI_REVIEW_ENABLED; delete process.env.AI_DAILY_QUOTA; });
 
   it("is a soft failure while the kill switch is off", async () => {
     delete process.env.AI_REVIEW_ENABLED;
@@ -201,6 +253,47 @@ describe("generateJson", () => {
     expect(err.code).toBe("AI_QUOTA_DAILY");
     expect(err.retryAfterMs).toBe(14_309_000);
     expect(err.message).toBe("AI_QUOTA_DAILY");
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("a run refused up front makes 0 provider calls: the day's calls are used up", async () => {
+    process.env.AI_DAILY_QUOTA = "1";
+    resetDailyBudgetForTests();
+    generateContent.mockResolvedValue({ text: '{"ok": true}' });
+    await expect(generateJson(req)).resolves.toEqual({ ok: true });
+    expect(generateContent).toHaveBeenCalledTimes(1);
+
+    const err = await rejection(generateJson(req));
+    expect(err.code).toBe("AI_QUOTA_DAILY");
+    expect(err.retryAfterMs).toBeGreaterThan(0);
+    expect(generateContent).toHaveBeenCalledTimes(1); // the refused call never reached the provider
+    delete process.env.AI_DAILY_QUOTA;
+  });
+
+  it("a retry is a provider call and is counted: with 1 call left, a per-minute 429 is not retried", async () => {
+    process.env.AI_DAILY_QUOTA = "1";
+    resetDailyBudgetForTests();
+    vi.useFakeTimers();
+    generateContent.mockRejectedValue(Object.assign(new Error(quotaBody("GenerateRequestsPerMinutePerProjectPerModel", "1s")), { status: 429 }));
+    const p = rejection(generateJson(req));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect((await p).code).toBe("AI_QUOTA_DAILY");
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    delete process.env.AI_DAILY_QUOTA;
+  });
+
+  it("after Google reports the daily limit, the next call is blocked until its reset time and never reaches the provider", async () => {
+    generateContent.mockRejectedValue(
+      Object.assign(new Error(quotaBody("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "3600s")), { status: 429 }),
+    );
+    const first = await rejection(generateJson(req));
+    expect(first.code).toBe("AI_QUOTA_DAILY");
+    expect(generateContent).toHaveBeenCalledTimes(1);
+
+    const second = await rejection(generateJson(req));
+    expect(second.code).toBe("AI_QUOTA_DAILY");
+    expect(second.retryAfterMs).toBeGreaterThan(3_500_000);
+    expect(second.retryAfterMs).toBeLessThanOrEqual(3_600_000);
     expect(generateContent).toHaveBeenCalledTimes(1);
   });
 

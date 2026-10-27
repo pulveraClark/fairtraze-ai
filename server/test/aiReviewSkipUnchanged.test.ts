@@ -6,6 +6,7 @@ import { generateMemberSummaries, type MemberSummaryDeps } from "../src/lib/aiRe
 import { generateBriefComparison, type BriefDeps } from "../src/lib/aiReview/briefComparison.js";
 import { AiReviewError } from "../src/lib/geminiClient.js";
 import { lastUpToDate, recordUpToDate, startReview, waitForReview } from "../src/lib/aiReview/reviewLock.js";
+import { noteDailyQuotaHit, resetDailyBudgetForTests } from "../src/lib/aiReview/limiter.js";
 import { createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 
 // "Nothing changed" costs zero AI calls, decided from reads only, before stage 1.
@@ -173,6 +174,57 @@ describe("instructions check: unchanged inputs cost 0 AI calls", () => {
     const newBrief = briefDeps(answer(), ["README.md", "src/Login.tsx", "src/Signup.tsx"]);
     await generateBriefComparison(project.id, newBrief);
     expect(calls(newBrief.generate)).toBe(1);
+  });
+});
+
+describe("daily quota: skipped parts cost 0, and a refused run makes 0 provider calls", () => {
+  afterEach(() => { resetDailyBudgetForTests(); });
+
+  it("an unchanged run is not refused when the day's calls are used up: it needs no call, so it counts as 0", async () => {
+    const { project } = await setup();
+    await generateMemberSummaries(project.id, memberDeps(["a1", "b1"]));
+
+    noteDailyQuotaHit(3_600_000); // the provider says the daily limit is reached
+    const again = memberDeps(["a1", "b1"]);
+    const out = await generateMemberSummaries(project.id, again);
+    expect(out!.result.status).toBe("OK");
+    expect(out!.result.reused).toBeTruthy();
+    expect(calls(again.generate)).toBe(0);
+  });
+
+  it("a changed run that cannot fit is refused before anything is fetched or called, and the last good result stays", async () => {
+    const { project, report } = await setup();
+    await generateMemberSummaries(project.id, memberDeps(["a1", "b1"]));
+    const good = await stored(report.id, "MEMBER_SUMMARIES");
+
+    noteDailyQuotaHit(3_600_000);
+    const changed = memberDeps(["a1", "a2", "b1"]);
+    const out = await generateMemberSummaries(project.id, changed);
+    expect(out!.result.status).toBe("FAILED");
+    expect(out!.result.errorCode).toBe("AI_QUOTA_DAILY");
+    expect(calls(changed.generate)).toBe(0);
+    expect(calls(changed.fetchEvidence)).toBe(0);
+
+    const kept = await stored(report.id, "MEMBER_SUMMARIES");
+    expect(kept.status).toBe("OK");
+    expect(kept.createdAt.getTime()).toBe(good.createdAt.getTime());
+    expect(kept.content).toMatchObject({ lastAttempt: { errorCode: "AI_QUOTA_DAILY", keptLast: true } });
+  });
+
+  it("the instructions check is refused before its call when the limit is reached", async () => {
+    const { project } = await setup("GITHUB");
+    noteDailyQuotaHit(3_600_000);
+    const generate = vi.fn() as unknown as BriefDeps["generate"];
+    const out = await generateBriefComparison(project.id, {
+      fetchTree: vi.fn().mockResolvedValue(["README.md"]),
+      fetchFile: vi.fn().mockResolvedValue(null),
+      loadDocs: vi.fn().mockResolvedValue({ hasDocument: false, pieces: [], spans: [] }),
+      generate,
+      githubToken: "tok",
+      loadBriefFiles: vi.fn().mockResolvedValue({ usable: [], skipped: [] }),
+    } as BriefDeps);
+    expect(out!.result.errorCode).toBe("AI_QUOTA_DAILY");
+    expect(calls(generate)).toBe(0);
   });
 });
 
