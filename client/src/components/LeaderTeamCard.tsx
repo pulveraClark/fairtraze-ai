@@ -7,6 +7,8 @@ import { taskCountLabel } from "../lib/tasks/countLabel";
 import { studentFlagLabel } from "../lib/studentDisplay";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
+import { SOURCE_COLOR, SOURCE_NAME, type SourceKey } from "../lib/sourceColors";
+import { splitShare, validBlend, type ShareBlend } from "../lib/shareSegments";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -28,6 +30,11 @@ const uniqueByLabel = (flags: string[]) => flags.filter((f, i) => flags.findInde
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
 
+/** Small colored square in front of a source label. Decorative: the text next to it always names the source. */
+function Swatch({ source }: { source: SourceKey }) {
+  return <span aria-hidden="true" className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-baseline" style={{ backgroundColor: SOURCE_COLOR[source] }} />;
+}
+
 /** The name cell of a row: a button that opens the member's window when the card can open it. */
 function RowLead({ open, name, children }: { open?: (opener: HTMLElement) => void; name: string; children: React.ReactNode }) {
   if (!open) return <div className="flex min-w-0 items-start gap-3">{children}</div>;
@@ -45,13 +52,17 @@ function RowLead({ open, name, children }: { open?: (opener: HTMLElement) => voi
 }
 
 /** Leader-only team view. The server only sends `team` to the group's leader. */
-export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUserId, onOpenMember }: {
+export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, currentUserId, onOpenMember }: {
   team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; currentUserId?: number;
+  /** The project's public blend weights. With them a Combined card draws the GitHub/Docs split bar and legend. */
+  blend?: Partial<ShareBlend> | null;
   /** Opens that member's window. With it, every row is clickable; without it the rows are plain. */
   onOpenMember?: (userId: number, opener: HTMLElement) => void;
 }) {
   const combined = sourceType === "COMBINED";
   const equalPct = team.length > 0 ? 100 / team.length : 0;
+  const split = combined ? validBlend(blend) : null;
+  const sources: SourceKey[] = split ? [...(split.wGitHub > 0 ? ["github" as const] : []), ...(split.wDocs > 0 ? ["docs" as const] : [])] : [];
   return (
     <section aria-labelledby="leader-team-title" className="h-full rounded-xl border border-slate-200 bg-white p-4">
       <h2 id="leader-team-title" className="flex items-center gap-1 text-sm font-semibold text-slate-900">
@@ -59,6 +70,11 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
         <InfoTip label="About the team contributions view" helpHref={helpLink("ai")}>{TIPS.leaderTeam}</InfoTip>
       </h2>
       <p className="mt-1 text-xs leading-normal text-slate-700">Equal share: {equalPct.toFixed(1)}% each.</p>
+      {split && !noActivity && (
+        <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-700">
+          {sources.map((s) => <span key={s}><Swatch source={s} />{SOURCE_NAME[s]}</span>)}
+        </p>
+      )}
       <ul className="mt-3 divide-y divide-slate-200">
         {team.map((m) => (
           <li
@@ -96,10 +112,18 @@ export function LeaderTeamCard({ team, sourceType, noActivity = false, currentUs
                     <span className="font-semibold">{pct(m.contributionShare)}</span>
                     <span className="text-xs text-slate-700"> share</span>
                   </p>
-                  {m.contributionShare !== null && <ShareBar pct={m.contributionShare * 100} fairPct={equalPct} />}
+                  {m.contributionShare !== null && (() => {
+                    if (!split) return <ShareBar pct={m.contributionShare * 100} fairPct={equalPct} />;
+                    const s = splitShare(split, m.githubContributionShare, m.documentContributionShare);
+                    return <ShareBar pct={s.total} fairPct={equalPct} segments={s.segments} ariaLabel={s.ariaLabel} />;
+                  })()}
                   {combined && (
                     <p className="text-xs tabular-nums text-slate-700">
-                      GitHub {pct(m.githubContributionShare)} · Docs {pct(m.documentContributionShare)}
+                      {split && sources.includes("github") && <Swatch source="github" />}
+                      {(!split || sources.includes("github")) && `GitHub ${pct(m.githubContributionShare)}`}
+                      {!split || sources.length === 2 ? " · " : ""}
+                      {split && sources.includes("docs") && <Swatch source="docs" />}
+                      {(!split || sources.includes("docs")) && `Docs ${pct(m.documentContributionShare)}`}
                     </p>
                   )}
                   <div className="mt-1 flex flex-wrap gap-1.5">

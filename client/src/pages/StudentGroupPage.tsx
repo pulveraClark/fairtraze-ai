@@ -50,7 +50,7 @@ import { BriefCheckWithMarks } from "../components/BriefCheckWithMarks";
 import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
 import { useAiReview } from "../hooks/useAiReview";
-import { getContributionStatsCards, scoreBlendLine, type MyContribution } from "../lib/contributionStats";
+import { getContributionStatsCards, scoreBlendLine, type CombinedMyContribution, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RoleSuggestionData {
@@ -934,6 +934,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     team={report.team}
                     currentUserId={user?.id}
                     sourceType={sourceType}
+                    blend={sourceType === "COMBINED" ? (report.myContribution as CombinedMyContribution | null) : null}
                     noActivity={report.noActivity}
                     onOpenMember={(id, el) => { memberOpener.current = el; setOpenMemberId(id); }}
                   />

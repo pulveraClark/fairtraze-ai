@@ -51,8 +51,12 @@ table, .tabular-nums { font-variant-numeric: tabular-nums; }
   --brand-risk-amber:   #f59e0b;   /* amber-500 — overload bars / moderate badge */
   --brand-risk-green:   #10b981;   /* emerald-500 — healthy                      */
 
+  /* Source colours for the GitHub / Docs split bar and its legend (see lib/sourceColors.ts) */
+  --ft-source-github:   #2563eb;   /* blue-600   */
+  --ft-source-docs:     #ea580c;   /* orange-600 */
+
   /* Backgrounds */
-  --brand-bg-light:     #ffffff;   /* page base — pure white                     */
+  --brand-bg-light:    #ffffff;   /* page base — pure white                     */
   --brand-bg-subtle:    #f8fafc;   /* slate-50  — section alternates, auth bg    */
   --brand-white:        #ffffff;
 

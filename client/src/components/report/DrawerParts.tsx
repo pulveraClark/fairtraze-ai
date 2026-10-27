@@ -2,6 +2,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { FOCUS_LIGHT } from "../ui";
+import { SOURCE_COLOR } from "../../lib/sourceColors";
+import type { ShareSegment } from "../../lib/shareSegments";
 
 /** Full-width section header button (>=44px) with a title, one-line subtitle and a rotating chevron. */
 export function DisclosureSection({
@@ -136,17 +138,36 @@ export function Row({ label, value, tip, bar }: { label: ReactNode; value: React
 
 const clampPct = (v: number) => (Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0);
 
-/** Thin decorative 0-100% bar; the percentage text beside it carries the meaning. `fairPct` adds a tick at the equal share. */
-export function ShareBar({ pct, fairPct }: { pct: number; fairPct: number | null }) {
+/**
+ * Thin 0-100% bar; the percentage text beside it carries the meaning. `fairPct` adds a tick at the equal share.
+ * With `segments` the fill is split into source colors (GitHub / Docs) inside the same track and the bar gets
+ * `ariaLabel`; the tick is drawn above the fills with a thin white edge so it stays visible on blue and orange.
+ */
+export function ShareBar({ pct, fairPct, segments, ariaLabel }: {
+  pct: number; fairPct: number | null; segments?: ShareSegment[]; ariaLabel?: string;
+}) {
+  const split = !!segments;
   return (
-    <div aria-hidden="true" data-testid="share-bar" className="relative mb-2 mt-0.5 h-1.5 w-full basis-full rounded-full bg-slate-200">
-      <div data-testid="share-bar-fill" className="absolute inset-y-0 left-0 rounded-full bg-slate-500" style={{ width: `${clampPct(pct)}%` }} />
+    <div
+      {...(split ? { role: "img", "aria-label": ariaLabel } : { "aria-hidden": true })}
+      data-testid="share-bar"
+      className="relative mb-2 mt-0.5 h-1.5 w-full basis-full rounded-full bg-slate-200"
+    >
+      {segments ? (
+        <div className="absolute inset-0 flex overflow-hidden rounded-full">
+          {segments.map((s) => (
+            <div key={s.key} data-testid={`share-bar-${s.key}`} className="h-full shrink-0" style={{ width: `${clampPct(s.pct)}%`, backgroundColor: SOURCE_COLOR[s.key] }} />
+          ))}
+        </div>
+      ) : (
+        <div data-testid="share-bar-fill" className="absolute inset-y-0 left-0 rounded-full bg-slate-500" style={{ width: `${clampPct(pct)}%` }} />
+      )}
       {fairPct !== null && (
         // Inset by half the tick's width so the tick stays inside the track at 0% and 100%.
         <div className="absolute inset-y-0 inset-x-px">
           <span
             data-testid="share-bar-tick"
-            className="absolute -inset-y-0.5 w-0.5 -translate-x-1/2 bg-slate-900"
+            className={`absolute -inset-y-0.5 w-0.5 -translate-x-1/2 bg-slate-900 ${split ? "ring-1 ring-white" : ""}`}
             style={{ left: `${clampPct(fairPct)}%` }}
           />
         </div>
