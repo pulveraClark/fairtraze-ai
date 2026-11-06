@@ -1,3 +1,4 @@
+import { aiFooterLine } from "../lib/aiFooter";
 import { HISTORY_HINT } from "../lib/docActionHints";
 import { AppFooter } from "../components/AppFooter";
 import { BUTTON_SECONDARY_COMPACT } from "../components/ui/styles";
@@ -963,7 +964,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                           <ReactMarkdown>{report.narrative}</ReactMarkdown>
                         </div>
                         <p className="mt-2 text-xs leading-normal text-slate-700">
-                          May be wrong. Informational only; it does not assign grades or replace instructor judgment.
+                          {aiFooterLine()}
                           {report.narrativeOutdated ? " Results changed since this was written." : ""}
                         </p>
                       </div>

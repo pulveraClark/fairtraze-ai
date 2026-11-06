@@ -1,3 +1,4 @@
+import { aiFooterLine } from "../lib/aiFooter";
 import { useId, useRef, useState } from "react";
 import type { TeamHealth } from "@shared/types";
 import ReactMarkdown from "react-markdown";
@@ -316,7 +317,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       )}
       {narrative && !generating && (
         <p className="mt-4 text-sm italic leading-normal text-slate-700">
-          May be wrong{when ? ` · Based on the analysis of ${when}` : ""}. Informational only; it does not assign grades or replace instructor judgment.
+          {aiFooterLine(when)}
         </p>
       )}
       {viewing && instructionsAssignmentId && (

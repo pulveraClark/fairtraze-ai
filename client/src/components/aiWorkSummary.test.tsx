@@ -308,7 +308,7 @@ describe("AI button in Member contributions", () => {
     render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} basedOnAt="2026-10-24T01:00:00Z" />);
     expect(screen.getByRole("heading", { name: "AI findings" })).toBeTruthy();
     expect(screen.getAllByText("AI findings")).toHaveLength(1);
-    expect(screen.getByText(/May be wrong · Based on the analysis of .+\. Informational only; it does not assign grades or replace instructor judgment\./)).toBeTruthy();
+    expect(screen.getByText(/May be wrong · Based on the analysis of .+\. Informational only; it does not assign grades or replace instructor judgment\. Work outside GitHub and FairTraze Docs, such as meetings, research, design and offline work, is not counted\./)).toBeTruthy();
     // The card adds no second "supports your assessment..." sentence of its own.
     expect(screen.queryByText(/supports your assessment|should not replace your own judgment/)).toBeNull();
   });
