@@ -102,6 +102,52 @@ describe("StudentGroupPage", () => {
     expect(screen.queryByText(/older scoring rules/)).toBeNull();
   });
 
+  describe("Early data note above Your Flags", () => {
+    const withFlags = (flags: string[], dataConfidence: string | null) => groupFixture({
+      report: { ...(groupFixture().report as object), dataConfidence, myContribution: { ...(groupFixture().report.myContribution as object), flags } },
+    });
+    const LOW_NOTE = "This is early data, so these notes may change as more work is recorded.";
+    const MEDIUM_NOTE = "These notes may change as more work is recorded.";
+
+    it("low and medium with zero flags show no note", () => {
+      window.history.pushState({}, "", REPORT);
+      for (const level of ["low", "medium"]) {
+        state.data = withFlags([], level);
+        const { unmount } = renderPage();
+        expect(screen.getByText("No flags on your contributions.")).toBeTruthy();
+        expect(screen.queryByText(LOW_NOTE)).toBeNull();
+        expect(screen.queryByText(MEDIUM_NOTE)).toBeNull();
+        unmount();
+      }
+    });
+
+    it("with one flag: low shows the early-data note, medium the shorter one", () => {
+      window.history.pushState({}, "", REPORT);
+      state.data = withFlags(["free-rider"], "low");
+      const low = renderPage();
+      expect(screen.getByText(LOW_NOTE)).toBeTruthy();
+      expect(screen.getByText("Early data · too early to tell")).toBeTruthy();
+      low.unmount();
+      state.data = withFlags(["free-rider"], "medium");
+      const medium = renderPage();
+      expect(screen.getByText(MEDIUM_NOTE)).toBeTruthy();
+      expect(screen.queryByText(LOW_NOTE)).toBeNull();
+      medium.unmount();
+    });
+
+    it("high, final and no level show no note and no tag, even with a flag", () => {
+      window.history.pushState({}, "", REPORT);
+      for (const level of ["high", "final", null]) {
+        state.data = withFlags(["free-rider"], level);
+        const { unmount } = renderPage();
+        expect(screen.queryByText(LOW_NOTE)).toBeNull();
+        expect(screen.queryByText(MEDIUM_NOTE)).toBeNull();
+        expect(screen.queryByText(/Early data/)).toBeNull();
+        unmount();
+      }
+    });
+  });
+
   it("has no header Tasks button; Tasks stays a tab (R1)", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: /^Tasks$/ })).toBeNull();

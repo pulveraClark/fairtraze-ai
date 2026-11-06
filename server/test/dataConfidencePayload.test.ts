@@ -20,10 +20,11 @@ function member(over: Partial<ScoredMember>): ScoredMember {
   };
 }
 
-async function seed(days: [number, number], shares: [number, number] = [0.7, 0.3]) {
+async function seed(days: [number, number], shares: [number, number] = [0.7, 0.3], deadline: Date | null = null) {
   const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
   const cls = await createClassSection(instructor.id);
   const asg = await createAssignment(cls.id, { sourceType: "GITHUB" });
+  if (deadline) await prisma.assignment.update({ where: { id: asg.id }, data: { deadline } });
   const project = await createProject({ assignmentId: asg.id });
   const { user: a } = await createUser({ systemRole: "STUDENT" });
   const { user: b } = await createUser({ systemRole: "STUDENT" });
@@ -56,6 +57,23 @@ describe("Early data level in the two report read endpoints", () => {
       expect((await asInstructor(project.id, instructor)).body.dataConfidence, `instructor ${days}`).toBe(level);
       expect((await asStudent(project.id, a)).body.report.dataConfidence, `student ${days}`).toBe(level);
     }
+  });
+
+  it("after the project's due date has ended (Manila time) the level is 'final' for both; before that, unchanged", async () => {
+    const DAY = 86_400_000;
+    // Deadline stored the way the date picker stores it: midnight at the start of the due date (Manila browser).
+    const manilaMidnight = (d: Date) => new Date(`${d.toISOString().slice(0, 10)}T00:00:00+08:00`);
+    const past = await seed([2, 3], [0.7, 0.3], manilaMidnight(new Date(Date.now() - 10 * DAY)));
+    expect((await asInstructor(past.project.id, past.instructor)).body.dataConfidence).toBe("final");
+    expect((await asStudent(past.project.id, past.a)).body.report.dataConfidence).toBe("final");
+    const upcoming = await seed([2, 3], [0.7, 0.3], manilaMidnight(new Date(Date.now() + 10 * DAY)));
+    expect((await asInstructor(upcoming.project.id, upcoming.instructor)).body.dataConfidence).toBe("low");
+    expect((await asStudent(upcoming.project.id, upcoming.a)).body.report.dataConfidence).toBe("low");
+  });
+
+  it("nobody has activity: no level at all, even after the deadline", async () => {
+    const { instructor, project } = await seed([0, 0], [0, 0], new Date("2020-01-01T00:00:00+08:00"));
+    expect((await asInstructor(project.id, instructor)).body.dataConfidence).toBeNull();
   });
 
   it("nobody has activity: no level at all (the 'Not enough activity yet' state keeps its own words)", async () => {

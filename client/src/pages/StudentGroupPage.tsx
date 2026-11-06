@@ -77,7 +77,7 @@ interface GroupDetail {
     /** Server flag: no member has any recorded activity yet (display only). */
     noActivity?: boolean;
     /** Read-time "Early data" level (display only; null when nobody has activity). */
-    dataConfidence?: "low" | "medium" | "high" | null;
+    dataConfidence?: "low" | "medium" | "high" | "final" | null;
     quietSource?: "GitHub" | "Docs" | null;
     analyzedAt:  string;
     trigger?:    "manual" | "auto" | null;

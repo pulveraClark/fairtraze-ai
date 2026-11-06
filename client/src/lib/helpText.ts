@@ -28,7 +28,7 @@ export const TIPS = {
   tasksPlanning: "Tasks are for planning. They are never counted in anyone's score.",
   shortcuts: "Press ? on the board to see every keyboard shortcut. Shortcuts pause while you type.",
   leaderTeam: "This view helps your group share the work. Shares come from recorded activity, are not grades, and your instructor makes the final assessment.",
-  earlyData: `Early data means the most active member has fewer than ${DATA_CONFIDENCE_DAYS.high} active days, or the Docs numbers may be approximate. Fewer than ${DATA_CONFIDENCE_DAYS.low} active days reads "too early to tell"; scores and flags are unchanged and may shift as more work is recorded.`,
+  earlyData: `Early data shows before the project deadline when the most active member has fewer than ${DATA_CONFIDENCE_DAYS.high} active days (fewer than ${DATA_CONFIDENCE_DAYS.low} reads 'too early to tell'), or when the Docs numbers may be approximate. Scores and flags never change because of it.`,
   evenness: "Compares everyone's recorded activity to show how evenly work is spread. It describes the team, not you.",
   flagBasisDeadline: "The last third is counted from the group's first recorded activity up to the assignment deadline.",
   flagBasisSpan: "No deadline was set, so the last third is counted across the group's first-to-last recorded activity.",

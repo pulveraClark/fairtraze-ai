@@ -16,7 +16,7 @@ describe("EarlyDataTag", () => {
   });
 
   it("high, no activity and unknown show nothing at all", () => {
-    for (const level of ["high", null, undefined] as const) {
+    for (const level of ["high", "final", null, undefined] as const) {
       const { container, unmount } = render(<EarlyDataTag level={level} />);
       expect(container).toBeEmptyDOMElement();
       unmount();
@@ -30,7 +30,9 @@ describe("EarlyDataTag", () => {
   it("the help text states the rule from the constants and names the most active member", () => {
     expect(TIPS.earlyData).toContain("most active member");
     expect(TIPS.earlyData).toContain("fewer than 15 active days");
-    expect(TIPS.earlyData).toContain("fewer than 5 active days".replace("fewer", "Fewer"));
+    expect(TIPS.earlyData).toContain("fewer than 5 reads 'too early to tell'");
+    expect(TIPS.earlyData).toContain("before the project deadline");
+    expect(TIPS.earlyData.length).toBeLessThanOrEqual(240);
   });
 });
 
@@ -62,6 +64,7 @@ describe("student wording on early data", () => {
       expect(note).not.toMatch(/gini|band|index|free-rider|inactive|blame|fault|should/i);
     }
     expect(earlyDataFlagsNote("high")).toBeNull();
+    expect(earlyDataFlagsNote("final")).toBeNull();
     expect(earlyDataFlagsNote(null)).toBeNull();
     for (const t of [...Object.values(EARLY_DATA_TEXT), TIPS.earlyData]) expect(t).not.toMatch(/gini/i);
   });

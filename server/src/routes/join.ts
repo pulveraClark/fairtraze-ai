@@ -774,7 +774,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       analyzedAt:  latestReport.generatedAt.toISOString(),
       trigger:     stored.trigger ?? null,
       noActivity:  hasNoRecordedActivity(teamReport.members),
-      dataConfidence: reportDataConfidence(teamReport.members, docsDataApproximate),
+      dataConfidence: reportDataConfidence(teamReport.members, docsDataApproximate, asgn.deadline),
       quietSource: hasNoRecordedActivity(teamReport.members) ? null : quietSource(teamReport.members),
       memberCount: teamReport.memberCount,
       deadlineWindowBasis: teamReport.deadlineWindowBasis,

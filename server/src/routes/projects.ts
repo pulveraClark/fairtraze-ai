@@ -205,7 +205,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      assignment: { select: { id: true, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
+      assignment: { select: { id: true, sourceType: true, deadline: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
       groupMemberships: {
         include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
         orderBy: { joinedAt: "asc" },
@@ -292,7 +292,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     membershipChangedAt:    project.membershipChangedAt?.toISOString() ?? null,
     memberRoles,
     docsDataApproximate,
-    dataConfidence: reportDataConfidence(reportMembers, docsDataApproximate),
+    dataConfidence: reportDataConfidence(reportMembers, docsDataApproximate, project.assignment?.deadline),
     rulesOutdated: isRulesOutdated(stored),
     scoringRulesVersion: stored.scoringRulesVersion ?? 1,
     trigger: stored.trigger ?? null,

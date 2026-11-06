@@ -34,7 +34,7 @@ export function studentHealthLabel(teamHealth: string): string {
 }
 
 /** The one calm line above a student's flags on early data. Never accusatory; null when no tag applies. */
-export function earlyDataFlagsNote(level: "low" | "medium" | "high" | null | undefined): string | null {
+export function earlyDataFlagsNote(level: "low" | "medium" | "high" | "final" | null | undefined): string | null {
   if (level === "low") return "This is early data, so these notes may change as more work is recorded.";
   if (level === "medium") return "These notes may change as more work is recorded.";
   return null;
