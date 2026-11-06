@@ -86,7 +86,7 @@ export function howCounted(input: HowCountedInput): HowCountedModel {
         {
           label: "Counted less",
           text:
-            `Formatting edits count about ${pct(EDIT_TYPE_WEIGHT.formatting)} and tiny edits about ${pct(EDIT_TYPE_WEIGHT.trivial)}. ` +
+            `Small wording and spacing edits count about ${pct(EDIT_TYPE_WEIGHT.formatting)} and tiny edits about ${pct(EDIT_TYPE_WEIGHT.trivial)}. ` +
             `Text ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"}${about(deleted, "characters")}.` +
             (positive(d.importedChars) ? " Text imported from a Word file is counted by an estimate." : ""),
         },

@@ -37,10 +37,10 @@ describe("howCounted", () => {
     expect(text).toContain("Text imported from a Word file is counted by an estimate.");
   });
 
-  it("Docs wording: formatting is only under Counted less (with its real weights), the Not counted line names style changes, no 'trivial'/'.docx'", () => {
+  it("Docs wording: small wording and spacing edits are only under Counted less (with its real weights), the Not counted line names style changes, no 'trivial'/'.docx'", () => {
     const m = howCounted({ voice: "member", github: null, docs: { retainedChars: 10 }, rulesVersion: 2 });
     const [counted, less, not] = m.blocks[0].groups.map((g) => g.text);
-    expect(less).toContain("Formatting edits count about 30% and tiny edits about 10%.");
+    expect(less).toContain("Small wording and spacing edits count about 30% and tiny edits about 10%.");
     expect(not).toContain("Style changes that leave the text the same, such as bold or headings.");
     expect(not).not.toMatch(/formatting/i);
     expect(counted).not.toMatch(/formatting/i);
