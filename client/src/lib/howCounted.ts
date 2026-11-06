@@ -1,6 +1,7 @@
 // Display only: plain-words "how this was counted" text for one member. Every number comes from data the
 // report already stores; nothing here is read by scoring. Weights quoted here come from the shared constants.
 import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
+import { EDIT_TYPE_WEIGHT } from "@shared/editClassifier";
 
 export const OUTSIDE_WORK_LINE = "Work outside GitHub and FairTraze Docs is not counted.";
 
@@ -38,9 +39,10 @@ export interface HowCountedModel {
 
 const n = (v: number) => v.toLocaleString("en-US");
 const positive = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
-const here = (v: number | null | undefined, unit = "") => (positive(v) ? ` (${n(v)}${unit} here)` : "");
+const count = (v: number | null | undefined, unit: string) => (positive(v) ? ` (${n(v)} ${unit})` : "");
+const pct = (w: number) => `${Math.round(w * 100)}%`;
 // The stored self-churn ratio is rounded to 3 decimals, so a count rebuilt from it is an estimate.
-const about = (v: number | null | undefined, unit = "") => (positive(v) ? ` (about ${n(v)}${unit})` : "");
+const about = (v: number | null | undefined, unit: string) => (positive(v) ? ` (about ${n(v)} ${unit})` : "");
 
 /** Characters a member wrote and later deleted themselves, from the stored ratio and inserted total. */
 export function selfDeletedChars(ratio: number | null | undefined, inserted: number | null | undefined): number {
@@ -56,18 +58,18 @@ export function howCounted(input: HowCountedInput): HowCountedModel {
     blocks.push({
       source: "GitHub",
       groups: [
-        { label: "Counted", text: "Code lines at full weight. Commits, with line detail read for up to 100 per member." },
+        { label: "Counted", text: "Code lines at full weight, and commits. Line counts come from up to 100 commits per member." },
         {
           label: "Counted less",
           text:
-            `Comment lines count ${LINE_TYPE_WEIGHTS.comment === 0.25 ? "a quarter" : `${LINE_TYPE_WEIGHTS.comment}×`}${here(input.github.commentLines)}. ` +
+            `Comment lines count ${LINE_TYPE_WEIGHTS.comment === 0.25 ? "a quarter" : `${LINE_TYPE_WEIGHTS.comment}×`}${count(input.github.commentLines, "lines")}. ` +
             "Test, style, docs and config files count less than source files. " +
             `Lines ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"} lower the total, by up to half.`,
         },
         {
           label: "Not counted",
           text:
-            `Blank lines${here(input.github.blankLines)}. ` +
+            `Blank lines${count(input.github.blankLines, "lines")}. ` +
             "Generated files such as lock files and build output (GitHub's raw line totals still include them). Merge commits.",
         },
       ],
@@ -80,17 +82,18 @@ export function howCounted(input: HowCountedInput): HowCountedModel {
     blocks.push({
       source: "FairTraze Docs",
       groups: [
-        { label: "Counted", text: `Text ${who} wrote that is still in the document${here(d.retainedChars, " characters")}.` },
+        { label: "Counted", text: `Text ${who} wrote that is still in the document${count(d.retainedChars, "characters")}.` },
         {
           label: "Counted less",
           text:
-            "Formatting and trivial edits. " +
-            `Text ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"}${about(deleted, " characters")}.` +
-            (positive(d.importedChars) ? " Imported .docx text, which counts as an estimate." : ""),
+            `Formatting edits count about ${pct(EDIT_TYPE_WEIGHT.formatting)} and tiny edits about ${pct(EDIT_TYPE_WEIGHT.trivial)}. ` +
+            `Text ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"}${about(deleted, "characters")}.` +
+            (positive(d.importedChars) ? " Text imported from a Word file is counted by an estimate." : ""),
         },
         {
           label: "Not counted",
-          text: `Bold, headings and other formatting-only changes. Inserted images${here(d.images)}, which are shown but never scored.`,
+          // No per-project image credit exists: inserted images are disclosed, never scored (see CLAUDE.md "Image insertion").
+          text: "Style changes that leave the text the same, such as bold or headings. Images are shown but not scored.",
         },
       ],
     });

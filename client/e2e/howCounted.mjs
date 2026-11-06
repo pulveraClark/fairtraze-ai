@@ -69,6 +69,8 @@ try {
           check(text.includes("Work outside GitHub and FairTraze Docs is not counted."), "outside-work line is shown");
           check(text.includes("Scoring rules version 2."), "rules version is shown");
           check(/about [\d,]+ characters/.test(text), "self-deleted Docs count is worded 'about N characters'");
+          check(!/here|harness|undefined|NaN/i.test(text), "no 'here' and no harness notes in the text");
+          check(text.includes("Images are shown but not scored.") && !/never scored/.test(text), "image sentence is the plain one");
           if (scene === "student") {
             check(!/gini|band|index|share/i.test(text), "student text has no Gini, band, index or share wording");
             check(!text.includes("the member"), "student text speaks to 'you'");

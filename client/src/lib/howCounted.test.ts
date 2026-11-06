@@ -9,16 +9,17 @@ describe("howCounted", () => {
     const m = howCounted({ voice: "member", github: { commentLines: 1200, blankLines: 340 }, docs: null, rulesVersion: 2 });
     expect(m.blocks.map((b) => b.source)).toEqual(["GitHub"]);
     expect(m.blocks[0].groups.map((g) => g.label)).toEqual(["Counted", "Counted less", "Not counted"]);
-    expect(all(m)).toContain("a quarter (1,200 here)");
-    expect(all(m)).toContain("Blank lines (340 here)");
+    expect(all(m)).toContain("a quarter (1,200 lines)");
+    expect(all(m)).toContain("Blank lines (340 lines)");
     expect(all(m)).toContain("lock files");
+    expect(all(m)).toContain("Line counts come from up to 100 commits per member.");
     expect(m.footer).toEqual(["Scoring rules version 2.", OUTSIDE_WORK_LINE]);
   });
 
   it("omits counts that are zero or unknown, and the rules line when the version is unknown", () => {
     const m = howCounted({ voice: "member", github: {}, docs: { images: 0, importedChars: 0 }, rulesVersion: null });
-    expect(all(m)).not.toMatch(/here\)/);
-    expect(all(m)).not.toContain("Imported .docx");
+    expect(all(m)).not.toMatch(/\(\d[\d,]* (lines|characters)\)/);
+    expect(all(m)).not.toContain("imported from a Word file");
     expect(m.footer).toEqual([OUTSIDE_WORK_LINE]);
   });
 
@@ -31,10 +32,36 @@ describe("howCounted", () => {
     });
     expect(m.blocks.map((b) => b.source)).toEqual(["FairTraze Docs"]);
     const text = all(m);
-    expect(text).toContain("still in the document (700 characters here)");
+    expect(text).toContain("still in the document (700 characters)");
     expect(text).toContain("(about 250 characters)");
-    expect(text).toContain("Imported .docx text");
-    expect(text).toContain("Inserted images (2 here)");
+    expect(text).toContain("Text imported from a Word file is counted by an estimate.");
+  });
+
+  it("Docs wording: formatting is only under Counted less (with its real weights), the Not counted line names style changes, no 'trivial'/'.docx'", () => {
+    const m = howCounted({ voice: "member", github: null, docs: { retainedChars: 10 }, rulesVersion: 2 });
+    const [counted, less, not] = m.blocks[0].groups.map((g) => g.text);
+    expect(less).toContain("Formatting edits count about 30% and tiny edits about 10%.");
+    expect(not).toContain("Style changes that leave the text the same, such as bold or headings.");
+    expect(not).not.toMatch(/formatting/i);
+    expect(counted).not.toMatch(/formatting/i);
+    expect(all(m)).not.toMatch(/trivial|\.docx/i);
+  });
+
+  it("images: no per-project image credit exists, so the sentence is the same for 0, 1 or many images and never claims credit", () => {
+    const say = (images: number) => howCounted({ voice: "member", github: null, docs: { images }, rulesVersion: 2 }).blocks[0].groups[2].text;
+    for (const n of [0, 1, 12]) {
+      expect(say(n)).toContain("Images are shown but not scored.");
+      expect(say(n)).not.toMatch(/never scored|short paragraph|up to 5/);
+    }
+    expect(say(0)).toBe(say(12));
+  });
+
+  it("the real text has no 'here', no harness notes and no developer wording", () => {
+    const full = all(howCounted({
+      voice: "member", github: { commentLines: 300, blankLines: 100 },
+      docs: { selfChurnRatio: 0.05, totalInsertedChars: 12000, retainedChars: 9000, importedChars: 1500, images: 2 }, rulesVersion: 2,
+    }));
+    expect(full).not.toMatch(/here|harness|fixture|TODO|undefined|NaN|\[object/i);
   });
 
   it("student voice addresses 'you' and never mentions the member, Gini or shares", () => {
