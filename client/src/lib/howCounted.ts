@@ -39,6 +39,8 @@ export interface HowCountedModel {
 const n = (v: number) => v.toLocaleString("en-US");
 const positive = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const here = (v: number | null | undefined, unit = "") => (positive(v) ? ` (${n(v)}${unit} here)` : "");
+// The stored self-churn ratio is rounded to 3 decimals, so a count rebuilt from it is an estimate.
+const about = (v: number | null | undefined, unit = "") => (positive(v) ? ` (about ${n(v)}${unit})` : "");
 
 /** Characters a member wrote and later deleted themselves, from the stored ratio and inserted total. */
 export function selfDeletedChars(ratio: number | null | undefined, inserted: number | null | undefined): number {
@@ -83,7 +85,7 @@ export function howCounted(input: HowCountedInput): HowCountedModel {
           label: "Counted less",
           text:
             "Formatting and trivial edits. " +
-            `Text ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"}${here(deleted, " characters")}.` +
+            `Text ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"}${about(deleted, " characters")}.` +
             (positive(d.importedChars) ? " Imported .docx text, which counts as an estimate." : ""),
         },
         {

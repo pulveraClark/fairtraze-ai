@@ -32,7 +32,7 @@ describe("howCounted", () => {
     expect(m.blocks.map((b) => b.source)).toEqual(["FairTraze Docs"]);
     const text = all(m);
     expect(text).toContain("still in the document (700 characters here)");
-    expect(text).toContain("(250 characters here)");
+    expect(text).toContain("(about 250 characters)");
     expect(text).toContain("Imported .docx text");
     expect(text).toContain("Inserted images (2 here)");
   });
