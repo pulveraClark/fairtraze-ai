@@ -29,6 +29,8 @@ interface Props {
   findingsNote?: string | null;
   /** AI findings already exist (button reads Regenerate). */
   hasNarrative?: boolean;
+  /** "Early data" (low): flag pills render grey with the same words. Display only. */
+  mutedFlags?: boolean;
 }
 
 /** Role chips: leader + functional roles, text only (context, never a score input). */
@@ -49,7 +51,7 @@ export function RoleChips({ info }: { info: MemberRoleInfo | undefined }) {
   );
 }
 
-export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false, findingsNote }: Props) {
+export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false, findingsNote, mutedFlags = false }: Props) {
   // Busy until 90 s have passed; then the button works again and the wording changes.
   const slow = !!generator?.slow;
   const reviewRunning = aiSummaryState === "running";
@@ -145,7 +147,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                     ) : (
                       m.flags.map((f) => (
                         <span key={f} className="inline-flex flex-wrap items-center gap-1">
-                          <StatusPill kind="flag" value={f} />
+                          <StatusPill kind="flag" value={f} muted={mutedFlags} />
                           {outcomes?.get(f) === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
                           {outcomes?.get(f) === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
                         </span>

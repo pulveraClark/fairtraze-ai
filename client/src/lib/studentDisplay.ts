@@ -32,3 +32,10 @@ export function evennessLine(teamHealth: string): string {
 export function studentHealthLabel(teamHealth: string): string {
   return HEALTH_WORDS[teamHealth] ?? teamHealth;
 }
+
+/** The one calm line above a student's flags on early data. Never accusatory; null when no tag applies. */
+export function earlyDataFlagsNote(level: "low" | "medium" | "high" | null | undefined): string | null {
+  if (level === "low") return "This is early data, so these notes may change as more work is recorded.";
+  if (level === "medium") return "These notes may change as more work is recorded.";
+  return null;
+}

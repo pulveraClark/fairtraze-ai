@@ -52,8 +52,8 @@ function RowLead({ open, name, children }: { open?: (opener: HTMLElement) => voi
 }
 
 /** Leader-only team view. The server only sends `team` to the group's leader. */
-export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, currentUserId, onOpenMember }: {
-  team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; currentUserId?: number;
+export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, flagsMuted = false, currentUserId, onOpenMember }: {
+  team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; flagsMuted?: boolean; currentUserId?: number;
   /** The project's public blend weights. With them a Combined card draws the GitHub/Docs split bar and legend. */
   blend?: Partial<ShareBlend> | null;
   /** Opens that member's window. With it, every row is clickable; without it the rows are plain. */
@@ -129,7 +129,7 @@ export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, cu
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {m.flags.length === 0
                       ? <span className="text-xs text-slate-700">No flags</span>
-                      : uniqueByLabel(m.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={m.userId === currentUserId ? "own" : "peer"} />)}
+                      : uniqueByLabel(m.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={m.userId === currentUserId ? "own" : "peer"} muted={flagsMuted} />)}
                   </div>
                 </>
               )}

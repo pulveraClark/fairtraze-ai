@@ -52,8 +52,9 @@ const STUDENT_STYLE: Record<Exclude<FlagView, "instructor">, string> = {
   peer: "bg-slate-100 text-slate-800 border-slate-300",
 };
 
-export function FlagTag({ flag, className = "", view = "instructor" }: { flag: Flag; className?: string; view?: FlagView }) {
-  const style = view === "instructor" ? FLAG_STYLE[flag] : STUDENT_STYLE[view];
+export function FlagTag({ flag, className = "", view = "instructor", muted = false }: { flag: Flag; className?: string; view?: FlagView; muted?: boolean }) {
+  // muted ("Early data"): the same words in plain grey, so an early flag does not read as an alarm.
+  const style = muted ? STUDENT_STYLE.peer : view === "instructor" ? FLAG_STYLE[flag] : STUDENT_STYLE[view];
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border-2 ${style} ${className}`}

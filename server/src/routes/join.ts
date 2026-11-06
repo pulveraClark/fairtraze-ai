@@ -4,6 +4,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
+import { reportDataConfidence } from "../lib/reportConfidence.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
@@ -773,6 +774,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       analyzedAt:  latestReport.generatedAt.toISOString(),
       trigger:     stored.trigger ?? null,
       noActivity:  hasNoRecordedActivity(teamReport.members),
+      dataConfidence: reportDataConfidence(teamReport.members, docsDataApproximate),
       quietSource: hasNoRecordedActivity(teamReport.members) ? null : quietSource(teamReport.members),
       memberCount: teamReport.memberCount,
       deadlineWindowBasis: teamReport.deadlineWindowBasis,

@@ -43,6 +43,9 @@ interface Props {
   workSummary?: ReactNode;
   /** Scoring rules version stored with the report; shown in "How this was counted". */
   rulesVersion?: number | null;
+  /** "Early data": low greys the flag pills; medium adds a "may change" line. Display only. */
+  flagsMuted?: boolean;
+  flagsMayChange?: boolean;
 }
 
 export function NotAvailable({ children }: { children?: ReactNode }) {
@@ -177,7 +180,7 @@ type ColumnProps = Omit<Props, "onClose" | "restoreFocusTo" | "position" | "onPr
 
 /** Left column: the share at a glance, the score-driver summary and flags. No state. */
 function MemberSidebar({
-  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes,
+  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes, flagsMuted, flagsMayChange,
 }: ColumnProps) {
   const fairPct = memberCount > 0 ? 100 / memberCount : null;
   const { info, combined, importedChars, images } = viewOf(member, memberRoles);
@@ -223,6 +226,9 @@ function MemberSidebar({
 
       <div className="mt-4">
         <h3 className="mb-1.5 text-sm font-semibold text-slate-900">Flags</h3>
+        {(flagsMayChange || flagsMuted) && member.flags.length > 0 && (
+          <p className="mb-1.5 text-xs leading-normal text-slate-700">Flags may change as more activity is recorded.</p>
+        )}
         {member.flags.length === 0 ? (
           <p className="text-sm text-slate-800">No flags</p>
         ) : (
@@ -233,7 +239,7 @@ function MemberSidebar({
               return (
                 <li key={f}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusPill kind="flag" value={f} />
+                    <StatusPill kind="flag" value={f} muted={flagsMuted} />
                     {outcome === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
                     {outcome === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
                   </div>

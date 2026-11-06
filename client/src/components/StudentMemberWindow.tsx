@@ -53,7 +53,7 @@ function isEditableTarget(t: EventTarget | null): boolean {
 }
 
 export function StudentMemberWindow({
-  member, members, currentUserId, memberCount, sourceType, noActivity, counted, ai, onSelect, onClose, restoreFocusTo,
+  member, members, currentUserId, memberCount, sourceType, noActivity, flagsMuted = false, counted, ai, onSelect, onClose, restoreFocusTo,
 }: {
   member: StudentMemberView;
   /** Every member the viewer may step through; one entry (themselves) for a plain member, so no arrows. */
@@ -62,6 +62,8 @@ export function StudentMemberWindow({
   memberCount: number;
   sourceType: string;
   noActivity: boolean;
+  /** "Early data" (low): flag pills render grey with the same words. Display only. */
+  flagsMuted?: boolean;
   /** The viewer's OWN counting detail; null for anyone else's window (a leader sees it for themselves only). */
   counted?: HowCountedInput | null;
   ai: AiReviewResponse | null;
@@ -170,7 +172,7 @@ export function StudentMemberWindow({
                 <p className="text-sm text-slate-700">No flags</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {uniqueByLabel(member.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={isYou ? "own" : "peer"} />)}
+                  {uniqueByLabel(member.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={isYou ? "own" : "peer"} muted={flagsMuted} />)}
                 </div>
               )}
             </div>

@@ -1,4 +1,5 @@
 import { aiFooterLine } from "../lib/aiFooter";
+import { EarlyDataTag } from "../components/EarlyDataTag";
 import { HISTORY_HINT } from "../lib/docActionHints";
 import { AppFooter } from "../components/AppFooter";
 import { BUTTON_SECONDARY_COMPACT } from "../components/ui/styles";
@@ -32,7 +33,7 @@ import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
-import { studentHealthLabel, evennessLine } from "../lib/studentDisplay";
+import { studentHealthLabel, evennessLine, earlyDataFlagsNote } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
 import { openAttachmentByName, type BriefAttachment } from "../lib/briefAttachments";
@@ -75,6 +76,8 @@ interface GroupDetail {
     teamHealth:  string;
     /** Server flag: no member has any recorded activity yet (display only). */
     noActivity?: boolean;
+    /** Read-time "Early data" level (display only; null when nobody has activity). */
+    dataConfidence?: "low" | "medium" | "high" | null;
     quietSource?: "GitHub" | "Docs" | null;
     analyzedAt:  string;
     trigger?:    "manual" | "auto" | null;
@@ -523,6 +526,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             memberCount={report.memberCount}
             sourceType={sourceType}
             noActivity={!!report.noActivity}
+            flagsMuted={report.dataConfidence === "low"}
             counted={open.userId === user?.id ? ownCountedInput(report.myContribution, sourceType, data?.scoringRulesVersion) : null}
             ai={ai.data}
             onSelect={setOpenMemberId}
@@ -939,6 +943,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     sourceType={sourceType}
                     blend={sourceType === "COMBINED" ? (report.myContribution as CombinedMyContribution | null) : null}
                     noActivity={report.noActivity}
+                    flagsMuted={report.dataConfidence === "low"}
                     onOpenMember={(id, el) => { memberOpener.current = el; setOpenMemberId(id); }}
                   />
                 )}
@@ -952,8 +957,11 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         How evenly work is shared
                         <InfoTip label="About how evenly work is shared" helpHref={helpLink("flags")}>{TIPS.evenness}</InfoTip>
                       </p>
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
-                        {studentHealthLabel(report.teamHealth)}
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${report.dataConfidence === "low" ? "text-slate-800 bg-slate-100 border-slate-300" : (HEALTH_BADGE[report.teamHealth] ?? "")}`}>
+                          {studentHealthLabel(report.teamHealth)}
+                        </span>
+                        <EarlyDataTag level={report.dataConfidence} />
                       </span>
                       <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.teamHealth)}</p>
                     </div>
@@ -992,6 +1000,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 {report.myContribution && !report.noActivity && (
                   <div>
                     <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Your Flags</h3>
+                    {report.myContribution.flags.length > 0 && earlyDataFlagsNote(report.dataConfidence) && (
+                      <p className="-mt-2 mb-3 text-xs leading-normal text-slate-700">{earlyDataFlagsNote(report.dataConfidence)}</p>
+                    )}
                     {report.myContribution.flags.length === 0 ? (
                       <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 text-sm text-slate-600 text-center">
                         No flags on your contributions.
@@ -1008,7 +1019,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <FlagTag flag={flag} view="own" />
+                                  <FlagTag flag={flag} view="own" muted={report.dataConfidence === "low"} />
                                   {flag === "deadline-driven" && (
                                     <InfoTip label="About the last third" helpHref={helpLink("flags")}>
                                       {report.deadlineWindowBasis === "assignment-deadline" ? TIPS.flagBasisDeadline : TIPS.flagBasisSpan}

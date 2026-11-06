@@ -1,3 +1,4 @@
+import { DATA_CONFIDENCE_DAYS } from "@shared/dataConfidence";
 // All short (?) tooltip texts and the Help page anchors, in one place. Display only: nothing here
 // reads or changes a score. Every tip is one or two plain sentences (helpText.test.ts enforces it).
 // Numbers that the scoring code owns are never typed here; they are passed in by the caller.
@@ -27,6 +28,7 @@ export const TIPS = {
   tasksPlanning: "Tasks are for planning. They are never counted in anyone's score.",
   shortcuts: "Press ? on the board to see every keyboard shortcut. Shortcuts pause while you type.",
   leaderTeam: "This view helps your group share the work. Shares come from recorded activity, are not grades, and your instructor makes the final assessment.",
+  earlyData: `Early data means the most active member has fewer than ${DATA_CONFIDENCE_DAYS.high} active days, or the Docs numbers may be approximate. Fewer than ${DATA_CONFIDENCE_DAYS.low} active days reads "too early to tell"; scores and flags are unchanged and may shift as more work is recorded.`,
   evenness: "Compares everyone's recorded activity to show how evenly work is spread. It describes the team, not you.",
   flagBasisDeadline: "The last third is counted from the group's first recorded activity up to the assignment deadline.",
   flagBasisSpan: "No deadline was set, so the last third is counted across the group's first-to-last recorded activity.",

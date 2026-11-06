@@ -33,8 +33,8 @@ export const FLAG_LABEL: Record<Flag, string> = {
 const FLAG_TONE: Record<Flag, PillTone> = { inactive: "red", "free-rider": "red", overload: "orange", "deadline-driven": "yellow" };
 
 type Props =
-  | { kind: "health"; value: TeamHealth; className?: string }
-  | { kind: "flag"; value: Flag; className?: string }
+  | { kind: "health"; value: TeamHealth; className?: string; muted?: boolean }
+  | { kind: "flag"; value: Flag; className?: string; muted?: boolean }
   | { kind: "status"; label: string; tone?: PillTone; className?: string };
 
 function Icon({ kind }: { kind: "ok" | "alert" | "clock" | "dot" }) {
@@ -63,6 +63,8 @@ export function StatusPill(props: Props) {
     label = props.label;
     icon = "dot";
   }
+  // "Early data": same words and icon, grey instead of the alert colour. Display only.
+  if ((props.kind === "health" || props.kind === "flag") && props.muted) tone = "neutral";
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-normal ${PILL_TONES[tone].cls} ${props.className ?? ""}`}>
       <Icon kind={icon} />

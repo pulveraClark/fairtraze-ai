@@ -32,6 +32,7 @@ import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { groupCrumbLabels } from "../lib/groupCrumbs";
 import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth, quietSource, quietSourceText } from "../lib/groupActivity";
 import { NoActivityPill } from "../components/NoActivityPill";
+import { EarlyDataTag } from "../components/EarlyDataTag";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { LastAnalyzed } from "../components/LastAnalyzed";
@@ -365,7 +366,10 @@ export function ProjectDetailPage({ projectId }: Props) {
   const equalSharePct = memberCount > 0 ? 100 / memberCount : 0;
   const flagged       = reportMembers.filter((m) => m.flags.length > 0);
   const totalFlags    = reportMembers.reduce((s, m) => s + m.flags.length, 0);
-  const healthTone    = stored && !noActivity
+  // "Early data" (read-time, display only): low = health and flags stay visible but grey; medium = a small note.
+  const confidence    = noActivity ? null : (stored?.dataConfidence ?? null);
+  const earlyMuted    = confidence === "low";
+  const healthTone    = stored && !noActivity && !earlyMuted
     ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
     : "neutral";
 
@@ -691,7 +695,12 @@ export function ProjectDetailPage({ projectId }: Props) {
                 hero
                 label="Team health"
                 tone={healthTone}
-                value={noActivity ? <NoActivityPill className="!text-lg" /> : <StatusPill kind="health" value={stored.report.teamHealth} className="!text-lg" />}
+                value={noActivity ? <NoActivityPill className="!text-lg" /> : (
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <StatusPill kind="health" value={stored.report.teamHealth} className="!text-lg" muted={earlyMuted} />
+                    <EarlyDataTag level={confidence} />
+                  </span>
+                )}
                 detail={noActivity ? "Scores appear once members have recorded activity." : (
                   <span className="flex items-center gap-1">
                     Gini {stored.report.gini.toFixed(3)}
@@ -754,6 +763,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             <MemberContributionList
               members={stored.report.members}
               memberRoles={stored.memberRoles}
+              mutedFlags={earlyMuted}
               disputedMembers={disputedMembers}
               resolvedFlagOutcomes={resolvedFlagOutcomes}
               aiSummaryState={aiReview.data?.canGenerate ? workSummaryState(aiReview.data) : null}
@@ -882,6 +892,8 @@ export function ProjectDetailPage({ projectId }: Props) {
           deadlineBasis={stored.report.deadlineWindowBasis ?? null}
           memberCount={stored.report.memberCount}
           memberRoles={stored.memberRoles}
+          flagsMuted={earlyMuted}
+          flagsMayChange={confidence === "medium"}
           rulesVersion={stored.scoringRulesVersion ?? null}
           disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}

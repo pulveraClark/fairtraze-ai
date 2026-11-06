@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
+import { reportDataConfidence } from "../lib/reportConfidence.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
@@ -274,6 +275,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     return { userId: m.user.id, githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes, taskSummary, avatarUpdatedAt: m.user.avatarUpdatedAt ? m.user.avatarUpdatedAt.toISOString() : null };
   });
 
+  const docsDataApproximate = await docsDataApproximateFor(projectId, project.assignment?.sourceType);
   const response: StoredReportResponse = {
     projectId,
     assignmentId: project.assignment?.id ?? null,
@@ -289,7 +291,8 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     scoringConfigChangedAt: project.scoringConfigChangedAt?.toISOString() ?? null,
     membershipChangedAt:    project.membershipChangedAt?.toISOString() ?? null,
     memberRoles,
-    docsDataApproximate: await docsDataApproximateFor(projectId, project.assignment?.sourceType),
+    docsDataApproximate,
+    dataConfidence: reportDataConfidence(reportMembers, docsDataApproximate),
     rulesOutdated: isRulesOutdated(stored),
     scoringRulesVersion: stored.scoringRulesVersion ?? 1,
     trigger: stored.trigger ?? null,
