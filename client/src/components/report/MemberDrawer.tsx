@@ -16,6 +16,7 @@ import { describeFlagRule, type DeadlineBasis, type FlagSource } from "../../lib
 import { docsStatsOf, formatPct, githubStatsOf, isCombinedMember, roleInfoOf } from "../../lib/memberView";
 import { InfoTip } from "../ui/InfoTip";
 import { TIPS, helpLink } from "../../lib/helpText";
+import { HowCounted } from "./HowCounted";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -40,6 +41,8 @@ interface Props {
   onOpenScoringSettings?: () => void;
   /** AI work summary section, shown first in the main column. Display only. */
   workSummary?: ReactNode;
+  /** Scoring rules version stored with the report; shown in "How this was counted". */
+  rulesVersion?: number | null;
 }
 
 export function NotAvailable({ children }: { children?: ReactNode }) {
@@ -59,14 +62,6 @@ function InfoIcon() {
     <svg className="mt-0.5 h-4 w-4 shrink-0 text-indigo-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
       <circle cx="12" cy="12" r="9" />
       <path strokeLinecap="round" d="M12 11v5M12 8h.01" />
-    </svg>
-  );
-}
-
-function WarnIcon() {
-  return (
-    <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
     </svg>
   );
 }
@@ -291,7 +286,7 @@ function MemberSidebar({
 }
 
 /** Right column: the collapsible detail sections. Keyed by member so open/closed state resets on a switch. */
-function MemberSections({ member, source, memberRoles, onOpenScoringSettings, workSummary }: ColumnProps) {
+function MemberSections({ member, source, memberRoles, onOpenScoringSettings, workSummary, rulesVersion }: ColumnProps) {
   const userId = useAuthOptional()?.user?.id ?? null;
   const [whereOpen, setWhereOpen] = useState(() => readSectionOpen(userId, "where", true));
   const [impactOpen, setImpactOpen] = useState(false);
@@ -434,10 +429,6 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings, wo
                     that were analyzed (up to 100), which can differ from that total.
                   </Note>
                 )}
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2.5 text-xs leading-normal text-amber-900">
-                  <WarnIcon />
-                  <p>Raw lines are GitHub's totals and include generated files such as lock files, which are not counted in the weighted score.</p>
-                </div>
               </>
             ) : null}
           </DisclosureSection>
@@ -489,6 +480,15 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings, wo
           )}
         </DisclosureSection>
       ) : null}
+
+      <HowCounted
+        voice="member"
+        rulesVersion={rulesVersion}
+        github={showGithub && gh ? { commentLines: gh.commentLinesAdded, blankLines: gh.blankLinesAdded } : null}
+        docs={source !== "github" && docs
+          ? { selfChurnRatio: docs.selfChurnRatio, totalInsertedChars: docs.totalInsertedChars, retainedChars: docs.retainedChars, importedChars, images }
+          : null}
+      />
     </>
   );
 }

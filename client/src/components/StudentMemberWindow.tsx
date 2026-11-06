@@ -6,6 +6,8 @@ import { FlagTag } from "./FlagTag";
 import { NoActivityPill } from "./NoActivityPill";
 import { Row, ShareBar } from "./report/DrawerParts";
 import { WorkSummaryBlock } from "./report/AiWorkSummary";
+import { HowCounted } from "./report/HowCounted";
+import type { HowCountedInput } from "../lib/howCounted";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { taskCountLabel } from "../lib/tasks/countLabel";
@@ -51,7 +53,7 @@ function isEditableTarget(t: EventTarget | null): boolean {
 }
 
 export function StudentMemberWindow({
-  member, members, currentUserId, memberCount, sourceType, noActivity, ai, onSelect, onClose, restoreFocusTo,
+  member, members, currentUserId, memberCount, sourceType, noActivity, counted, ai, onSelect, onClose, restoreFocusTo,
 }: {
   member: StudentMemberView;
   /** Every member the viewer may step through; one entry (themselves) for a plain member, so no arrows. */
@@ -60,6 +62,8 @@ export function StudentMemberWindow({
   memberCount: number;
   sourceType: string;
   noActivity: boolean;
+  /** The viewer's OWN counting detail; null for anyone else's window (a leader sees it for themselves only). */
+  counted?: HowCountedInput | null;
   ai: AiReviewResponse | null;
   onSelect: (userId: number) => void;
   onClose: () => void;
@@ -196,6 +200,7 @@ export function StudentMemberWindow({
           </p>
         )}
       </section>
+      {isYou && counted && !noActivity && <div className="mt-4"><HowCounted {...counted} /></div>}
     </Modal>
   );
 }

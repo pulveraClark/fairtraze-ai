@@ -882,6 +882,7 @@ export function ProjectDetailPage({ projectId }: Props) {
           deadlineBasis={stored.report.deadlineWindowBasis ?? null}
           memberCount={stored.report.memberCount}
           memberRoles={stored.memberRoles}
+          rulesVersion={stored.scoringRulesVersion ?? null}
           disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
           onOpenDisputes={() => { setSelectedName(null); navigate("/disputes"); }}

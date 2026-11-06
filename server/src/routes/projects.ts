@@ -291,6 +291,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     memberRoles,
     docsDataApproximate: await docsDataApproximateFor(projectId, project.assignment?.sourceType),
     rulesOutdated: isRulesOutdated(stored),
+    scoringRulesVersion: stored.scoringRulesVersion ?? 1,
     trigger: stored.trigger ?? null,
     narrativeOutdated: stored.narrativeOutdated === true,
     repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),

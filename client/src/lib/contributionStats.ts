@@ -9,6 +9,9 @@ export interface GithubMyContribution {
   additions:         number;
   deletions:         number;
   activeDays:        number;
+  /** Own counting detail for "How this was counted"; optional so older responses still parse. */
+  commentLinesAdded?: number;
+  blankLinesAdded?:   number;
   flags:             Flag[];
 }
 
@@ -18,6 +21,9 @@ export interface EditorMyContribution {
   activeDays:         number;
   retainedChars:      number;
   totalInsertedChars: number;
+  selfChurnRatio?:    number;
+  importedRetainedChars?: number;
+  insertedImageCount?: number;
   flags:              Flag[];
 }
 
@@ -28,8 +34,32 @@ export interface CombinedMyContribution {
   wGitHub:                   number;
   wDocs:                     number;
   flags:                     Flag[];
-  github: { commits: number; additions: number; deletions: number; activeDays: number } | null;
-  document: { sessionCount: number; activeDays: number; retainedChars: number; totalInsertedChars: number } | null;
+  github: { commits: number; additions: number; deletions: number; activeDays: number; commentLinesAdded?: number; blankLinesAdded?: number } | null;
+  document: {
+    sessionCount: number; activeDays: number; retainedChars: number; totalInsertedChars: number;
+    selfChurnRatio?: number; importedRetainedChars?: number; insertedImageCount?: number;
+  } | null;
+}
+
+/** Builds the "How this was counted" input from a student's own contribution. Pure; own data only. */
+export function ownCountedInput(mine: MyContribution | null, sourceType: string, rulesVersion: number | null | undefined) {
+  if (!mine) return null;
+  const base = { voice: "you" as const, rulesVersion: rulesVersion ?? null };
+  if (sourceType === "EDITOR") {
+    const m = mine as EditorMyContribution;
+    return { ...base, github: null, docs: { selfChurnRatio: m.selfChurnRatio, totalInsertedChars: m.totalInsertedChars, retainedChars: m.retainedChars, importedChars: m.importedRetainedChars, images: m.insertedImageCount } };
+  }
+  if (sourceType === "COMBINED") {
+    const m = mine as CombinedMyContribution;
+    const d = m.document;
+    return {
+      ...base,
+      github: m.github ? { commentLines: m.github.commentLinesAdded, blankLines: m.github.blankLinesAdded } : null,
+      docs: d ? { selfChurnRatio: d.selfChurnRatio, totalInsertedChars: d.totalInsertedChars, retainedChars: d.retainedChars, importedChars: d.importedRetainedChars, images: d.insertedImageCount } : null,
+    };
+  }
+  const m = mine as GithubMyContribution;
+  return { ...base, github: { commentLines: m.commentLinesAdded, blankLines: m.blankLinesAdded }, docs: null };
 }
 
 export type MyContribution = GithubMyContribution | EditorMyContribution | CombinedMyContribution;

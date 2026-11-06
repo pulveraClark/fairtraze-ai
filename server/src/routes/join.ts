@@ -711,6 +711,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
         additions:         m.additions,
         deletions:         m.deletions,
         activeDays:        m.activeDays,
+        commentLinesAdded: m.commentLinesAdded,
+        blankLinesAdded:   m.blankLinesAdded,
         flags:             m.flags,
       };
     } else if (sourceType === "EDITOR") {
@@ -721,6 +723,9 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
         activeDays:         m.activeDays,
         retainedChars:      m.retainedChars,
         totalInsertedChars: m.totalInsertedChars,
+        selfChurnRatio:     m.selfChurnRatio,
+        importedRetainedChars: m.importNote ? m.importedRetainedChars : 0,
+        insertedImageCount: m.insertedImageCount,
         flags:              m.flags,
       };
     } else {
@@ -735,10 +740,14 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
         github: m.github ? {
           commits: m.github.commits, additions: m.github.additions,
           deletions: m.github.deletions, activeDays: m.github.activeDays,
+          commentLinesAdded: m.github.commentLinesAdded, blankLinesAdded: m.github.blankLinesAdded,
         } : null,
         document: m.document ? {
           sessionCount: m.document.sessionCount, activeDays: m.document.activeDays,
           retainedChars: m.document.retainedChars, totalInsertedChars: m.document.totalInsertedChars,
+          selfChurnRatio: m.document.selfChurnRatio,
+          importedRetainedChars: m.document.importNote ? m.document.importedRetainedChars : 0,
+          insertedImageCount: m.document.insertedImageCount,
         } : null,
       };
     }
@@ -757,6 +766,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     hasReport: true,
     docsDataApproximate,
     rulesOutdated: isRulesOutdated(stored),
+    scoringRulesVersion: stored.scoringRulesVersion ?? 1,
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     report: {
       teamHealth:  teamReport.teamHealth,

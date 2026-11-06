@@ -203,14 +203,21 @@ describe("MemberDrawer", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("shows raw next to weighted lines with the generated-files note", async () => {
-    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+  it("shows raw next to weighted lines; the generated-files message now lives in 'How this was counted'", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} rulesVersion={2} />);
     await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
     expect(screen.getByText("500 raw · 350.4 weighted")).toBeInTheDocument();
     expect(screen.getByText("Lines deleted")).toBeInTheDocument();
     expect(screen.getByText("Share of activity in the final third")).toBeInTheDocument();
     expect(screen.getByText("70.0%", { selector: "dd" })).toBeInTheDocument();
-    expect(screen.getByText(/include generated files such as lock files/)).toBeInTheDocument();
+    expect(screen.queryByText(/include generated files such as lock files/)).not.toBeInTheDocument();
+    // Closed by default; opening it shows the moved message, the rules version and the outside-work line.
+    const counted = screen.getByRole("button", { name: /How this was counted/ });
+    expect(counted).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(counted);
+    expect(screen.getByText(/GitHub's raw line totals still include them/)).toBeInTheDocument();
+    expect(screen.getByText("Scoring rules version 2.")).toBeInTheDocument();
+    expect(screen.getByText("Work outside GitHub and FairTraze Docs is not counted.")).toBeInTheDocument();
   });
 
   it("hides the breakdown sections instead of showing 'Not available' for older reports (R7)", () => {

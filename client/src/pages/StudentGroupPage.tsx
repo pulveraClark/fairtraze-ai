@@ -50,7 +50,7 @@ import { BriefCheckWithMarks } from "../components/BriefCheckWithMarks";
 import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
 import { useAiReview } from "../hooks/useAiReview";
-import { getContributionStatsCards, scoreBlendLine, type CombinedMyContribution, type MyContribution } from "../lib/contributionStats";
+import { getContributionStatsCards, ownCountedInput, scoreBlendLine, type CombinedMyContribution, type MyContribution } from "../lib/contributionStats";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RoleSuggestionData {
@@ -68,6 +68,7 @@ interface GroupDetail {
   hasReport:    boolean;
   docsDataApproximate?: boolean;
   rulesOutdated?: boolean;
+  scoringRulesVersion?: number;
   docsDataFixedAt?: string;
   report: {
     teamHealth:  string;
@@ -521,6 +522,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             memberCount={report.memberCount}
             sourceType={sourceType}
             noActivity={!!report.noActivity}
+            counted={open.userId === user?.id ? ownCountedInput(report.myContribution, sourceType, data?.scoringRulesVersion) : null}
             ai={ai.data}
             onSelect={setOpenMemberId}
             onClose={() => setOpenMemberId(null)}

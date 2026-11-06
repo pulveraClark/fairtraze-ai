@@ -324,6 +324,8 @@ export interface StoredReportResponse {
   docsDataApproximate?: boolean;
   // Computed at read time (never stored): the report was scored with older scoring rules.
   rulesOutdated?: boolean;
+  // The SCORING_RULES_VERSION stored with this report (1 when absent). Display only.
+  scoringRulesVersion?: number;
   // Computed at read time: the linked repository was changed after this report was generated.
   repoChanged?: boolean;
   // Who started the analysis that produced this report (null for reports saved before this was recorded).
