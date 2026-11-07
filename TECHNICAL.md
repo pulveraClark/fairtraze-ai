@@ -21,7 +21,6 @@ This document is sourced entirely from the actual code. Every version number, fo
 | React | ^19.1.0 | Component-based UI for the instructor dashboard. |
 | Vite | ^6.3.5 | Fast dev server with HMR; proxies `/api` to the server so no CORS issues in development. |
 | Tailwind CSS | ^4.1.7 (via `@tailwindcss/vite`) | Utility-first styling; v4 integrates as a Vite plugin so no separate config file is needed. |
-| Recharts | ^3.8.1 | Declarative bar chart for contribution shares; chosen for its straightforward React integration. |
 | react-markdown | ^10.1.0 | Renders the Gemini narrative (plain prose) as formatted HTML without writing a custom parser. |
 | TypeScript | ^5.8.3 | Same version as server and shared to ensure compatible type definitions. |
 

@@ -414,7 +414,7 @@ Wording and status aids on the report screens. **None of it is read by `shared/`
 - Local 375px / 200% zoom checks, all in `npm run test:e2e -w client`: `howCounted.mjs`, `earlyData.mjs`, `noteStatus.mjs`, `failureMessages.mjs`, `lastAnalyzed.mjs`.
 
 ## Stack
-- **client**: React + Vite + TypeScript + Tailwind + Recharts — an instructor-facing dashboard
+- **client**: React + Vite + TypeScript + Tailwind — an instructor-facing dashboard
 - **server**: Express + TypeScript + Prisma (PostgreSQL, hosted on Neon) + Octokit (GitHub) + Yjs (Collaborative Editor) + Gemini API
 - **shared**: shared TypeScript types and the deterministic scoring module
 
@@ -604,7 +604,7 @@ Scoring weights and flag thresholds are configured **per project (applies to Git
 | High Risk Gini | ≥ 0.4 | High inequality |
 
 ### Historical trend & benchmarking — IMPLEMENTED
-Each analyze run creates a new `Report` row (no uniqueness constraint on `projectId`), so a group's Gini/team-health history accumulates across runs. `GET /api/projects/:id/report/history` (`server/src/routes/projects.ts`) returns that history; the instructor dashboard renders it as `TrendChart` in `ProjectDetailPage.tsx`, shown only once at least 2 runs exist.
+Each analyze run creates a new `Report` row (no uniqueness constraint on `projectId`), so a group's runs accumulate as stored history. There is no trend chart or history endpoint any more (the "Imbalance trend" card, `TrendChart`, `GET /api/projects/:id/report/history` and the Recharts dependency were removed); stored runs themselves are untouched.
 
 Separately, `client/src/lib/benchmark.ts`'s `computeAssignmentBenchmark()` compares a group's Gini against the average Gini of other analyzed groups **under the same assignment** (shown as a ▲/▼ note in `TeamHealthBanner.tsx`). This is a same-assignment average, not cross-section or institutional analytics — that remains unbuilt (see Phase F below).
 

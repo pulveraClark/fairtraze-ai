@@ -421,7 +421,7 @@ These features represent the longer-term direction of FairTraze AI. They have no
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  CLIENT — React + Vite + TypeScript + Tailwind + Recharts   │
+│  CLIENT — React + Vite + TypeScript + Tailwind              │
 │  Instructor dashboard, project detail pages, alerts UI       │
 └────────────────────────────┬────────────────────────────────┘
                              │  HTTP (REST)

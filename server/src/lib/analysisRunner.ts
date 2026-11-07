@@ -453,9 +453,8 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
   const report = computeTeamReport(rawMembers, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
   console.log(`[analyze] project ${projectId}: report has ${report.memberCount} member(s)`);
 
-  // Always create a new Report row per analysis run — history accumulates so the
-  // instructor can see how Gini/team health changed across the project lifecycle
-  // (see GET /api/projects/:id/report/history). Only the previous row's narrative
+  // Always create a new Report row per analysis run — runs accumulate as stored history.
+  // Only the previous row's narrative
   // is carried forward, so re-analyzing doesn't silently blank a saved AI explanation.
   const existing = await prisma.report.findFirst({
     where: { projectId },

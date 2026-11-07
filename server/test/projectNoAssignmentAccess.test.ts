@@ -25,7 +25,6 @@ describe("projects with no assignment", () => {
     const auth = authHeaderFor(instructor);
 
     expect((await request(app).get(`/api/projects/${project.id}/report`).set("Authorization", auth)).status).toBe(403);
-    expect((await request(app).get(`/api/projects/${project.id}/report/history`).set("Authorization", auth)).status).toBe(403);
     expect((await request(app).get(`/api/projects/${project.id}/disputes`).set("Authorization", auth)).status).toBe(403);
     expect((await request(app).post(`/api/projects/${project.id}/analyze`).set("Authorization", auth)).status).toBe(403);
     expect((await request(app).post(`/api/projects/${project.id}/narrative`).set("Authorization", auth)).status).toBe(403);

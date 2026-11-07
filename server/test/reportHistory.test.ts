@@ -70,25 +70,4 @@ describe("Report history accumulation", () => {
     const secondContent = JSON.parse(rows[1].content!) as { narrative: string | null };
     expect(secondContent.narrative).toBe("This team showed balanced participation.");
   });
-
-  it("GET /report/history returns all accumulated points, oldest first, and enforces ownership", async () => {
-    const { instructor, project } = await setupEditorProject();
-    const { user: otherInstructor } = await createUser({ systemRole: "INSTRUCTOR" });
-
-    await request(app).post(`/api/projects/${project.id}/analyze`).set("Authorization", authHeaderFor(instructor));
-    await request(app).post(`/api/projects/${project.id}/analyze`).set("Authorization", authHeaderFor(instructor));
-
-    const res = await request(app)
-      .get(`/api/projects/${project.id}/report/history`)
-      .set("Authorization", authHeaderFor(instructor));
-    expect(res.status).toBe(200);
-    expect(res.body.history.length).toBe(2);
-    expect(new Date(res.body.history[0].generatedAt).getTime())
-      .toBeLessThanOrEqual(new Date(res.body.history[1].generatedAt).getTime());
-
-    const forbidden = await request(app)
-      .get(`/api/projects/${project.id}/report/history`)
-      .set("Authorization", authHeaderFor(otherInstructor));
-    expect(forbidden.status).toBe(403);
-  });
 });

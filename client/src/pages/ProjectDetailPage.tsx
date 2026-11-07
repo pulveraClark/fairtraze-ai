@@ -1,19 +1,17 @@
 import { HISTORY_HINT } from "../lib/docActionHints";
 import { AppFooter } from "../components/AppFooter";
 import { useEffect, useState, useCallback, useRef } from "react";
-import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, ReportHistoryPoint, AnyScoredMember } from "@shared/types";
+import type { StoredReportResponse, ProjectSummaryItem, ProjectScoringConfig, AnyScoredMember } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
-import { TrendChart } from "../components/TrendChart";
 import { DocsDataApproximateNotice } from "../components/DocsDataApproximateNotice";
 import { ReportNotices } from "../components/report/ReportNotices";
 import { NOTICE_PRIORITY, type ReportNotice } from "../lib/reportNotices";
-import { PageHeader, StatTile, InfoTip, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT, CARD } from "../components/ui";
+import { PageHeader, StatTile, InfoTip, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../components/ui";
 import { MemberContributionList } from "../components/report/MemberContributionList";
 import { MemberDrawer } from "../components/report/MemberDrawer";
 import { giniBandsText } from "../lib/giniBands";
 import type { FlagSource } from "../lib/flagRules";
-import { usePrefersReducedMotion } from "../lib/usePrefersReducedMotion";
 import { Narrative } from "../components/Narrative";
 import { MemberWorkSummary } from "../components/report/AiWorkSummary";
 import { useAiReview } from "../hooks/useAiReview";
@@ -127,13 +125,8 @@ export function ProjectDetailPage({ projectId }: Props) {
         .sort((a, b) => a.groupName.localeCompare(b.groupName))
     : [];
 
-  // Gini/team-health across all past analysis runs — rendered only when there are 2+ points
   // The analysis time of the report on screen, for the quiet re-read to compare against.
   const storedAnalyzedAt = useRef<string | undefined>(undefined);
-  const [reportHistory, setReportHistory] = useState<ReportHistoryPoint[]>([]);
-  // Expanded by default — the card itself is already gated on having 2+ runs; this only
-  // controls whether its body (the chart) is shown within that card.
-  const [trendExpanded, setTrendExpanded] = useState(true);
 
   // quiet: a background re-read (automatic refresh). It keeps the page as it is, replaces the report
   // only when a new one has arrived, and ignores failures - the report already on screen stays.
@@ -168,19 +161,6 @@ export function ProjectDetailPage({ projectId }: Props) {
       if (!quiet) setFetchError("Network error — could not reach the server.");
     } finally {
       if (!quiet) setLoading(false);
-    }
-  }, [projectId, token]);
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}/report/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { setReportHistory([]); return; }
-      const data = (await res.json()) as { history: ReportHistoryPoint[] };
-      setReportHistory(data.history);
-    } catch {
-      setReportHistory([]);
     }
   }, [projectId, token]);
 
@@ -237,8 +217,7 @@ export function ProjectDetailPage({ projectId }: Props) {
   useEffect(() => {
     void fetchStored();
     void fetchDisputes();
-    void fetchHistory();
-  }, [fetchStored, fetchDisputes, fetchHistory]);
+  }, [fetchStored, fetchDisputes]);
 
   useEffect(() => { storedAnalyzedAt.current = stored?.analyzedAt; }, [stored?.analyzedAt]);
 
@@ -250,12 +229,11 @@ export function ProjectDetailPage({ projectId }: Props) {
     request: () => requestReportRefresh(projectId, token),
     refetch: () => fetchStored({ quiet: true }),
   });
-  // A new report adds a point to the trend chart and may change the group's health label in the switcher.
+  // A new report may change the group's health label in the switcher.
   const seenAnalyzedAt = useRef<string | undefined>(undefined);
   useEffect(() => {
     const at = stored?.analyzedAt;
     if (seenAnalyzedAt.current && at && at !== seenAnalyzedAt.current) {
-      void fetchHistory();
       void summaryQuery.refetch();
     }
     seenAnalyzedAt.current = at;
@@ -281,7 +259,6 @@ export function ProjectDetailPage({ projectId }: Props) {
       await Promise.all([
         fetchStored(),
         summaryQuery.refetch(),   // refresh health labels in switcher
-        fetchHistory(),           // refresh trend chart with the new run
       ]);
       setNotFound(false);
     } catch (err) {
@@ -297,7 +274,6 @@ export function ProjectDetailPage({ projectId }: Props) {
     }
   }
 
-  const reducedMotion = usePrefersReducedMotion();
   // Measured duration of this session's last analysis run; shown as a note once the report is up.
   const analysisSeconds = progress.stage === "done" ? stageDurations(progress.times).total : undefined;
   // Selected by name (the list's own key) so a refreshed report resolves to the current member object.
@@ -777,41 +753,6 @@ export function ProjectDetailPage({ projectId }: Props) {
               instructionsAssignmentId={classId && assignmentId ? assignmentId : undefined}
               onNarrativeGenerated={onNarrativeGenerated}
             />
-
-            {/* Imbalance trend */}
-            <div>
-              {/* Omitted until there are at least 2 runs, since a single point isn't a trend. */}
-              {reportHistory.length >= 2 && (
-                <section aria-labelledby="trend-title" className={`${CARD} min-w-0 overflow-hidden`}>
-                  <button
-                    type="button"
-                    onClick={() => setTrendExpanded((v) => !v)}
-                    aria-expanded={trendExpanded}
-                    className={`flex min-h-10 w-full items-start justify-between gap-4 px-4 py-3 text-left hover:bg-slate-50 ${FOCUS_LIGHT} focus-visible:-outline-offset-2`}
-                  >
-                    <span>
-                      <span id="trend-title" className="block text-lg font-semibold text-slate-900">Imbalance trend</span>
-                      <span className="block text-sm leading-normal text-slate-700">Gini coefficient across all analysis runs for this group</span>
-                    </span>
-                    <svg
-                      className={`mt-1.5 h-5 w-5 shrink-0 text-slate-700 ${reducedMotion ? "" : "transition-transform duration-200"} ${trendExpanded ? "rotate-180" : ""}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      aria-hidden="true"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {trendExpanded && (
-                    <div className="border-t border-slate-200 px-4 pt-4 pb-2">
-                      <TrendChart history={reportHistory} />
-                    </div>
-                  )}
-                </section>
-              )}
-            </div>
           </>
         )}
           </>
