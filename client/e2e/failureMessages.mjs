@@ -24,7 +24,7 @@ const saved = [];
 const WORDS = {
   "analysis-failed": [
     "GitHub is limiting requests right now. Wait about an hour, then select Re-analyze. The nightly update will also try again.",
-    "We couldn't read the repository. Check that the link is correct and that the repository is public. If it is private, ask the FairTraze team how to share it, then select Re-analyze.",
+    "We couldn't read the repository. Check that the link is correct and that the repository is public, then select Re-analyze.",
     "GitHub access isn't set up on this server. Contact the FairTraze team.",
     "We couldn't reach GitHub. Try again in a few minutes.",
     "The analysis didn't finish. Try again in a few minutes. If it keeps happening, contact the FairTraze team.",
