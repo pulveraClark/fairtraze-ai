@@ -15,6 +15,7 @@ import type {
 
 import { contentHasNoRecordedActivity, hasNoRecordedActivity, quietSource } from "../lib/reportActivity.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
+import { autoUpdateFailed } from "../lib/autoAnalysis.js";
 
 export const joinRouter = Router();
 
@@ -768,6 +769,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     docsDataApproximate,
     rulesOutdated: isRulesOutdated(stored),
     scoringRulesVersion: stored.scoringRulesVersion ?? 1,
+    autoUpdateFailed: autoUpdateFailed(project, asgn, latestReport.generatedAt),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     report: {
       teamHealth:  teamReport.teamHealth,

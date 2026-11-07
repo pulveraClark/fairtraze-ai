@@ -11,10 +11,16 @@ describe("plainAiFailure", () => {
     expect(plainAiFailure("AI_QUOTA_DAILY")).toBe("The AI's daily limit was reached. Try again later.");
     expect(plainAiFailure("AI_QUOTA_DAILY", null)).toBe("The AI's daily limit was reached. Try again later.");
   });
-  it("keeps the existing plain text for every other failure and never echoes raw text", () => {
-    for (const code of ["AI_RATE_LIMITED", "AI_TIMEOUT", "AI_UNAVAILABLE", "secret provider detail", null]) {
+  it("says the AI is busy for a per-minute limit or a timeout, with a short wait as the next step", () => {
+    for (const code of ["AI_RATE_LIMITED", "AI_TIMEOUT"]) {
+      expect(plainAiFailure(code)).toBe("The AI is busy. Try again in a minute.");
+    }
+  });
+  it("uses one plain text with a next step for every other failure and never echoes raw text", () => {
+    for (const code of ["AI_UNAVAILABLE", "AI_BAD_OUTPUT", "secret provider detail", null]) {
       expect(plainAiFailure(code)).toBe(NARRATIVE_UNAVAILABLE_TEXT);
     }
+    expect(NARRATIVE_UNAVAILABLE_TEXT).toBe("The AI explanation is unavailable right now. The scores and flags are not affected. Try again later.");
   });
 });
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AI_POLL_MAX_MS, AI_POLL_MS, type AiReviewResponse } from "../lib/aiReview";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 
 export interface UseAiReview {
   data: AiReviewResponse | null;
@@ -74,7 +75,7 @@ return false;
       setError(body.error ?? "Could not start the AI findings.");
       return false;
     } catch {
-      setError("Network error — could not reach the server.");
+      setError(NETWORK_ERROR_TEXT);
       return false;
     }
   }, [projectId, token]);

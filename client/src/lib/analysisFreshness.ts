@@ -27,5 +27,13 @@ export function formatLastAnalyzedStudent(iso: string, now: Date = new Date()): 
   return `Last analyzed ${relativeTime(iso, now)}. Updates every night.`;
 }
 
+/** The latest automatic update did not finish. Same words for everyone; no cause, no blame. */
+export const AUTO_UPDATE_FAILED_TEXT = "The latest update didn't finish. It will try again tonight.";
+
+/** "Last analyzed 3 days ago. The latest update didn't finish. It will try again tonight." */
+export function formatLastAnalyzedUpdateFailed(iso: string, now: Date = new Date()): string {
+  return `Last analyzed ${relativeTime(iso, now)}. ${AUTO_UPDATE_FAILED_TEXT}`;
+}
+
 export const UPDATING_TEXT = "Updating…";
 export const NARRATIVE_OUTDATED_TEXT = "Results changed. Generate new AI findings.";

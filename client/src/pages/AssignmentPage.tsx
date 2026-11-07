@@ -21,6 +21,7 @@ import { classCrumb, classFullLabel } from "../lib/classLabel";
 import { EditAssignmentModal } from "../components/EditAssignmentModal";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { REPO_NOT_LINKED_MESSAGE, repoNotLinked } from "../lib/repoNotice";
+import { analysisBodyText, NETWORK_ERROR_TEXT } from "../lib/failureText";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface AssignmentMeta {
@@ -120,6 +121,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkFailures, setBulkFailures] = useState<string[]>([]);
+  // What the first failed group was told (the sentence names what to do), shown after the group names.
+  const [bulkFailureReason, setBulkFailureReason] = useState<string | null>(null);
   const [bulkNotice, setBulkNotice]     = useState<string | null>(null);
   const [bulkExporting, setBulkExporting] = useState(false);
   const [exportItems, setExportItems] = useState<PrintableReportBundleItem[] | null>(null);
@@ -172,10 +175,16 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     analyzingRef.current.add(projectId);
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, {
+      const analyzeRes = await fetch(`/api/projects/${projectId}/analyze`, {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!analyzeRes.ok) {
+        // Say what happened and what to do, instead of the button just stopping.
+        const body = (await analyzeRes.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
+        const name = item?.groupName ?? `Project ${projectId}`;
+        setBulkNotice(`${name}: ${analysisBodyText(body)}`);
+      }
       // Re-fetch just the summary after re-analysis
       if (assignment) {
         const res  = await fetch(`/api/assignments/${assignmentId}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -184,6 +193,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       }
       // The dashboard, class page and sidebar share one cached summary: make them pick up this analysis.
       void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
+    } catch {
+      setBulkNotice(`${item?.groupName ?? `Project ${projectId}`}: ${NETWORK_ERROR_TEXT}`);
     } finally {
       analyzingRef.current.delete(projectId);
       setAnalyzing((prev) => {
@@ -226,6 +237,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     setBulkFailures([]);
     setBulkProgress({ done: 0, total: ids.length });
     const failures: string[] = [];
+    let firstReason: string | null = null;
     for (const id of ids) {
       setAnalyzing((prev) => new Set(prev).add(id));
       try {
@@ -236,10 +248,12 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         if (!res.ok) {
           const groupName = summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`;
           failures.push(groupName);
+          if (!firstReason) firstReason = analysisBodyText(await res.json().catch(() => null));
         }
       } catch {
         const groupName = summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`;
         failures.push(groupName);
+        if (!firstReason) firstReason = NETWORK_ERROR_TEXT;
       } finally {
         setAnalyzing((prev) => {
           const next = new Set(prev);
@@ -250,6 +264,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       }
     }
     setBulkFailures(failures);
+    setBulkFailureReason(firstReason);
     setBulkRunning(false);
     bulkLock.current = false;
     setBulkProgress(null);
@@ -472,7 +487,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         {bulkFailures.length > 0 && (
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
             <button onClick={() => setBulkFailures([])} className="float-right text-amber-400 hover:text-amber-700 ml-2">✕</button>
-            Failed to analyze: {bulkFailures.join(", ")}. You can retry these individually.
+            Failed to analyze: {bulkFailures.join(", ")}. {bulkFailureReason ?? "You can retry these individually."}
           </div>
         )}
 

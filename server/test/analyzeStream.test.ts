@@ -4,6 +4,7 @@ import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 import { fetchRepoStats } from "../src/lib/github.js";
 import { countByDay } from "../src/lib/dayCounts.js";
+import { ANALYSIS_FAILURE_TEXT } from "@shared/failureMessages.js";
 import type { GitHubContributorData, GitHubProgress } from "../src/lib/github.js";
 import {
   createUser,
@@ -289,13 +290,13 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
     const { events } = await analyzeStream(project.id, instructor);
     const err = events[events.length - 1];
     expect(err.event).toBe("error");
-    expect(err.data).toMatchObject({ status: 404, error: "GitHub repo not found or token lacks access" });
+    expect(err.data).toMatchObject({ status: 404, code: "GITHUB_REPO_UNREADABLE", error: ANALYSIS_FAILURE_TEXT.GITHUB_REPO_UNREADABLE });
 
     const plain = await request(app)
       .post(`/api/projects/${project.id}/analyze`)
       .set("Authorization", authHeaderFor(instructor));
     expect(plain.status).toBe(404);
-    expect(plain.body).toMatchObject({ error: "GitHub repo not found or token lacks access" });
+    expect(plain.body).toMatchObject({ code: "GITHUB_REPO_UNREADABLE", error: ANALYSIS_FAILURE_TEXT.GITHUB_REPO_UNREADABLE });
   });
 
   it("validation errors before the stream opens stay plain JSON, even with Accept: text/event-stream", async () => {
@@ -342,6 +343,77 @@ describe("COMBINED failure parity with the previous sequential order", () => {
       .set("Authorization", authHeaderFor(instructor));
 
     expect(res.status).toBe(429);
-    expect(res.body).toEqual({ error: "GitHub rate limit exceeded" });
+    expect(res.body).toEqual({ code: "GITHUB_RATE_LIMITED", error: ANALYSIS_FAILURE_TEXT.GITHUB_RATE_LIMITED });
+  });
+});
+
+// Every failed GitHub read gets a stable code and one plain sentence that says what to do next. The provider's
+// own message never reaches the user, and a student is never named or blamed.
+describe("GitHub failures are worded plainly", () => {
+  const analyze = async (projectId: number, instructor: Parameters<typeof authHeaderFor>[0]) =>
+    request(app).post(`/api/projects/${projectId}/analyze`).set("Authorization", authHeaderFor(instructor));
+  const githubError = (message: string, status?: number, headers?: Record<string, string>) =>
+    Object.assign(new Error(message), { ...(status ? { status } : {}), ...(headers ? { response: { headers } } : {}) });
+
+  const cases: Array<[string, Error, number, keyof typeof ANALYSIS_FAILURE_TEXT]> = [
+    ["429", githubError("Too Many Requests", 429), 429, "GITHUB_RATE_LIMITED"],
+    ["403 with the limit used up", githubError("Forbidden", 403, { "x-ratelimit-remaining": "0" }), 429, "GITHUB_RATE_LIMITED"],
+    ["403 that says rate limit", githubError("API rate limit exceeded for token", 403), 429, "GITHUB_RATE_LIMITED"],
+    ["403 with no limit reached (no access to the repository)", githubError("Forbidden", 403, { "x-ratelimit-remaining": "4000" }), 404, "GITHUB_REPO_UNREADABLE"],
+    ["404", githubError("Not Found", 404), 404, "GITHUB_REPO_UNREADABLE"],
+    ["401 (the server's token was refused)", githubError("Bad credentials", 401), 503, "GITHUB_NOT_CONFIGURED"],
+    ["anything else", githubError("socket hang up"), 502, "GITHUB_UNREACHABLE"],
+  ];
+
+  it.each(cases)("%s", async (_name, err, status, code) => {
+    process.env.GITHUB_TOKEN = "test-token";
+    const { instructor, project } = await setupProject("GITHUB");
+    mockedFetchRepoStats.mockRejectedValue(err);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await analyze(project.id, instructor);
+    expect(res.status).toBe(status);
+    expect(res.body.code).toBe(code);
+    expect(res.body.error).toBe(ANALYSIS_FAILURE_TEXT[code]);
+    expect(res.body.detail).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain(err.message);
+  });
+
+  it("the same wording applies to a COMBINED group", async () => {
+    process.env.GITHUB_TOKEN = "test-token";
+    const { instructor, project } = await setupProject("COMBINED");
+    mockedFetchRepoStats.mockRejectedValue(githubError("socket hang up"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await analyze(project.id, instructor);
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ code: "GITHUB_UNREACHABLE", error: "We couldn't reach GitHub. Try again in a few minutes." });
+  });
+
+  it("a server with no GitHub token says so without naming the setting, and points to the FairTraze team", async () => {
+    const saved = process.env.GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    try {
+      const { instructor, project } = await setupProject("GITHUB");
+      const res = await analyze(project.id, instructor);
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ code: "GITHUB_NOT_CONFIGURED", error: "GitHub access isn't set up on this server. Contact the FairTraze team." });
+      expect(JSON.stringify(res.body)).not.toMatch(/GITHUB_TOKEN/);
+    } finally {
+      if (saved !== undefined) process.env.GITHUB_TOKEN = saved;
+    }
+  });
+
+  it("an unexpected failure while streaming never sends the exception text", async () => {
+    process.env.GITHUB_TOKEN = "test-token";
+    const { instructor, project } = await setupProject("GITHUB");
+    mockedFetchRepoStats.mockImplementation(githubReturning([contributor("member-a", 1)]));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(prisma.report, "create").mockRejectedValue(new Error("secret db detail at host x"));
+
+    const { events } = await analyzeStream(project.id, instructor);
+    const last = events[events.length - 1];
+    expect(last.event).toBe("error");
+    expect(last.data).toMatchObject({ status: 500, code: "ANALYSIS_FAILED", error: ANALYSIS_FAILURE_TEXT.ANALYSIS_FAILED });
+    expect(JSON.stringify(last.data)).not.toContain("secret db detail");
   });
 });

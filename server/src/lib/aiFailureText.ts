@@ -5,10 +5,18 @@ import type { AiLastAttempt } from "@shared/aiReviewTypes.js";
 // For a daily quota the client words the reset time in the viewer's own clock from `retryAt`; the hours
 // form below is the fallback for places that cannot (the narrative's `error` string).
 
-export const NARRATIVE_UNAVAILABLE_TEXT = "AI explanation temporarily unavailable — showing computed results.";
+export const NARRATIVE_UNAVAILABLE_TEXT =
+  "The AI explanation is unavailable right now. The scores and flags are not affected. Try again later.";
+/** A per-minute limit or a timeout: it clears on its own, so the next step is a short wait. */
+export const AI_BUSY_TEXT = "The AI is busy. Try again in a minute.";
+/** A new explanation could not be written but an earlier one is on screen. */
+export const NARRATIVE_KEPT_TEXT = "The new explanation could not be written, so the saved one is shown. Try again later.";
 
 export function plainAiFailure(code: string | null | undefined, retryAfterMs?: number | null): string {
   switch (code) {
+    case "AI_RATE_LIMITED":
+    case "AI_TIMEOUT":
+      return AI_BUSY_TEXT;
     case "AI_QUOTA_DAILY":
       return typeof retryAfterMs === "number" && retryAfterMs > 0
         ? `The AI's daily limit was reached. It resets in about ${Math.max(1, Math.ceil(retryAfterMs / 3_600_000))} ${Math.ceil(retryAfterMs / 3_600_000) <= 1 ? "hour" : "hours"}. Try again later.`

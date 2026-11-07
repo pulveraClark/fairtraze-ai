@@ -198,8 +198,8 @@ export async function streamAnalyze(
       const data = JSON.parse(frame.data) as unknown;
       if (frame.event === "done") return data as AnalyzeResponse;
       if (frame.event === "error") {
-        const err = data as { status?: number; error?: string };
-        throw new AnalyzeError(err.error ?? "Analysis failed.", err.status);
+        const err = data as { status?: number; error?: string; code?: string };
+        throw new AnalyzeError(err.error ?? "Analysis failed.", err.status, err.code);
       }
       if (frame.event === "github" || frame.event === "docs" || frame.event === "compute" || frame.event === "save") {
         onEvent({ event: frame.event, data } as AnalyzeStreamEvent);

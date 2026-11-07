@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { NarrativeResponse } from "@shared/types";
 import { useAuth } from "../context/AuthContext";
 import { AI_SLOW_MS, quotaResetLine, upToDateLine } from "../lib/aiReview";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import type { UseAiReview } from "./useAiReview";
 import { useSlowAfter } from "./useSlowAfter";
 
@@ -10,6 +11,8 @@ export interface AiReportGenerator {
   reviewOn: boolean;
   generating: boolean;
   error: string | null;
+  /** A calm note when a new explanation could not be written but the saved one is shown; null otherwise. */
+  warning: string | null;
   generate: (regenerate?: boolean) => Promise<void>;
   /** "Already up to date. Nothing changed since …" after a Regenerate that changed nothing; null otherwise. */
   upToDate: string | null;
@@ -34,6 +37,7 @@ export function useGenerateAiReport(
   const { token } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   // When the saved explanation was written, if the last click found it unchanged (the server made no AI call).
   const [narrativeSince, setNarrativeSince] = useState<string | null>(null);
   const reviewOn = !!review?.data?.enabled && !!review.data.canGenerate && !!review.data.hasReport;
@@ -41,6 +45,7 @@ export function useGenerateAiReport(
   const generate = useCallback(async (regenerate = false) => {
     setGenerating(true);
     setError(null);
+    setWarning(null);
     setNarrativeSince(null);
     // The review runs in the background; it never delays or blocks the explanation.
     if (reviewOn) void review!.start();
@@ -54,9 +59,12 @@ export function useGenerateAiReport(
       } else if (data.narrative) {
         onNarrativeGenerated(data.narrative);
         setNarrativeSince(data.upToDate?.since ?? null);
+        // The saved text is shown, but a new one could not be written: say why and what to do (server wording;
+        // the daily limit is worded on the viewer's clock).
+        if (data.warning) setWarning(data.code === "AI_QUOTA_DAILY" ? quotaResetLine(data.retryAt) : data.warning);
       }
     } catch {
-      setError("Network error — could not reach the server.");
+      setError(NETWORK_ERROR_TEXT);
     } finally {
       setGenerating(false);
     }
@@ -79,7 +87,7 @@ export function useGenerateAiReport(
     }
   }, [busy, failed]);
 
-  const upToDate = busy || failed ? null : upToDateLine(narrativeSince, reviewOn, review?.data?.upToDate?.since);
+  const upToDate = busy || failed || warning ? null : upToDateLine(narrativeSince, reviewOn, review?.data?.upToDate?.since);
 
-  return { reviewOn, generating, error, generate, upToDate, busy, slow, announcement };
+  return { reviewOn, generating, error, warning, generate, upToDate, busy, slow, announcement };
 }

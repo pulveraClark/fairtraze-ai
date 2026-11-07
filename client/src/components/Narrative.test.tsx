@@ -35,6 +35,26 @@ describe("Narrative outdated notice", () => {
   });
 });
 
+describe("Narrative failure wording", () => {
+  const gen = (over: Partial<import("../hooks/useGenerateAiReport").AiReportGenerator>): import("../hooks/useGenerateAiReport").AiReportGenerator => ({
+    reviewOn: false, generating: false, error: null, warning: null, generate: async () => {}, upToDate: null, busy: false, slow: false, announcement: "", ...over,
+  });
+
+  it("shows the error with a Try again button when the explanation could not be written", () => {
+    render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}}
+      generator={gen({ error: "The AI explanation is unavailable right now. The scores and flags are not affected. Try again later." })} />);
+    expect(screen.getByRole("alert").textContent).toContain("The scores and flags are not affected. Try again later.");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("shows a calm note, not an alert, when the saved explanation is kept after a failed regenerate", () => {
+    render(<Narrative narrative="Saved text." projectId={1} onNarrativeGenerated={() => {}}
+      generator={gen({ warning: "The new explanation could not be written, so the saved one is shown. Try again later." })} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("The new explanation could not be written, so the saved one is shown. Try again later.")).toBeTruthy();
+  });
+});
+
 describe("StatTile hero", () => {
   it("makes the value the largest text on the tile", () => {
     render(<StatTile hero label="Team health" value="Healthy" />);

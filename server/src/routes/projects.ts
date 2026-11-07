@@ -8,6 +8,7 @@ import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
 import { projectsWithRepoChangedSince } from "../lib/repoChange.js";
+import { autoUpdateFailed } from "../lib/autoAnalysis.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const projectsRouter = Router();
@@ -205,7 +206,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      assignment: { select: { id: true, sourceType: true, deadline: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
+      assignment: { select: { id: true, sourceType: true, deadline: true, createdAt: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
       groupMemberships: {
         include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
         orderBy: { joinedAt: "asc" },
@@ -296,6 +297,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     rulesOutdated: isRulesOutdated(stored),
     scoringRulesVersion: stored.scoringRulesVersion ?? 1,
     trigger: stored.trigger ?? null,
+    autoUpdateFailed: autoUpdateFailed(project, project.assignment, latestReport.generatedAt),
     narrativeOutdated: stored.narrativeOutdated === true,
     repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),

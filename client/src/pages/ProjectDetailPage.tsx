@@ -36,6 +36,8 @@ import { EarlyDataTag } from "../components/EarlyDataTag";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { LastAnalyzed } from "../components/LastAnalyzed";
+import { AnalysisFailedCard } from "../components/AnalysisFailedCard";
+import { analysisErrorText } from "../lib/failureText";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { requestReportRefresh } from "../lib/refreshReport";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
@@ -286,9 +288,7 @@ export function ProjectDetailPage({ projectId }: Props) {
       if (err instanceof AnalyzeError && err.code === "REPO_NOT_LINKED") {
         setRepoMissingFromServer(true);
       } else {
-        setReanalyzeError(
-          err instanceof AnalyzeError ? err.message : "Network error — could not reach the server."
-        );
+        setReanalyzeError(analysisErrorText(err));
       }
     } finally {
       analyzeLock.current = false;
@@ -603,7 +603,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* How fresh the report is, and "Updating…" while a background refresh runs */}
         {stored && !reanalyzing && (
-          <LastAnalyzed analyzedAt={stored.analyzedAt} trigger={stored.trigger} updating={updating} />
+          <LastAnalyzed analyzedAt={stored.analyzedAt} trigger={stored.trigger} updating={updating} updateFailed={stored.autoUpdateFailed} />
         )}
 
         {/* Analysis panel: live while running, completed state while the report reloads */}
@@ -621,20 +621,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* Re-analyze error */}
         {reanalyzeError && !reanalyzing && (
-          <div role="alert" className="bg-red-50 border border-red-300 rounded-xl p-4 flex items-start gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-base font-semibold text-red-900">Analysis failed</p>
-              <p className="text-base leading-normal text-red-900 break-words">{reanalyzeError}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setReanalyzeError(null)}
-              aria-label="Dismiss error"
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-2xl leading-none text-red-900 hover:bg-red-100 ${FOCUS_LIGHT}`}
-            >
-              &times;
-            </button>
-          </div>
+          <AnalysisFailedCard message={reanalyzeError} onDismiss={() => setReanalyzeError(null)} />
         )}
 
         {/* Network / fetch error */}

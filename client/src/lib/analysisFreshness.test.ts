@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLastAnalyzed, formatLastAnalyzedStudent, relativeTime } from "./analysisFreshness";
+import { formatLastAnalyzed, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, AUTO_UPDATE_FAILED_TEXT, relativeTime } from "./analysisFreshness";
 
 const NOW = new Date("2026-10-26T12:00:00Z");
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -31,6 +31,13 @@ describe("formatLastAnalyzed", () => {
   });
   it("does not say 'every night' (it also refreshes when a report is opened)", () => {
     expect(formatLastAnalyzed(ago(HOUR), "auto", NOW)).not.toMatch(/night/i);
+  });
+});
+
+describe("when the latest automatic update did not finish", () => {
+  it("says so in one calm sentence, for everyone, without a cause or blame", () => {
+    expect(formatLastAnalyzedUpdateFailed(ago(3 * 24 * HOUR), NOW)).toBe("Last analyzed 3 days ago. The latest update didn't finish. It will try again tonight.");
+    expect(AUTO_UPDATE_FAILED_TEXT).toBe("The latest update didn't finish. It will try again tonight.");
   });
 });
 

@@ -161,7 +161,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   // The sentence to mark in the instructions window; null while it is closed.
   const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
-  const { generating, error, generate, busy, slow, upToDate } = generator ?? own;
+  const { generating, error, warning, generate, busy, slow, upToDate } = generator ?? own;
   const anyError = error ?? review?.error ?? null;
 
   const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
@@ -219,6 +219,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           </button>
         </div>
       )}
+      {warning && !anyError && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{warning}</p>}
       {review?.data?.enabled && review.data.refreshFailed?.findings && (
         <RefreshFailedNote
           note={review.data.refreshFailed.findings}

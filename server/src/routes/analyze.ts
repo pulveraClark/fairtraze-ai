@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { generateFairnessNarrative, narrativeInputHash } from "../lib/gemini.js";
-import { aiFailureOf, plainAiFailure } from "../lib/aiFailureText.js";
+import { aiFailureOf, plainAiFailure, NARRATIVE_KEPT_TEXT } from "../lib/aiFailureText.js";
+import { ANALYSIS_FAILURE_TEXT } from "@shared/failureMessages.js";
 import { quotaGate } from "../lib/aiReview/limiter.js";
 import { logReadability } from "../lib/aiReview/readability.js";
 import { runAnalysis, type ProgressEmitter } from "../lib/analysisRunner.js";
@@ -90,7 +91,8 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
     // Once the stream is open, headers are already sent, so report the failure as an event.
     if (!progress.opened) throw err;
     console.error(err);
-    progress.finish(500, { error: err instanceof Error ? err.message : "Internal server error" });
+    // Plain words only: the exception text stays in the server log, never in the stream.
+    progress.finish(500, { code: "ANALYSIS_FAILED", error: ANALYSIS_FAILURE_TEXT.ANALYSIS_FAILED });
   }
 });
 
@@ -214,7 +216,9 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
       res.json({
         narrative: stored.narrative,
         cached: true,
-        warning: quota ? plainAiFailure(failure.code, failure.retryAfterMs) : "Generation failed; showing previously saved narrative.",
+        warning: quota || failure.code === "AI_RATE_LIMITED" || failure.code === "AI_TIMEOUT"
+          ? plainAiFailure(failure.code, failure.retryAfterMs)
+          : NARRATIVE_KEPT_TEXT,
         ...quotaInfo,
       });
     } else {

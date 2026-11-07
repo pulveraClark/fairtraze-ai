@@ -358,6 +358,10 @@ model Project {
   // When the leader last pressed "Refresh commits" (once per 5 minutes per group, enforced in the
   // route). Display and rate limit only: never read by scoring, never marks a report outdated.
   commitsRefreshedAt       DateTime?
+  // The last automatic (nightly or on-open) analysis that did not finish: when, and a short code. Display only;
+  // cleared by the next analysis that saves a report. Never read by scoring.
+  lastAutoFailureAt        DateTime?
+  lastAutoFailureCode      String?
   createdAt                DateTime          @default(now())
   aiCommitDigests          AiCommitDigest[]
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)

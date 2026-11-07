@@ -15,6 +15,7 @@ import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
 import { joinInviteUrl } from "../lib/joinInvite";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectsSummaryQuery, useClassesListQuery } from "../hooks/useSharedQueries";
+import { analysisBodyText, NETWORK_ERROR_TEXT } from "../lib/failureText";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -482,6 +483,7 @@ export function InstructorDashboardPage() {
   const [filterMode, setFilterMode]   = useState<FilterMode>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [analyzing, setAnalyzing]     = useState<Set<number>>(new Set());
+  const [analyzeNotice, setAnalyzeNotice] = useState<string | null>(null);
   const analyzingRef = useRef<Set<number>>(new Set());
   const [showClassModal, setShowClassModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LifecycleClass | null>(null);
@@ -531,12 +533,22 @@ export function InstructorDashboardPage() {
     if (analyzingRef.current.has(projectId)) return; // already running: ignore a second click
     analyzingRef.current.add(projectId);
     setAnalyzing((prev) => new Set(prev).add(projectId));
+    setAnalyzeNotice(null);
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, {
+      const res = await fetch(`/api/projects/${projectId}/analyze`, {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        // Say what happened and what to do, instead of the button just stopping.
+        const body = (await res.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
+        const name = summary.find((s) => s.projectId === projectId)?.groupName ?? `Project ${projectId}`;
+        setAnalyzeNotice(`${name}: ${analysisBodyText(body)}`);
+      }
       await summaryQuery.refetch();
+    } catch {
+      const name = summary.find((s) => s.projectId === projectId)?.groupName ?? `Project ${projectId}`;
+      setAnalyzeNotice(`${name}: ${NETWORK_ERROR_TEXT}`);
     } finally {
       analyzingRef.current.delete(projectId);
       setAnalyzing((prev) => {
@@ -653,6 +665,13 @@ export function InstructorDashboardPage() {
       </div>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {analyzeNotice && (
+          <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-normal text-amber-900">
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{analyzeNotice}</span>
+            <button type="button" onClick={() => setAnalyzeNotice(null)} aria-label="Dismiss" className="ft-hit shrink-0 rounded px-2 text-amber-900 hover:bg-amber-100">&times;</button>
+          </div>
+        )}
 
         {/* Search bar */}
         <div className="relative mb-4">

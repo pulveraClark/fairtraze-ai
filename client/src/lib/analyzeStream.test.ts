@@ -118,12 +118,13 @@ describe("streamAnalyze", () => {
 
   it("throws the server's message for an error event", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      sseResponse(['event: error\ndata: {"status":429,"error":"GitHub rate limit exceeded"}\n\n'])
+      sseResponse(['event: error\ndata: {"status":429,"code":"GITHUB_RATE_LIMITED","error":"GitHub is limiting requests right now."}\n\n'])
     ));
     await expect(streamAnalyze(1, "tok", () => {})).rejects.toMatchObject({
       name: "AnalyzeError",
-      message: "GitHub rate limit exceeded",
+      message: "GitHub is limiting requests right now.",
       status: 429,
+      code: "GITHUB_RATE_LIMITED",
     });
   });
 

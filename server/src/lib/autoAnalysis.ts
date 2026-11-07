@@ -6,6 +6,7 @@ import { LATEST_REPORT_ORDER } from "./latestReport.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
 import { runAnalysis, silentProgress, type AnalysisResult } from "./analysisRunner.js";
 import { isAnalysisRunning } from "./analysisLock.js";
+import { isAnalysisFailureCode, type AnalysisFailureCode } from "@shared/failureMessages.js";
 
 // Which groups get analyzed automatically, and whether anything changed since their last report.
 // Planning only: nothing here touches the analyzer or the scoring maths.
@@ -184,6 +185,46 @@ const isRateLimit = (err: unknown) => {
 };
 
 /**
+ * Remembers that an automatic run for this group did not finish, so its report page can say so calmly.
+ * Display only (the next analysis that saves a report clears it); never throws, never touches a report.
+ */
+export async function recordAutoFailure(projectId: number, code: AnalysisFailureCode): Promise<void> {
+  try {
+    await prisma.project.update({
+      where: { id: projectId },
+      data:  { lastAutoFailureAt: new Date(), lastAutoFailureCode: code },
+    });
+  } catch (err) {
+    console.error(`[auto-analyze] could not record the failure for group ${projectId}:`, err instanceof Error ? err.message : err);
+  }
+}
+
+/** The short code for a finished-but-failed analysis result (its body carries one for GitHub failures). */
+function failureCodeOf(result: AnalysisResult): AnalysisFailureCode {
+  const code = (result.body as { code?: unknown }).code;
+  return isAnalysisFailureCode(code) ? code : "ANALYSIS_FAILED";
+}
+
+/**
+ * Should the report page say the latest automatic update did not finish? Only while that is still true and
+ * still useful: the failure is newer than the report (a later analysis clears it anyway) and the project is
+ * in its active window, so "it will try again tonight" is accurate. Display only.
+ */
+export function autoUpdateFailed(
+  project: { lastAutoFailureAt: Date | null },
+  assignment: { createdAt: Date; deadline: Date | null } | null,
+  reportGeneratedAt: Date,
+  now: Date = new Date(),
+): boolean {
+  if (!project.lastAutoFailureAt || !assignment) return false;
+  if (project.lastAutoFailureAt.getTime() <= reportGeneratedAt.getTime()) return false;
+  return isProjectActive(assignment, now);
+}
+
+/** True when an automatic result is a real failure (not success, and not "someone else already holds the group"). */
+const isFailedResult = (result: AnalysisResult) => result.status !== 200 && result.status !== 409;
+
+/**
  * Analyzes every due group whose data changed, one at a time. A failure in one group never stops the
  * others. After GitHub says "rate limited" the remaining groups that need GitHub are skipped (Docs-only
  * groups still run). Never calls Gemini; alerts are raised only for changed results (see reportPolicy).
@@ -213,18 +254,22 @@ export async function runAutoAnalysis(now: Date = new Date(), deps: AutoRunDeps 
         rateLimited = true;
         summary.skipped++;
         summary.skippedRateLimited++;
+        await recordAutoFailure(group.id, "GITHUB_RATE_LIMITED");
       } else {
         summary.failed++;
         deps.log(`[auto-analyze] group ${group.id} failed: status ${result.status}`);
+        await recordAutoFailure(group.id, failureCodeOf(result));
       }
     } catch (err) {
       if (isRateLimit(err)) {
         rateLimited = true;
         summary.skipped++;
         summary.skippedRateLimited++;
+        await recordAutoFailure(group.id, "GITHUB_RATE_LIMITED");
       } else {
         summary.failed++;
         deps.log(`[auto-analyze] group ${group.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+        await recordAutoFailure(group.id, "ANALYSIS_FAILED");
       }
     }
   }
@@ -304,6 +349,11 @@ export async function refreshReportIfStale(
   }
   if (!reason) return { refreshing: false, why: "unchanged" };
 
-  deps.analyze(projectId).catch((err) => console.error(`[auto-analyze] refresh of group ${projectId} failed:`, err));
+  deps.analyze(projectId)
+    .then((result) => { if (isFailedResult(result)) return recordAutoFailure(projectId, failureCodeOf(result)); })
+    .catch((err) => {
+      console.error(`[auto-analyze] refresh of group ${projectId} failed:`, err);
+      return recordAutoFailure(projectId, isRateLimit(err) ? "GITHUB_RATE_LIMITED" : "ANALYSIS_FAILED");
+    });
   return { refreshing: true };
 }

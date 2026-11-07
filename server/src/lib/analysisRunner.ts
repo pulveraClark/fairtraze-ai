@@ -14,6 +14,7 @@ import type { RawMemberStats, RawDocumentMemberStats, AnalyzeResponse, TeamRepor
 import { LATEST_REPORT_ORDER } from "./latestReport.js";
 import { reportPolicy, type AnalysisTrigger } from "./resultsChange.js";
 import { withAnalysisLock, ANALYSIS_IN_PROGRESS } from "./analysisLock.js";
+import { classifyGithubFailure, githubFailureBody } from "./githubFailure.js";
 
 // The analysis itself, independent of Express. routes/analyze.ts wraps it for the manual button
 // (ownership, SSE); the automatic runs call it with a no-op progress emitter.
@@ -285,7 +286,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
 
     await prisma.project.update({
       where: { id: projectId },
-      data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+      data:  { membershipChangedAt: null, scoringConfigChangedAt: null, lastAutoFailureAt: null, lastAutoFailureCode: null },
     });
 
     if (policy.notify) await notifyReportReady(project);
@@ -310,7 +311,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
   if (sourceType === "COMBINED") {
     const githubToken = process.env.GITHUB_TOKEN;
     if (!githubToken) {
-      return done(500, { error: "GITHUB_TOKEN is not set" });
+      return done(503, githubFailureBody("GITHUB_NOT_CONFIGURED"));
     }
 
     const requiredLogins = project.members.map((m) => m.githubUsername);
@@ -336,15 +337,9 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     ]);
 
     if (githubResult.status === "rejected") {
-      const err = githubResult.reason;
-      const e = err as { status?: number; message?: string };
-      if (e.status === 404) {
-        return done(404, { error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
-      }
-      if (e.status === 403 || e.status === 429) {
-        return done(429, { error: "GitHub rate limit exceeded" });
-      }
-      return done(502, { error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
+      const failure = classifyGithubFailure(githubResult.reason);
+      console.error(`[analyze] project ${projectId}: GitHub read failed (${failure.code}):`, githubResult.reason instanceof Error ? githubResult.reason.message : githubResult.reason);
+      return done(failure.status, githubFailureBody(failure.code, failure.status === 404 ? { repoUrl: project.repoUrl } : {}));
     }
     if (docsResult.status === "rejected") throw docsResult.reason;
 
@@ -401,7 +396,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
 
     await prisma.project.update({
       where: { id: projectId },
-      data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+      data:  { membershipChangedAt: null, scoringConfigChangedAt: null, lastAutoFailureAt: null, lastAutoFailureCode: null },
     });
 
     if (policy.notify) await notifyReportReady(project);
@@ -427,7 +422,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
 
   const githubToken = process.env.GITHUB_TOKEN;
   if (!githubToken) {
-    return done(500, { error: "GITHUB_TOKEN is not set" });
+    return done(503, githubFailureBody("GITHUB_NOT_CONFIGURED"));
   }
 
   const requiredLogins = project.members.map((m) => m.githubUsername);
@@ -439,14 +434,9 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     progress.emit("github", { contributors: 0, commits: 0, files: 0 });
     rawData = await fetchRepoStats(project.repoUrl ?? "", githubToken, requiredLogins, (p) => emitGithubProgress(progress, p, resolveName));
   } catch (err: unknown) {
-    const e = err as { status?: number; message?: string };
-    if (e.status === 404) {
-      return done(404, { error: "GitHub repo not found or token lacks access", repoUrl: project.repoUrl });
-    }
-    if (e.status === 403 || e.status === 429) {
-      return done(429, { error: "GitHub rate limit exceeded" });
-    }
-    return done(502, { error: "Failed to fetch GitHub stats", detail: e.message ?? String(err) });
+    const failure = classifyGithubFailure(err);
+    console.error(`[analyze] project ${projectId}: GitHub read failed (${failure.code}):`, err instanceof Error ? err.message : err);
+    return done(failure.status, githubFailureBody(failure.code, failure.status === 404 ? { repoUrl: project.repoUrl } : {}));
   }
 
   console.log(`[analyze] project ${projectId}: GitHub returned ${rawData.contributors.length} contributor(s): ${rawData.contributors.map((c) => c.githubUsername).join(", ")}`);
@@ -490,7 +480,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
   // Clear stale flags — report now reflects current membership and scoring config
   await prisma.project.update({
     where: { id: projectId },
-    data:  { membershipChangedAt: null, scoringConfigChangedAt: null },
+    data:  { membershipChangedAt: null, scoringConfigChangedAt: null, lastAutoFailureAt: null, lastAutoFailureCode: null },
   });
 
   // Fire-and-forget: generate alerts for at-risk groups. Never blocks the response.
