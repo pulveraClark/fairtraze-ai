@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { DisputesPage } from "./DisputesPage";
@@ -41,5 +41,29 @@ describe("DisputesPage", () => {
     );
     await screen.findByRole("heading", { name: "Disputes" });
     expect(screen.queryByText(/back to dashboard/i)).toBeNull();
+  });
+
+  it("opening the response window marks the note as seen, once, with no extra click", async () => {
+    const open = {
+      id: 5, memberName: "Ana", reason: "Offline work.", status: "OPEN", instructorResponse: null, disputedFlags: [],
+      createdAt: "2026-10-18T10:00:00Z", seenAt: null, resolvedAt: null,
+      project: { id: 3, groupName: "Group A", name: "App", assignment: null },
+    };
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => (String(url).includes("/seen") ? { seenAt: "2026-10-19T10:00:00Z" } : { disputes: [open], openCount: 1 }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RouterProvider><DisputesPage /></RouterProvider>
+      </QueryClientProvider>,
+    );
+    const seenCalls = () => fetchMock.mock.calls.filter(([u]) => String(u).includes("/api/disputes/5/seen"));
+    const button = await screen.findByRole("button", { name: /Respond/ });
+    expect(seenCalls()).toHaveLength(0);
+    fireEvent.click(button);
+    await waitFor(() => expect(seenCalls()).toHaveLength(1));
+    expect(fetchMock.mock.calls.find(([u]) => String(u).includes("/seen"))![1]).toMatchObject({ method: "POST" });
   });
 });

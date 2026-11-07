@@ -80,13 +80,13 @@ describe("StudentGroupPage", () => {
     expect(screen.getByRole("button", { name: "Send note" })).toBeTruthy();
   });
 
-  it("an open note reads 'Note status: Open - awaiting review' and 'Your note is open…'", () => {
+  it("an unopened note reads 'Note status: Sent' and 'Your note is open…'", () => {
     window.history.pushState({}, "", REPORT);
     state.data = flagged();
     state.notes = [{ id: 1, projectId: 1, status: "OPEN", reason: "Offline work", instructorResponse: null, disputedFlags: '["inactive"]', createdAt: "2026-10-18T10:00:00Z", resolvedAt: null }];
     renderPage();
     expect(screen.getByText("Note status:")).toBeTruthy();
-    expect(screen.getAllByText("Open - awaiting review").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sent").length).toBeGreaterThan(0);
     expect(screen.getByText("Your note is open and awaiting instructor review.")).toBeTruthy();
     expect(screen.queryByText(/dispute/i)).toBeNull();
   });

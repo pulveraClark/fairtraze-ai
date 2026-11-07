@@ -1,5 +1,5 @@
 import { StatusPill } from "./ui/StatusPill";
-import { NOTE_STATUS, noteFlags, type StudentNote } from "../lib/notes";
+import { NOTE_STAGE, noteFlags, noteOutcomeText, noteStage, type StudentNote } from "../lib/notes";
 import { studentFlagLabels } from "../lib/studentDisplay";
 
 function fmt(iso: string): string {
@@ -16,7 +16,8 @@ interface Props {
 
 /** One filed note: what the student wrote, its status in words, and the instructor's reply if there is one. */
 export function StudentNoteCard({ note, groupName, onOpenGroup, highlighted = false }: Props) {
-  const status = NOTE_STATUS[note.status];
+  const stage = noteStage(note);
+  const status = NOTE_STAGE[stage];
   const flags = noteFlags(note);
   return (
     <article
@@ -43,12 +44,16 @@ export function StudentNoteCard({ note, groupName, onOpenGroup, highlighted = fa
       {note.instructorResponse ? (
         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs font-semibold text-slate-700">
-            Instructor reply{note.resolvedAt ? ` - ${fmt(note.resolvedAt)}` : ""}
+            {noteOutcomeText(note.status)}{note.resolvedAt ? ` · ${fmt(note.resolvedAt)}` : ""}
           </p>
           <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-900">{note.instructorResponse}</p>
         </div>
-      ) : note.status === "OPEN" ? (
-        <p className="mt-3 text-xs text-slate-700">Your instructor has not replied yet. You will get a notification when they do.</p>
+      ) : stage === "sent" ? (
+        <p className="mt-3 text-xs text-slate-700">Your instructor hasn't opened it yet. You will get a notification when they reply.</p>
+      ) : stage === "seen" ? (
+        <p className="mt-3 text-xs text-slate-700">
+          Your instructor opened it{note.seenAt ? ` on ${fmt(note.seenAt)}` : ""}. A reply will show here, and you will get a notification.
+        </p>
       ) : null}
     </article>
   );

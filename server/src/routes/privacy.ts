@@ -88,7 +88,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     }),
     prisma.dispute.findMany({
       where:  { studentUserId: userId },
-      select: { id: true, projectId: true, reason: true, status: true, instructorResponse: true, disputedFlags: true, createdAt: true, resolvedAt: true },
+      select: { id: true, projectId: true, reason: true, status: true, instructorResponse: true, disputedFlags: true, createdAt: true, seenAt: true, resolvedAt: true },
     }),
     prisma.alert.findMany({
       where:  { OR: [{ recipientId: userId }, { instructorId: userId }] },

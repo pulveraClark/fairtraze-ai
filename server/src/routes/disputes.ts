@@ -274,6 +274,48 @@ disputesRouter.get("/api/projects/:id/disputes", ...requireRole("INSTRUCTOR"), a
   res.json({ disputes });
 });
 
+// ── POST /api/disputes/:id/seen ───────────────────────────────────────────────
+// The owning instructor opened the dispute. Sets seenAt once (idempotent: a later call keeps the
+// first time). Owner only, sends no alert, changes nothing else. Display only.
+
+disputesRouter.post("/api/disputes/:id/seen", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid dispute id" });
+    return;
+  }
+
+  const dispute = await prisma.dispute.findUnique({
+    where:  { id: idResult.data },
+    select: {
+      id: true, seenAt: true,
+      project: { select: { assignment: { select: { classSection: { select: { instructorId: true } } } } } },
+    },
+  });
+
+  if (!dispute) {
+    res.status(404).json({ error: "Dispute not found" });
+    return;
+  }
+  if (dispute.project.assignment?.classSection.instructorId !== req.user!.sub) {
+    res.status(403).json({ error: "You do not have access to this dispute." });
+    return;
+  }
+
+  if (dispute.seenAt) {
+    res.json({ seenAt: dispute.seenAt });
+    return;
+  }
+
+  // updateMany with seenAt: null keeps the first time even if two tabs call at once.
+  await prisma.dispute.updateMany({
+    where: { id: dispute.id, seenAt: null },
+    data:  { seenAt: new Date() },
+  });
+  const after = await prisma.dispute.findUnique({ where: { id: dispute.id }, select: { seenAt: true } });
+  res.json({ seenAt: after?.seenAt ?? null });
+});
+
 // ── POST /api/disputes/:id/resolve ────────────────────────────────────────────
 // Instructor resolves or dismisses an OPEN dispute. Ownership-checked.
 
@@ -322,12 +364,15 @@ disputesRouter.post("/api/disputes/:id/resolve", ...requireRole("INSTRUCTOR"), a
     return;
   }
 
+  const now = new Date();
   const updated = await prisma.dispute.update({
     where: { id: dispute.id },
     data: {
       status:             bodyResult.data.status,
       instructorResponse: bodyResult.data.instructorResponse,
-      resolvedAt:         new Date(),
+      resolvedAt:         now,
+      // Replying implies it was seen, so "Seen" never reads later than "Answered".
+      seenAt:             dispute.seenAt ?? now,
     },
   });
 

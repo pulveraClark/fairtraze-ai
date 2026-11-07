@@ -29,14 +29,22 @@ describe("StudentNotesPage", () => {
     expect(screen.getByText(/You have not sent a note/)).toBeInTheDocument();
   });
 
-  it("shows an open note with its status in words and no reply yet", () => {
+  it("shows an unopened note as Sent, with no reply yet", () => {
     state.data = [note({})];
     renderPage();
-    expect(screen.getByText("Open - awaiting review")).toBeInTheDocument();
+    expect(screen.getByText("Sent")).toBeInTheDocument();
     expect(screen.getByText("Most of my work was offline research.")).toBeInTheDocument();
     expect(screen.getByText("Group Alpha")).toBeInTheDocument();
-    expect(screen.getByText(/has not replied yet/)).toBeInTheDocument();
+    expect(screen.getByText(/hasn't opened it yet/)).toBeInTheDocument();
     expect(screen.getByText(/About: Low contribution/)).toBeInTheDocument();
+  });
+
+  it("shows a note the instructor opened as Seen, with the date only", () => {
+    state.data = [note({ seenAt: "2026-10-19T15:45:00Z" })];
+    renderPage();
+    expect(screen.getByText("Seen")).toBeInTheDocument();
+    expect(screen.getByText(/Your instructor opened it on Oct 19, 2026\. A reply will show here/)).toBeInTheDocument();
+    expect(screen.queryByText(/3:45|15:45/)).toBeNull();
   });
 
   it("shows the instructor reply on a reviewed note, newest note first", () => {
@@ -45,7 +53,8 @@ describe("StudentNotesPage", () => {
       note({ id: 2, createdAt: "2026-10-05T10:00:00Z", status: "RESOLVED", instructorResponse: "Thanks, noted.", resolvedAt: "2026-10-06T10:00:00Z", disputedFlags: "" }),
     ];
     renderPage();
-    expect(screen.getByText("Reviewed - accepted")).toBeInTheDocument();
+    expect(screen.getByText("Answered")).toBeInTheDocument();
+    expect(screen.getByText(/Your instructor accepted your note · Oct 6, 2026/)).toBeInTheDocument();
     expect(screen.getByText("Thanks, noted.")).toBeInTheDocument();
     const articles = screen.getAllByRole("article");
     expect(articles[0]!.id).toBe("note-2");

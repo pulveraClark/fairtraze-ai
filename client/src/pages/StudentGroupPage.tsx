@@ -21,7 +21,7 @@ import { useRouter } from "../router";
 import { StudentNoteCard } from "../components/StudentNoteCard";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { quietSourceText } from "../lib/groupActivity";
-import { NOTE_STATUS, sortNotes } from "../lib/notes";
+import { NOTE_STAGE, noteStage, sortNotes } from "../lib/notes";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
@@ -123,6 +123,7 @@ interface DisputeRecord {
   instructorResponse: string | null;
   disputedFlags:      string; // JSON array of flags captured at submission; "" = legacy (all flags)
   createdAt:          string;
+  seenAt?:            string | null;
   resolvedAt:         string | null;
 }
 
@@ -1055,7 +1056,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs font-bold uppercase tracking-wide">Note status:</span>
                                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${DISPUTE_STATUS_STYLE[dispute.status]}`}>
-                                          {NOTE_STATUS[dispute.status].label}
+                                          {NOTE_STAGE[noteStage(dispute)].label}
                                         </span>
                                       </div>
                                       <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{dispute.reason}</p>

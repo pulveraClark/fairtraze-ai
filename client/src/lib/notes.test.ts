@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { noteFlags, sortNotes, NOTE_STATUS } from "./notes";
+import { noteFlags, sortNotes, noteStage, noteOutcomeText, NOTE_STAGE } from "./notes";
 
 describe("notes helpers", () => {
   it("reads the flags captured at submission and tolerates legacy or broken values", () => {
@@ -13,9 +13,20 @@ describe("notes helpers", () => {
     expect(sortNotes(input).map((n) => n.createdAt.slice(8, 10))).toEqual(["03", "02", "01"]);
     expect(input[0]!.createdAt.slice(8, 10)).toBe("01");
   });
-  it("words every status in text", () => {
-    expect(NOTE_STATUS.OPEN.label).toMatch(/awaiting/i);
-    expect(NOTE_STATUS.RESOLVED.label).toMatch(/accepted/i);
-    expect(NOTE_STATUS.DISMISSED.label).toMatch(/upheld/i);
+  it("words every stage in text: Sent, Seen, Answered", () => {
+    expect(NOTE_STAGE.sent.label).toBe("Sent");
+    expect(NOTE_STAGE.seen.label).toBe("Seen");
+    expect(NOTE_STAGE.answered.label).toBe("Answered");
+  });
+  it("is Sent until the instructor opens it, Seen after, Answered once replied", () => {
+    expect(noteStage({ status: "OPEN", seenAt: null })).toBe("sent");
+    expect(noteStage({ status: "OPEN" })).toBe("sent"); // notes from before seenAt existed
+    expect(noteStage({ status: "OPEN", seenAt: "2026-10-19T10:00:00Z" })).toBe("seen");
+    expect(noteStage({ status: "RESOLVED", seenAt: null })).toBe("answered");
+    expect(noteStage({ status: "DISMISSED", seenAt: "2026-10-19T10:00:00Z" })).toBe("answered");
+  });
+  it("states the instructor's decision in plain words", () => {
+    expect(noteOutcomeText("RESOLVED")).toBe("Your instructor accepted your note");
+    expect(noteOutcomeText("DISMISSED")).toBe("Your instructor kept the result");
   });
 });

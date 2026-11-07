@@ -78,6 +78,15 @@ function ResolveModal({
 
   useEffect(() => { textareaRef.current?.focus(); }, []);
 
+  // Opening the response window marks the note "Seen" for the student. Automatic, idempotent on the
+  // server, silent on failure: the instructor never has to do or see anything extra.
+  useEffect(() => {
+    void fetch(`/api/disputes/${dispute.id}/seen`, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => { /* display-only; ignore */ });
+  }, [dispute.id, token]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!response.trim()) { setError("Please provide a response."); return; }
