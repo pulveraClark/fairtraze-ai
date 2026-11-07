@@ -44,6 +44,7 @@ import {
 } from "./middleware/security.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
 import { isEmailEnabled } from "./lib/emailConfig.js";
+import { SERVER_ERROR_TEXT } from "@shared/failureMessages.js";
 
 // Builds the Express app without binding a port or attaching the collab
 // WebSocket servers — split out from index.ts so tests (supertest) and the
@@ -151,13 +152,22 @@ export function createApp() {
 
   app.use(
     (
-      err: Error,
+      err: Error & { status?: number; statusCode?: number },
       _req: express.Request,
       res: express.Response,
       _next: express.NextFunction
     ) => {
+      // The real error always goes to the server log.
       console.error(err);
-      res.status(500).json({ error: err.message ?? "Internal server error" });
+      // A request the client got wrong (malformed JSON, a body over the size limit) keeps its message and its 4xx
+      // status. Anything else is our fault (HTTP 500 and above): one generic sentence, never the exception text,
+      // which can name tables, hosts or keys.
+      const status = Number(err.status ?? err.statusCode);
+      if (status >= 400 && status < 500) {
+        res.status(status).json({ error: err.message });
+        return;
+      }
+      res.status(status >= 500 && status < 600 ? status : 500).json({ code: "SERVER_ERROR", error: SERVER_ERROR_TEXT });
     }
   );
 

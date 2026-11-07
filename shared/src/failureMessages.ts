@@ -29,6 +29,10 @@ export const ANALYSIS_FAILURE_TEXT: Record<AnalysisFailureCode, string> = {
     "The analysis didn't finish. Try again in a few minutes. If it keeps happening, contact the FairTraze team.",
 };
 
+/** Any uncaught server error (HTTP 500 and above) on any route: one sentence, no internals, nobody blamed. */
+export const SERVER_ERROR_TEXT =
+  "Something went wrong on our side. Try again in a few minutes. If it keeps happening, contact the FairTraze team.";
+
 export function isAnalysisFailureCode(code: unknown): code is AnalysisFailureCode {
   return typeof code === "string" && code in ANALYSIS_FAILURE_TEXT;
 }
