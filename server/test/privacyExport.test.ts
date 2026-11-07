@@ -61,4 +61,19 @@ describe("GET /api/privacy/export", () => {
       expect(raw).not.toContain(leak);
     }
   });
+
+  it("exports when the instructor opened the caller's own note (seenAt)", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+    const cs = await createClassSection(instructor.id);
+    const asgn = await createAssignment(cs.id, { sourceType: "COMBINED" });
+    const project = await createProject({ assignmentId: asgn.id });
+    const { user: me } = await createUser({ systemRole: "STUDENT", name: "Maria Santos", email: "maria2@uclm.edu.ph" });
+    await createMembership(me.id, project.id, "LEADER");
+    const seenAt = new Date("2026-10-19T15:45:00Z");
+    await prisma.dispute.create({ data: { projectId: project.id, studentUserId: me.id, memberName: "Maria Santos", reason: "Offline work", seenAt } });
+
+    const res = await request(app).get("/api/privacy/export").set("Authorization", authHeaderFor(me));
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.text).disputes[0].seenAt).toBe(seenAt.toISOString());
+  });
 });

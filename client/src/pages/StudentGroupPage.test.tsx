@@ -91,6 +91,21 @@ describe("StudentGroupPage", () => {
     expect(screen.queryByText(/dispute/i)).toBeNull();
   });
 
+  it("the per-flag badge states the instructor's decision in plain words, with no verdict on the student", () => {
+    window.history.pushState({}, "", REPORT);
+    state.data = flagged();
+    const base = { id: 1, projectId: 1, reason: "Offline work", disputedFlags: '["inactive"]', createdAt: "2026-10-18T10:00:00Z", resolvedAt: "2026-10-19T10:00:00Z" };
+    state.notes = [{ ...base, status: "RESOLVED", instructorResponse: "Thanks." }];
+    const { unmount } = renderPage();
+    expect(screen.getAllByText("Your instructor accepted your note").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Reviewed|Accepted|Upheld/)).toBeNull();
+    unmount();
+    state.notes = [{ ...base, status: "DISMISSED", instructorResponse: "Result stands." }];
+    renderPage();
+    expect(screen.getAllByText("Your instructor kept the result").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Reviewed|Accepted|Upheld/)).toBeNull();
+  });
+
   it("shows one calm line when the report uses older scoring rules, and nothing otherwise", () => {
     window.history.pushState({}, "", REPORT);
     state.data = groupFixture({ rulesOutdated: true });

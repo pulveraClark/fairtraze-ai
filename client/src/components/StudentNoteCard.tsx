@@ -1,10 +1,8 @@
 import { StatusPill } from "./ui/StatusPill";
-import { NOTE_STAGE, noteFlags, noteOutcomeText, noteStage, type StudentNote } from "../lib/notes";
+import { NOTE_STAGE, formatNoteDate, noteFlags, noteOutcomeText, noteStage, type StudentNote } from "../lib/notes";
 import { studentFlagLabels } from "../lib/studentDisplay";
 
-function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+const fmt = formatNoteDate;
 
 interface Props {
   note: StudentNote;

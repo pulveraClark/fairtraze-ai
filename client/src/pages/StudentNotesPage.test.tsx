@@ -47,6 +47,14 @@ describe("StudentNotesPage", () => {
     expect(screen.queryByText(/3:45|15:45/)).toBeNull();
   });
 
+  it("shows a late-evening time on the Manila day, not the browser's", () => {
+    // 4:30 PM UTC on Oct 19 is 12:30 AM on Oct 20 in Manila.
+    state.data = [note({ createdAt: "2026-10-19T16:30:00Z", seenAt: "2026-10-19T16:30:00Z" })];
+    renderPage();
+    expect(screen.getByText("Filed Oct 20, 2026")).toBeInTheDocument();
+    expect(screen.getByText(/Your instructor opened it on Oct 20, 2026\./)).toBeInTheDocument();
+  });
+
   it("shows the instructor reply on a reviewed note, newest note first", () => {
     state.data = [
       note({ id: 1, createdAt: "2026-10-01T10:00:00Z" }),

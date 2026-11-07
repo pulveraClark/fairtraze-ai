@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { noteFlags, sortNotes, noteStage, noteOutcomeText, NOTE_STAGE } from "./notes";
+import { noteFlags, sortNotes, noteStage, noteOutcomeText, formatNoteDate, NOTE_STAGE } from "./notes";
 
 describe("notes helpers", () => {
   it("reads the flags captured at submission and tolerates legacy or broken values", () => {
@@ -24,6 +24,13 @@ describe("notes helpers", () => {
     expect(noteStage({ status: "OPEN", seenAt: "2026-10-19T10:00:00Z" })).toBe("seen");
     expect(noteStage({ status: "RESOLVED", seenAt: null })).toBe("answered");
     expect(noteStage({ status: "DISMISSED", seenAt: "2026-10-19T10:00:00Z" })).toBe("answered");
+  });
+  it("dates use the school's Manila day, date only, whatever the browser's time zone", () => {
+    expect(formatNoteDate("2026-10-19T15:59:00Z")).toBe("Oct 19, 2026"); // 11:59 PM in Manila
+    expect(formatNoteDate("2026-10-19T16:00:00Z")).toBe("Oct 20, 2026"); // midnight in Manila: the next day
+    expect(formatNoteDate("2026-10-19T16:30:00Z")).toBe("Oct 20, 2026"); // 12:30 AM in Manila
+    expect(formatNoteDate("2026-10-19T00:30:00Z")).toBe("Oct 19, 2026");
+    expect(formatNoteDate("2026-10-19T15:45:00Z")).not.toMatch(/\d:\d\d/);
   });
   it("states the instructor's decision in plain words", () => {
     expect(noteOutcomeText("RESOLVED")).toBe("Your instructor accepted your note");

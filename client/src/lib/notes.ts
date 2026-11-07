@@ -30,6 +30,12 @@ export function noteStage(note: Pick<StudentNote, "status" | "seenAt">): NoteSta
   return note.seenAt ? "seen" : "sent";
 }
 
+/** "Oct 20, 2026" on the school's calendar day (Asia/Manila), like tasks and the analysis days: a late-evening
+ *  time never shows the next or previous day because of the browser's own time zone. Date only, no time. */
+export function formatNoteDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" });
+}
+
 /** Plain words for the instructor's decision, shown in the reply header. */
 export function noteOutcomeText(status: StudentNote["status"]): string {
   if (status === "RESOLVED") return "Your instructor accepted your note";

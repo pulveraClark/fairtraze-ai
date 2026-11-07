@@ -21,7 +21,7 @@ import { useRouter } from "../router";
 import { StudentNoteCard } from "../components/StudentNoteCard";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { quietSourceText } from "../lib/groupActivity";
-import { NOTE_STAGE, noteStage, sortNotes } from "../lib/notes";
+import { NOTE_STAGE, noteOutcomeText, noteStage, sortNotes } from "../lib/notes";
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
@@ -1029,16 +1029,17 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                   {(() => {
                                     const outcome = getFlagDisputeOutcome(flag, dispute);
                                     if (!outcome) return null;
+                                    // Same plain words as the reply header on the note card: the instructor's decision, no verdict on the student.
                                     if (outcome === "RESOLVED") {
                                       return (
                                         <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-50 border-emerald-200">
-                                          Reviewed — Accepted
+                                          {noteOutcomeText("RESOLVED")}
                                         </span>
                                       );
                                     }
                                     return (
-                                      <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-500 bg-slate-50 border-slate-200">
-                                        Reviewed — Upheld
+                                      <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-700 bg-slate-50 border-slate-200">
+                                        {noteOutcomeText("DISMISSED")}
                                       </span>
                                     );
                                   })()}
