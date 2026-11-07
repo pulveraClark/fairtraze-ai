@@ -215,8 +215,8 @@ describe("MemberDrawer", () => {
     const counted = screen.getByRole("button", { name: /How this was counted/ });
     expect(counted).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(counted);
-    expect(screen.getByText(/GitHub's raw line totals still include them/)).toBeInTheDocument();
-    expect(screen.getByText("Scoring rules version 2.")).toBeInTheDocument();
+    expect(screen.getByText(/Auto-generated files \(for example lock files\)/)).toBeInTheDocument();
+    expect(screen.getByText("Scoring rules v2.")).toBeInTheDocument();
     expect(screen.getByText("Work outside GitHub and FairTraze Docs is not counted.")).toBeInTheDocument();
   });
 

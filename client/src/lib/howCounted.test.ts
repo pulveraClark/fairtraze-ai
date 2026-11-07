@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { OUTSIDE_WORK_LINE, howCounted, selfDeletedChars } from "./howCounted";
+import { GITHUB_SAMPLE_NOTE, OUTSIDE_WORK_LINE, howCounted, selfDeletedChars } from "./howCounted";
 import { ownCountedInput } from "./contributionStats";
 
-const all = (m: ReturnType<typeof howCounted>) => [...m.blocks.flatMap((b) => b.groups.map((g) => g.text)), ...m.footer].join(" ");
+const all = (m: ReturnType<typeof howCounted>) => [...m.blocks.flatMap((b) => [b.note ?? "", ...b.groups.flatMap((g) => g.items)]), ...m.footer].join("\n");
 
 describe("howCounted", () => {
-  it("GitHub-only member: three groups, counts filled in, rules version and outside-work line last", () => {
+  it("GitHub-only member: three groups, one item per line, counts filled in, rules version and outside-work line last", () => {
     const m = howCounted({ voice: "member", github: { commentLines: 1200, blankLines: 340 }, docs: null, rulesVersion: 2 });
     expect(m.blocks.map((b) => b.source)).toEqual(["GitHub"]);
-    expect(m.blocks[0].groups.map((g) => g.label)).toEqual(["Counted", "Counted less", "Not counted"]);
-    expect(all(m)).toContain("a quarter (1,200 lines)");
+    expect(m.blocks[0].groups.map((g) => g.label)).toEqual(["Counts fully", "Counts less", "Does not count"]);
+    expect(m.blocks[0].groups.map((g) => g.symbol)).toEqual(["✓", "↓", "✕"]);
+    expect(m.blocks[0].groups.map((g) => g.tone)).toEqual(["full", "less", "none"]);
+    expect(m.blocks[0].groups.every((g) => g.items.every((i) => !i.includes(". ")))).toBe(true);
+    expect(all(m)).toContain("Comment lines count 25% (1,200 lines)");
+    expect(all(m)).toContain("by up to 50%");
     expect(all(m)).toContain("Blank lines (340 lines)");
-    expect(all(m)).toContain("lock files");
-    expect(all(m)).toContain("Line counts come from up to 100 commits per member.");
-    expect(m.footer).toEqual(["Scoring rules version 2.", OUTSIDE_WORK_LINE]);
+    expect(all(m)).toContain("Auto-generated files (for example lock files)");
+    expect(all(m)).not.toMatch(/raw line totals|a quarter|build output/);
+    expect(m.blocks[0].note).toBe(GITHUB_SAMPLE_NOTE);
+    expect(GITHUB_SAMPLE_NOTE).toBe("Lines are counted from each member's 100 most recent commits. Commits and active days use the full history.");
+    expect(m.footer).toEqual(["Scoring rules v2.", OUTSIDE_WORK_LINE]);
   });
 
   it("omits counts that are zero or unknown, and the rules line when the version is unknown", () => {
@@ -34,23 +40,24 @@ describe("howCounted", () => {
     const text = all(m);
     expect(text).toContain("still in the document (700 characters)");
     expect(text).toContain("(about 250 characters)");
-    expect(text).toContain("Text imported from a Word file is counted by an estimate.");
+    expect(text).toContain("Text imported from a Word file is counted by an estimate");
   });
 
-  it("Docs wording: small wording and spacing edits are only under Counted less (with its real weights), the Not counted line names style changes, no 'trivial'/'.docx'", () => {
+  it("Docs wording: small wording and spacing edits are only under Counts less (with its real weights), Does not count names style changes, no 'trivial'/'.docx'", () => {
     const m = howCounted({ voice: "member", github: null, docs: { retainedChars: 10 }, rulesVersion: 2 });
-    const [counted, less, not] = m.blocks[0].groups.map((g) => g.text);
-    expect(less).toContain("Small wording and spacing edits count about 30% and tiny edits about 10%.");
-    expect(not).toContain("Style changes that leave the text the same, such as bold or headings.");
+    const [counted, less, not] = m.blocks[0].groups.map((g) => g.items.join("\n"));
+    expect(less).toContain("Small wording and spacing edits count about 30%");
+    expect(less).toContain("Tiny edits count about 10%");
+    expect(not).toContain("Style changes that leave the text the same, such as bold or headings");
     expect(not).not.toMatch(/formatting/i);
     expect(counted).not.toMatch(/formatting/i);
     expect(all(m)).not.toMatch(/trivial|\.docx/i);
   });
 
   it("images: no per-project image credit exists, so the sentence is the same for 0, 1 or many images and never claims credit", () => {
-    const say = (images: number) => howCounted({ voice: "member", github: null, docs: { images }, rulesVersion: 2 }).blocks[0].groups[2].text;
+    const say = (images: number) => howCounted({ voice: "member", github: null, docs: { images }, rulesVersion: 2 }).blocks[0].groups[2].items.join("\n");
     for (const n of [0, 1, 12]) {
-      expect(say(n)).toContain("Images are shown but not scored.");
+      expect(say(n)).toContain("Images are shown but not scored");
       expect(say(n)).not.toMatch(/never scored|short paragraph|up to 5/);
     }
     expect(say(0)).toBe(say(12));

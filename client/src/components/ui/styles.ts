@@ -15,3 +15,10 @@ export const BUTTON_SECONDARY_COMPACT = compact(BUTTON_SECONDARY);
 export const BUTTON_PRIMARY_COMPACT = compact(BUTTON_PRIMARY);
 
 export const CARD = "rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+
+/** "How this was counted" tones. Soft green / amber / gray, never red (red is for risk flags). Always paired with a symbol and text. */
+export const COUNT_TONE = {
+  full: { chip: "bg-[#E3F3E8] text-[#1F5130]", border: "border-[#5BAA7A]" },
+  less: { chip: "bg-[#FBF0D5] text-[#6A4A05]", border: "border-[#D9A441]" },
+  none: { chip: "bg-[#ECEEF1] text-[#3A424C]", border: "border-[#AEB6BF]" },
+} as const;

@@ -67,10 +67,45 @@ try {
           const region = page.getByRole("region", { name: "How this was counted" });
           const text = await region.innerText();
           check(text.includes("Work outside GitHub and FairTraze Docs is not counted."), "outside-work line is shown");
-          check(text.includes("Scoring rules version 2."), "rules version is shown");
+          check(text.includes("Scoring rules v2."), "rules version is shown as \"v2\"");
           check(/about [\d,]+ characters/.test(text), "self-deleted Docs count is worded 'about N characters'");
           check(!/here|harness|undefined|NaN/i.test(text), "no 'here' and no harness notes in the text");
-          check(text.includes("Images are shown but not scored.") && !/never scored/.test(text), "image sentence is the plain one");
+          check(text.includes("Images are shown but not scored") && !/never scored/.test(text), "image sentence is the plain one");
+          check(/Counts fully/.test(text) && /Counts less/.test(text) && /Does not count/.test(text) && !/Counted|Not counted/.test(text), "labels are Counts fully / Counts less / Does not count");
+          check(text.includes("Auto-generated files (for example lock files)") && !/raw line totals|build output/.test(text), "plain words for generated files");
+          check(text.includes("Lines are counted from each member's 100 most recent commits. Commits and active days use the full history."), "GitHub sample note is shown");
+          check(/25%/.test(text) && /up to 50%/.test(text) && /30%/.test(text) && /10%/.test(text), "percentages shown as 25%, 30%, 10%, up to 50%");
+          const f = await region.evaluate((r) => {
+            const px = (e) => parseFloat(getComputedStyle(e).fontSize);
+            const q = (sel) => [...r.querySelectorAll(sel)];
+            const sections = q("section");
+            const chips = q("h5");
+            const rows = chips.map((c) => c.parentElement);
+            const gaps = sections.slice(0, -1).map((sec, i) => Math.round(sections[i + 1].getBoundingClientRect().top - sec.getBoundingClientRect().bottom));
+            return {
+              headings: q("h4").length, lists: q("ul").length, chips: chips.length,
+              items: q("li").map(px), chipSizes: chips.map(px), headingSizes: q("h4").map(px),
+              footer: q("div.space-y-1 > p").map(px),
+              notes: q("section > p").map(px),
+              chipBold: chips.every((c) => parseInt(getComputedStyle(c).fontWeight, 10) >= 700),
+              chipSymbols: chips.every((c) => /^[✓↓✕]/.test(c.textContent.trim())),
+              borders: rows.map((e) => getComputedStyle(e).borderLeftWidth),
+              chipWidths: chips.map((c) => Math.round(c.getBoundingClientRect().width)),
+              chipAbove: chips.every((c) => c.getBoundingClientRect().bottom <= c.parentElement.querySelector("ul").getBoundingClientRect().top + 1),
+              gaps,
+              order: sections.map((sec) => [...sec.querySelectorAll("h5")].map((h) => h.textContent.trim().replace(/^Ss*/, "")).join(">")),
+            };
+          });
+          console.log("   computed:", JSON.stringify({ items: [...new Set(f.items)], chips: [...new Set(f.chipSizes)], headings: [...new Set(f.headingSizes)], footer: [...new Set(f.footer)], notes: [...new Set(f.notes)], chipWidths: [...new Set(f.chipWidths)], borders: [...new Set(f.borders)], gaps: f.gaps, chipAbove: f.chipAbove }));
+          check(f.headings >= 1 && f.lists === f.chips && f.chips >= 3, "real headings and lists (h4 per source, h5 chip, ul per group)");
+          check(f.order.every((o) => o.replace(/[✓↓✕]/g, "") === "Counts fully>Counts less>Does not count"), "same order in every source " + f.order.join(" | "));
+          check(f.chipBold && f.chipSymbols, "chips are bold and start with a symbol");
+          check(f.borders.every((b) => b === "3px"), "left border is 3px");
+          check(Math.min(...f.items, ...f.chipSizes, ...f.headingSizes, ...f.footer) >= 14, "computed font size of body, chips, headings and footer is at least 14px");
+          check(f.notes.every((n) => n >= 13), "notes line is at least 13px");
+          if (width >= 640) check(f.chipWidths.every((w) => w === 150) && !f.chipAbove, "chip is 150px wide, beside its text");
+          else check(f.chipAbove, "chip stacks above its text at 375px");
+          if (f.gaps.length) check(f.gaps.every((g) => g === 24), "24px between the GitHub and Docs sections (" + f.gaps.join(",") + ")");
           if (scene === "student") {
             check(!/gini|band|index|share/i.test(text), "student text has no Gini, band, index or share wording");
             check(!text.includes("the member"), "student text speaks to 'you'");

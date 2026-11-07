@@ -24,18 +24,28 @@ export interface HowCountedInput {
   rulesVersion?: number | null;
 }
 
+export type CountedTone = "full" | "less" | "none";
 export interface CountedGroup {
-  label: "Counted" | "Counted less" | "Not counted";
-  text: string;
+  label: "Counts fully" | "Counts less" | "Does not count";
+  /** Shown beside the label so colour is never the only signal. */
+  symbol: "✓" | "↓" | "✕";
+  tone: CountedTone;
+  /** One short line each. */
+  items: string[];
 }
 export interface CountedBlock {
   source: "GitHub" | "FairTraze Docs";
+  /** Small note under the source heading. */
+  note?: string;
   groups: CountedGroup[];
 }
 export interface HowCountedModel {
   blocks: CountedBlock[];
   footer: string[];
 }
+
+export const GITHUB_SAMPLE_NOTE =
+  "Lines are counted from each member's 100 most recent commits. Commits and active days use the full history.";
 
 const n = (v: number) => v.toLocaleString("en-US");
 const positive = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -52,26 +62,31 @@ export function selfDeletedChars(ratio: number | null | undefined, inserted: num
 
 export function howCounted(input: HowCountedInput): HowCountedModel {
   const who = input.voice === "you" ? "you" : "the member";
+  const self = input.voice === "you" ? "yourself" : "themselves";
   const blocks: CountedBlock[] = [];
+  const group = (tone: CountedTone, items: string[]): CountedGroup =>
+    tone === "full"
+      ? { label: "Counts fully", symbol: "✓", tone, items }
+      : tone === "less"
+        ? { label: "Counts less", symbol: "↓", tone, items }
+        : { label: "Does not count", symbol: "✕", tone, items };
 
   if (input.github) {
     blocks.push({
       source: "GitHub",
+      note: GITHUB_SAMPLE_NOTE,
       groups: [
-        { label: "Counted", text: "Code lines at full weight, and commits. Line counts come from up to 100 commits per member." },
-        {
-          label: "Counted less",
-          text:
-            `Comment lines count ${LINE_TYPE_WEIGHTS.comment === 0.25 ? "a quarter" : `${LINE_TYPE_WEIGHTS.comment}×`}${count(input.github.commentLines, "lines")}. ` +
-            "Test, style, docs and config files count less than source files. " +
-            `Lines ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"} lower the total, by up to half.`,
-        },
-        {
-          label: "Not counted",
-          text:
-            `Blank lines${count(input.github.blankLines, "lines")}. ` +
-            "Generated files such as lock files and build output (GitHub's raw line totals still include them). Merge commits.",
-        },
+        group("full", ["Code lines at full weight", "Commits"]),
+        group("less", [
+          `Comment lines count ${pct(LINE_TYPE_WEIGHTS.comment)}${count(input.github.commentLines, "lines")}`,
+          "Test, style, docs and config files count less than source files",
+          `Lines ${who} later deleted ${self} lower the total, by up to ${pct(0.5)}`,
+        ]),
+        group("none", [
+          `Blank lines${count(input.github.blankLines, "lines")}`,
+          "Auto-generated files (for example lock files)",
+          "Merge commits",
+        ]),
       ],
     });
   }
@@ -82,25 +97,24 @@ export function howCounted(input: HowCountedInput): HowCountedModel {
     blocks.push({
       source: "FairTraze Docs",
       groups: [
-        { label: "Counted", text: `Text ${who} wrote that is still in the document${count(d.retainedChars, "characters")}.` },
-        {
-          label: "Counted less",
-          text:
-            `Small wording and spacing edits count about ${pct(EDIT_TYPE_WEIGHT.formatting)} and tiny edits about ${pct(EDIT_TYPE_WEIGHT.trivial)}. ` +
-            `Text ${who} later deleted ${input.voice === "you" ? "yourself" : "themselves"}${about(deleted, "characters")}.` +
-            (positive(d.importedChars) ? " Text imported from a Word file is counted by an estimate." : ""),
-        },
-        {
-          label: "Not counted",
+        group("full", [`Text ${who} wrote that is still in the document${count(d.retainedChars, "characters")}`]),
+        group("less", [
+          `Small wording and spacing edits count about ${pct(EDIT_TYPE_WEIGHT.formatting)}`,
+          `Tiny edits count about ${pct(EDIT_TYPE_WEIGHT.trivial)}`,
+          `Text ${who} later deleted ${self}${about(deleted, "characters")}`,
+          ...(positive(d.importedChars) ? ["Text imported from a Word file is counted by an estimate"] : []),
+        ]),
+        group("none", [
           // No per-project image credit exists: inserted images are disclosed, never scored (see CLAUDE.md "Image insertion").
-          text: "Style changes that leave the text the same, such as bold or headings. Images are shown but not scored.",
-        },
+          "Style changes that leave the text the same, such as bold or headings",
+          "Images are shown but not scored",
+        ]),
       ],
     });
   }
 
   const footer: string[] = [];
-  if (positive(input.rulesVersion)) footer.push(`Scoring rules version ${input.rulesVersion}.`);
+  if (positive(input.rulesVersion)) footer.push(`Scoring rules v${input.rulesVersion}.`);
   footer.push(OUTSIDE_WORK_LINE);
   return { blocks, footer };
 }
