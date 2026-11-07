@@ -20,7 +20,7 @@ describe("plainAiFailure", () => {
     for (const code of ["AI_UNAVAILABLE", "AI_BAD_OUTPUT", "secret provider detail", null]) {
       expect(plainAiFailure(code)).toBe(NARRATIVE_UNAVAILABLE_TEXT);
     }
-    expect(NARRATIVE_UNAVAILABLE_TEXT).toBe("The AI explanation is unavailable right now. The scores and flags are not affected. Try again later.");
+    expect(NARRATIVE_UNAVAILABLE_TEXT).toBe("The AI findings are unavailable right now. The scores and flags are not affected. Try again later.");
   });
 });
 

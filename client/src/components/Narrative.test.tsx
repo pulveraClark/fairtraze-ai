@@ -42,16 +42,16 @@ describe("Narrative failure wording", () => {
 
   it("shows the error with a Try again button when the explanation could not be written", () => {
     render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}}
-      generator={gen({ error: "The AI explanation is unavailable right now. The scores and flags are not affected. Try again later." })} />);
+      generator={gen({ error: "The AI findings are unavailable right now. The scores and flags are not affected. Try again later." })} />);
     expect(screen.getByRole("alert").textContent).toContain("The scores and flags are not affected. Try again later.");
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
   it("shows a calm note, not an alert, when the saved explanation is kept after a failed regenerate", () => {
     render(<Narrative narrative="Saved text." projectId={1} onNarrativeGenerated={() => {}}
-      generator={gen({ warning: "The new explanation could not be written, so the saved one is shown. Try again later." })} />);
+      generator={gen({ warning: "The new AI findings could not be written, so the saved ones are shown. Try again later." })} />);
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByText("The new explanation could not be written, so the saved one is shown. Try again later.")).toBeTruthy();
+    expect(screen.getByText("The new AI findings could not be written, so the saved ones are shown. Try again later.")).toBeTruthy();
   });
 });
 

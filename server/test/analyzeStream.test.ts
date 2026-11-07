@@ -313,7 +313,7 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
 // COMBINED now runs GitHub and editor collection concurrently. A failure in either must surface
 // exactly as it did when they ran one after the other.
 describe("COMBINED failure parity with the previous sequential order", () => {
-  it("an editor-stats failure (GitHub fine) responds 500 { error: <message> } like any uncaught route error", async () => {
+  it("an editor-stats failure (GitHub fine) responds 500 with a plain sentence, never the exception text", async () => {
     process.env.GITHUB_TOKEN = "test-token";
     const { instructor, a, project } = await setupProject("COMBINED");
     await seedEditorActivity(project.id, a.id);
@@ -326,7 +326,8 @@ describe("COMBINED failure parity with the previous sequential order", () => {
       .set("Authorization", authHeaderFor(instructor));
 
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: "docs db down" });
+    expect(res.body).toEqual({ code: "ANALYSIS_FAILED", error: ANALYSIS_FAILURE_TEXT.ANALYSIS_FAILED });
+    expect(JSON.stringify(res.body)).not.toContain("docs db down");
     expect(await prisma.report.count({ where: { projectId: project.id } })).toBe(0);
   });
 

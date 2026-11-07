@@ -87,11 +87,11 @@ analyzeRouter.post("/api/projects/:id/analyze", ...requireRole("INSTRUCTOR"), re
   try {
     await runAnalyze(req, res, progress);
   } catch (err) {
-    // Plain JSON clients: rethrow so Express's error handler responds exactly as before.
-    // Once the stream is open, headers are already sent, so report the failure as an event.
-    if (!progress.opened) throw err;
+    // Plain words only, for every client: the exception text (a database or provider message can name tables,
+    // hosts or keys) stays in the server log and never reaches a screen. A plain JSON client gets a 500 body;
+    // a streaming client gets an error event (the stream may already be open, so headers cannot be changed).
     console.error(err);
-    // Plain words only: the exception text stays in the server log, never in the stream.
+    if (res.headersSent && !progress.opened) return;
     progress.finish(500, { code: "ANALYSIS_FAILED", error: ANALYSIS_FAILURE_TEXT.ANALYSIS_FAILED });
   }
 });

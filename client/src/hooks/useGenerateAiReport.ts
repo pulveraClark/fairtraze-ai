@@ -11,7 +11,7 @@ export interface AiReportGenerator {
   reviewOn: boolean;
   generating: boolean;
   error: string | null;
-  /** A calm note when a new explanation could not be written but the saved one is shown; null otherwise. */
+  /** A calm note when new AI findings could not be written but the saved ones are shown; null otherwise. */
   warning: string | null;
   generate: (regenerate?: boolean) => Promise<void>;
   /** "Already up to date. Nothing changed since …" after a Regenerate that changed nothing; null otherwise. */

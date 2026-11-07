@@ -11,7 +11,7 @@ describe("failure wording", () => {
     expect(ANALYSIS_FAILURE_TEXT.GITHUB_RATE_LIMITED).toBe(
       "GitHub is limiting requests right now. Wait about an hour, then select Re-analyze. The nightly update will also try again.");
     expect(ANALYSIS_FAILURE_TEXT.GITHUB_REPO_UNREADABLE).toBe(
-      "We couldn't read the repository. Check that the link is correct and the repository is public, then select Re-analyze.");
+      "We couldn't read the repository. Check that the link is correct and that the repository is public. If it is private, ask the FairTraze team how to share it, then select Re-analyze.");
     expect(ANALYSIS_FAILURE_TEXT.GITHUB_NOT_CONFIGURED).toBe("GitHub access isn't set up on this server. Contact the FairTraze team.");
     expect(ANALYSIS_FAILURE_TEXT.GITHUB_UNREACHABLE).toBe("We couldn't reach GitHub. Try again in a few minutes.");
     expect(ANALYSIS_FAILURE_TEXT.ANALYSIS_FAILED).toBe("The analysis didn't finish. Try again in a few minutes. If it keeps happening, contact the FairTraze team.");

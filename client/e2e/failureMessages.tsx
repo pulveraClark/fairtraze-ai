@@ -34,9 +34,9 @@ function App() {
     return (
       <main className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-6">
         <Narrative narrative={null} projectId={1} onNarrativeGenerated={() => undefined}
-          generator={gen({ error: "The AI explanation is unavailable right now. The scores and flags are not affected. Try again later." })} />
+          generator={gen({ error: "The AI findings are unavailable right now. The scores and flags are not affected. Try again later." })} />
         <Narrative narrative="Saved text." projectId={1} onNarrativeGenerated={() => undefined}
-          generator={gen({ warning: "The new explanation could not be written, so the saved one is shown. Try again later." })} />
+          generator={gen({ warning: "The new AI findings could not be written, so the saved ones are shown. Try again later." })} />
         <Narrative narrative={null} projectId={1} onNarrativeGenerated={() => undefined}
           generator={gen({ error: "The AI's daily limit was reached. It is available again around 3:00 PM (in about 4 hours)." })} />
       </main>

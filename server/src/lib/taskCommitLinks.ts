@@ -1,4 +1,5 @@
 import { TASK_LIMITS } from "@shared/taskTypes.js";
+import { REPO_UNREADABLE_FOR_MEMBERS } from "@shared/failureMessages.js";
 import { prisma } from "./prisma.js";
 import { effectiveTaskKey, TASK_KEY_PATTERN } from "./taskKey.js";
 import { logActivity } from "./taskBoard.js";
@@ -174,7 +175,7 @@ export async function syncGroupCommits(
     commits = await fetcher(ref.owner, ref.repo, token);
   } catch (err) {
     const status = (err as { status?: number })?.status;
-    if (status === 404 || status === 403) throw new CommitSyncError("GitHub repo not found or token lacks access.", 404);
+    if (status === 404 || status === 403) throw new CommitSyncError(REPO_UNREADABLE_FOR_MEMBERS, 404);
     throw new CommitSyncError("Could not read commits from GitHub. Try again in a few minutes.", 502);
   }
   return { ...(await linkCommitsToTasks(project.id, ref.key, commits)), scanned: commits.length };

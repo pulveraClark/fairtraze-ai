@@ -24,15 +24,15 @@ const saved = [];
 const WORDS = {
   "analysis-failed": [
     "GitHub is limiting requests right now. Wait about an hour, then select Re-analyze. The nightly update will also try again.",
-    "We couldn't read the repository. Check that the link is correct and the repository is public, then select Re-analyze.",
+    "We couldn't read the repository. Check that the link is correct and that the repository is public. If it is private, ask the FairTraze team how to share it, then select Re-analyze.",
     "GitHub access isn't set up on this server. Contact the FairTraze team.",
     "We couldn't reach GitHub. Try again in a few minutes.",
     "The analysis didn't finish. Try again in a few minutes. If it keeps happening, contact the FairTraze team.",
     "We couldn't reach the server. Check your connection, then try again.",
   ],
   "ai-findings": [
-    "The AI explanation is unavailable right now. The scores and flags are not affected. Try again later.",
-    "The new explanation could not be written, so the saved one is shown. Try again later.",
+    "The AI findings are unavailable right now. The scores and flags are not affected. Try again later.",
+    "The new AI findings could not be written, so the saved ones are shown. Try again later.",
     "The AI's daily limit was reached. It is available again around 3:00 PM (in about 4 hours).",
   ],
   freshness: [

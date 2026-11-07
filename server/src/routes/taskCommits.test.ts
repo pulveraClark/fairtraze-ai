@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import type { BoardResponse, TaskDetails } from "@shared/taskTypes.js";
+import { REPO_UNREADABLE_FOR_MEMBERS } from "@shared/failureMessages.js";
 import {
   createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership,
 } from "../../test/factories.js";
@@ -139,7 +140,8 @@ describe("POST /tasks/sync-commits (leader Refresh)", () => {
     fetcher.mockRejectedValueOnce(Object.assign(new Error("Not Found"), { status: 404 }));
     const failed = await sync(leader, project.id);
     expect(failed.status).toBe(404);
-    expect(failed.body.error).toMatch(/not found or token lacks access/i);
+    expect(failed.body.error).toBe(REPO_UNREADABLE_FOR_MEMBERS);
+    expect(failed.body.error).not.toMatch(/token/i);
     expect((await prisma.project.findUniqueOrThrow({ where: { id: project.id } })).commitsRefreshedAt).toBeNull();
 
     fetcher.mockRejectedValueOnce(new Error("boom"));

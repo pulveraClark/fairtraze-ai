@@ -6,11 +6,11 @@ import type { AiLastAttempt } from "@shared/aiReviewTypes.js";
 // form below is the fallback for places that cannot (the narrative's `error` string).
 
 export const NARRATIVE_UNAVAILABLE_TEXT =
-  "The AI explanation is unavailable right now. The scores and flags are not affected. Try again later.";
+  "The AI findings are unavailable right now. The scores and flags are not affected. Try again later.";
 /** A per-minute limit or a timeout: it clears on its own, so the next step is a short wait. */
 export const AI_BUSY_TEXT = "The AI is busy. Try again in a minute.";
-/** A new explanation could not be written but an earlier one is on screen. */
-export const NARRATIVE_KEPT_TEXT = "The new explanation could not be written, so the saved one is shown. Try again later.";
+/** New AI findings could not be written but earlier ones are on screen. */
+export const NARRATIVE_KEPT_TEXT = "The new AI findings could not be written, so the saved ones are shown. Try again later.";
 
 export function plainAiFailure(code: string | null | undefined, retryAfterMs?: number | null): string {
   switch (code) {
