@@ -1,5 +1,6 @@
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { AppFooter } from "../components/AppFooter";
+import { AnalyzedAgo } from "../components/AnalyzedAgo";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { useEffect, useState } from "react";
 import { classAccent } from "../lib/classBand";
@@ -263,8 +264,8 @@ export function ClassCard({
                 {studentHealthLabel(latestReport.teamHealth)}
               </span>
             )}
-            <p className="text-xs text-slate-600">
-              Analyzed {new Date(latestReport.generatedAt).toLocaleDateString()}
+            <p className="text-xs text-slate-700">
+              <AnalyzedAgo iso={latestReport.generatedAt} />
             </p>
           </div>
         ) : (

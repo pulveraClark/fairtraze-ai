@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { RouterProvider } from "../router";
 import { GroupSummaryCard } from "./GroupSummaryCard";
@@ -21,6 +21,25 @@ function renderCard(names: string[], over: Partial<ProjectSummaryItem> = {}, tas
     </RouterProvider>,
   );
 }
+
+describe("GroupSummaryCard last analyzed", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("says 'Last analyzed 3 hours ago' (exact date in the tooltip) instead of a bare date", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    renderCard(["Ana", "Ben"], { lastAnalyzedAt: "2026-10-20T09:00:00Z" });
+    const line = screen.getByText("Last analyzed 3 hours ago");
+    expect(line).toHaveAttribute("title", "Oct 20, 2026, 5:00 PM");
+    expect(screen.queryByText(/^\d{1,2}\/\d{1,2}\/\d{4}$/)).toBeNull();
+  });
+
+  it("an unanalyzed group keeps its 'Not analyzed / No report yet' state and shows no analyzed time", () => {
+    renderCard(["Ana"], { isAnalyzed: false, lastAnalyzedAt: null, teamHealth: null });
+    expect(screen.getByText("No report yet")).toBeInTheDocument();
+    expect(screen.queryByText(/Last analyzed/)).toBeNull();
+  });
+});
 
 describe("GroupSummaryCard member legend", () => {
   it("tells members apart even when they share a first word", () => {

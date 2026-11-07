@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLastAnalyzed, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, AUTO_UPDATE_FAILED_TEXT, relativeTime } from "./analysisFreshness";
+import { formatLastAnalyzed, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, formatLastAnalyzedShort, formatAnalyzedExact, AUTO_UPDATE_FAILED_TEXT, relativeTime } from "./analysisFreshness";
 
 const NOW = new Date("2026-10-26T12:00:00Z");
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -31,6 +31,18 @@ describe("formatLastAnalyzed", () => {
   });
   it("does not say 'every night' (it also refreshes when a report is opened)", () => {
     expect(formatLastAnalyzed(ago(HOUR), "auto", NOW)).not.toMatch(/night/i);
+  });
+});
+
+describe("short form for lists and cards", () => {
+  it("reads 'Last analyzed 3 hours ago' with no update status", () => {
+    expect(formatLastAnalyzedShort(ago(3 * HOUR), NOW)).toBe("Last analyzed 3 hours ago");
+    expect(formatLastAnalyzedShort(ago(30_000), NOW)).toBe("Last analyzed just now");
+    expect(formatLastAnalyzedShort(ago(2 * 24 * HOUR), NOW)).toBe("Last analyzed 2 days ago");
+  });
+  it("gives the exact date and time on the Manila clock, so a late-evening time is the right day", () => {
+    expect(formatAnalyzedExact("2026-10-19T15:45:00Z")).toBe("Oct 19, 2026, 11:45 PM");
+    expect(formatAnalyzedExact("2026-10-19T16:30:00Z")).toBe("Oct 20, 2026, 12:30 AM");
   });
 });
 

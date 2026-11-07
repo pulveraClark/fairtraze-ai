@@ -27,6 +27,18 @@ export function formatLastAnalyzedStudent(iso: string, now: Date = new Date()): 
   return `Last analyzed ${relativeTime(iso, now)}. Updates every night.`;
 }
 
+/** "Last analyzed 3 hours ago": the short form for lists and summary cards. */
+export function formatLastAnalyzedShort(iso: string, now: Date = new Date()): string {
+  return `Last analyzed ${relativeTime(iso, now)}`;
+}
+
+/** "Oct 20, 2026, 3:45 PM" on the school's Manila clock, for a tooltip beside the relative time. */
+export function formatAnalyzedExact(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}
+
 /** The latest automatic update did not finish. Same words for everyone; no cause, no blame. */
 export const AUTO_UPDATE_FAILED_TEXT = "The latest update didn't finish. It will try again tonight.";
 

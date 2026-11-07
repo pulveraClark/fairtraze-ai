@@ -10,6 +10,7 @@ import { TaskCountLine } from "./TaskCountLine";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
 import { REPO_CHANGED_NOTICE, REPO_NOT_LINKED_MESSAGE, REPO_NOT_LINKED_PILL, repoNotLinked } from "../lib/repoNotice";
+import { AnalyzedAgo } from "./AnalyzedAgo";
 
 const HEALTH_BADGE: Record<TeamHealth, string> = {
   Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
@@ -235,9 +236,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
               Gini: <span className="font-semibold text-slate-600">{item.gini.toFixed(3)}</span>
             </span>
           )}
-          {item.lastAnalyzedAt && (
-            <span>{new Date(item.lastAnalyzedAt).toLocaleDateString()}</span>
-          )}
+          {item.lastAnalyzedAt && <AnalyzedAgo iso={item.lastAnalyzedAt} />}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {onTasks && (

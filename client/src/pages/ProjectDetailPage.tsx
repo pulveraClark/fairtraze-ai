@@ -728,7 +728,7 @@ export function ProjectDetailPage({ projectId }: Props) {
               <StatTile
                 compact
                 label="Analysis"
-                value={<span className="text-base">{SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"} · {new Date(stored.analyzedAt).toLocaleDateString()}</span>}
+                value={<span className="text-base">{SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}</span>}
                 detail={
                   sourceType !== "EDITOR" && stored.repoUrl ? (
                     <a

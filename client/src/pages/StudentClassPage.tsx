@@ -1,5 +1,6 @@
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { AppFooter } from "../components/AppFooter";
+import { AnalyzedAgo } from "../components/AnalyzedAgo";
 import { classCrumb } from "../lib/classLabel";
 import { studentHealthLabel } from "../lib/studentDisplay";
 import { useState } from "react";
@@ -260,6 +261,9 @@ export function ProjectCard({
 
               {!g.report && (
                 <p className="text-xs text-slate-600 italic">No analysis yet — awaiting instructor.</p>
+              )}
+              {g.report && (
+                <p className="text-xs text-slate-700"><AnalyzedAgo iso={g.report.generatedAt} /></p>
               )}
 
               <div className="flex items-center gap-3 pt-1 flex-wrap">

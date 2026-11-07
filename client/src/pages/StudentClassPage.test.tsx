@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ProjectCard } from "./StudentClassPage";
 
@@ -42,6 +42,24 @@ describe("ProjectCard for a student already in a group (R9)", () => {
     renderCard(asgn({}, { report: { teamHealth: "Moderate Risk", generatedAt: "2026-10-18T00:00:00Z" } }));
     expect(screen.getByText("Work is a bit uneven")).toBeInTheDocument();
     expect(screen.queryByText(/Moderate Risk|0\.31/)).toBeNull();
+  });
+});
+
+describe("ProjectCard last analyzed", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("shows 'Last analyzed 5 hours ago' under the health pill, and nothing when there is no report", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    const { container } = render(<ProjectCard asgn={asgn({}, { report: { teamHealth: "Healthy", generatedAt: "2026-10-20T07:00:00Z" } }) as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={vi.fn()} />);
+    expect(screen.getByText("Last analyzed 5 hours ago")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Gini|index|band/i);
+  });
+
+  it("shows no analyzed time before the first analysis", () => {
+    renderCard(asgn({}, { report: null }));
+    expect(screen.queryByText(/Last analyzed/)).toBeNull();
+    expect(screen.getByText("No analysis yet — awaiting instructor.")).toBeInTheDocument();
   });
 });
 
