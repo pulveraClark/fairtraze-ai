@@ -10,6 +10,11 @@ describe("LastAnalyzed", () => {
     expect(screen.getByText("Last analyzed 3 hours ago (automatic) · Updates automatically")).toBeInTheDocument();
   });
 
+  it("keeps the exact date and time (Manila clock) as a tooltip, since the report's Analysis tile no longer repeats the date", () => {
+    render(<LastAnalyzed analyzedAt="2026-10-19T16:30:00Z" trigger="auto" />);
+    expect(screen.getByText(/^Last analyzed .* ago \(automatic\)/)).toHaveAttribute("title", "Oct 20, 2026, 12:30 AM");
+  });
+
   it("when the latest automatic update did not finish, says so calmly instead of 'Updates automatically'", () => {
     render(<LastAnalyzed analyzedAt={ago(3 * 86_400_000)} trigger="auto" updateFailed />);
     expect(screen.getByText("Last analyzed 3 days ago. The latest update didn't finish. It will try again tonight.")).toBeInTheDocument();

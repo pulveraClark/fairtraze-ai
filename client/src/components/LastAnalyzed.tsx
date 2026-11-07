@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatLastAnalyzed, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, UPDATING_TEXT } from "../lib/analysisFreshness";
+import { formatAnalyzedExact, formatLastAnalyzed, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, UPDATING_TEXT } from "../lib/analysisFreshness";
 
 interface Props {
   analyzedAt: string;
@@ -25,7 +25,7 @@ export function LastAnalyzed({ analyzedAt, trigger, updating = false, updateFail
 
   return (
     <p className={`${variant === "student" ? "text-xs" : "text-sm"} leading-normal text-slate-700 ${className}`}>
-      <span>{updateFailed ? formatLastAnalyzedUpdateFailed(analyzedAt, now) : variant === "student" ? formatLastAnalyzedStudent(analyzedAt, now) : formatLastAnalyzed(analyzedAt, trigger, now)}</span>
+      <span title={formatAnalyzedExact(analyzedAt)}>{updateFailed ? formatLastAnalyzedUpdateFailed(analyzedAt, now) : variant === "student" ? formatLastAnalyzedStudent(analyzedAt, now) : formatLastAnalyzed(analyzedAt, trigger, now)}</span>
       <span role="status" aria-live="polite" className="ml-2 font-medium text-indigo-800">
         {updating ? UPDATING_TEXT : ""}
       </span>
