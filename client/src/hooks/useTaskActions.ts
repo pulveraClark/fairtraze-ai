@@ -95,7 +95,12 @@ export function useTaskActions(projectId: number) {
   /** Create a task; a leader may create straight into another column (create, then move to the bottom). */
   const createTask = useCallback(async (input: CreateTaskInput, status: TaskStatus = "TODO"): Promise<BoardTask> => {
     const created = await taskApi.create(token, projectId, input);
-    setBoard((b) => replaceTaskIn(b, created));
+    setBoard((b) => {
+      const next = replaceTaskIn(b, created);
+      // The picked instructions item has a task now: drop it from the list at once instead of waiting for the next poll.
+      if (!next || !input.requirementKey || !next.suggestions) return next;
+      return { ...next, suggestions: next.suggestions.filter((s) => s.key !== input.requirementKey) };
+    });
     if (status !== "TODO") {
       const moved = await moveToStatus(created, status);
       return moved ?? created;
