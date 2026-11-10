@@ -88,6 +88,32 @@ try {
         const foot = await page.locator("p", { hasText: "May be wrong" }).last().boundingBox();
         check(!!foot && foot.x >= 0 && foot.x + foot.width <= width + 0.5, `footer line stays inside the screen (${Math.round(foot?.width ?? 0)}px wide, wraps)`);
       }
+      if (scene === "instructor") {
+        const SENTENCE = "Early data: too early to tell. Results may change as work continues.";
+        const tag = page.getByRole("button", { name: "About early data" });
+        const tagBox = await tag.boundingBox();
+        check(!!tagBox && tagBox.height >= 39.5, `the tag is at least 40px tall (${Math.round(tagBox?.height ?? 0)}px)`);
+        await tag.click();
+        const early = page.getByRole("group", { name: "About early data" });
+        await early.waitFor();
+        const text = await early.innerText();
+        check(text.trim() === SENTENCE, "the tag's popover holds only the early-data sentence");
+        check(!/gini|how team health/i.test(text), "no Gini text in the tag's popover");
+        const box = await early.boundingBox();
+        check(!!box && box.x >= -0.5 && box.x + box.width <= width + 0.5, `the tag's popover stays inside the screen (x ${Math.round(box?.x ?? 0)}, w ${Math.round(box?.width ?? 0)})`);
+        if (width >= 640) check(!!box && !!tagBox && Math.abs(box.x - tagBox.x) <= 1, "from 640px the popover starts at the tag's left edge");
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "no sideways scroll with the popover open");
+        if (shots) await page.screenshot({ path: path.join(shots, `earlydata__tag-popover-${level}__${name}.png`), fullPage: true });
+        await page.keyboard.press("Escape");
+        check((await early.count()) === 0 && (await tag.evaluate((el) => el === document.activeElement)), "Esc closes it and focus returns to the tag");
+        await tag.click();
+        await page.mouse.click(2, 2);
+        check((await early.count()) === 0, "a click outside closes it");
+        await page.getByRole("button", { name: "About the Gini coefficient and team health" }).click();
+        const gini = page.getByRole("group", { name: "About the Gini coefficient and team health" });
+        await gini.waitFor();
+        check(!(await gini.innerText()).includes("too early to tell"), "the Gini popover no longer carries the early-data sentence");
+      }
       if (shots) {
         const file = `earlydata__${scene}-${level}__${name}.png`;
         await page.screenshot({ path: path.join(shots, file), fullPage: !dialog });

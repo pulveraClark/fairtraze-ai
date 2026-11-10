@@ -19,25 +19,54 @@ describe("TeamSummaryBar", () => {
     expect(flaggedText(3)).toBe("3 members flagged");
   });
 
-  it("shows the Early data tag only when data is early, and the long sentence only inside the popover", async () => {
+  it("shows the Early data tag only when data is early, and the long sentence only in the tag's own popover", async () => {
     const { rerender } = render(<TeamSummaryBar {...base} />);
     expect(screen.queryByText("Early data")).toBeNull();
     rerender(<TeamSummaryBar {...base} confidence="low" earlyMuted />);
-    expect(screen.getByRole("button", { name: /Early data/ })).toBeInTheDocument();
+    const tag = screen.getByRole("button", { name: "About early data" });
+    expect(tag.textContent).toBe("Early data");
     expect(screen.queryByText(EARLY_DATA_SENTENCE)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "About the Gini coefficient and team health" }));
+    expect(screen.queryByText(EARLY_DATA_SENTENCE)).toBeNull();
+    await userEvent.click(tag);
     expect(screen.getByText(EARLY_DATA_SENTENCE)).toBeInTheDocument();
   });
 
-  it("the tag opens the same popover, Esc closes it and returns focus to the tag", async () => {
+  it("the tag opens only its own popover; Esc closes it and returns focus to the tag", async () => {
     render(<TeamSummaryBar {...base} confidence="medium" averageGini={0.2} />);
-    const tag = screen.getByRole("button", { name: /Early data/ });
+    const tag = screen.getByRole("button", { name: "About early data" });
     await userEvent.click(tag);
     expect(tag.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText(/Average for other groups in this assignment: 0\.200/)).toBeInTheDocument();
+    expect(screen.getByText(EARLY_DATA_SENTENCE)).toBeInTheDocument();
+    expect(screen.queryByText("How team health is read")).toBeNull();
+    expect(screen.queryByText(/Average for other groups/)).toBeNull();
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByText(EARLY_DATA_SENTENCE)).toBeNull();
+    expect(tag.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(tag);
+  });
+
+  it("the Gini (i) shows the bands and benchmark but not the early-data sentence; the two popovers switch", async () => {
+    render(<TeamSummaryBar {...base} confidence="medium" averageGini={0.2} />);
+    const info = screen.getByRole("button", { name: "About the Gini coefficient and team health" });
+    const tag = screen.getByRole("button", { name: "About early data" });
+    await userEvent.click(info);
+    expect(screen.getByText("How team health is read")).toBeInTheDocument();
+    expect(screen.getByText(/Average for other groups in this assignment: 0\.200/)).toBeInTheDocument();
+    expect(screen.queryByText(EARLY_DATA_SENTENCE)).toBeNull();
+    await userEvent.click(tag);
+    expect(screen.queryByText("How team health is read")).toBeNull();
+    expect(screen.getByText(EARLY_DATA_SENTENCE)).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(tag);
+  });
+
+  it("a click outside closes the open popover", async () => {
+    render(<div><span>outside</span><TeamSummaryBar {...base} confidence="low" /></div>);
+    await userEvent.click(screen.getByRole("button", { name: "About early data" }));
+    expect(screen.getByText(EARLY_DATA_SENTENCE)).toBeInTheDocument();
+    await userEvent.click(screen.getByText("outside"));
+    expect(screen.queryByText(EARLY_DATA_SENTENCE)).toBeNull();
   });
 
   it("no activity: no Gini and no flagged count", () => {
