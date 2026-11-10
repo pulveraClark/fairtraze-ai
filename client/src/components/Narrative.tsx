@@ -15,7 +15,6 @@ import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
 import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
 import { useRequirementMarks } from "../hooks/useRequirementMarks";
-import { giniBandsText } from "../lib/giniBands";
 import { healthSentence, instructionsSummary } from "../lib/aiSummary";
 import { PILL, pillLabel } from "../lib/instructionsCheck";
 import { RefreshFailedNote } from "./RefreshFailedNote";
@@ -47,8 +46,6 @@ interface Props {
   instructionsAssignmentId?: number;
   /** The code-computed team health; null/absent hides the health line (for example, no recorded activity). */
   teamHealth?: TeamHealth | null;
-  /** Shown only inside "Team details". Instructor page only. */
-  gini?: number | null;
 }
 
 const ROW_BTN = `flex min-h-11 min-w-0 flex-1 basis-56 items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-50 ${FOCUS_LIGHT}`;
@@ -157,7 +154,7 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, ...ca
   );
 }
 
-export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref, instructionsAssignmentId, teamHealth, gini }: Props) {
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref, instructionsAssignmentId, teamHealth }: Props) {
   // The sentence to mark in the instructions window; null while it is closed.
   const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
@@ -167,7 +164,6 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
   const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
   // "Some AI findings show changed files only..." now sits with the member findings, not in this card.
   const statusLine = review?.data?.status === "PARTIAL" ? null : reviewStatusLine(review?.data ?? null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const addressedLine = aiAddressedLine(review?.data ?? null);
   const briefLine = briefStatusLine(review?.data ?? null);
   const briefCheck = review?.data?.enabled ? review.data.briefCheck : undefined;
@@ -287,34 +283,18 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
         />
       )}
 
-      {/* Team details: the full explanation (with the Gini sentence) and how the label is read */}
-      {!generating && (narrative || typeof gini === "number") && (
-        <div className="mt-3">
-          <Disclosure
-            title={`Team details${typeof gini === "number" ? ` · Gini ${gini.toFixed(3)}` : ""}, how the team health is read`}
-            open={detailsOpen}
-            onToggle={() => setDetailsOpen((v) => !v)}
-          >
-            <div className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
-              {outdated && narrative && (
-                <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
-                  {NARRATIVE_OUTDATED_TEXT}
-                </p>
-              )}
-              {narrative && (
-                <div className="text-sm leading-relaxed text-slate-800 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-200">
-                  <ReactMarkdown>{narrative}</ReactMarkdown>
-                </div>
-              )}
-              <p className="text-xs leading-normal text-slate-700">{giniBandsText()}</p>
-            </div>
-          </Disclosure>
+      {/* The AI explanation, inline. The note about changed results sits above it. */}
+      {narrative && !generating && (
+        <div className="mt-3 space-y-3">
+          {outdated && (
+            <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
+              {NARRATIVE_OUTDATED_TEXT}
+            </p>
+          )}
+          <div className="text-sm leading-relaxed text-slate-800 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-200">
+            <ReactMarkdown>{narrative}</ReactMarkdown>
+          </div>
         </div>
-      )}
-      {narrative && !generating && outdated && !detailsOpen && (
-        <p role="status" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
-          {NARRATIVE_OUTDATED_TEXT}
-        </p>
       )}
       {narrative && !generating && (
         <p className="mt-4 text-sm italic leading-normal text-slate-700">

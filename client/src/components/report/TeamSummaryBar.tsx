@@ -7,6 +7,7 @@ import { StatusPill } from "../ui/StatusPill";
 import { NoActivityPill } from "../NoActivityPill";
 import { EarlyDataTag, EARLY_DATA_SENTENCE } from "../EarlyDataTag";
 import { helpLink } from "../../lib/helpText";
+import { giniBands } from "../../lib/giniBands";
 
 interface Props {
   noActivity: boolean;
@@ -90,7 +91,20 @@ export function TeamSummaryBar({ noActivity, teamHealth, gini, earlyMuted, confi
             aria-label="About the Gini coefficient and team health"
             className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-300 bg-white p-3 text-lg font-normal leading-normal text-slate-800 shadow-lg"
           >
-            <p>Gini shows how evenly the work is shared. 0 means perfectly equal.</p>
+            <p className="font-semibold text-slate-900">How team health is read</p>
+            <p className="mt-1">Gini shows how evenly the work is shared. 0 means perfectly equal.</p>
+            <ul className="mt-2 space-y-1">
+              {giniBands().map((b) => {
+                const here = !noActivity && b.health === teamHealth;
+                return (
+                  <li key={b.health} className={here ? "font-semibold text-slate-900" : undefined}>
+                    <span aria-hidden="true" className="inline-block w-5">{here ? "✓" : ""}</span>
+                    {b.label}: {b.range}
+                    {here && <span className="sr-only"> (this group)</span>}
+                  </li>
+                );
+              })}
+            </ul>
             {early && <p className="mt-2">{EARLY_DATA_SENTENCE}</p>}
             {averageGini !== null && (
               <p className="mt-2">
@@ -98,6 +112,7 @@ export function TeamSummaryBar({ noActivity, teamHealth, gini, earlyMuted, confi
                 {gini > averageGini ? "this group is more uneven" : gini < averageGini ? "this group is more even" : "equal"}.
               </p>
             )}
+            <p className="mt-2">Informational only. The instructor decides.</p>
             <a href={helpLink("gini")} target="_blank" rel="noopener noreferrer" className={`mt-2 block w-fit rounded font-semibold text-indigo-700 underline ${FOCUS_LIGHT}`}>
               More in Help
             </a>

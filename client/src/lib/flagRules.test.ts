@@ -10,7 +10,7 @@ import {
   MODERATE_RISK_GINI_THRESHOLD,
 } from "@shared/scoring";
 import { describeFlagRule } from "./flagRules";
-import { giniBandsText } from "./giniBands";
+import { giniBands } from "./giniBands";
 
 function raw(name: string, commits: number, adds: number, dates: string[]): RawMemberStats {
   return {
@@ -90,10 +90,11 @@ describe("describeFlagRule", () => {
   });
 });
 
-describe("giniBandsText", () => {
+describe("giniBands", () => {
   it("reads the Gini boundaries from the scoring constants", () => {
-    const t = giniBandsText();
+    const t = giniBands().map((b) => `${b.label}: ${b.range}`).join(" ");
     expect(t).toContain(`below ${HEALTHY_GINI_THRESHOLD}`);
     expect(t).toContain(`${MODERATE_RISK_GINI_THRESHOLD} or above`);
+    expect(giniBands().map((b) => b.health)).toEqual(["Healthy", "Moderate Risk", "High Risk"]);
   });
 });

@@ -20,11 +20,11 @@ describe("Narrative", () => {
 });
 
 describe("Narrative outdated notice", () => {
-  it("tells the instructor the results changed and keeps the saved text (inside Team details)", async () => {
+  it("tells the instructor the results changed and keeps the saved text inline", async () => {
     render(<Narrative narrative="Saved text." outdated projectId={1} onNarrativeGenerated={() => {}} />);
     expect(screen.getByText("Results changed. Generate new AI findings.")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /^Team details/ }));
     expect(screen.getByText("Saved text.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Team details/ })).toBeNull();
   });
 
   it("shows no notice when the AI findings are current or missing", () => {
@@ -81,7 +81,7 @@ const renderCard = (requirements: R[] | null, extra: Partial<React.ComponentProp
   const data: AiReviewResponse = { ...base, ...(requirements ? { briefCheck: mkCheck(requirements) } : {}) };
   return render(
     <Narrative narrative="Explained. The Gini coefficient is 0.122." projectId={1} onNarrativeGenerated={() => {}}
-      review={{ data, error: null, start: vi.fn() }} teamHealth="Healthy" gini={0.122} {...extra} />,
+      review={{ data, error: null, start: vi.fn() }} teamHealth="Healthy" {...extra} />,
   );
 };
 const mixed = () => [...found(7), req("No README", "NOT_FOUND"), req("Has charts", "NOT_FOUND", { unverified: true })];
@@ -172,13 +172,12 @@ describe("AI findings summary", () => {
     expect(screen.getByText("Work is shared very evenly.")).toBeTruthy();
   });
 
-  it("the Gini number appears only inside Team details", async () => {
-    const { container } = renderCard(found(2));
-    const header = screen.getByRole("button", { name: /^Team details · Gini 0\.122, how the team health is read/ });
-    expect(container.textContent).not.toContain("Explained.");
-    expect(container.textContent?.replace(header.textContent ?? "", "")).not.toContain("0.122");
-    await userEvent.click(header);
-    expect(screen.getByText(/The Gini coefficient is 0\.122/)).toBeTruthy();
+  it("has no Team details row and no Gini number: the explanation text is inline", () => {
+    const { container } = renderCard(found(2), { narrative: "Explained." });
+    expect(screen.queryByRole("button", { name: /Team details/ })).toBeNull();
+    expect(container.textContent).not.toContain("0.122");
+    expect(container.textContent).not.toMatch(/Gini/);
+    expect(container.textContent).toContain("Explained.");
   });
 
   it("no longer says 'Select a member above' in the card", () => {

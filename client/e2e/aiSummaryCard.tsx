@@ -62,8 +62,8 @@ function Page() {
   }
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4">
-      <Narrative narrative={"This project has a team health of Healthy.\n\nThe Gini coefficient is 0.122."} projectId={1} onNarrativeGenerated={() => {}}
-        review={review} generator={generator} instructionsHref="/class/1/assignment/2" instructionsAssignmentId={1} basedOnAt="2026-10-26T01:00:00Z" teamHealth="Healthy" gini={0.122} />
+      <Narrative narrative={"This project has a team health of Healthy.\n\nThe work is shared evenly."} projectId={1} onNarrativeGenerated={() => {}}
+        review={review} generator={generator} instructionsHref="/class/1/assignment/2" instructionsAssignmentId={1} basedOnAt="2026-10-26T01:00:00Z" teamHealth="Healthy" />
     </div>
   );
 }

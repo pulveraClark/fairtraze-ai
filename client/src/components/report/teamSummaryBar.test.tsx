@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TeamSummaryBar, flaggedText } from "./TeamSummaryBar";
 import { EARLY_DATA_SENTENCE } from "../EarlyDataTag";
+import { HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "@shared/scoring";
 
 const base = { noActivity: false, teamHealth: "Healthy" as const, gini: 0.122, earlyMuted: false, confidence: "high" as const, flaggedCount: 0, averageGini: null };
 
@@ -43,5 +44,19 @@ describe("TeamSummaryBar", () => {
     render(<TeamSummaryBar {...base} noActivity />);
     expect(screen.queryByText(/Gini/)).toBeNull();
     expect(screen.queryByText(/flagged/)).toBeNull();
+  });
+
+  it("the popover is titled 'How team health is read', lists the three bands from the constants and marks this group's", async () => {
+    render(<TeamSummaryBar {...base} teamHealth="Moderate Risk" gini={0.3} />);
+    await userEvent.click(screen.getByRole("button", { name: "About the Gini coefficient and team health" }));
+    expect(screen.getByText("How team health is read")).toBeInTheDocument();
+    expect(screen.getByText("Gini shows how evenly the work is shared. 0 means perfectly equal.")).toBeInTheDocument();
+    const items = screen.getAllByRole("listitem");
+    const text = items.map((li) => li.textContent ?? "");
+    expect(text).toHaveLength(3);
+    expect(text[0]).toBe(`Healthy: Gini below ${HEALTHY_GINI_THRESHOLD}`);
+    expect(text[1]).toBe(`✓Moderate risk: ${HEALTHY_GINI_THRESHOLD} to below ${MODERATE_RISK_GINI_THRESHOLD} (this group)`);
+    expect(text[2]).toBe(`High risk: ${MODERATE_RISK_GINI_THRESHOLD} or above`);
+    expect(screen.getByText("Informational only. The instructor decides.")).toBeInTheDocument();
   });
 });

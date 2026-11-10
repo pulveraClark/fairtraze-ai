@@ -1,5 +1,5 @@
 // Local-only: the AI findings card with the short summary on top, at 375px. Checks no sideways scroll, no text
-// under 12px, rows and buttons >= 40px (disclosure rows 44px), the Gini number hidden until Team details opens. No backend.
+// under 12px, rows and buttons >= 40px (disclosure rows 44px), no Gini in the card. No backend.
 // Run: node e2e/aiSummaryCard.mjs [screenshot-dir]
 import { createServer } from "vite";
 import { chromium } from "playwright";
@@ -34,7 +34,7 @@ try {
       return own && parseFloat(getComputedStyle(el).fontSize) < 11.99;
     }).length;
     const small = [...card.querySelectorAll("button")].map((b) => ({ t: b.textContent.trim().slice(0, 40), h: Math.round(b.getBoundingClientRect().height) })).filter((b) => b.h < 40 && b.t !== ""); // the (?) InfoTip is an existing shared control
-    const rows = [...card.querySelectorAll("button[aria-expanded]")].filter((b) => /^▸?s*(Team details|Project instructions check)/.test(b.textContent.trim())).map((b) => b.getBoundingClientRect().height);
+    const rows = [...card.querySelectorAll("button[aria-expanded]")].filter((b) => /^▸?s*(Project instructions check)/.test(b.textContent.trim())).map((b) => b.getBoundingClientRect().height);
     return { scrollW: document.documentElement.scrollWidth, tiny, small, rows, text: card.textContent };
   });
 
@@ -42,18 +42,16 @@ try {
   check(m.scrollW <= 375, `no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `no text under 12px (${m.tiny})`);
   check(m.small.length === 0, `buttons >= 40px ${JSON.stringify(m.small)}`);
-  check(m.rows.length === 2 && m.rows.every((h) => h >= 44), `two disclosure rows >= 44px (${m.rows.join(", ")})`);
-  check(!m.text.includes("0.122".replace("0.122", "The Gini")) && !/Gini coefficient is/.test(m.text), "Gini sentence hidden until Team details opens");
+  check(m.rows.length === 1 && m.rows.every((h) => h >= 44), `the disclosure row >= 44px (${m.rows.join(", ")})`);
+  check(!/Gini/.test(m.text) && !/Team details/.test(m.text), "no Gini and no Team details row in the card");
   check(m.text.includes("Needs a look") && m.text.includes("+2 more"), "Needs a look with 2 items and +2 more");
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__ai-findings-375.png") });
 
-  await page.getByRole("button", { name: /^Team details/ }).click();
   await page.getByRole("button", { name: /Project instructions check · all 10/ }).click();
   await page.waitForTimeout(200);
   m = await measure();
   check(m.scrollW <= 375, `expanded: no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `expanded: no text under 12px (${m.tiny})`);
-  check(/Gini coefficient is 0.122/.test(m.text), "Gini sentence shown inside Team details");
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__ai-findings-expanded-375.png") });
   // Covered requirements shown, then one proof open: still one line each, no overflow, small targets absent.
   await page.getByRole("button", { name: /^6 covered requirements · show/ }).click();

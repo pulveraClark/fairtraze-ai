@@ -697,7 +697,6 @@ export function ProjectDetailPage({ projectId }: Props) {
               generator={aiGenerator}
               basedOnAt={stored.analyzedAt}
               teamHealth={noActivity ? null : stored.report.teamHealth}
-              gini={noActivity ? null : stored.report.gini}
               repoUrl={sourceType !== "EDITOR" ? stored.repoUrl : null}
               sourceType={sourceType}
               instructionsHref={classId && assignmentId ? assignmentUrl : undefined}
