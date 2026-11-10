@@ -11,7 +11,7 @@ import { LINK_CLS, RequirementMarkPanel } from "./RequirementMarkPanel";
 import type { MarksApi } from "../hooks/useRequirementMarks";
 import { isMarkable } from "@shared/requirementMarkable";
 import { CHECK_TIP_SENTENCES, WORKED_ON_LABEL, WORKED_ON_NOTE, visibleWorkedOn, workedOn, type WorkedOn } from "../lib/workedOnBy";
-import { STALE_ROW_NOTE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, staleOrphanLine, type KeyMarks } from "../lib/requirementMarks";
+import { STALE_ROW_NOTE, confirmedByInstructor, coveredByAiSentence, marksByKey, staleMarks, type KeyMarks } from "../lib/requirementMarks";
 import {
   ATTACHED_FILE_TIP, ATTENTION_ORDER, NOTHING_READ_TITLE, OPEN_FILE_FAILED, OPEN_FILE_MISSING, PILL, SCANNED_NOTE, SKIPPED_NOT_CHECKED, comparedSentence, countKinds, coveredSentence,
   coveredToggleLabel, droppedSentence, highlightHash, kindOf, nothingReadAdvice, otherCountsSentence, pillLabel, readLine, skippedLine,
@@ -412,11 +412,10 @@ export function BriefCheckCard({
   const docs = sourceType !== "GITHUB";
   const keyMarks = marks ? marksByKey(marks.marks) : undefined;
   const confirmed = marks ? confirmedByInstructor(check.requirements, marks.marks) : 0;
-  // A stale mark goes on the row it is about; when that requirement is no longer in the check, on a line after the list.
+  // A stale mark goes on the row it is about. One whose requirement is no longer in the check is ignored silently.
   const stale = marks ? staleMarks(marks.marks) : [];
   const liveKeys = new Set(check.requirements.map((r) => r.key).filter(Boolean));
   const staleKeys = new Set(stale.filter((m) => liveKeys.has(m.requirementKey)).map((m) => m.requirementKey));
-  const orphans = stale.filter((m) => !liveKeys.has(m.requirementKey));
   // An item the instructor confirmed no longer needs a check, so it is left out of "needs your check".
   const stillOpen = keyMarks ? check.requirements.filter((r) => !(kindOf(r) !== "COVERED" && r.key && keyMarks.get(r.key)?.instructor)) : check.requirements;
   const others = otherCountsSentence(countKinds(stillOpen), instructor);
@@ -480,15 +479,6 @@ export function BriefCheckCard({
         )}
         {!embedded && check.requirements.some((r) => r.contributors) && (
           <p className="text-xs leading-normal text-slate-700">{WORKED_ON_NOTE}</p>
-        )}
-        {orphans.length > 0 && (
-          <div className="space-y-1">
-            {orphans.map((m) => (
-              <p key={m.requirementKey} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950 [overflow-wrap:anywhere]">
-                {staleOrphanLine(m)}
-              </p>
-            ))}
-          </div>
         )}
         {dropped > 0 && <p className="text-xs leading-normal text-slate-700">{droppedSentence(dropped)}</p>}
         {!embedded && (

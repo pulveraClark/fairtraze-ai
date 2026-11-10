@@ -205,10 +205,11 @@ describe("instructor", () => {
     expect(a.remove).toHaveBeenCalledWith(9);
   });
 
-  it("a mark whose requirement is no longer in the check gets one line after the list, worded by its owner", async () => {
+  it("a mark whose requirement is no longer in the check is ignored silently, for the leader's claim too", async () => {
     render(<BriefCheckCard check={check()} instructor marks={api("instructor", [mark({ stale: true, requirementKey: "d".repeat(32) })])} />);
     await open();
-    expect(screen.getByText("Instructions changed. The leader's claim on “Write system documentation” no longer applies.")).toBeTruthy();
+    expect(screen.queryByText(/Instructions changed/)).toBeNull();
+    expect(screen.queryByText(/no longer applies/)).toBeNull();
   });
 });
 

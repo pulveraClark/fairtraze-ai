@@ -536,9 +536,13 @@ describe("lighter rows", () => {
     expect(note.textContent).not.toMatch(/\.\.|\.”\./);
   });
 
-  it("a stale mark with no row left gets one line after the list, with the quoted text's full stop removed", () => {
-    render(<BriefCheckCard check={withNames} instructor embedded marks={api("instructor", [mark({ requirementKey: "gone", requirementText: "Old one." })])} />);
-    expect(screen.getByText("Instructions changed. Your mark on “Old one” no longer applies.")).toBeTruthy();
+  it("a stale mark with no row left shows nothing at all (ignored silently) and changes no count", () => {
+    const { container, rerender } = render(<BriefCheckCard check={withNames} instructor marks={api("instructor", [])} />);
+    const before = container.textContent;
+    rerender(<BriefCheckCard check={withNames} instructor marks={api("instructor", [mark({ requirementKey: "gone", requirementText: "Old one." })])} />);
+    expect(screen.queryByText(/no longer applies/)).toBeNull();
+    expect(screen.queryByText(/Instructions changed/)).toBeNull();
+    expect(container.textContent).toBe(before);
   });
 
   it("'Open file' says so when the file is gone or cannot be loaded", async () => {
