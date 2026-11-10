@@ -11,6 +11,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const shots = process.argv[2] ?? null;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 const PORT = 5207;
+// 375 = phone; 640 = a 1280px desktop at 200% zoom. Run: E2E_WIDTH=640 node e2e/aiSummaryCard.mjs
+const WIDTH = Number(process.env.E2E_WIDTH ?? 375);
 const server = await createServer({ root: path.resolve(here, ".."), server: { port: PORT, strictPort: true }, logLevel: "error" });
 await server.listen();
 const browser = await chromium.launch();
@@ -18,7 +20,7 @@ let failures = 0;
 const check = (ok, what) => { console.log(`${ok ? "PASS" : "FAIL"}  ${what}`); if (!ok) failures++; };
 
 try {
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 900 } });
+  const ctx = await browser.newContext({ viewport: { width: WIDTH, height: 900 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -39,7 +41,7 @@ try {
   });
 
   let m = await measure();
-  check(m.scrollW <= 375, `no sideways scroll (scrollWidth ${m.scrollW})`);
+  check(m.scrollW <= WIDTH, `no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `no text under 12px (${m.tiny})`);
   check(m.small.length === 0, `buttons >= 40px ${JSON.stringify(m.small)}`);
   check(m.rows.length === 1 && m.rows.every((h) => h >= 44), `the disclosure row >= 44px (${m.rows.join(", ")})`);
@@ -51,7 +53,7 @@ try {
   await page.getByRole("button", { name: "+2 more" }).click();
   await page.waitForTimeout(200);
   m = await measure();
-  check(m.scrollW <= 375, `all 4 items shown: no sideways scroll (scrollWidth ${m.scrollW})`);
+  check(m.scrollW <= WIDTH, `all 4 items shown: no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `all 4 items shown: no text under 12px (${m.tiny})`);
   check(m.small.length === 0, `all 4 items shown: buttons >= 40px ${JSON.stringify(m.small)}`);
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__ai-findings-expanded-375.png") });
@@ -59,7 +61,7 @@ try {
   await page.getByRole("button", { name: "6 covered requirements, with proof" }).click();
   await page.waitForTimeout(150);
   m = await measure();
-  check(m.scrollW <= 375, `covered shown: no sideways scroll (scrollWidth ${m.scrollW})`);
+  check(m.scrollW <= WIDTH, `covered shown: no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `covered shown: no text under 12px (${m.tiny})`);
   check(m.small.length === 0, `covered shown: buttons >= 40px ${JSON.stringify(m.small)}`);
   const proofs = await page.getByRole("button", { name: /^Proof/ }).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
@@ -67,8 +69,24 @@ try {
   const open = await page.getByRole("button", { name: "Open file (new tab)" }).evaluate((e) => Math.round(e.getBoundingClientRect().height));
   check(open >= 40, `Open file button is ${open}px tall`);
   // The quiet instructor action and the disclosure row.
-  const disclosure = await page.getByRole("button", { name: /^6 covered requirements, with proof/ }).evaluate((e) => ({ h: Math.round(e.getBoundingClientRect().height), w: Math.round(e.getBoundingClientRect().width), pw: Math.round(e.parentElement.getBoundingClientRect().width), exp: e.getAttribute("aria-expanded") }));
-  check(disclosure.h >= 44 && disclosure.exp === "true" && disclosure.w >= disclosure.pw - 25 /* the card pads its content by 12px a side */, `covered disclosure row is full width and ${disclosure.h}px tall, aria-expanded=${disclosure.exp} w=${disclosure.w} parent=${disclosure.pw}`);
+  const disclosure = await page.getByRole("button", { name: /^6 covered requirements, with proof/ }).evaluate((e) => ({ h: Math.round(e.getBoundingClientRect().height), w: Math.round(e.getBoundingClientRect().width), pw: Math.round(e.parentElement.getBoundingClientRect().width), right: Math.round(e.getBoundingClientRect().right), pright: Math.round(e.parentElement.getBoundingClientRect().right), exp: e.getAttribute("aria-expanded") }));
+  if (WIDTH <= 375) {
+    check(disclosure.h >= 44 && disclosure.exp === "true" && disclosure.w >= disclosure.pw - 25 /* the card pads its content by 12px a side */, `covered disclosure row is full width and ${disclosure.h}px tall, aria-expanded=${disclosure.exp} w=${disclosure.w} parent=${disclosure.pw}`);
+  } else {
+    // Wider screens put "View the instructions" and the (i) beside the row, so it need not be full width.
+    check(disclosure.h >= 44 && disclosure.exp === "true" && disclosure.right <= disclosure.pright + 1, `covered disclosure row is ${disclosure.h}px tall, aria-expanded=${disclosure.exp}, fits inside its parent (right ${disclosure.right} <= ${disclosure.pright})`);
+    const reach = await page.evaluate(() => {
+      const row = [...document.querySelectorAll("button[aria-expanded]")].find((b) => /covered requirement/.test(b.textContent));
+      const bar = row.parentElement;
+      const link = [...bar.querySelectorAll("button")].find((b) => b.textContent.trim() === "View the instructions");
+      const tip = bar.querySelector("button[aria-label='About the project instructions check']");
+      const inView = (el) => { if (!el) return false; const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && r.left >= 0 && r.right <= document.documentElement.clientWidth && r.right <= bar.getBoundingClientRect().right + 1; };
+      return { link: inView(link), tip: inView(tip) };
+    });
+    check(reach.link && reach.tip, `"View the instructions" and the (i) are visible and inside the row (link ${reach.link}, (i) ${reach.tip})`);
+    await page.getByRole("button", { name: "About the project instructions check" }).focus();
+    check(await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "About the project instructions check"), "the (i) can take keyboard focus");
+  }
   const mark = page.getByRole("button", { name: "Mark as covered" }).first();
   const markInfo = await mark.evaluate((e) => ({ h: Math.round(e.getBoundingClientRect().height), fs: parseFloat(getComputedStyle(e).fontSize), sameLine: !!e.parentElement.querySelector("a, button:not([aria-label='x'])") }));
   check(markInfo.h >= 40 && markInfo.fs >= 12, `"Mark as covered" is ${markInfo.h}px tall, ${markInfo.fs}px text`);
@@ -81,7 +99,7 @@ try {
   await page.getByRole("button", { name: /^Proof/ }).first().click();
   await page.waitForTimeout(150);
   m = await measure();
-  check(m.scrollW <= 375, `proof open: no sideways scroll (scrollWidth ${m.scrollW})`);
+  check(m.scrollW <= WIDTH, `proof open: no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `proof open: no text under 12px (${m.tiny})`);
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__rows-proof-375.png") });
   await page.getByRole("button", { name: "About the project instructions check" }).click();
@@ -100,7 +118,7 @@ try {
     const small = [...card.querySelectorAll("button, input")].filter((b) => b.getBoundingClientRect().height > 0 && b.getBoundingClientRect().height < 40 && b.type !== "file" && !b.closest("[role=tooltip]") && b.getAttribute("aria-label") !== "About the project instructions check").map((b) => b.textContent.trim().slice(0, 30));
     return { scrollW: document.documentElement.scrollWidth, tiny, small };
   });
-  check(lm.scrollW <= 375, `leader claim panel: no sideways scroll (scrollWidth ${lm.scrollW})`);
+  check(lm.scrollW <= WIDTH, `leader claim panel: no sideways scroll (scrollWidth ${lm.scrollW})`);
   check(lm.tiny === 0, `leader claim panel: no text under 12px (${lm.tiny})`);
   check(lm.small.length === 0, `leader claim panel: targets >= 40px ${JSON.stringify(lm.small)}`);
   if (shots) await lp.locator("#leader-card").screenshot({ path: path.join(shots, "instructions-check__leader-claim-open-375.png") });
