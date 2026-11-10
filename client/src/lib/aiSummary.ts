@@ -25,20 +25,22 @@ function confirmedKeys(marks: RequirementMark[]): Set<string> {
   );
 }
 
-export interface LookItem { text: string; kind: Exclude<RequirementKind, "COVERED"> }
+export interface LookItem { text: string; kind: Exclude<RequirementKind, "COVERED">; req: Req }
 
 export interface InstructionsSummary {
+  /** Every requirement the AI listed (after its quotes were verified). */
   total: number;
+  /** Covered: the AI found it, or the instructor confirmed it. Leader claims never count. */
   found: number;
+  /** total - found: the items in the "Needs a look" box. */
   needCheck: number;
-  line: string;
-  /** At most 2: not covered first, then "check", then partly covered. */
+  /** Every open item, not covered first, then "check", then partly covered. The box shows the first 2. */
   look: LookItem[];
-  more: number;
 }
 
 const LOOK_ORDER: LookItem["kind"][] = ["NOT_COVERED", "CHECK", "PARTLY"];
 
+/** The one place the counts come from, so "N of M" in the box and "k covered" on the row always add up to M. */
 export function instructionsSummary(requirements: Req[], marks: RequirementMark[] = []): InstructionsSummary {
   const confirmed = confirmedKeys(marks);
   const open: LookItem[] = [];
@@ -46,13 +48,13 @@ export function instructionsSummary(requirements: Req[], marks: RequirementMark[
   for (const r of requirements) {
     const kind = kindOf(r);
     if (kind === "COVERED" || (r.key && confirmed.has(r.key))) found++;
-    else open.push({ text: r.text, kind: kind as LookItem["kind"] });
+    else open.push({ text: r.text, kind: kind as LookItem["kind"], req: r });
   }
-  const total = requirements.length;
-  const needCheck = open.length;
   const sorted = LOOK_ORDER.flatMap((k) => open.filter((i) => i.kind === k));
-  const line = needCheck === 0
-    ? `Instructions: ${found} of ${total} found in the work. Nothing needs your check.`
-    : `Instructions: ${found} of ${total} found in the work · ${needCheck} need${needCheck === 1 ? "s" : ""} your check`;
-  return { total, found, needCheck, line, look: sorted.slice(0, 2), more: Math.max(0, sorted.length - 2) };
+  return { total: requirements.length, found, needCheck: open.length, look: sorted };
 }
+
+/** "Needs a look (2 of 9)". */
+export const needsLookTitle = (n: number, total: number) => `Needs a look (${n} of ${total})`;
+/** "6 covered requirements, with proof". */
+export const coveredProofTitle = (k: number) => `${k} covered requirement${k === 1 ? "" : "s"}, with proof`;

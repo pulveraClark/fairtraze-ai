@@ -38,7 +38,7 @@ export function truncateQuote(q: string, max = QUOTE_MAX): string {
 }
 
 /** How a reader opens the project instructions: a link to the page that shows them (instructor) or a window (leader, student). */
-interface InstructionsAccess {
+export interface InstructionsAccess {
   instructionsHref?: string;
   onViewInstructions?: (quote?: string) => void;
   /** Opens the attached file itself (not the instructions window). Absent: the role cannot open it, so no link. */
@@ -244,9 +244,37 @@ function WorkedOnBy({ line, inline = false }: { line: WorkedOn; inline?: boolean
   );
 }
 
-function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks, staleNote }: {
+/**
+ * The action line under a requirement the AI did not confirm: "See in the instructions" (or "Open file") and, with
+ * marks, "Mark as covered" (instructor) / "We have this" (leader) or the mark's own box. Shared by the rows of the
+ * check and by the items of the "Needs a look" box, so both behave the same.
+ */
+export function RequirementActions({ r, access, marks, keyMarks }: { r: Req; access: InstructionsAccess; marks?: MarksApi; keyMarks?: KeyMarks }) {
+  const covered = kindOf(r) === "COVERED";
+  const showSee = !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
+  const showOpen = !covered && fromFileOnly(r) && !!access.openFile;
+  const lead = showSee ? <SeeInInstructions quote={r.sourceQuote} access={access} />
+    : showOpen ? <OpenFile file={r.sourceFile!} access={access} /> : null;
+  if (marks && r.key) {
+    return (
+      <RequirementMarkPanel
+        requirementKey={r.key}
+        marks={keyMarks}
+        api={marks}
+        canClaim={marks.role === "leader" && isMarkable(r)}
+        canCheck={marks.role === "instructor" && isMarkable(r)}
+        lead={lead}
+      />
+    );
+  }
+  return lead ? <div className="mt-1 flex flex-wrap items-center gap-x-2">{lead}</div> : null;
+}
+
+function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks, staleNote, confirmedRow = false }: {
   r: Req; instructor: boolean; access: InstructionsAccess; repoUrl?: string | null; docs: boolean;
   marks?: MarksApi; keyMarks?: KeyMarks; staleNote?: boolean;
+  /** The AI did not confirm it but the instructor did: shown with the covered tick (no Proof button). */
+  confirmedRow?: boolean;
 }) {
   const kind = kindOf(r);
   const covered = kind === "COVERED";
@@ -255,15 +283,10 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
   const line = visibleWorkedOn(workedOn(r, instructor, keyMarks), kind);
   // Covered and partly covered rows get the Proof button; a row that needs a check shows its Why / Look in instead.
   const proof = (covered || kind === "PARTLY") && hasProof(r, covered);
-  // "See in the instructions" / "Open file" sit on the action line under the requirement (before "Mark as covered").
-  const showSee = !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
-  const showOpen = !covered && fromFileOnly(r) && !!access.openFile;
-  const lead = showSee ? <SeeInInstructions quote={r.sourceQuote} access={access} />
-    : showOpen ? <OpenFile file={r.sourceFile!} access={access} /> : null;
   return (
     <li className="min-w-0 py-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {covered ? (
+        {covered || confirmedRow ? (
           <>
             <span aria-hidden="true" className="order-1 shrink-0 font-semibold text-emerald-800">✓</span>
             <span className="sr-only order-1">Covered</span>
@@ -271,7 +294,7 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
         ) : (
           <Pill kind={kind} instructor={instructor} />
         )}
-        <p className={`min-w-0 flex-1 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere] ${covered ? "order-2 basis-40" : "basis-48"}`}>{r.text}</p>
+        <p className={`min-w-0 flex-1 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere] ${covered || confirmedRow ? "order-2 basis-40" : "basis-48"}`}>{r.text}</p>
         {/* On a narrow screen the names wrap under the line and Proof stays beside the text. */}
         {covered && line && <div className="order-4 basis-full sm:order-3 sm:basis-auto"><WorkedOnBy line={line} inline /></div>}
         {!covered && fromFileOnly(r) && (
@@ -279,7 +302,7 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
         )}
         {proof && <ProofButton open={proofOpen} onToggle={() => setProofOpen((v) => !v)} controls={proofId} />}
       </div>
-      {kind === "CHECK" && (
+      {kind === "CHECK" && !confirmedRow && (
         <Grid
           rows={[
             ["Check", instructor ? `Does the work include “${quoted(r.text)}”?` : `Is “${quoted(r.text)}” in your work?`],
@@ -291,18 +314,7 @@ function RequirementRow({ r, instructor, access, repoUrl, docs, marks, keyMarks,
       {proof && proofOpen && <div id={proofId} className="mt-1"><ProofBody r={r} access={access} showSource={covered} /></div>}
       {!covered && line && <WorkedOnBy line={line} />}
       {staleNote && <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>}
-      {marks && r.key ? (
-        <RequirementMarkPanel
-          requirementKey={r.key}
-          marks={keyMarks}
-          api={marks}
-          canClaim={marks.role === "leader" && isMarkable(r)}
-          canCheck={marks.role === "instructor" && isMarkable(r)}
-          lead={lead}
-        />
-      ) : (
-        lead && <div className="mt-1 flex flex-wrap items-center gap-x-2">{lead}</div>
-      )}
+      <RequirementActions r={r} access={access} marks={marks} keyMarks={keyMarks} />
     </li>
   );
 }
@@ -412,8 +424,14 @@ export function BriefCheckCard({
     <RequirementRow
       key={i} r={r} instructor={instructor} access={access} repoUrl={repoUrl} docs={docs} marks={marks}
       keyMarks={r.key ? keyMarks?.get(r.key) : undefined} staleNote={!!r.key && staleKeys.has(r.key)}
+      confirmedRow={embedded && kindOf(r) !== "COVERED" && !!r.key && !!keyMarks?.get(r.key)?.instructor}
     />
   );
+  // Embedded (the instructor's AI findings card): only what is covered, with proof. The items that still need a look
+  // are in that card's "Needs a look" box, so they are not repeated here. Covered = the AI found it, or the instructor confirmed it.
+  const coveredRows = embedded
+    ? check.requirements.filter((r) => kindOf(r) === "COVERED" || (!!r.key && !!keyMarks?.get(r.key)?.instructor))
+    : covered;
 
   return (
     <Shell embedded={embedded}>
@@ -439,10 +457,13 @@ export function BriefCheckCard({
             {others && !allCovered ? ` ${others}` : ""}
           </p>
         )}
-        {!allCovered && attention.length > 0 && (
+        {!embedded && !allCovered && attention.length > 0 && (
           <ul className="divide-y divide-slate-100">{attention.map(row)}</ul>
         )}
-        {covered.length > 0 && (
+        {embedded && coveredRows.length > 0 && (
+          <ul id="instructions-covered-list" className="divide-y divide-slate-100">{coveredRows.map(row)}</ul>
+        )}
+        {!embedded && covered.length > 0 && (
           <>
             <button
               type="button"

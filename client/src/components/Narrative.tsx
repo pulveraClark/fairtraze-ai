@@ -1,5 +1,5 @@
 import { aiFooterLine } from "../lib/aiFooter";
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import type { TeamHealth } from "@shared/types";
 import ReactMarkdown from "react-markdown";
 import { BUTTON_SECONDARY, CARD } from "./ui/styles";
@@ -9,13 +9,14 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
-import { BriefCheckCard, CheckHeaderActions } from "./BriefCheckCard";
+import { BriefCheckCard, CheckHeaderActions, RequirementActions, type InstructionsAccess } from "./BriefCheckCard";
+import { STALE_ROW_NOTE, marksByKey, staleMarks } from "../lib/requirementMarks";
 import { StatusPill } from "./ui/StatusPill";
 import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
 import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
 import { useRequirementMarks } from "../hooks/useRequirementMarks";
-import { healthSentence, instructionsSummary } from "../lib/aiSummary";
+import { coveredProofTitle, healthSentence, instructionsSummary, needsLookTitle } from "../lib/aiSummary";
 import { PILL, pillLabel } from "../lib/instructionsCheck";
 import { RefreshFailedNote } from "./RefreshFailedNote";
 import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
@@ -93,7 +94,7 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, ...ca
       }
     : undefined;
   const [open, setOpen] = useState(false);
-  const rowRef = useRef<HTMLButtonElement>(null);
+  const [showAllLook, setShowAllLook] = useState(false);
   const summary = instructionsSummary(check.requirements, marks.marks);
   const unavailable = !!failedNote;
   const actions = <CheckHeaderActions sources={check.sources} instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} />;
@@ -101,54 +102,65 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, ...ca
     return (
       <div className="mt-3 space-y-2">
         {failedNote}
-        <Disclosure title="Project instructions check · nothing could be read" open={open} onToggle={() => setOpen((v) => !v)} buttonRef={rowRef} actions={actions}>
+        <Disclosure title="Project instructions check · nothing could be read" open={open} onToggle={() => setOpen((v) => !v)} actions={actions}>
           <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
         </Disclosure>
       </div>
     );
   }
   if (summary.total === 0) return null;
+  const access: InstructionsAccess = { instructionsHref: card.instructionsHref, onViewInstructions: card.onViewInstructions, openFile: onOpenFile };
+  const keyMarks = marksByKey(marks.marks);
+  // An older mark whose sentence changed, on a requirement that is still in the check: the row says "check again".
+  const liveKeys = new Set(check.requirements.map((r) => r.key).filter(Boolean));
+  const staleKeys = new Set(staleMarks(marks.marks).filter((m) => liveKeys.has(m.requirementKey)).map((m) => m.requirementKey));
+  const shown = showAllLook ? summary.look : summary.look.slice(0, 2);
+  const more = summary.look.length - 2;
   return (
     <>
-      <p className="mt-3 text-sm font-medium leading-normal text-slate-900">
-        {unavailable ? "Instructions check unavailable. Last good result kept." : summary.line}
-      </p>
+      {unavailable && <p className="mt-3 text-sm font-medium leading-normal text-slate-900">Instructions check unavailable. Last good result kept.</p>}
       {summary.look.length > 0 && (
         <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
-          <p className="text-xs font-semibold text-amber-950">Needs a look</p>
+          <p className="text-xs font-semibold text-amber-950">{needsLookTitle(summary.needCheck, summary.total)}</p>
           <ul className="mt-1.5 space-y-2">
-            {summary.look.map((i) => (
-              <li key={i.text} className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${PILL[i.kind].cls}`}>
-                  <span aria-hidden="true">{PILL[i.kind].icon}</span>
-                  {pillLabel(i.kind, true)}
-                </span>
-                <span className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{i.text}</span>
+            {shown.map((i) => (
+              <li key={i.req.key ?? i.text} className="min-w-0">
+                <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${PILL[i.kind].cls}`}>
+                    <span aria-hidden="true">{PILL[i.kind].icon}</span>
+                    {pillLabel(i.kind, true)}
+                  </span>
+                  <span className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{i.text}</span>
+                </div>
+                {!i.req.sourceQuote && i.req.sourceFile && (
+                  <p className="mt-1 text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">From attached file: {i.req.sourceFile}</p>
+                )}
+                {i.req.key && staleKeys.has(i.req.key) && (
+                  <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>
+                )}
+                <RequirementActions r={i.req} access={access} marks={marks} keyMarks={i.req.key ? keyMarks.get(i.req.key) : undefined} />
               </li>
             ))}
           </ul>
-          {summary.more > 0 && (
+          {more > 0 && (
             <button
               type="button"
-              onClick={() => { setOpen(true); rowRef.current?.focus(); }}
+              aria-expanded={showAllLook}
+              onClick={() => setShowAllLook((v) => !v)}
               className={`mt-1 inline-flex min-h-10 items-center text-sm font-medium text-blue-800 underline underline-offset-2 ${FOCUS_LIGHT}`}
             >
-              +{summary.more} more
+              {showAllLook ? "Show fewer" : `+${more} more`}
             </button>
           )}
         </div>
       )}
       <div className="mt-3 space-y-2">
         {failedNote}
-        <Disclosure
-          title={`Project instructions check · all ${summary.total}, with proof`}
-          open={open}
-          onToggle={() => setOpen((v) => !v)}
-          buttonRef={rowRef}
-          actions={actions}
-        >
-          <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
-        </Disclosure>
+        {summary.found > 0 && (
+          <Disclosure title={coveredProofTitle(summary.found)} open={open} onToggle={() => setOpen((v) => !v)} actions={actions}>
+            <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
+          </Disclosure>
+        )}
       </div>
     </>
   );

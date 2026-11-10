@@ -428,7 +428,7 @@ describe("project instructions check placement", () => {
   it("instructor: the check sits in the AI findings card; a failed run gets one calm line", () => {
     const start = vi.fn();
     const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} />);
-    expect(screen.getByRole("button", { name: /Project instructions check · all 5, with proof/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^2 covered requirements, with proof/ })).toBeTruthy();
     rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefFailed: true }, error: null, start }} />);
     expect(screen.queryByRole("button", { name: /Project instructions check/ })).toBeNull();
     expect(screen.getByText("The project instructions check could not run. Try again later.")).toBeTruthy();
@@ -479,11 +479,9 @@ describe("lighter rows", () => {
     marks, role, error: null, claim: vi.fn(async () => true), confirm: vi.fn(async () => true), decline: vi.fn(async () => true),
     remove: vi.fn(async () => true), loadImage: vi.fn(async () => new Blob(["x"])),
   });
-  const openCovered = () => userEvent.click(screen.getByRole("button", { name: /^2 covered requirements · show/ }));
 
   it("a covered row is one line: tick, text, up to 2 names then +N, and a Proof button; no chip, no 'See proof'", async () => {
     render(<BriefCheckCard check={withNames} instructor embedded />);
-    await openCovered();
     const row = within(rowOf("Has a login page"));
     expect(row.getByText("Ana R.")).toBeTruthy();
     expect(row.getByText("Ben C.")).toBeTruthy();
@@ -495,8 +493,24 @@ describe("lighter rows", () => {
     expect(within(rowOf("Has a survey")).queryByText("Worked on by")).toBeNull();
   });
 
-  it("a not-covered row without names has no 'Worked on by' and no 'No one found yet'", () => {
+  it("embedded lists only the covered rows, straight away: no not-covered rows and no show/hide toggle", () => {
     render(<BriefCheckCard check={withNames} instructor embedded />);
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Has a README")).toBeNull();
+    expect(screen.queryByText("Has charts")).toBeNull();
+    expect(screen.queryByRole("button", { name: /covered requirements . (show|hide)/ })).toBeNull();
+  });
+
+  it("embedded: an item the instructor confirmed is listed with a tick, no pill and no Proof button", () => {
+    render(<BriefCheckCard check={withNames} instructor embedded marks={api("instructor", [mark({ requirementKey: "Has a README", requirementText: "Has a README.", stale: false })])} />);
+    const row = within(rowOf("Has a README"));
+    expect(row.queryByText("Not covered yet")).toBeNull();
+    expect(row.getByText("Confirmed by the instructor")).toBeTruthy();
+    expect(row.queryByRole("button", { name: /^Proof/ })).toBeNull();
+  });
+
+  it("a not-covered row without names has no 'Worked on by' and no 'No one found yet'", () => {
+    render(<BriefCheckCard check={withNames} instructor />);
     const row = within(rowOf("Has a README"));
     expect(row.queryByText("Worked on by")).toBeNull();
     expect(screen.queryByText(/No one found yet/)).toBeNull();
@@ -515,7 +529,7 @@ describe("lighter rows", () => {
   });
 
   it("a stale mark sits on its own row, not at the bottom, and its text has no double period", () => {
-    render(<BriefCheckCard check={withNames} instructor embedded marks={api("instructor", [mark({})])} />);
+    render(<BriefCheckCard check={withNames} instructor marks={api("instructor", [mark({})])} />);
     const note = within(rowOf("Has tests")).getByText("Instructions changed since your mark. Check again.");
     expect(note).toBeTruthy();
     expect(screen.getAllByText(/Instructions changed/)).toHaveLength(1);
