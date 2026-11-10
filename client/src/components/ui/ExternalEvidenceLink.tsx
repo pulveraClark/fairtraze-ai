@@ -24,13 +24,14 @@ export function baseName(path: string): string {
 
 /** The accessible name of a file link; says where it goes and that it opens a new tab. */
 export function fileLinkLabel(path: string, isCommit: boolean, lines?: readonly [number, number]): string {
-  const what = isCommit ? "changes" : lines ? linesText(lines) : "file";
-  return `Open ${baseName(path)} ${what} on GitHub (new tab)`;
+  // With lines the name is spoken as "Open Graphhopper.py, lines 12 to 14, on GitHub (new tab)".
+  if (!isCommit && lines) return `Open ${baseName(path)}, ${linesText(lines, " to ")}, on GitHub (new tab)`;
+  return `Open ${baseName(path)} ${isCommit ? "changes" : "file"} on GitHub (new tab)`;
 }
 
-/** "line 12" or "lines 12-15". */
-export function linesText(lines: readonly [number, number]): string {
-  return lines[0] === lines[1] ? `line ${lines[0]}` : `lines ${lines[0]}-${lines[1]}`;
+/** "line 12" or "lines 12-15" (`join` " to " for speech). */
+export function linesText(lines: readonly [number, number], join = "-"): string {
+  return lines[0] === lines[1] ? `line ${lines[0]}` : `lines ${lines[0]}${join}${lines[1]}`;
 }
 
 export function ExternalEvidenceLink({

@@ -179,7 +179,7 @@ describe("BriefCheckCard", () => {
     await userEvent.click(screen.getByRole("button", { name: /covered requirements/ }));
     for (const b of screen.getAllByRole("button", { name: /^Proof/ })) await userEvent.click(b);
     const first = within(rowOf("Build a route planner that uses GraphHopper"));
-    const a = first.getByRole("link", { name: "Open Graphhopper.py lines 12-14 on GitHub (new tab)" });
+    const a = first.getByRole("link", { name: "Open Graphhopper.py, lines 12 to 14, on GitHub (new tab)" });
     expect(a.getAttribute("href")).toBe(blob);
     expect(a.textContent).toBe("Graphhopper.py, lines 12-14");
     expect(first.getByText("return graphhopper.route(a, b)")).toBeTruthy();

@@ -102,6 +102,39 @@ try {
   check(m.scrollW <= WIDTH, `proof open: no sideways scroll (scrollWidth ${m.scrollW})`);
   check(m.tiny === 0, `proof open: no text under 12px (${m.tiny})`);
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "ai-summary__rows-proof-375.png") });
+
+  // Code proof: file and lines + quote; lines with the quote hidden; the file only. Every proof open.
+  for (const b of await page.getByRole("button", { name: /^Proof/ }).all()) {
+    if ((await b.getAttribute("aria-expanded")) !== "true") await b.click();
+  }
+  await page.waitForTimeout(150);
+  const withLines = page.getByRole("link", { name: "Open Graphhopper.py, lines 12 to 14, on GitHub (new tab)" });
+  const hiddenQuote = page.getByRole("link", { name: "Open Graphhopper.py, lines 20 to 22, on GitHub (new tab)" });
+  const fileOnly = page.getByRole("link", { name: "Open Graphhopper.py file on GitHub (new tab)" });
+  check((await withLines.count()) === 1 && (await hiddenQuote.count()) === 1 && (await fileOnly.count()) === 1, "the three code links are named 'Open Graphhopper.py, lines 12 to 14, on GitHub (new tab)', '..., lines 20 to 22, ...' and '... file ...'");
+  check((await withLines.textContent()) === "server/routing/Graphhopper.py, lines 12-14", `link text reads the path and 'lines 12-14' (${await withLines.textContent()})`);
+  check((await withLines.getAttribute("href")).endsWith("#L12-L14") && !(await fileOnly.getAttribute("href")).includes("#L"), "the lines link has #L12-L14; the file-only link has no #L");
+  const codeRows = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll("a[aria-label^='Open Graphhopper.py']")].map((a) => a.closest("li"));
+    const quote = rows[0].querySelector("blockquote");
+    return {
+      targets: [...document.querySelectorAll("a[aria-label^='Open Graphhopper.py']")].map((a) => Math.round(a.getBoundingClientRect().height)),
+      quoteFont: quote ? parseFloat(getComputedStyle(quote).fontSize) : 0,
+      quoteLines: quote ? Math.round(quote.getBoundingClientRect().height / parseFloat(getComputedStyle(quote).lineHeight)) : 0,
+      quoteRight: quote ? Math.round(quote.getBoundingClientRect().right) : 0,
+      rowRight: Math.round(rows[0].getBoundingClientRect().right),
+      quotes: rows.map((li) => li.querySelectorAll("blockquote").length),
+      scrollW: document.documentElement.scrollWidth,
+    };
+  });
+  check(codeRows.targets.every((h) => h >= 40), `code links are >= 40px tall (${codeRows.targets.join(", ")})`);
+  check(codeRows.quoteFont >= 12, `the quote is ${codeRows.quoteFont}px`);
+  check(codeRows.quoteLines >= 2 && codeRows.quoteRight <= codeRows.rowRight, `the long quote wraps (${codeRows.quoteLines} lines) and stays inside its row (${codeRows.quoteRight} <= ${codeRows.rowRight})`);
+  check(codeRows.quotes.join() === "1,0,0", `a quote under the first link only; none when hidden or without lines (${codeRows.quotes.join()})`);
+  check(codeRows.scrollW <= WIDTH, `code proofs open: no sideways scroll (scrollWidth ${codeRows.scrollW})`);
+  m = await measure();
+  check(m.tiny === 0 && m.small.length === 0, `code proofs open: no text under 12px (${m.tiny}), buttons >= 40px ${JSON.stringify(m.small)}`);
+  if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, `ai-summary__code-proof-${WIDTH}.png`) });
   await page.getByRole("button", { name: "About the project instructions check" }).click();
   if (shots) await page.screenshot({ path: path.join(shots, "ai-summary__tip-open-375.png") });
   if (shots) await page.locator("#narrative-title").locator("xpath=ancestor::section").screenshot({ path: path.join(shots, "instructions-check__covered-list-open-375.png") });

@@ -32,8 +32,20 @@ const req = (text: string, status: "FOUND" | "NOT_FOUND" | "PARTLY_FOUND", unver
   text, status, unverified, key: text, contributors, sourceQuote: `${text} (from the instructions)`,
   evidence: status === "FOUND" ? [{ type: "file", ref: "src/App.tsx", href: "https://github.com/example/app/blob/HEAD/src/App.tsx", isCommit: false }] : [],
 });
+// Code proof shapes: lines + quote; lines with the quote hidden (changed by redaction); the file only (no lines).
+const sha = "a".repeat(40);
+const gp = `https://github.com/example/app/blob/${sha}/server/routing/Graphhopper.py`;
+const codeProof = [
+  [{ type: "file", ref: "server/routing/Graphhopper.py", href: `${gp}#L12-L14`, isCommit: false, lines: [12, 14], quoteHidden: false,
+    quote: "route = graphhopper.route(origin, destination, vehicle=default_vehicle, instructions=True, locale='en')" }],
+  [{ type: "file", ref: "server/routing/Graphhopper.py", href: `${gp}#L20-L22`, isCommit: false, lines: [20, 22], quote: "", quoteHidden: false }],
+  [{ type: "file", ref: "server/routing/Graphhopper.py", href: gp, isCommit: false, quote: "", quoteHidden: false }],
+];
 const requirements = [
-  ...Array.from({ length: 6 }, (_, i) => req(`Requirement ${i + 1} is met`, "FOUND", false, i < 4 ? ["Ana R.", "Ben C.", "Cy D."] : [])),
+  ...Array.from({ length: 6 }, (_, i) => {
+    const r = req(`Requirement ${i + 1} is met`, "FOUND", false, i < 4 ? ["Ana R.", "Ben C.", "Cy D."] : []);
+    return i < 3 ? { ...r, evidence: codeProof[i] } : r;
+  }),
   req(long, "NOT_FOUND"), req("Has automated tests", "NOT_FOUND", true), req("Has a README", "NOT_FOUND"),
   { ...req("Matches the wireframes in the design file", "NOT_FOUND", true), sourceQuote: undefined, sourceFile: "Final-Project-Instructions-Section-B-Group-Deliverables-2026-Semester-1-v3.pdf" },
 ] as AiBriefCheck["requirements"];
