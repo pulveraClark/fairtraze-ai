@@ -26,7 +26,7 @@ async function setup(opts: { status?: "OK" | "FAILED" | "SKIPPED"; requirements?
   const report = await prisma.report.create({ data: { projectId: project.id, content: "{}" } });
   const requirements = opts.requirements ?? [
     { text: "Has a login page", status: "FOUND", evidence: [
-      { type: "file", ref: "src/Login.tsx", quote: "export function Login()" },
+      { type: "file", ref: "src/Login.tsx", quote: "export function Login()", headSha: "a".repeat(40), lines: [3, 4], quoteSafe: true },
       { type: "doc", ref: "Methodology", quote: "Ben wrote this sentence", authors: [ben.id] },
       { type: "doc", ref: "Intro", quote: "Lia wrote this sentence", authors: [leader.id] },
     ] },
@@ -59,7 +59,8 @@ describe("brief check visibility", () => {
     const s = await setup();
     const res = await get(s.project.id, s.leader);
     const ev = res.body.briefCheck.requirements[0].evidence;
-    expect(ev[0]).toMatchObject({ ref: "src/Login.tsx", quote: "export function Login()", quoteHidden: false });
+    expect(ev[0]).toMatchObject({ ref: "src/Login.tsx", quote: "export function Login()", quoteHidden: false, lines: [3, 4], isCommit: false });
+    expect(ev[0].href).toBe(`https://github.com/example/repo/blob/${"a".repeat(40)}/src/Login.tsx#L3-L4`);
     expect(ev[1]).toMatchObject({ ref: "Methodology", quote: "", quoteHidden: true });
     expect(ev[2]).toMatchObject({ ref: "Intro", quote: "Lia wrote this sentence", quoteHidden: false });
     expect(res.body.briefCheck).not.toHaveProperty("aiAddressedCount");

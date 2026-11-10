@@ -18,6 +18,8 @@ describe("ExternalEvidenceLink", () => {
 
   it("names a file-only link as a file, and wraps long paths", () => {
     expect(fileLinkLabel("a/b/Trip.py", false)).toBe("Open Trip.py file on GitHub (new tab)");
+    expect(fileLinkLabel("a/b/Trip.py", false, [3, 3])).toBe("Open Trip.py line 3 on GitHub (new tab)");
+    expect(fileLinkLabel("a/b/Trip.py", false, [3, 9])).toBe("Open Trip.py lines 3-9 on GitHub (new tab)");
     render(<ExternalEvidenceLink href={href} label="x">{"a/".repeat(60)}</ExternalEvidenceLink>);
     expect(screen.getByRole("link").innerHTML).toContain("[overflow-wrap:anywhere]");
   });

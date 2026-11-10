@@ -13,7 +13,7 @@ import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { activeQuotaLimit } from "../lib/aiFailureText.js";
 import { requirementKeys } from "../lib/requirementMarks.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
-import { canonicalRepoUrl, linkFile, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
+import { canonicalRepoUrl, linkFile, linkFileAtCommit, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
 import { contributorsFor, evidenceShas, hasHeadingProof, headingAuthorIds, type ContributorLookup } from "../lib/aiReview/contributors.js";
 import { loadGroupDocEvidence } from "../lib/aiReview/docsEvidence.js";
 import type {
@@ -141,8 +141,11 @@ export function shapeBriefForViewer(
     ...(who ? { contributors: contributorsFor(r.evidence, who) } : {}),
     evidence: r.evidence.map((e) => {
       const othersWrote = e.type === "doc" && viewer === "leader" && !!e.quote && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
-      const links = e.type === "file" ? (linkFile(repo, e.ref, e.commits) ?? {}) : {};
-      return { type: e.type, ref: e.ref, quote: othersWrote ? "" : e.quote, quoteHidden: othersWrote, ...(e.heading ? { heading: true } : {}), ...links };
+      // A code proof read at a pinned commit links to the file (and the quoted lines) at that commit; older
+      // checks keep the commit link. The code quote is shown only when it was confirmed safe to show.
+      const links = e.type === "file" ? (linkFileAtCommit(repo, e.ref, e.headSha, e.lines) ?? linkFile(repo, e.ref, e.commits) ?? {}) : {};
+      const quote = e.type === "file" ? (e.quoteSafe ? e.quote : "") : othersWrote ? "" : e.quote;
+      return { type: e.type, ref: e.ref, quote, quoteHidden: othersWrote, ...(e.heading ? { heading: true } : {}), ...links };
     }),
   }));
   return {

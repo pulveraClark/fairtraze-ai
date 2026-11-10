@@ -298,3 +298,50 @@ describe("runBriefComparison", () => {
     expect((await prisma.report.findUnique({ where: { id: report.id } }))!.content).toBe("{}");
   });
 });
+
+describe("runBriefComparison: code proof is read at one commit", () => {
+  const HEAD = "b".repeat(40);
+  const found = [{
+    text: "Has a login form", status: "FOUND", sourceQuote: "The app has a login page.",
+    evidence: [{ type: "file", ref: "src/Login.tsx", quote: "export function Login()" }],
+  }];
+
+  it("pins the tree and file reads to the head commit and stores it with the quoted lines", async () => {
+    const { project, ana } = await setup({ sourceType: "GITHUB" });
+    await prisma.aiCommitDigest.create({ data: { projectId: project.id, sha: "abc", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", authorLogin: "anacruz", summary: "Added login.", files: [{ path: "src/Login.tsx", added: 20, removed: 0 }] } });
+    const fetchTree = vi.fn().mockResolvedValue(["README.md", "src/Login.tsx"]);
+    const fetchFile = vi.fn(async (_o: string, _r: string, _t: string, path: string) =>
+      path === "src/Login.tsx" ? ["// header", "export function Login() { return null; }", ""].join("\n") : "# Readme");
+    const resolveHead = vi.fn().mockResolvedValue(HEAD);
+    const r = await runBriefComparison(project.id, deps({ generate: answer(found), anaId: ana.id, fetchTree, fetchFile, resolveHead }));
+
+    expect(fetchTree.mock.calls[0]![3]).toBe(HEAD);
+    expect(fetchFile.mock.calls.every((c) => c[4] === HEAD)).toBe(true);
+    expect(r.content.requirements[0]!.evidence[0]).toMatchObject({
+      type: "file", ref: "src/Login.tsx", headSha: HEAD, lines: [2, 2], quoteSafe: true, quote: "export function Login()",
+    });
+  });
+
+  it("when the head commit cannot be read it works as before: no pinned commit, no lines", async () => {
+    const { project, ana } = await setup({ sourceType: "GITHUB" });
+    await prisma.aiCommitDigest.create({ data: { projectId: project.id, sha: "abc", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", authorLogin: "anacruz", summary: "Added login.", files: [{ path: "src/Login.tsx", added: 20, removed: 0 }] } });
+    const resolveHead = vi.fn().mockRejectedValue(new Error("github"));
+    const r = await runBriefComparison(project.id, deps({ generate: answer(found), anaId: ana.id, resolveHead }));
+    const ev = r.content.requirements[0]!.evidence[0]!;
+    expect(r.status).toBe("OK");
+    expect(ev.ref).toBe("src/Login.tsx");
+    expect(ev).not.toHaveProperty("headSha");
+    expect(ev).not.toHaveProperty("lines");
+  });
+
+  it("a quote on a line that had a secret removed keeps its line link but is not shown", async () => {
+    const { project, ana } = await setup({ sourceType: "GITHUB" });
+    await prisma.aiCommitDigest.create({ data: { projectId: project.id, sha: "abc", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m", authorLogin: "anacruz", summary: "Added login.", files: [{ path: "src/Login.tsx", added: 20, removed: 0 }] } });
+    const resolveHead = vi.fn().mockResolvedValue(HEAD);
+    // The default fixture file has API_KEY = 'abcdef123456' on the quoted line.
+    const r = await runBriefComparison(project.id, deps({ generate: answer(found), anaId: ana.id, resolveHead }));
+    const ev = r.content.requirements[0]!.evidence[0]!;
+    expect(ev).toMatchObject({ headSha: HEAD, lines: [1, 1] });
+    expect(ev).not.toHaveProperty("quoteSafe");
+  });
+});

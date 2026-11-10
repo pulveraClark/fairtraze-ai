@@ -167,10 +167,15 @@ function ProofBody({ r, access, showSource }: { r: Req; access: InstructionsAcce
           {evidence.map((e, j) => (
             <li key={j} className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-normal">
               {e.type === "file" ? (
-                <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
-                  <span>Code:</span>
-                  <FileEvidenceLink path={e.ref} href={e.href} isCommit={e.isCommit} />
-                </div>
+                <>
+                  <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">
+                    <span>Code:</span>
+                    <FileEvidenceLink path={e.ref} href={e.href} isCommit={e.isCommit} lines={e.lines} />
+                  </div>
+                  {e.quote ? (
+                    <blockquote className="mt-0.5 border-l-2 border-slate-300 pl-2 font-mono text-xs text-slate-900 [overflow-wrap:anywhere]">{truncateQuote(e.quote)}</blockquote>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <div className="flex flex-wrap items-center gap-x-1 text-xs font-semibold text-slate-700 [overflow-wrap:anywhere]">

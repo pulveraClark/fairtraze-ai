@@ -37,6 +37,25 @@ export function fileUrl(ref: RepoRef, path: string): string {
   return `https://github.com/${ref.owner}/${ref.repo}/blob/HEAD/${encoded}`;
 }
 
+/** The file at one commit, with the quoted lines highlighted when they are known. */
+export function blobUrl(ref: RepoRef, sha: string, path: string, lines?: readonly [number, number]): string {
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const anchor = lines && lines[0] >= 1 && lines[1] >= lines[0] ? (lines[1] === lines[0] ? `#L${lines[0]}` : `#L${lines[0]}-L${lines[1]}`) : "";
+  return `https://github.com/${ref.owner}/${ref.repo}/blob/${sha}/${encoded}${anchor}`;
+}
+
+/**
+ * Brief check, code proof read at a pinned commit: the file at that commit (not a commit diff), with the quoted
+ * lines when known. Null when there is no pinned commit (older checks), so the caller keeps the commit link.
+ */
+export function linkFileAtCommit(
+  ref: RepoRef | null, path: string, sha: string | undefined, lines?: readonly [number, number],
+): { href: string; isCommit: false; lines?: [number, number] } | null {
+  if (!ref || !path || !sha || !SHA.test(sha)) return null;
+  const ok = lines && lines[0] >= 1 && lines[1] >= lines[0];
+  return { href: blobUrl(ref, sha, path, ok ? lines : undefined), isCommit: false, ...(ok ? { lines: [lines![0], lines![1]] as [number, number] } : {}) };
+}
+
 export interface FileLinks {
   /** The newest commit's diff anchored to this file, or the file itself when no commit is known. */
   href: string;

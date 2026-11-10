@@ -23,8 +23,14 @@ export function baseName(path: string): string {
 }
 
 /** The accessible name of a file link; says where it goes and that it opens a new tab. */
-export function fileLinkLabel(path: string, isCommit: boolean): string {
-  return `Open ${baseName(path)} ${isCommit ? "changes" : "file"} on GitHub (new tab)`;
+export function fileLinkLabel(path: string, isCommit: boolean, lines?: readonly [number, number]): string {
+  const what = isCommit ? "changes" : lines ? linesText(lines) : "file";
+  return `Open ${baseName(path)} ${what} on GitHub (new tab)`;
+}
+
+/** "line 12" or "lines 12-15". */
+export function linesText(lines: readonly [number, number]): string {
+  return lines[0] === lines[1] ? `line ${lines[0]}` : `lines ${lines[0]}-${lines[1]}`;
 }
 
 export function ExternalEvidenceLink({
@@ -46,16 +52,20 @@ export function ExternalEvidenceLink({
 
 /** A changed file: the newest commit's diff, then "+N more" with one link per other commit. */
 export function FileEvidenceLink({
-  path, href, isCommit, more,
+  path, href, isCommit, more, lines,
 }: {
   path: string;
   href?: string;
   isCommit?: boolean;
   more?: Array<{ sha: string; href: string }>;
+  /** The quoted lines of the file, when the link points at them. */
+  lines?: readonly [number, number];
 }) {
   return (
     <span className="flex min-w-0 flex-col">
-      <ExternalEvidenceLink href={href} label={fileLinkLabel(path, isCommit !== false)}>{path}</ExternalEvidenceLink>
+      <ExternalEvidenceLink href={href} label={fileLinkLabel(path, isCommit !== false, lines)}>
+        {lines ? `${path}, ${linesText(lines)}` : path}
+      </ExternalEvidenceLink>
       {more && more.length > 0 && (
         <span className="flex flex-wrap items-center gap-x-2 text-xs text-slate-700">
           <span>+{more.length} more</span>

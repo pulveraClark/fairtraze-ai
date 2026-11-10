@@ -10,15 +10,16 @@ import { quotaGate } from "./limiter.js";
 import { adoptReviewForReport, findReusableReview, inputFingerprint } from "./inputFingerprint.js";
 import type { AiBriefContent, AiBriefSources, AiReviewStatus } from "@shared/aiReviewTypes.js";
 import { loadGroupDocEvidence } from "./docsEvidence.js";
-import { fetchRepoTree, fetchRepoFileText } from "./repoFiles.js";
+import { fetchRepoTree, fetchRepoFileText, fetchHeadSha } from "./repoFiles.js";
 import { fetchRepoCommitMessages } from "../githubCommitMessages.js";
 import { COMMIT_PAGES } from "./memberSummaries.js";
 import { sanitizeForAi } from "./sanitize.js";
 import { redactSecrets } from "./redact.js";
 import { BRIEF_PROMPT_VERSION, BRIEF_SCHEMA, BRIEF_SYSTEM, NO_WRITTEN_BRIEF, dataBlock, validateBriefOutput } from "./prompts.js";
 import {
-  KEY_FILE_CHARS, briefFingerprint, buildDocSections, fitBriefInput, logProofCheck, selectKeyFiles, selectTreePaths, verifyRequirements,
-  type BriefInput,
+  KEY_FILE_CHARS, briefFingerprint, buildDocSections, fitBriefInput, lineBreaksKept, logProofCheck, selectKeyFiles, selectTreePaths,
+  verifyRequirements, type BriefInput, type RawFileInfo,
+
 } from "./briefEvidence.js";
 import type { ReviewResult } from "./memberSummaries.js";
 
@@ -29,6 +30,9 @@ import type { ReviewResult } from "./memberSummaries.js";
 export interface BriefDeps {
   fetchTree: typeof fetchRepoTree;
   fetchFile: typeof fetchRepoFileText;
+  // The commit the files are read at, so a code link can point to the exact lines. Optional and best effort:
+  // without it the check works as before and links keep to the commit diff.
+  resolveHead?: typeof fetchHeadSha;
   loadDocs: typeof loadGroupDocEvidence;
   generate: typeof generateJson;
   githubToken: string | undefined;
@@ -41,6 +45,7 @@ export interface BriefDeps {
 const defaultDeps = (): BriefDeps => ({
   fetchTree: fetchRepoTree,
   fetchFile: fetchRepoFileText,
+  resolveHead: fetchHeadSha,
   loadDocs: loadGroupDocEvidence,
   generate: generateJson,
   githubToken: process.env.GITHUB_TOKEN,
@@ -122,6 +127,9 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   const files: BriefInput["files"] = [];
   // path -> shas of the commits that touched it, newest first. Display only (links); never sent to the AI.
   const commitsByPath = new Map<string, string[]>();
+  // The commit the files were read at, and each file as read (to count lines); neither is sent to the AI.
+  let headSha: string | undefined;
+  const rawFiles = new Map<string, RawFileInfo>();
   const repo = project.repoUrl ? checkRepoUrl(project.repoUrl) : null;
   if (sourceType !== "EDITOR" && repo?.ok) {
     sources++;
@@ -130,7 +138,13 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
       errors.push("GITHUB_UNAVAILABLE");
     } else {
       try {
-        const tree = await deps.fetchTree(repo.owner, repo.repo, deps.githubToken);
+        // Pin every read to one commit so the quoted line numbers stay true. Best effort: if it fails, read as before.
+        try {
+          headSha = (await deps.resolveHead?.(repo.owner, repo.repo, deps.githubToken)) ?? undefined;
+        } catch {
+          headSha = undefined;
+        }
+        const tree = await deps.fetchTree(repo.owner, repo.repo, deps.githubToken, headSha);
         paths = selectTreePaths(tree);
         const digests = await prisma.aiCommitDigest.findMany({
           where: { projectId },
@@ -152,11 +166,13 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
         }
         for (const path of selectKeyFiles(paths, added)) {
           try {
-            const text = await deps.fetchFile(repo.owner, repo.repo, deps.githubToken, path);
+            const text = await deps.fetchFile(repo.owner, repo.repo, deps.githubToken, path, headSha);
             if (text === null) continue;
-            const excerpt = clean(redactSecrets(text.slice(0, KEY_FILE_CHARS)));
+            const rawExcerpt = text.slice(0, KEY_FILE_CHARS);
+            const excerpt = clean(redactSecrets(rawExcerpt));
             files.push({ path, excerpt });
             fileText.set(path, excerpt);
+            rawFiles.set(path, { raw: rawExcerpt, aligned: lineBreaksKept(rawExcerpt, excerpt) });
           } catch {
             // One unreadable file is not a failure of the whole check.
           }
@@ -202,6 +218,8 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     input,
     attached: briefFiles.usable.map((f) => f.filename),
     commits: [...commitsByPath.entries()].sort(([a], [b]) => (a < b ? -1 : 1)),
+    // A new pinned commit changes the lines the links point to, and a check written before line links must not be reused.
+    ...(headSha ? { head: headSha } : {}),
   });
   if (errors.length === 0) {
     const prev = await findReusableReview(projectId, "BRIEF_COMPARISON");
@@ -257,7 +275,7 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
   // A requirement may point only to the written instructions that were sent and to files that were sent.
   const verified = verifyRequirements(raw, {
     source: { instructions: brief ? input.brief : "", files: sentFiles.map((f) => f.filename) },
-    paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans,
+    paths: new Set(input.paths), fileText, docs: input.docs, pieces, spans, headSha, rawFiles,
   });
   logProofCheck(`brief (group ${projectId})`, verified.proof, verified.rejections);
   briefSources = { ...briefSources, droppedCount: verified.droppedCount };

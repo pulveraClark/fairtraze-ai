@@ -16,6 +16,8 @@ export interface AiFileLinks {
   isCommit?: boolean;
   // Other commits that touched the file, newest first.
   more?: AiEvidenceLink[];
+  // Brief check only: the quoted lines [first, last] of the file at the analyzed commit, when known and safe.
+  lines?: [number, number];
 }
 
 export interface AiSummaryEvidence {
@@ -74,6 +76,12 @@ export interface AiBriefEvidence {
   commits?: string[];
   // Short text copied from that file or section. Verified in code before it is stored.
   quote: string;
+  // Files only, checks written after the line-link change: the commit the file was read at, the quote's first and
+  // last line in it, and whether the quote may be shown (those lines are identical before and after secret removal
+  // and pseudonyms). Absent on older checks, which keep their commit link and show no code quote.
+  headSha?: string;
+  lines?: [number, number];
+  quoteSafe?: boolean;
   // Docs only: true when the proof is the section heading itself (a requirement about the whole document);
   // `ref` is then a real heading of the document outline and `quote` is empty.
   heading?: boolean;

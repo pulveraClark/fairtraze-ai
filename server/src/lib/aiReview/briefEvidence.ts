@@ -160,6 +160,9 @@ export interface BriefVerifyContext {
   // For doc quotes: who wrote the piece that contains it.
   pieces: DocPiece[];
   spans: AuthorshipSpan[];
+  // Optional, for code links: the commit the files were read at, and each file as read (before cleaning).
+  headSha?: string;
+  rawFiles?: Map<string, RawFileInfo>;
 }
 
 /** Everyone who wrote any of the pieces the quote touches. */
@@ -220,6 +223,67 @@ export function maxRequirementsFor(instructions: string): number {
   }
   const separators = (text.match(/\band\b/gi)?.length ?? 0) + (text.match(/[,;]/g)?.length ?? 0);
   return Math.min(MAX_REQUIREMENTS, units + separators + 1);
+}
+
+/** The file text as it was read (first KEY_FILE_CHARS) and whether removing secrets kept every line break. */
+export interface RawFileInfo {
+  raw: string;
+  aligned: boolean;
+}
+
+/** True when cleaning (secret removal, pseudonyms) did not add or remove a line break, so line n is line n. */
+export function lineBreaksKept(raw: string, cleaned: string): boolean {
+  const count = (s: string) => (s.match(/\n/g) ?? []).length;
+  return count(raw) === count(cleaned);
+}
+
+export interface FileQuoteSpot {
+  lines: [number, number];
+  // The matched text exactly as it is in the file, shortened; set only when it is safe to display.
+  shown?: string;
+}
+
+/**
+ * Where a verified quote sits in the file: first and last line (1-based), counted on the text that was sent.
+ * Case and whitespace do not matter (same rule as the check). Null when the lines of the sent text cannot be
+ * trusted to be the file's lines (a secret spanning several lines was removed). The quote is shown only when
+ * every line it touches is identical in the file as read and in the text that was sent, so it never carries a
+ * pseudonym or a redaction marker.
+ */
+export function locateFileQuote(sent: string, quote: string, info: RawFileInfo | undefined): FileQuoteSpot | null {
+  if (!info || !info.aligned) return null;
+  // Normalized copy with a map back to `sent` (whitespace runs become one space, as `normalize` does).
+  let norm = "";
+  const map: number[] = [];
+  let pendingSpace = false;
+  for (let i = 0; i < sent.length; i++) {
+    const ch = sent[i]!;
+    if (/\s/.test(ch)) { pendingSpace = norm !== ""; continue; }
+    if (pendingSpace) { norm += " "; map.push(i); pendingSpace = false; }
+    for (const c of ch.toLowerCase()) { norm += c; map.push(i); }
+  }
+  const q = normalize(quote);
+  if (!q) return null;
+  const at = norm.indexOf(q);
+  if (at === -1) return null;
+  const from = map[at]!;
+  const to = map[at + q.length - 1]! + 1;
+  const lineOf = (offset: number) => (sent.slice(0, offset).match(/\n/g) ?? []).length + 1;
+  const first = lineOf(from);
+  const last = lineOf(to - 1);
+  const sentLines = sent.split("\n");
+  const rawLines = info.raw.split("\n");
+  let same = true;
+  for (let n = first; n <= last; n++) {
+    const a = sentLines[n - 1]?.replace(/\r$/, "");
+    const b = rawLines[n - 1]?.replace(/\r$/, "");
+    // The last line of a shortened excerpt may be cut off; what is there must still be the file's own start of it.
+    const cut = n === sentLines.length && b !== undefined && a !== undefined && b.startsWith(a);
+    if (a === undefined || b === undefined || (a !== b && !cut)) { same = false; break; }
+  }
+  const spot: FileQuoteSpot = { lines: [first, last] };
+  if (same) spot.shown = sent.slice(from, to).replace(/\r/g, "").trim().slice(0, MAX_QUOTE_CHARS);
+  return spot;
 }
 
 export type RejectReason = "import only" | "too short" | "quote not found" | "ref not found";
@@ -343,7 +407,14 @@ export function verifyRequirements(raw: RawRequirement[], ctx: BriefVerifyContex
             if (q && (!text || !normalize(text).includes(q))) { reject("file", "quote not found", quote); continue; }
             // An import proves a library is used. That is proof only when the requirement's own text names the library (not its source sentence, not the file name).
             if (isImportOnly(quote) && !requirementNamesImport(quote, r.text)) { reject("file", "import only", quote); continue; }
-            evidence.push({ type: "file", ref: e.ref, quote });
+            // Pinned commit and quoted lines for the code link (new checks only; never changes what is accepted).
+            const spot = q && text ? locateFileQuote(text, quote, ctx.rawFiles?.get(e.ref)) : null;
+            evidence.push({
+              type: "file", ref: e.ref, quote: spot?.shown ?? quote,
+              ...(ctx.headSha ? { headSha: ctx.headSha } : {}),
+              ...(ctx.headSha && spot ? { lines: spot.lines } : {}),
+              ...(ctx.headSha && spot?.shown ? { quoteSafe: true } : {}),
+            });
           } else {
             const nq = normalizeQuote(quote);
             if (!nq) { reject("doc", "quote not found", quote); continue; }

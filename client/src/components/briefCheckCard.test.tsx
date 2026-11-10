@@ -24,8 +24,8 @@ const check: AiBriefCheck = {
   aiAddressedCount: 2,
   requirements: [
     { text: "Has a login page", status: "FOUND", unverified: false, sourceQuote: QUOTE, evidence: [
-      { type: "file", ref: "src/Login.tsx", quote: "export function Login()", quoteHidden: false, href: gh, isCommit: true, more: [{ sha: "b52e0d3", href: "https://github.com/example/Trips/commit/b52e0d3" }] },
-      { type: "file", ref: "src/Login.tsx", quote: "second quote", quoteHidden: false, href: gh, isCommit: true },
+      { type: "file", ref: "src/Login.tsx", quote: "", quoteHidden: false, href: gh, isCommit: true, more: [{ sha: "b52e0d3", href: "https://github.com/example/Trips/commit/b52e0d3" }] },
+      { type: "file", ref: "src/Login.tsx", quote: "", quoteHidden: false, href: gh, isCommit: true },
       { type: "doc", ref: "Methodology", quote: "", quoteHidden: true },
     ] },
     { text: "Has a survey", status: "FOUND", unverified: false, sourceFile: "brief.pdf", sourcePage: 2, evidence: [{ type: "doc", ref: "Survey", quote: LONG, quoteHidden: false }] },
@@ -124,7 +124,7 @@ describe("BriefCheckCard", () => {
     expect(screen.queryByText("See proof")).toBeNull();
   });
 
-  it("covered rows keep their proof closed; it starts with where it comes from; code is a file link only, docs show one short quote", async () => {
+  it("covered rows keep their proof closed; it starts with where it comes from; an older code proof is a file link only, docs show one short quote", async () => {
     const openDoc = vi.fn();
     render(<DocSectionProvider value={openDoc}><BriefCheckCard check={check} instructionsHref="/class/1/assignment/2" /></DocSectionProvider>);
     await open();
@@ -159,6 +159,35 @@ describe("BriefCheckCard", () => {
     expect(quote.textContent!.endsWith("…")).toBe(true);
     await userEvent.click(survey.getByRole("link", { name: "Open section Survey in Docs" }));
     expect(openDoc).toHaveBeenCalledWith("Survey");
+  });
+
+  it("code proof names the file and the quoted lines, links to those lines at the analyzed commit, and shows the quote", async () => {
+    const blob = "https://github.com/example/Trips/blob/" + "a".repeat(40) + "/Graphhopper.py#L12-L14";
+    const two: AiBriefCheck = {
+      ...check,
+      requirements: [
+        { text: "Build a route planner that uses GraphHopper", status: "FOUND", unverified: false, sourceQuote: "Build a route planner that uses GraphHopper.", evidence: [
+          { type: "file", ref: "Graphhopper.py", quote: "return graphhopper.route(a, b)", quoteHidden: false, href: blob, isCommit: false, lines: [12, 14] },
+        ] },
+        { text: "The route planner must have a Tkinter GUI", status: "FOUND", unverified: false, sourceQuote: "The route planner must have a Tkinter GUI.", evidence: [
+          { type: "file", ref: "Graphhopper.py", quote: "", quoteHidden: false, href: "https://github.com/example/Trips/blob/" + "a".repeat(40) + "/Graphhopper.py", isCommit: false },
+        ] },
+      ],
+    };
+    render(<BriefCheckCard check={two} instructionsHref="/class/1/assignment/2" />);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /covered requirements/ }));
+    for (const b of screen.getAllByRole("button", { name: /^Proof/ })) await userEvent.click(b);
+    const first = within(rowOf("Build a route planner that uses GraphHopper"));
+    const a = first.getByRole("link", { name: "Open Graphhopper.py lines 12-14 on GitHub (new tab)" });
+    expect(a.getAttribute("href")).toBe(blob);
+    expect(a.textContent).toBe("Graphhopper.py, lines 12-14");
+    expect(first.getByText("return graphhopper.route(a, b)")).toBeTruthy();
+    // Lines or quote not known (hidden for safety): the file at the commit, no line text, no quote.
+    const second = within(rowOf("The route planner must have a Tkinter GUI"));
+    const b = second.getByRole("link", { name: "Open Graphhopper.py file on GitHub (new tab)" });
+    expect(b.getAttribute("href")).not.toContain("#L");
+    expect(second.queryByRole("blockquote")).toBeNull();
   });
 
   it("truncates only long quotes", () => {
