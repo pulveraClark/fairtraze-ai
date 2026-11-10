@@ -141,7 +141,7 @@ describe("StudentGroupPage", () => {
       state.data = withFlags(["free-rider"], "low");
       const low = renderPage();
       expect(screen.getByText(LOW_NOTE)).toBeTruthy();
-      expect(screen.getByText("Early data · too early to tell")).toBeTruthy();
+      expect(screen.getByText("Early data")).toBeTruthy();
       low.unmount();
       state.data = withFlags(["free-rider"], "medium");
       const medium = renderPage();

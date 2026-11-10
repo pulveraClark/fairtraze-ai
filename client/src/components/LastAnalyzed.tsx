@@ -10,13 +10,15 @@ interface Props {
   updateFailed?: boolean;
   /** "student": a small grey line, "Last analyzed 14 hours ago. Updates every night." */
   variant?: "default" | "student";
+  /** Instructor report: the analysis source and repository link, shown after "Updates automatically". */
+  analysis?: React.ReactNode;
 }
 
 /**
  * "Last analyzed 3 hours ago · Updates automatically", plus "Updating…" while a background refresh
  * runs. The status span is always in the page so a screen reader announces it when its text appears.
  */
-export function LastAnalyzed({ analyzedAt, trigger, updating = false, updateFailed = false, className = "", variant = "default" }: Props) {
+export function LastAnalyzed({ analyzedAt, trigger, updating = false, updateFailed = false, className = "", variant = "default", analysis }: Props) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -26,6 +28,7 @@ export function LastAnalyzed({ analyzedAt, trigger, updating = false, updateFail
   return (
     <p className={`${variant === "student" ? "text-xs" : "text-sm"} leading-normal text-slate-700 ${className}`}>
       <span title={formatAnalyzedExact(analyzedAt)}>{updateFailed ? formatLastAnalyzedUpdateFailed(analyzedAt, now) : variant === "student" ? formatLastAnalyzedStudent(analyzedAt, now) : formatLastAnalyzed(analyzedAt, trigger, now)}</span>
+      {analysis && <span> · {analysis}</span>}
       <span role="status" aria-live="polite" className="ml-2 font-medium text-indigo-800">
         {updating ? UPDATING_TEXT : ""}
       </span>

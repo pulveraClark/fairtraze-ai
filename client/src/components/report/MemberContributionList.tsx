@@ -69,7 +69,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
         <div className="min-w-0">
           <h2 id="member-contributions-title" className="text-lg font-semibold text-slate-900">Member contributions</h2>
           <p className="mt-1 flex flex-wrap items-center gap-x-1 text-sm leading-normal text-slate-700">
-            Select a member for details.
+            {n} member{n === 1 ? "" : "s"} · equal share {equalPct.toFixed(0)}% (the marker on each bar). Select a member for details.
             <InfoTip label="About the equal-share marker" helpHref={helpLink("shares")}>{TIPS.equalShareList(equalPct)}</InfoTip>
           </p>
           {aiSummaryState && (

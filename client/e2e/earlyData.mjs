@@ -67,9 +67,9 @@ try {
       check(errors.length === 0, `no console errors ${errors.slice(0, 2).join(" | ")}`);
 
       if (scene !== "footer" && scene !== "member-drawer" && scene !== "student-window") {
-        const want = level === "low" ? "Early data · too early to tell" : "Early data";
+        const want = "Early data";
         check(m.text.includes(want), `tag reads "${want}"`);
-        if (level === "medium") check(!/too early to tell/.test(m.text), "medium does not say 'too early to tell'");
+        check(!/too early to tell/.test(m.text), "the long sentence is not printed beside the tag");
         check(!/Early data[^\n]*\d/.test(m.text), "no day count in the tag");
       }
       if (scene === "instructor" || scene === "student") {

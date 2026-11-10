@@ -7,10 +7,9 @@ import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { DocsDataApproximateNotice } from "../components/DocsDataApproximateNotice";
 import { ReportNotices } from "../components/report/ReportNotices";
 import { NOTICE_PRIORITY, type ReportNotice } from "../lib/reportNotices";
-import { PageHeader, StatTile, InfoTip, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../components/ui";
+import { PageHeader, StatusPill, EmptyState, Skeleton, BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../components/ui";
 import { MemberContributionList } from "../components/report/MemberContributionList";
 import { MemberDrawer } from "../components/report/MemberDrawer";
-import { giniBandsText } from "../lib/giniBands";
 import type { FlagSource } from "../lib/flagRules";
 import { Narrative } from "../components/Narrative";
 import { MemberWorkSummary } from "../components/report/AiWorkSummary";
@@ -29,8 +28,7 @@ import { PrintableReport } from "../components/PrintableReport";
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { groupCrumbLabels } from "../lib/groupCrumbs";
 import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth, quietSource, quietSourceText } from "../lib/groupActivity";
-import { NoActivityPill } from "../components/NoActivityPill";
-import { EarlyDataTag } from "../components/EarlyDataTag";
+import { TeamSummaryBar } from "../components/report/TeamSummaryBar";
 import { useRouter } from "../router";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { LastAnalyzed } from "../components/LastAnalyzed";
@@ -39,7 +37,6 @@ import { analysisErrorText } from "../lib/failureText";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { requestReportRefresh } from "../lib/refreshReport";
 import { streamAnalyze, applyStreamEvent, markDone, startProgress, stageDurations, formatSeconds, AnalyzeError, INITIAL_PROGRESS, type AnalyzeProgress } from "../lib/analyzeStream";
-import { helpLink } from "../lib/helpText";
 import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
 import { REPO_CHANGED_NOTICE, REPO_NOT_LINKED_HINT, REPO_NOT_LINKED_MESSAGE, REPO_NOT_LINKED_PILL, repoNotLinked } from "../lib/repoNotice";
 
@@ -338,16 +335,10 @@ export function ProjectDetailPage({ projectId }: Props) {
   const reportMembers = noActivity ? storedMembers.map((m) => ({ ...m, flags: [] })) : storedMembers;
   const selectedIdx    = selectedName === null ? -1 : reportMembers.findIndex((m) => m.studentName === selectedName);
   const selectedMember: AnyScoredMember | null = selectedIdx >= 0 ? reportMembers[selectedIdx] : null;
-  const memberCount   = stored?.report.memberCount ?? 0;
-  const equalSharePct = memberCount > 0 ? 100 / memberCount : 0;
   const flagged       = reportMembers.filter((m) => m.flags.length > 0);
-  const totalFlags    = reportMembers.reduce((s, m) => s + m.flags.length, 0);
   // "Early data" (read-time, display only): low = health and flags stay visible but grey; medium = a small note.
   const confidence    = noActivity ? null : (stored?.dataConfidence ?? null);
   const earlyMuted    = confidence === "low";
-  const healthTone    = stored && !noActivity && !earlyMuted
-    ? ({ Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" } as const)[stored.report.teamHealth]
-    : "neutral";
 
   const reportNotices: ReportNotice[] = [];
   if (stored && reportStale) {
@@ -579,7 +570,30 @@ export function ProjectDetailPage({ projectId }: Props) {
 
         {/* How fresh the report is, and "Updating…" while a background refresh runs */}
         {stored && !reanalyzing && (
-          <LastAnalyzed analyzedAt={stored.analyzedAt} trigger={stored.trigger} updating={updating} updateFailed={stored.autoUpdateFailed} />
+          <LastAnalyzed
+            analyzedAt={stored.analyzedAt}
+            trigger={stored.trigger}
+            updating={updating}
+            updateFailed={stored.autoUpdateFailed}
+            analysis={
+              <>
+                {SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}
+                {sourceType !== "EDITOR" && stored.repoUrl ? (
+                  <>
+                    {" · "}
+                    <a
+                      href={stored.repoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex min-h-8 items-center break-all font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
+                    >
+                      {stored.repoUrl.replace("https://github.com/", "")}
+                    </a>
+                  </>
+                ) : null}
+              </>
+            }
+          />
         )}
 
         {/* Analysis panel: live while running, completed state while the report reloads */}
@@ -613,9 +627,7 @@ export function ProjectDetailPage({ projectId }: Props) {
         {(loading || loadingReport) && (
           <div aria-busy="true" role="status" className="space-y-4">
             <span className="sr-only">Loading report…</span>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
-            </div>
+            <Skeleton className="h-16" />
             <Skeleton className="h-64" />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Skeleton className="h-64" />
@@ -650,77 +662,16 @@ export function ProjectDetailPage({ projectId }: Props) {
               </p>
             )}
 
-            {/* Summary row */}
-            <section aria-label="Summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {/* Team health is the one main number: double width, larger text. Flags, Members and Analysis are meta. */}
-              <div className="h-full min-w-0 sm:col-span-2">
-              <StatTile
-                hero
-                label="Team health"
-                tone={healthTone}
-                value={noActivity ? <NoActivityPill className="!text-lg" /> : (
-                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <StatusPill kind="health" value={stored.report.teamHealth} className="!text-lg" muted={earlyMuted} />
-                    <EarlyDataTag level={confidence} />
-                  </span>
-                )}
-                detail={noActivity ? "Scores appear once members have recorded activity." : (
-                  <span className="flex items-center gap-1">
-                    Gini {stored.report.gini.toFixed(3)}
-                    <InfoTip label="About the Gini coefficient and team health" helpHref={helpLink("gini")}>
-                      <span className="block">0 = perfectly equal, 1 = one member holds everything.</span>
-                      <span className="mt-1 block">{giniBandsText()}</span>
-                      {benchmark.averageGini !== null && (
-                        <span className="mt-1 block">
-                          Average for other groups in this assignment: {benchmark.averageGini.toFixed(3)} —{" "}
-                          {stored.report.gini > benchmark.averageGini
-                            ? "this group is more uneven"
-                            : stored.report.gini < benchmark.averageGini
-                            ? "this group is more even"
-                            : "equal"}.
-                        </span>
-                      )}
-                    </InfoTip>
-                  </span>
-                )}
-              />
-              </div>
-              <StatTile
-                compact
-                label="Flags"
-                value={totalFlags}
-                detail={
-                  flagged.length === 0
-                    ? "No members flagged."
-                    : flagged.map((m) => m.studentName).join(", ")
-                }
-              />
-              <StatTile
-                compact
-                label="Members"
-                value={memberCount}
-                detail={`equal share ${equalSharePct.toFixed(0)}%`}
-              />
-              <StatTile
-                compact
-                label="Analysis"
-                value={<span className="text-base">{SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}</span>}
-                detail={
-                  sourceType !== "EDITOR" && stored.repoUrl ? (
-                    <a
-                      href={stored.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex min-h-8 items-center break-all font-medium text-indigo-800 underline underline-offset-2 hover:text-indigo-900 ${FOCUS_LIGHT}`}
-                    >
-                      {stored.repoUrl.replace("https://github.com/", "")}
-                    </a>
-                  ) : (
-                    "FairTraze Docs activity"
-                  )
-                }
-              />
-            </section>
+            {/* Summary: one container, one row */}
+            <TeamSummaryBar
+              noActivity={noActivity}
+              teamHealth={stored.report.teamHealth}
+              gini={stored.report.gini}
+              earlyMuted={earlyMuted}
+              confidence={confidence}
+              flaggedCount={flagged.length}
+              averageGini={benchmark.averageGini}
+            />
 
             {/* Member contributions: also holds the one AI generate button (not shown to admins) */}
             <MemberContributionList

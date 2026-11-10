@@ -5,7 +5,8 @@ import "../src/index.css";
 import type { AnyScoredMember, ScoredMember } from "@shared/types";
 import type { DataConfidence } from "@shared/dataConfidence";
 import { AuthProvider } from "../src/context/AuthContext";
-import { StatTile, StatusPill } from "../src/components/ui";
+import { StatusPill } from "../src/components/ui";
+import { TeamSummaryBar } from "../src/components/report/TeamSummaryBar";
 import { EarlyDataTag } from "../src/components/EarlyDataTag";
 import { FlagTag } from "../src/components/FlagTag";
 import { MemberContributionList } from "../src/components/report/MemberContributionList";
@@ -51,18 +52,7 @@ const view: StudentMemberView = {
 function Instructor() {
   return (
     <main className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-6">
-      <StatTile
-        hero
-        label="Team health"
-        tone={muted ? "neutral" : "red"}
-        value={(
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <StatusPill kind="health" value="High Risk" className="!text-lg" muted={muted} />
-            <EarlyDataTag level={level} />
-          </span>
-        )}
-        detail="Gini 0.400"
-      />
+      <TeamSummaryBar noActivity={false} teamHealth="High Risk" gini={0.4} earlyMuted={muted} confidence={level} flaggedCount={2} averageGini={null} />
       <MemberContributionList members={members} mutedFlags={muted} onOpen={() => undefined} />
     </main>
   );

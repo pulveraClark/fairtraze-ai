@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { render, screen } from "@testing-library/react";
 import { EarlyDataTag, EARLY_DATA_TEXT } from "./EarlyDataTag";
 import { FlagTag } from "./FlagTag";
@@ -7,12 +8,23 @@ import { earlyDataFlagsNote } from "../lib/studentDisplay";
 import { TIPS } from "../lib/helpText";
 
 describe("EarlyDataTag", () => {
-  it("low reads 'Early data · too early to tell', medium reads 'Early data'", () => {
+  it("low and medium both read just 'Early data'", () => {
     const { rerender } = render(<EarlyDataTag level="low" />);
-    expect(screen.getByText("Early data · too early to tell")).toBeInTheDocument();
+    expect(screen.getByText("Early data")).toBeInTheDocument();
+    expect(screen.queryByText(/too early to tell/)).toBeNull();
     rerender(<EarlyDataTag level="medium" />);
     expect(screen.getByText("Early data")).toBeInTheDocument();
     expect(screen.queryByText(/too early to tell/)).toBeNull();
+  });
+
+  it("with a popover it is one real button that reports its expanded state and calls onToggle", async () => {
+    const onToggle = vi.fn();
+    render(<EarlyDataTag level="low" popover={{ expanded: false, onToggle }} />);
+    const btn = screen.getByRole("button", { name: /Early data/ });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(btn);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "About early data" })).toBeNull();
   });
 
   it("high, no activity and unknown show nothing at all", () => {
