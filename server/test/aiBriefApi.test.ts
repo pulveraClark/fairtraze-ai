@@ -159,7 +159,9 @@ describe("brief check visibility", () => {
       });
       for (const viewer of [s.instructor, s.leader]) {
         const b = (await get(s.project.id, viewer)).body.briefCheck;
-        expect(b.sources.droppedCount).toBe(2);
+        // The "left out" count is for the owning instructor only; the leader never receives it.
+        if (viewer === s.instructor) expect(b.sources.droppedCount).toBe(2);
+        else expect(b.sources).not.toHaveProperty("droppedCount");
         expect(b.requirements[0]).toMatchObject({ sourceQuote: "The app has a login page." });
         expect(b.requirements[0]).not.toHaveProperty("sourceFile");
         expect(b.requirements[1]).toMatchObject({ sourceFile: "brief.pdf", sourcePage: 3 });
