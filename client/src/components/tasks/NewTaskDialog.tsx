@@ -3,6 +3,10 @@ import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, type BoardResponse, type TaskPri
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
 import type { TaskActions } from "../../hooks/useTaskActions";
+import { TitleCombobox } from "./TitleCombobox";
+
+// No "item N": the order of AI-listed requirements is not guaranteed to match the instructions text.
+const FROM_INSTRUCTIONS = "From the project instructions.";
 
 interface Props {
   board: BoardResponse;
@@ -21,6 +25,7 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
   const [priority, setPriority] = useState<TaskPriority>("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [assignee, setAssignee] = useState("");
+  const [requirementKey, setRequirementKey] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -35,6 +40,7 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
         description: description.trim() || null,
         priority,
         dueDate: dueDate || null,
+        ...(requirementKey ? { requirementKey } : {}),
         ...(board.viewer.isLeader && assignee ? { assignedToUserId: Number(assignee) } : {}),
       });
       onCreated(created.id);
@@ -51,7 +57,19 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
         <form onSubmit={submit} className="mt-3 space-y-3">
           <div>
             <label htmlFor="nt-title" className="mb-1 block text-sm font-medium text-slate-900">Title</label>
-            <input id="nt-title" value={title} maxLength={200} autoFocus onChange={(e) => setTitle(e.target.value)} className={FIELD} />
+            <TitleCombobox
+              id="nt-title"
+              value={title}
+              maxLength={200}
+              autoFocus
+              onChange={setTitle}
+              suggestions={board.viewer.isLeader ? board.suggestions ?? [] : []}
+              onPick={(s) => {
+                setTitle(s.text.slice(0, 200));
+                setDescription(FROM_INSTRUCTIONS);
+                setRequirementKey(s.key);
+              }}
+            />
           </div>
           <div>
             <label htmlFor="nt-desc" className="mb-1 block text-sm font-medium text-slate-900">Description (optional)</label>

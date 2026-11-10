@@ -59,6 +59,8 @@ export interface CreateTaskInput {
   assignedToUserId?: number | null;
   milestoneId?: number | null;
   labelIds?: number[];
+  /** Set when the task was picked from the project instructions (leader only; ignored otherwise). */
+  requirementKey?: string;
 }
 
 export interface UpdateTaskInput {

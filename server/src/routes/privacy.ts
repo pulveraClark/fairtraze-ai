@@ -81,7 +81,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
       where:  { OR: [{ assignedToUserId: userId }, { createdByUserId: userId }] },
       select: {
         id: true, projectId: true, number: true, title: true, description: true, done: true, completedAt: true, createdAt: true,
-        assignedToUserId: true, createdByUserId: true, status: true, priority: true, dueDate: true,
+        assignedToUserId: true, createdByUserId: true, status: true, priority: true, dueDate: true, requirementKey: true,
         milestone: { select: { name: true } },
         labelLinks: { select: { label: { select: { name: true } } } },
       },

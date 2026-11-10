@@ -16,7 +16,8 @@ const app = createApp();
 const NAME = "Juan Dela Cruz";
 const EMAIL = "juan.delacruz@uclm.edu.ph";
 const LOGIN = "jdelacruz";
-const BYTES = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 1, 2, 3, 4, 5]); // "%PDF-" + payload
+const REQ_KEY = "0123456789abcdef0123456789abcdef"; // a content hash of an instructions item, no personal data
+const BYTES =Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 1, 2, 3, 4, 5]); // "%PDF-" + payload
 
 async function seed() {
   const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
@@ -46,6 +47,7 @@ async function seed() {
     data: {
       projectId: project.id, number: 2, title: "Write the intro", description: `Review with <@${juan.id}> please`,
       createdByUserId: maria.id, assignedToUserId: juan.id, position: 2048, status: "IN_REVIEW", priority: "HIGH",
+      requirementKey: REQ_KEY,
       dueDate: parseDateOnly("2026-11-20"), milestoneId: milestone.id, labelLinks: { create: [{ labelId: label.id }] },
     },
   });
@@ -105,7 +107,8 @@ describe("personal-data export: task data", () => {
     // Tasks created by or assigned to Juan, with status, priority, due date, milestone and labels.
     expect(body.tasks.map((t: { title: string }) => t.title).sort()).toEqual(["Slides by Juan Dela Cruz", "Write the intro"]);
     const intro = body.tasks.find((t: { id: number }) => t.id === t2.id);
-    expect(intro).toMatchObject({ status: "IN_REVIEW", priority: "HIGH", dueDate: "2026-11-20", milestone: "Alpha release", labels: ["frontend"], number: 2 });
+    expect(intro).toMatchObject({ status: "IN_REVIEW", priority: "HIGH", dueDate: "2026-11-20", milestone: "Alpha release", labels: ["frontend"], number: 2, requirementKey: REQ_KEY });
+    expect(body.tasks.find((t: { id: number }) => t.id !== t2.id).requirementKey).toBeNull();
 
     expect(body.taskComments.map((c: { body: string }) => c.body)).toEqual([`I will take it, <@${maria.id}>`]);
     expect(body.taskWatches.map((w: { taskId: number }) => w.taskId)).toEqual([t2.id]);
@@ -171,6 +174,8 @@ describe("erasure: task data", () => {
     expect((await prisma.task.findUniqueOrThrow({ where: { id: t3.id } })).title).toBe("Maria private task");
     // Mention tokens are ids, so they need no rewrite and still point at the (now anonymous) person.
     expect((await prisma.task.findUniqueOrThrow({ where: { id: t2.id } })).description).toBe(`Review with <@${juan.id}> please`);
+    // The requirement key is a content hash, not personal data: erasure leaves it as it was.
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: t2.id } })).requirementKey).toBe(REQ_KEY);
 
     // Teammate's comment that used his name in plain text is scrubbed; her mention token and her other text are untouched.
     const comments = await prisma.taskComment.findMany({ where: { taskId: t2.id }, orderBy: { id: "asc" } });

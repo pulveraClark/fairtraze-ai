@@ -168,6 +168,16 @@ export interface BoardResponse {
   tasks: BoardTask[];
   milestones: BoardMilestone[];
   labels: BoardLabel[];
+  /**
+   * Leader only: items of the project instructions (from the latest stored brief check) that have no task
+   * yet, as plain text. Absent for everyone else and when there is nothing to suggest.
+   */
+  suggestions?: TaskSuggestion[];
+}
+
+export interface TaskSuggestion {
+  key: string;
+  text: string;
 }
 
 export type TaskActivityType =

@@ -28,6 +28,9 @@ export function useFocusTrap<T extends HTMLElement>(onClose: () => void, restore
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // An open combobox list takes the first Esc (it closes itself and keeps the typed text).
+        const t = e.target as HTMLElement | null;
+        if (t?.getAttribute?.("role") === "combobox" && t.getAttribute("aria-expanded") === "true") return;
         e.preventDefault();
         e.stopPropagation();
         closeRef.current();

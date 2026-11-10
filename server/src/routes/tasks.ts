@@ -22,6 +22,7 @@ import { computePosition, rebalanced } from "../lib/taskPosition.js";
 import { deriveTaskKey, effectiveTaskKey } from "../lib/taskKey.js";
 import { addWatchers, notifyMentions, notifyStatusChange, taskLink } from "../lib/taskWatchers.js";
 import { triggerLazyDueSweep } from "../lib/taskDueSweep.js";
+import { latestCheckRequirements } from "../lib/taskSuggestions.js";
 import { extractMentionIds } from "@shared/taskTypes.js";
 
 // The group Tasks board. Planning data only: nothing here is read by scoring, the analysis or the
@@ -150,6 +151,8 @@ const createSchema = z.object({
   assignedToUserId: idParam.nullable().optional(),
   milestoneId: idParam.nullable().optional(),
   labelIds: z.array(idParam).max(TASK_LIMITS.labelsPerTask).optional(),
+  // Picked from "From the project instructions"; honoured for the leader only (see below).
+  requirementKey: z.string().regex(/^[0-9a-f]{32}$/).optional(),
 });
 
 // POST /api/groups/:id/tasks — any group member may create a task; a non-leader's task is always
@@ -193,6 +196,10 @@ tasksRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res:
 
   const dueDate = data.dueDate ? parseDateOnly(data.dueDate) : null;
   const labelIds = [...new Set(data.labelIds ?? [])];
+  // Only the leader's pick of a real item of the latest check is stored; anything else is ignored silently.
+  const requirementKey = actor.isLeader && data.requirementKey
+    && (await latestCheckRequirements(project.id)).some((r) => r.key === data.requirementKey)
+    ? data.requirementKey : null;
 
   const created = await prisma.$transaction(async (tx) => {
     const counter = await tx.project.update({
@@ -215,6 +222,7 @@ tasksRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res:
         assignedToUserId: actor.isLeader ? data.assignedToUserId ?? null : null,
         milestoneId: actor.isLeader ? data.milestoneId ?? null : null,
         createdByUserId: actor.userId,
+        requirementKey,
         ...statusFields("TODO"),
         labelLinks: { create: labelIds.map((labelId) => ({ labelId })) },
       },

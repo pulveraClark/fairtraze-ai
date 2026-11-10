@@ -411,6 +411,9 @@ model Task {
   milestoneId      Int?
   // Text of a heading in the group's document this task is linked to (no Yjs involvement).
   docHeading       String?
+  // Key (see lib/requirementMarks.ts#requirementKeys) of the project-instructions item this task was
+  // created from, so the suggestion list can hide items that already have a task. Planning data only.
+  requirementKey   String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @default(now()) @updatedAt
   project          Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -429,6 +432,7 @@ model Task {
   @@unique([projectId, number])
   @@index([projectId, status, position])
   @@index([assignedToUserId])
+  @@index([projectId, requirementKey])
 }
 
 enum TaskStatus {
