@@ -218,8 +218,10 @@ export async function runBriefComparison(projectId: number, deps: BriefDeps = de
     input,
     attached: briefFiles.usable.map((f) => f.filename),
     commits: [...commitsByPath.entries()].sort(([a], [b]) => (a < b ? -1 : 1)),
-    // A new pinned commit changes the lines the links point to, and a check written before line links must not be reused.
-    ...(headSha ? { head: headSha } : {}),
+    // Only whether the check carries line links, not which commit: a reused check keeps its own pinned commit, whose
+    // blob link and line numbers stay true while the excerpts above are unchanged. A check written before line
+    // links (or without a readable head) differs from one with them, so it runs once more.
+    lineLinks: headSha ? 1 : 0,
   });
   if (errors.length === 0) {
     const prev = await findReusableReview(projectId, "BRIEF_COMPARISON");

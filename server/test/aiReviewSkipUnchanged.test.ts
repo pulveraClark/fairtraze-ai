@@ -175,6 +175,28 @@ describe("instructions check: unchanged inputs cost 0 AI calls", () => {
     await generateBriefComparison(project.id, newBrief);
     expect(calls(newBrief.generate)).toBe(1);
   });
+
+  it("a new head commit with the same files and excerpts reuses the stored check; one saved without line links runs once", async () => {
+    const { project, report } = await setup("GITHUB");
+    const withHead = (sha: string | null) => ({ ...briefDeps(answer()), resolveHead: vi.fn().mockResolvedValue(sha) }) as BriefDeps;
+
+    // A check saved without a readable head (as before line links) has no line links.
+    const old = withHead(null);
+    await generateBriefComparison(project.id, old);
+    expect(calls(old.generate)).toBe(1);
+
+    // First run with a head: the marker differs, so it runs once.
+    const first = withHead("a".repeat(40));
+    await generateBriefComparison(project.id, first);
+    expect(calls(first.generate)).toBe(1);
+
+    // The student pushes more commits elsewhere: the head moves, nothing it reads changed.
+    const moved = withHead("b".repeat(40));
+    const out = await generateBriefComparison(project.id, moved);
+    expect(calls(moved.generate)).toBe(0);
+    expect(out!.result.reused).toBeTruthy();
+    expect((await stored(report.id, "BRIEF_COMPARISON")).status).toBe("OK");
+  });
 });
 
 describe("daily quota: skipped parts cost 0, and a refused run makes 0 provider calls", () => {
