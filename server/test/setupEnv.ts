@@ -24,6 +24,11 @@ vi.mock("../src/lib/githubRepoCheck.js", () => ({
   checkRepoReachable: vi.fn().mockResolvedValue({ status: "ok" }),
 }));
 
+// Email features are on in tests no matter what server/.env says (a developer .env may set
+// EMAIL_ENABLED=false). The sender below is mocked, so no real email is ever sent. A test that needs
+// the switch off sets or deletes it itself (see emailEnabled.test.ts).
+process.env.EMAIL_ENABLED = "true";
+
 vi.mock("../src/lib/email.js", () => ({
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
   sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
