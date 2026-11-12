@@ -211,14 +211,14 @@ function DisputeModal({
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="min-h-10 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !reason.trim()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex min-h-10 items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? "Sending…" : "Send note"}
             </button>
@@ -455,7 +455,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <p className="text-sm text-red-600">{error || "Group not found."}</p>
             <button
               onClick={() => navigate("/student")}
-              className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-600 transition-colors"
+              className="ft-hit inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-600 transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -592,14 +592,14 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     <button
                       onClick={() => void handleSaveGroupName()}
                       disabled={groupNameBusy}
-                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-1.5 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      className="min-h-10 text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                     >
                       {groupNameBusy ? "Saving…" : "Save"}
                     </button>
                     <button
                       onClick={() => setEditingGroupName(false)}
                       disabled={groupNameBusy}
-                      className="text-xs text-slate-600 hover:text-slate-600 px-1.5 py-1 rounded transition-colors disabled:opacity-50"
+                      className="min-h-10 text-xs text-slate-600 hover:text-slate-600 px-2 py-1 rounded transition-colors disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -648,7 +648,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               <button
                 type="button"
                 onClick={() => setShowBrief(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
+                className="inline-flex min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
               >
                 Instructions
               </button>
@@ -656,7 +656,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <EvidenceReportButton projectId={project.id} hasReport={hasReport} />
             <button
               onClick={() => setShowManageModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
+              className="inline-flex min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -768,7 +768,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       const meta = FUNCTIONAL_ROLE_META[role];
                       if (!meta) return null;
                       return (
-                        <span key={role} className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${meta.activeClass}`}>
+                        <span key={role} className={`min-h-10 text-xs px-2.5 py-1 rounded-lg border font-medium ${meta.activeClass}`}>
                           ✓ {meta.label}
                         </span>
                       );
@@ -831,7 +831,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 key={role}
                                 disabled={suggestBusy}
                                 onClick={() => setSuggestDraft(next)}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
+                                className={`min-h-10 text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
                                   selected ? meta.activeClass : meta.inactiveClass
                                 }`}
                               >
@@ -1081,7 +1081,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                   ) : (
                                     <button
                                       onClick={() => setShowDisputeModal(true)}
-                                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                                      className="inline-flex min-h-10 items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
                                     >
                                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
