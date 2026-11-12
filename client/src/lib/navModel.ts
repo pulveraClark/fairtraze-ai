@@ -3,14 +3,14 @@
 import { classTooltip } from "./classLabel";
 
 export type SystemRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
-export type NavIconName = "home" | "classes" | "disputes" | "bell" | "settings" | "audit" | "help";
+export type NavIconName = "home" | "classes" | "disputes" | "bell" | "settings" | "audit" | "help" | "verify";
 
 export const MAX_CLASSES  = 8;
 export const MAX_PROJECTS = 8;
 export const MAX_GROUPS   = 8;
 
 export interface NavItemDef {
-  key: "dashboard" | "classes" | "disputes" | "notifications" | "settings" | "audit" | "help";
+  key: "dashboard" | "classes" | "verify" | "disputes" | "notifications" | "settings" | "audit" | "help";
   label: string;
   href: string;
   icon: NavIconName;
@@ -35,6 +35,8 @@ export function getNavItems(role: SystemRole, opts: { hasNotes?: boolean } = {})
     return [
       { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: "home" },
       { key: "classes",   label: "Classes",   href: "/dashboard", icon: "classes" },
+      // An action, not a route: opens the Verify report dialog (href is unused).
+      { key: "verify",    label: "Verify report", href: "", icon: "verify" },
       { key: "disputes",  label: "Disputes",  href: "/disputes",  icon: "disputes" },
       notifications,
       help,

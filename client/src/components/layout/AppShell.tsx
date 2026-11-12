@@ -5,6 +5,7 @@ import { useRouter } from "../../router";
 import { useAlerts } from "../../hooks/useAlerts";
 import { usePrefersReducedMotion } from "../../lib/usePrefersReducedMotion";
 import { readSidebarCollapsed, writeSidebarCollapsed } from "../../lib/sidebarPrefs";
+import { VerifyReportDialog } from "../VerifyReportDialog";
 import { SIDEBAR_ID, SidebarContent } from "./Sidebar";
 import { MenuIcon } from "./icons";
 import { FOCUS_RING } from "./navStyles";
@@ -56,6 +57,20 @@ function AuthedFrame({ userId, children }: { userId: number; children: ReactNode
     setCollapsed(next);
     writeSidebarCollapsed(userId, next);
   }, [collapsed, userId]);
+
+  // Verify report dialog: owned here because the mobile drawer unmounts when it closes.
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyOpener, setVerifyOpener] = useState<HTMLElement | null>(null);
+  const openVerify = useCallback((opener: HTMLElement) => {
+    setVerifyOpener(opener);
+    setVerifyOpen(true);
+  }, []);
+  const openVerifyFromDrawer = useCallback(() => {
+    // The drawer item disappears with the drawer, so focus returns to the menu button.
+    setVerifyOpener(menuButtonRef.current);
+    setMobileOpen(false);
+    setVerifyOpen(true);
+  }, []);
 
   const closeDrawer = useCallback(() => {
     setMobileOpen(false);
@@ -114,7 +129,7 @@ function AuthedFrame({ userId, children }: { userId: number; children: ReactNode
         {/* The aside stretches the full height of the page (so the dark column never ends above the
             footer); the content inside stays pinned to the viewport while the page scrolls. */}
         <div className="sticky top-0 h-dvh">
-          <SidebarContent collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+          <SidebarContent collapsed={collapsed} onToggleCollapse={toggleCollapsed} onOpenVerify={openVerify} />
         </div>
       </aside>
 
@@ -134,10 +149,13 @@ function AuthedFrame({ userId, children }: { userId: number; children: ReactNode
             onKeyDown={trapTab}
             className={`absolute inset-y-0 left-0 w-[min(20rem,85vw)] border-r border-white/10 shadow-2xl ${reduced ? "" : "ft-drawer-in"}`}
           >
-            <SidebarContent collapsed={false} mobile onNavigate={() => setMobileOpen(false)} onClose={closeDrawer} />
+            <SidebarContent collapsed={false} mobile onNavigate={() => setMobileOpen(false)} onClose={closeDrawer} onOpenVerify={openVerifyFromDrawer} />
           </div>
         </div>
       )}
+
+      <VerifyReportDialog open={verifyOpen} onClose={() => setVerifyOpen(false)} restoreFocusTo={verifyOpener} />
+
     </div>
   );
 }

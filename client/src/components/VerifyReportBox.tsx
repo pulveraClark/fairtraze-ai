@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   REPORT_ID_NOT_FOUND, VERIFY_LATEST_TEXT, VERIFY_OLDER_TEXT, type EvidenceVerifyResult,
 } from "@shared/evidenceReport";
-import { BUTTON_PRIMARY_COMPACT, CARD } from "./ui/styles";
+import { BUTTON_PRIMARY_COMPACT } from "./ui/styles";
 import { flagsText, manilaDateTime, pctText } from "../lib/evidenceText";
 
 /**
@@ -45,9 +45,8 @@ export function VerifyReportBox() {
   const showDocs = result ? result.sourceType !== "GITHUB" : false;
 
   return (
-    <section aria-labelledby={`${inputId}-title`} className={`${CARD} p-4 mt-6`}>
-      <h2 id={`${inputId}-title`} className="text-sm font-semibold text-slate-900">Verify report</h2>
-      <form onSubmit={onSubmit} className="mt-2 flex flex-wrap items-end gap-2">
+    <section aria-label="Verify report">
+      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
           <label htmlFor={inputId} className="text-xs text-slate-700">Report ID on the student's printout</label>
           <input

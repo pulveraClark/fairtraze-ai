@@ -125,6 +125,49 @@ describe("AppShell sidebar (instructor)", () => {
   });
 });
 
+describe("AppShell sidebar: Verify report", () => {
+  it("opens a dialog from the instructor's sidebar item, Escape closes it and focus returns", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    const item = within(nav).getByRole("button", { name: "Verify report" });
+    await userEvent.click(item);
+    const dialog = screen.getByRole("dialog", { name: "Verify report" });
+    expect(within(dialog).getByLabelText("Report ID on the student's printout")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeTruthy();
+
+    await userEvent.type(within(dialog).getByLabelText("Report ID on the student's printout"), "ft-1");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Verify report" })).toBeNull();
+    expect(document.activeElement).toBe(item);
+
+    // Reopening starts empty.
+    await userEvent.click(item);
+    expect((screen.getByLabelText("Report ID on the student's printout") as HTMLInputElement).value).toBe("");
+  });
+
+  it("is still reachable by name in the collapsed rail", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    expect(within(nav).getByRole("button", { name: "Verify report" })).toBeTruthy();
+  });
+
+  it("is not shown to students or admins", () => {
+    for (const role of ["STUDENT", "ADMIN"] as const) {
+      signInAs(role);
+      window.history.pushState({}, "", role === "ADMIN" ? "/admin" : "/student");
+      const { unmount } = renderShell();
+      expect(screen.queryByRole("button", { name: "Verify report" })).toBeNull();
+      unmount();
+    }
+  });
+});
+
 describe("AppShell sidebar (admin)", () => {
   it("shows flat links and no classes tree", async () => {
     signInAs("ADMIN");

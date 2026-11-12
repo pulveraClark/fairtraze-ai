@@ -85,6 +85,27 @@ function NavLinkItem({
   );
 }
 
+/** "Verify report": a button that opens a dialog (not a route). */
+function VerifyNavButton({
+  item, collapsed, onOpenVerify,
+}: { item: NavItemDef; collapsed: boolean; onOpenVerify: (opener: HTMLElement) => void }) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={collapsed ? item.label : undefined}
+        onClick={(e) => onOpenVerify(e.currentTarget)}
+        className={navItemClass(false, collapsed)}
+      >
+        <NavIcon name={item.icon} />
+        {!collapsed && <span className="flex-1 truncate text-left">{item.label}</span>}
+      </button>
+      {collapsed && <span aria-hidden="true" className={RAIL_TOOLTIP}>{item.label}</span>}
+    </div>
+  );
+}
+
 /** Notifications as a plain link (mobile drawer): the flyout is desktop-only. */
 function NotificationsLink({ item, active, onNavigate }: { item: NavItemDef; active: boolean; onNavigate?: () => void }) {
   const { unreadCount } = useAlerts();
@@ -360,9 +381,11 @@ interface SidebarContentProps {
   onNavigate?: () => void;
   onToggleCollapse?: () => void;
   onClose?: () => void;
+  /** Opens the Verify report dialog (instructor item); the shell owns the dialog. */
+  onOpenVerify?: (opener: HTMLElement) => void;
 }
 
-export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggleCollapse, onClose }: SidebarContentProps) {
+export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggleCollapse, onClose, onOpenVerify }: SidebarContentProps) {
   const { user } = useAuth();
   const { pathname } = useRouter();
   if (!user) return null;
@@ -414,6 +437,8 @@ export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggle
               <li key={item.key}>
                 {item.key === "classes" ? (
                   <ClassesSection item={item} role={role} active={active} collapsed={collapsed} onNavigate={onNavigate} />
+                ) : item.key === "verify" ? (
+                  onOpenVerify ? <VerifyNavButton item={item} collapsed={collapsed} onOpenVerify={onOpenVerify} /> : null
                 ) : item.key === "notifications" ? (
                   mobile
                     ? <NotificationsLink item={item} active={active} onNavigate={onNavigate} />

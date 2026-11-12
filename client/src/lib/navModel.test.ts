@@ -25,6 +25,14 @@ describe("getNavItems", () => {
     expect(getNavItems("INSTRUCTOR").some((i) => i.key === "disputes")).toBe(true);
     expect(getNavItems("STUDENT").some((i) => i.key === "disputes")).toBe(false);
   });
+  it("gives instructors Verify report between Classes and Disputes, and no one else", () => {
+    const keys = getNavItems("INSTRUCTOR").map((i) => i.key);
+    expect(keys.indexOf("verify")).toBe(keys.indexOf("classes") + 1);
+    expect(keys.indexOf("disputes")).toBe(keys.indexOf("verify") + 1);
+    expect(getNavItems("INSTRUCTOR").find((i) => i.key === "verify")?.label).toBe("Verify report");
+    expect(getNavItems("STUDENT", { hasNotes: true }).some((i) => i.key === "verify")).toBe(false);
+    expect(getNavItems("ADMIN").some((i) => i.key === "verify")).toBe(false);
+  });
   it("shows 'Your notes' to a student only once they have filed a note", () => {
     expect(getNavItems("STUDENT").some((i) => i.label === "Your notes")).toBe(false);
     expect(getNavItems("STUDENT", { hasNotes: false }).some((i) => i.label === "Your notes")).toBe(false);
