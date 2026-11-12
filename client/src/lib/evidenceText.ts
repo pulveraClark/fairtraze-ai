@@ -5,10 +5,13 @@ import type { EvidenceReportDto } from "@shared/evidenceReport";
 export const GITHUB_LABEL = "GitHub";
 export const EDITOR_LABEL = "FAIRTRAZE Collaborative Editor";
 
+export const DOCUMENTS_LABEL = "Documents";
+
+/** The Sources row of the info block: short names. The long editor name stays in the note under the table. */
 export function sourcesText(sourceType: EvidenceReportDto["sourceType"]): string {
   if (sourceType === "GITHUB") return GITHUB_LABEL;
-  if (sourceType === "EDITOR") return EDITOR_LABEL;
-  return `${GITHUB_LABEL} + ${EDITOR_LABEL}`;
+  if (sourceType === "EDITOR") return DOCUMENTS_LABEL;
+  return `${GITHUB_LABEL} + ${DOCUMENTS_LABEL}`;
 }
 
 /** Always one decimal: "48.0%", "33.3%", "100.0%". */

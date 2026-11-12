@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import type { EvidenceReportDto } from "@shared/evidenceReport";
 import { EvidenceSheet } from "./EvidenceSheet";
-import { tableNote } from "../lib/evidenceText";
+import { sourcesText, tableNote } from "../lib/evidenceText";
 
 function dto(over: Partial<EvidenceReportDto> = {}): EvidenceReportDto {
   return {
@@ -43,9 +43,19 @@ describe("EvidenceSheet", () => {
     expect(within(left).getByText("Contribution status:")).toBeTruthy();
     expect(within(right).getByText("Report ID:")).toBeTruthy();
     expect(within(right).queryByText("Class:")).toBeNull();
-    expect(screen.getByText("GitHub + FAIRTRAZE Collaborative Editor")).toBeTruthy();
+    expect(screen.getByText("GitHub + Documents")).toBeTruthy();
     const id = screen.getByText("FT-7K2P-9X");
     expect(id.style.fontWeight).toBe("700");
+  });
+
+  it("Sources reads GitHub, Documents or GitHub + Documents for the three source types", () => {
+    expect(sourcesText("GITHUB")).toBe("GitHub");
+    expect(sourcesText("EDITOR")).toBe("Documents");
+    expect(sourcesText("COMBINED")).toBe("GitHub + Documents");
+    const { rerender } = render(<EvidenceSheet dto={dto({ sourceType: "GITHUB", weights: null })} />);
+    expect(within(screen.getAllByRole("table")[1]).getByText("GitHub")).toBeTruthy();
+    rerender(<EvidenceSheet dto={dto({ sourceType: "EDITOR", weights: null, repoUrl: null })} />);
+    expect(within(screen.getAllByRole("table")[1]).getByText("Documents")).toBeTruthy();
   });
 
   it("shows real flag names or None, and Combined in bold", () => {
