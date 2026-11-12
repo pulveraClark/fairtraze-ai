@@ -11,7 +11,7 @@ import { isAnalysisFailureCode, type AnalysisFailureCode } from "@shared/failure
 // Which groups get analyzed automatically, and whether anything changed since their last report.
 // Planning only: nothing here touches the analyzer or the scoring maths.
 
-/** A project stays active this long after its deadline (late work and late grading). */
+/** A project stays active this long after its deadline (late work and late grading). MUST stay equal to AUTO_ANALYSIS_GRACE_DAYS in client/src/lib/analysisFreshness.ts, which drives the "Final report" wording. */
 export const ACTIVE_GRACE_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 

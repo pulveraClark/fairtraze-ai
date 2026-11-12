@@ -84,7 +84,7 @@ describe("LastAnalyzed", () => {
   const iso = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
   it("shows the line, and 'Updating…' only while updating", () => {
     const { rerender } = render(<LastAnalyzed analyzedAt={iso} trigger="auto" />);
-    expect(screen.getByText("Last analyzed 3 hours ago (automatic) · Re-analyzes automatically when there is new activity")).toBeTruthy();
+    expect(screen.getByText("Last analyzed 3 hours ago (automatic) · Re-analyzes when there is new activity")).toBeTruthy();
     expect(screen.queryByText("Updating…")).toBeNull();
     rerender(<LastAnalyzed analyzedAt={iso} trigger="auto" updating />);
     expect(screen.getByText("Updating…")).toBeTruthy();

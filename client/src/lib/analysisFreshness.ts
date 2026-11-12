@@ -16,7 +16,7 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   return plural(Math.floor(hours / 24), "day");
 }
 
-/** Mirrors ACTIVE_GRACE_DAYS in server/src/lib/autoAnalysis.ts: automatic analysis stops this long after the deadline. */
+/** Automatic analysis stops this many days after the deadline. MUST stay equal to ACTIVE_GRACE_DAYS in server/src/lib/autoAnalysis.ts (active up to and including this many days past the deadline). */
 export const AUTO_ANALYSIS_GRACE_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -29,13 +29,13 @@ export function isAutoAnalysisClosed(deadline: string | null | undefined, now: D
 }
 
 /**
- * Active: "Last analyzed 3 hours ago (manual) · Re-analyzes automatically when there is new activity".
- * Closed: "Last analyzed 15 days ago · Final report, no more automatic updates".
+ * Active: "Last analyzed 3 hours ago (manual) · Re-analyzes when there is new activity".
+ * Closed: "Last analyzed 15 days ago · Final report, no more updates".
  */
 export function formatLastAnalyzed(iso: string, trigger?: "manual" | "auto" | null, now: Date = new Date(), closed = false): string {
-  if (closed) return `Last analyzed ${relativeTime(iso, now)} · Final report, no more automatic updates`;
+  if (closed) return `Last analyzed ${relativeTime(iso, now)} · Final report, no more updates`;
   const who = trigger === "auto" ? " (automatic)" : trigger === "manual" ? " (manual)" : "";
-  return `Last analyzed ${relativeTime(iso, now)}${who} · Re-analyzes automatically when there is new activity`;
+  return `Last analyzed ${relativeTime(iso, now)}${who} · Re-analyzes when there is new activity`;
 }
 
 /** The students' line: "Last analyzed 14 hours ago. Updates again when there is new activity." / "... Final report, no more updates." */

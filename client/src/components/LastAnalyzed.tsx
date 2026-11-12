@@ -17,8 +17,8 @@ interface Props {
 }
 
 /**
- * "Last analyzed 3 hours ago · Re-analyzes automatically when there is new activity" (or "Final report, no
- * more automatic updates" once closed), plus "Updating…" while a background refresh runs. The status span
+ * "Last analyzed 3 hours ago · Re-analyzes when there is new activity" (or "Final report, no
+ * more updates" once closed), plus "Updating…" while a background refresh runs. The status span
  * is always in the page so a screen reader announces it when its text appears.
  */
 export function LastAnalyzed({ analyzedAt, trigger, updating = false, updateFailed = false, className = "", variant = "default", analysis, deadline }: Props) {

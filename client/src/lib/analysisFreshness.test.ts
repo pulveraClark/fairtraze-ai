@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLastAnalyzed, isAutoAnalysisClosed, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, formatLastAnalyzedShort, formatAnalyzedExact, AUTO_UPDATE_FAILED_TEXT, relativeTime } from "./analysisFreshness";
+import { formatLastAnalyzed, isAutoAnalysisClosed, AUTO_ANALYSIS_GRACE_DAYS, formatLastAnalyzedStudent, formatLastAnalyzedUpdateFailed, formatLastAnalyzedShort, formatAnalyzedExact, AUTO_UPDATE_FAILED_TEXT, relativeTime } from "./analysisFreshness";
 
 const NOW = new Date("2026-10-26T12:00:00Z");
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -20,7 +20,7 @@ describe("relativeTime", () => {
   });
 });
 
-const ACTIVE_TAIL = "Re-analyzes automatically when there is new activity";
+const ACTIVE_TAIL = "Re-analyzes when there is new activity";
 const DAY = 24 * HOUR;
 
 describe("isAutoAnalysisClosed (same 7-day rule as the server)", () => {
@@ -35,13 +35,20 @@ describe("isAutoAnalysisClosed (same 7-day rule as the server)", () => {
     expect(isAutoAnalysisClosed(deadline, edge)).toBe(false);
     expect(isAutoAnalysisClosed(deadline, new Date(edge.getTime() + 1))).toBe(true);
   });
+  it("exactly 7 days past the deadline is still active; 8 days past is closed", () => {
+    expect(isAutoAnalysisClosed(deadline, new Date(new Date(deadline).getTime() + 7 * DAY))).toBe(false);
+    expect(isAutoAnalysisClosed(deadline, new Date(new Date(deadline).getTime() + 8 * DAY))).toBe(true);
+  });
+  it("the grace period equals the server's ACTIVE_GRACE_DAYS (7)", () => {
+    expect(AUTO_ANALYSIS_GRACE_DAYS).toBe(7);
+  });
   it("is open before the deadline", () => {
     expect(isAutoAnalysisClosed("2026-11-30T00:00:00Z", NOW)).toBe(false);
   });
 });
 
 describe("formatLastAnalyzed", () => {
-  it("reads 'Last analyzed 3 hours ago · Re-analyzes automatically when there is new activity'", () => {
+  it("reads 'Last analyzed 3 hours ago · Re-analyzes when there is new activity'", () => {
     expect(formatLastAnalyzed(ago(3 * HOUR), null, NOW)).toBe(`Last analyzed 3 hours ago · ${ACTIVE_TAIL}`);
     expect(formatLastAnalyzed(ago(3 * HOUR), undefined, NOW)).toBe(`Last analyzed 3 hours ago · ${ACTIVE_TAIL}`);
   });
@@ -50,7 +57,7 @@ describe("formatLastAnalyzed", () => {
     expect(formatLastAnalyzed(ago(3 * HOUR), "manual", NOW)).toBe(`Last analyzed 3 hours ago (manual) · ${ACTIVE_TAIL}`);
   });
   it("once closed, says it is final and drops the trigger label", () => {
-    expect(formatLastAnalyzed(ago(15 * DAY), "manual", NOW, true)).toBe("Last analyzed 15 days ago · Final report, no more automatic updates");
+    expect(formatLastAnalyzed(ago(15 * DAY), "manual", NOW, true)).toBe("Last analyzed 15 days ago · Final report, no more updates");
   });
   it("never says 'Updates automatically'", () => {
     expect(formatLastAnalyzed(ago(HOUR), "auto", NOW)).not.toMatch(/Updates automatically/);
