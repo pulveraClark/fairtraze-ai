@@ -11,7 +11,6 @@ import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLin
 import { SparkleIcon } from "./ui/AiBadge";
 import { BriefCheckCard, CheckHeaderActions, RequirementActions, type InstructionsAccess } from "./BriefCheckCard";
 import { STALE_ROW_NOTE, marksByKey, staleMarks } from "../lib/requirementMarks";
-import { StatusPill } from "./ui/StatusPill";
 import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
 import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
@@ -240,12 +239,10 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
       {briefLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{briefLine}</p>}
 
-      {/* Health: the label is computed by code, so it shows even when the AI text is missing */}
+      {/* Health sentence: computed by code, so it shows even when the AI text is missing. The health pill itself
+          lives once, in the summary bar above, so it is not repeated here. */}
       {teamHealth && (
-        <p className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-normal text-slate-900">
-          <StatusPill kind="health" value={teamHealth} />
-          <span className="min-w-0">{healthSentence(teamHealth)}</span>
-        </p>
+        <p className="mb-1 text-sm leading-normal text-slate-900">{healthSentence(teamHealth)}</p>
       )}
 
       {/* No narrative yet */}

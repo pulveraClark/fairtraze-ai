@@ -190,9 +190,9 @@ describe("AI findings summary", () => {
     expect(screen.queryByText(/Needs a look/)).toBeNull();
   });
 
-  it("health chip and sentence show without an AI narrative", () => {
+  it("health sentence shows without an AI narrative (the pill lives in the summary bar)", () => {
     renderCard(null, { narrative: null });
-    expect(screen.getByText("Healthy")).toBeTruthy();
+    expect(screen.queryByText("Healthy")).toBeNull();
     expect(screen.getByText("Work is shared very evenly.")).toBeTruthy();
   });
 
