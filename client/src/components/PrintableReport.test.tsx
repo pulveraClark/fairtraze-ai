@@ -34,7 +34,7 @@ describe("instructor export (same sheet as the student report)", () => {
 
   it("shows the Gini index with 3 decimals and the band word, and the flags-only status", () => {
     render(<PrintableReport stored={stored()} meta={META} />);
-    expect(screen.getByText("Gini index:")).toBeTruthy();
+    expect(screen.getByText("Gini index")).toBeTruthy();
     expect(screen.getByText("0.122 (Healthy)")).toBeTruthy();
     expect(screen.getByText("Needs review (1 of 2 flagged)")).toBeTruthy();
   });

@@ -22,12 +22,13 @@ const DECISIONS = [
 
 function InfoColumn({ rows }: { rows: Array<{ label: string; value: ReactNode; bold?: boolean }> }) {
   return (
-    <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "auto" }}>
       <tbody>
         {rows.map((r) => (
           <tr key={r.label}>
-            <td style={{ fontWeight: 700, whiteSpace: "nowrap", paddingRight: "0.14in", paddingBottom: "0.02in", verticalAlign: "top" }}>{r.label}:</td>
-            <td style={{ fontWeight: r.bold ? 700 : 400, paddingBottom: "0.02in", wordBreak: "break-word" }}>{r.value}</td>
+            {/* Labels never wrap; a value wraps only when it really does not fit its column. */}
+            <td style={{ fontWeight: 700, whiteSpace: "nowrap", paddingRight: "0.14in", paddingBottom: "0.02in", verticalAlign: "top", width: "1%" }}>{r.label}</td>
+            <td style={{ fontWeight: r.bold ? 700 : 400, paddingBottom: "0.02in", minWidth: 0, overflowWrap: "anywhere" }}>{r.value}</td>
           </tr>
         ))}
       </tbody>
@@ -93,7 +94,7 @@ export function EvidenceSheet({ dto, instructor }: { dto: EvidenceReportDto; ins
         <div style={{ fontSize: "11pt" }}>{dto.groupName}</div>
       </header>
 
-      <div style={{ marginTop: "0.12in", display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: "0.3in" }}>
+      <div style={{ marginTop: "0.12in", display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", columnGap: "0.3in" }}>
         <InfoColumn
           rows={[
             { label: "Class", value: dto.className },

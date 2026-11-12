@@ -35,14 +35,14 @@ describe("EvidenceSheet", () => {
     expect(screen.getByText("College of Computer Studies")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Contribution Evidence Report" })).toBeTruthy();
     expect(screen.getByText("Group 1")).toBeTruthy();
-    for (const label of ["Class:", "Project:", "Repository:", "Contribution status:", "Analyzed:", "Generated:", "Sources:", "Report ID:"]) {
+    for (const label of ["Class", "Project", "Repository", "Contribution status", "Analyzed", "Generated", "Sources", "Report ID"]) {
       expect(screen.getByText(label).style.fontWeight).toBe("700");
     }
     // Two columns: Class/Project/Repository/Contribution status on the left, the other four on the right.
     const [left, right] = screen.getAllByRole("table").slice(0, 2);
-    expect(within(left).getByText("Contribution status:")).toBeTruthy();
-    expect(within(right).getByText("Report ID:")).toBeTruthy();
-    expect(within(right).queryByText("Class:")).toBeNull();
+    expect(within(left).getByText("Contribution status")).toBeTruthy();
+    expect(within(right).getByText("Report ID")).toBeTruthy();
+    expect(within(right).queryByText("Class")).toBeNull();
     expect(screen.getByText("GitHub + Documents")).toBeTruthy();
     const id = screen.getByText("FT-7K2P-9X");
     expect(id.style.fontWeight).toBe("700");
@@ -56,6 +56,21 @@ describe("EvidenceSheet", () => {
     expect(within(screen.getAllByRole("table")[1]).getByText("GitHub")).toBeTruthy();
     rerender(<EvidenceSheet dto={dto({ sourceType: "EDITOR", weights: null, repoUrl: null })} />);
     expect(within(screen.getAllByRole("table")[1]).getByText("Documents")).toBeTruthy();
+  });
+
+  it("prints labels bold, never wrapping and without colons; long values may wrap", () => {
+    const long = "A very long project title ".repeat(8).trim();
+    const { container } = render(<EvidenceSheet dto={dto({ projectTitle: long })} />);
+    for (const label of ["Class", "Project", "Repository", "Contribution status", "Analyzed", "Generated", "Sources", "Report ID"]) {
+      const cell = screen.getByText(label);
+      expect(cell.style.whiteSpace).toBe("nowrap");
+      expect(cell.style.fontWeight).toBe("700");
+    }
+    const info = (container.textContent ?? "");
+    for (const withColon of ["Class:", "Project:", "Repository:", "Contribution status:", "Analyzed:", "Generated:", "Sources:", "Report ID:"]) {
+      expect(info).not.toContain(withColon);
+    }
+    expect(screen.getByText(long).style.overflowWrap).toBe("anywhere");
   });
 
   it("shows real flag names or None, and Combined in bold", () => {
@@ -187,6 +202,6 @@ describe("EvidenceSheet", () => {
     ]) {
       expect(text).not.toContain(word);
     }
-    expect(text).toContain("Contribution status:");
+    expect(text).toContain("Contribution status");
   });
 });
