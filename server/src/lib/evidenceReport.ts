@@ -84,7 +84,7 @@ export async function buildEvidenceDto(
   return {
     collegeName: cs.department?.name || "College of Computer Studies",
     groupName: project.groupName || `Group ${projectId}`,
-    // Same wording as the instructor copy and every other class label: "CODE \u00B7 EDP 12345", code only without an EDP.
+    // Same wording as the instructor copy and every other class label: "CODE · EDP 12345", code only without an EDP.
     className: classFullLabel({ subjectCode: cs.subjectCode, edpCode: cs.edpCode }),
     projectTitle: asgn.title,
     repoUrl: sourceType === "EDITOR" ? null : project.repoUrl,
