@@ -855,13 +855,13 @@ Four new software modules are required to implement FairTraze Docs. Each has a d
 **UC-S-D2: View own document contribution summary (Phase C)**
 - **Actor:** Student
 - **Trigger:** Student navigates to their personal dashboard.
-- **Flow:** The student sees their own document metrics: edit sessions, active editing days, net retained text percentage, and their document contribution share. Regular members do not see other members' individual metrics; the group leader sees each member's share, flags and task counts to distribute work fairly.
+- **Flow:** The student sees their own document metrics: edit sessions, active editing days, net retained text percentage, and their document contribution share. On screen, regular members do not see other members' individual metrics; the group leader sees each member's share, flags and task counts to distribute work fairly. Any member can print one group Contribution Evidence Report with every member's share and flags (never the Gini value, bands or team health).
 - **Result:** The student has a factual self-assessment of their document contribution.
 
 **UC-S-D3: View own combined contribution (Phase C, COMBINED assignments)**
 - **Actor:** Student
 - **Trigger:** Student views the combined contribution report for their group.
-- **Flow:** The student sees their `combinedContributionShare` and its breakdown (GitHub share + document share at the configured weights). Regular members do not see teammates' individual scores; the group leader sees each member's combined share, GitHub/Docs split, flags and task counts to distribute work fairly.
+- **Flow:** The student sees their `combinedContributionShare` and its breakdown (GitHub share + document share at the configured weights). On screen, regular members do not see teammates' individual scores; the group leader sees each member's combined share, GitHub/Docs split, flags and task counts to distribute work fairly. Any member can print one group Contribution Evidence Report with every member's share and flags (never the Gini value, bands or team health).
 - **Result:** The student understands how their combined contribution is assessed.
 
 **UC-S-D4: Dispute a document or combined contribution assessment (Phase C)**
@@ -1017,9 +1017,11 @@ A student can see:
 - Their own metrics: net retained text %, edit sessions, active editing days, self-churn ratio.
 - Any flags applied to their own combined score.
 
-A student cannot see:
+On screen, a student cannot see:
 - Another member's individual `documentContributionShare` or metric breakdown.
 - Another member's flag status.
+
+The one exception is the printable group Contribution Evidence Report, which any member can print: it lists every member's recorded share and flags, and nothing else from the list above.
 - The full team-level Gini coefficient or team-health label (those are instructor-facing).
 
 ### Instructor Visibility
