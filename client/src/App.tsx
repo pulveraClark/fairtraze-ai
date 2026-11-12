@@ -18,6 +18,7 @@ const ClassPage = lazy(() => import("./pages/ClassPage").then((m) => ({ default:
 const AssignmentPage = lazy(() => import("./pages/AssignmentPage").then((m) => ({ default: m.AssignmentPage })));
 const StudentPage = lazy(() => import("./pages/StudentPage").then((m) => ({ default: m.StudentPage })));
 const StudentClassPage = lazy(() => import("./pages/StudentClassPage").then((m) => ({ default: m.StudentClassPage })));
+const EvidenceReportPage = lazy(() => import("./pages/EvidenceReportPage").then((m) => ({ default: m.EvidenceReportPage })));
 const StudentGroupPage = lazy(() => import("./pages/StudentGroupPage").then((m) => ({ default: m.StudentGroupPage })));
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const AuditLogPage = lazy(() => import("./pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
@@ -31,6 +32,9 @@ const PrivacyPage = lazy(() => import("./pages/PrivacyPage").then((m) => ({ defa
 const ConsentGatePage = lazy(() => import("./pages/ConsentGatePage").then((m) => ({ default: m.ConsentGatePage })));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 const JoinPage = lazy(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })));
+
+/** /group/:id/evidence: the printable Contribution Evidence Report (group members and the owning instructor). */
+const EVIDENCE_PATH = /^\/group\/(\d+)\/evidence$/;
 
 function RouteFallback() {
   return (
@@ -53,6 +57,8 @@ function routeElement(pathname: string, signedIn: boolean) {
  */
 export function usesShell(pathname: string, signedIn = false): boolean {
   if (pathname === "/help") return signedIn;
+  // The printable evidence report is a bare Letter sheet: no sidebar to hide when printing.
+  if (EVIDENCE_PATH.test(pathname)) return false;
   return !["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy"].includes(pathname);
 }
 
@@ -118,6 +124,15 @@ function pageElement(pathname: string) {
       <AuditLogPage />
     </ProtectedRoute>
   );
+
+  const evidenceMatch = pathname.match(EVIDENCE_PATH);
+  if (evidenceMatch) {
+    return (
+      <ProtectedRoute allowedRoles={["STUDENT", "INSTRUCTOR"]}>
+        <EvidenceReportPage projectId={parseInt(evidenceMatch[1], 10)} />
+      </ProtectedRoute>
+    );
+  }
 
   // Dynamic route: /student/group/:id (student only)
   const studentGroupMatch = pathname.match(/^\/student\/group\/(\d+)$/);

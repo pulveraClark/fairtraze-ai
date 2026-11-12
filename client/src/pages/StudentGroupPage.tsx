@@ -19,6 +19,7 @@ import {
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { StudentNoteCard } from "../components/StudentNoteCard";
+import { EvidenceReportButton } from "../components/EvidenceReportButton";
 import { NoActivityPill } from "../components/NoActivityPill";
 import { quietSourceText } from "../lib/groupActivity";
 import { NOTE_STAGE, noteOutcomeText, noteStage, sortNotes } from "../lib/notes";
@@ -652,6 +653,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 Instructions
               </button>
             )}
+            <EvidenceReportButton projectId={project.id} hasReport={hasReport} />
             <button
               onClick={() => setShowManageModal(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"

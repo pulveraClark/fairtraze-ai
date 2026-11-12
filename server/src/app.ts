@@ -12,6 +12,7 @@ import { privacyRouter } from "./routes/privacy.js";
 import { classesRouter } from "./routes/classes.js";
 import { assignmentsRouter } from "./routes/assignments.js";
 import { joinRouter } from "./routes/join.js";
+import { evidenceReportRouter } from "./routes/evidenceReport.js";
 import { groupsRouter } from "./routes/groups.js";
 import { taskCommitsRouter } from "./routes/taskCommits.js";
 import { taskOverviewRouter } from "./routes/taskOverview.js";
@@ -138,6 +139,7 @@ export function createApp() {
   app.use(assignmentsRouter);
   app.use(briefsRouter);
   app.use(joinRouter);
+  app.use(evidenceReportRouter);
   app.use(groupsRouter);
   app.use(tasksRouter);
   app.use(taskDetailsRouter);

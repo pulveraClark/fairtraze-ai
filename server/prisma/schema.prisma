@@ -367,6 +367,7 @@ model Project {
   assignment               Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   members                  Member[]
   reports                  Report[]
+  evidenceIds              ReportEvidenceId[]
   groupMemberships         GroupMembership[]
   requirementMarks         RequirementMark[]
   alerts                   Alert[]
@@ -576,6 +577,7 @@ model Report {
   combinedContributions CombinedContribution[]
   documentSnapshots     DocumentSnapshot[]
   aiReviews             AiReportReview[]
+  evidenceId            ReportEvidenceId?
 }
 
 enum AiReviewKind {
@@ -990,4 +992,19 @@ model TaskNotificationLog {
 
   @@unique([taskId, userId, kind, dueDate])
   @@index([userId])
+}
+
+// Short random Report ID printed on the student "Contribution Evidence Report". One per analysis
+// (Report), kept for as long as that Report exists, so an old printout still verifies as
+// "Older report". Display and verification only: never read by scoring.
+model ReportEvidenceId {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  projectId Int
+  reportId  Int      @unique
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }

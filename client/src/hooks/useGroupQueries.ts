@@ -4,6 +4,7 @@ import type { BoardResponse, BoardTask } from "@shared/taskTypes";
 import { POLL_10S } from "./pollingOptions";
 import type { GroupSetup } from "../lib/groupSetup";
 import { mergePending } from "../lib/tasks/pendingMoves";
+import type { EvidenceReportDto } from "@shared/evidenceReport";
 
 /**
  * Query keys for the student/group surfaces. userId is the second element of every key so a
@@ -19,6 +20,7 @@ export const groupKeys = {
   roleSuggestions: (uid: number | null, pid: number) => ["group", uid, "role-suggestions", pid] as const,
   tasks:           (uid: number | null, pid: number) => ["group", uid, "tasks", pid] as const, // the whole Tasks board payload
   taskDetails:     (uid: number | null, pid: number, tid: number) => ["group", uid, "task-details", pid, tid] as const,
+  evidence:        (uid: number | null, pid: number) => ["group", uid, "evidence", pid] as const,
   docHeadings:     (uid: number | null, pid: number) => ["group", uid, "doc-headings", pid] as const,
   workload:        (uid: number | null, pid: number) => ["group", uid, "workload", pid] as const,
   assignmentTasks: (uid: number | null, aid: number) => ["group", uid, "assignment-task-summary", aid] as const,
@@ -58,6 +60,19 @@ export function useGroupSetupQuery(projectId: number) {
     queryFn:  () => getJson<GroupSetup>(`/api/groups/${projectId}/setup`, token, "Could not load group setup."),
     enabled:  !!token && uid !== null,
     refetchOnWindowFocus: true,
+    retry: false,
+  });
+}
+
+/** GET /api/groups/:id/evidence-report: the one-page Contribution Evidence Report (reads the stored analysis only). */
+export function useEvidenceReportQuery(projectId: number) {
+  const { token, user } = useAuth();
+  const uid = user?.id ?? null;
+  return useQuery({
+    queryKey: groupKeys.evidence(uid, projectId),
+    queryFn:  () => getJson<EvidenceReportDto>(`/api/groups/${projectId}/evidence-report`, token, "Could not load the evidence report."),
+    enabled:  !!token && uid !== null,
+    staleTime: 0,
     retry: false,
   });
 }

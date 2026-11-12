@@ -70,6 +70,21 @@ describe("StudentGroupPage", () => {
 
   const flagged = () => groupFixture({ report: { ...(groupFixture().report as object), myContribution: { ...(groupFixture().report.myContribution as object), flags: ["inactive"] } } });
 
+  it("Print evidence report is enabled when the group has an analysis", () => {
+    renderPage();
+    const button = screen.getByRole("button", { name: "Print evidence report" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(screen.queryByText("No analysis yet.")).toBeNull();
+  });
+
+  it("Print evidence report is disabled with the visible message \"No analysis yet.\" before the first analysis", () => {
+    state.data = groupFixture({ hasReport: false, report: null });
+    renderPage();
+    const button = screen.getByRole("button", { name: "Print evidence report" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText("No analysis yet.")).toBeTruthy();
+  });
+
   it("calls it a note everywhere a student sees it: Add a note, Send note, Note status", () => {
     window.history.pushState({}, "", REPORT);
     state.data = flagged();
