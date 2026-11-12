@@ -88,8 +88,8 @@ export function EvidenceSheet({ dto, instructor }: { dto: EvidenceReportDto; ins
             </span>
           </div>
         )}
-        <div style={{ fontSize: "12pt", fontWeight: 700, letterSpacing: "0.02em" }}>{EVIDENCE_UNIVERSITY_NAME}</div>
-        {dto.collegeName && <div style={{ fontSize: "10.5pt", color: GREY }}>{dto.collegeName}</div>}
+        <div data-testid="university-line" style={{ fontSize: "12pt", fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.08em" }}>{EVIDENCE_UNIVERSITY_NAME}</div>
+        {dto.collegeName && <div data-testid="college-line" style={{ fontSize: "10.5pt", fontWeight: 400, color: GREY }}>{dto.collegeName}</div>}
         <h1 style={{ fontSize: "16pt", fontWeight: 700, margin: "0.08in 0 0.02in" }}>Contribution Evidence Report</h1>
         <div style={{ fontSize: "11pt" }}>{dto.groupName}</div>
       </header>
@@ -116,7 +116,7 @@ export function EvidenceSheet({ dto, instructor }: { dto: EvidenceReportDto; ins
         />
       </div>
 
-      <p style={{ fontWeight: 700, margin: "0.14in 0 0.05in" }}>Table 1. Recorded contribution and flags per member.</p>
+      <p style={{ fontWeight: 400, margin: "0.14in 0 0.05in" }}><strong style={{ fontWeight: 700 }}>Table 1.</strong> Recorded contribution and flags per member.</p>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr>

@@ -73,6 +73,25 @@ describe("EvidenceSheet", () => {
     expect(screen.getByText(long).style.overflowWrap).toBe("anywhere");
   });
 
+  it("sets the university line in spaced capitals, not bold; the college line regular", () => {
+    render(<EvidenceSheet dto={dto()} />);
+    const uni = screen.getByTestId("university-line");
+    expect(uni.style.textTransform).toBe("uppercase");
+    expect(uni.style.letterSpacing).not.toBe("");
+    expect(uni.style.fontWeight).toBe("400");
+    expect(screen.getByTestId("college-line").style.fontWeight).toBe("400");
+  });
+
+  it("bolds only 'Table 1.' in the caption", () => {
+    render(<EvidenceSheet dto={dto()} />);
+    const strong = screen.getByText("Table 1.");
+    expect(strong.tagName).toBe("STRONG");
+    expect(strong.style.fontWeight).toBe("700");
+    const caption = strong.parentElement as HTMLElement;
+    expect(caption.style.fontWeight).toBe("400");
+    expect(caption.textContent).toBe("Table 1. Recorded contribution and flags per member.");
+  });
+
   it("shows real flag names or None, and Combined in bold", () => {
     render(<EvidenceSheet dto={dto()} />);
     const rows = within(screen.getAllByRole("table")[2]).getAllByRole("row"); // [0] is the header; tables 0 and 1 are the info columns
