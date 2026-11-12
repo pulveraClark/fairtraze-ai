@@ -92,6 +92,16 @@ describe("EvidenceSheet", () => {
     expect(caption.textContent).toBe("Table 1. Recorded contribution and flags per member.");
   });
 
+  it("keeps right padding in the table cells so Combined and Flags never touch", () => {
+    render(<EvidenceSheet dto={dto()} />);
+    for (const name of ["Combined", "Flags"]) {
+      expect(screen.getByRole("columnheader", { name }).style.paddingRight).toBe("0.14in");
+    }
+    const rows = within(screen.getAllByRole("table")[2]).getAllByRole("row");
+    expect(within(rows[1]).getByText("35.0%").style.paddingRight).toBe("0.14in");
+    expect(within(rows[1]).getByText("None").style.paddingRight).toBe("0.14in");
+  });
+
   it("shows real flag names or None, and Combined in bold", () => {
     render(<EvidenceSheet dto={dto()} />);
     const rows = within(screen.getAllByRole("table")[2]).getAllByRole("row"); // [0] is the header; tables 0 and 1 are the info columns

@@ -58,11 +58,11 @@ export function EvidenceSheet({ dto, instructor }: { dto: EvidenceReportDto; ins
   const repo = dto.sourceType === "EDITOR" ? "Not applicable" : repoShort(dto.repoUrl);
   const compact = sheetDensity(dto.members.length) === "compact";
   const cell: CSSProperties = {
-    padding: compact ? "1px 6px" : "4px 6px", verticalAlign: "top", borderBottom: `1px solid ${RULE}`,
+    padding: compact ? "1px 0.14in 1px 6px" : "4px 0.14in 4px 6px", verticalAlign: "top", borderBottom: `1px solid ${RULE}`,
   };
   const numCell: CSSProperties = { ...cell, textAlign: "right", fontVariantNumeric: "tabular-nums" };
   const head: CSSProperties = {
-    padding: compact ? "2px 6px" : "4px 6px", textAlign: "left", fontWeight: 700,
+    padding: compact ? "2px 0.14in 2px 6px" : "4px 0.14in 4px 6px", textAlign: "left", fontWeight: 700,
     borderTop: `1.5px solid ${INK}`, borderBottom: `1.5px solid ${INK}`,
   };
   const last = dto.members.length - 1;
