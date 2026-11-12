@@ -1,4 +1,5 @@
 import { parseClassLabel } from "../components/ClassCard";
+import { NO_CLASS_PLACEHOLDER } from "./classLabel";
 
 interface CrumbSource {
   assignmentLabel?: string;
@@ -6,7 +7,7 @@ interface CrumbSource {
   assignmentTitle?: string;
 }
 
-const NO_LABEL = "General Assignment"; // the server's placeholder for a group with an empty assignmentLabel
+const NO_LABEL = NO_CLASS_PLACEHOLDER; // the server's placeholder for a group with an empty assignmentLabel
 
 /**
  * Names for the class and assignment crumbs of a group page. Uses the real class code and assignment

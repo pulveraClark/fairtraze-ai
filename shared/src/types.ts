@@ -307,6 +307,8 @@ export interface StoredReportResponse {
   analyzedAt: string;
   report: TeamReport<AnyScoredMember>;
   narrative: string | null;
+  /** The Report ID already made for this analysis (a student opened the evidence report), or null. Never made by this response. */
+  evidenceReportId?: string | null;
   unmatchedGitHubLogins: string[];
   sourceType: string | null; // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment)
   // Scoring config stored with the report (what produced these numbers)

@@ -26,6 +26,7 @@ export function PrintableReportBundle({ items }: Props) {
             narrative={item.narrative}
             assignmentLabel={item.assignmentLabel}
             showFooter={i === items.length - 1}
+            showReportIdInFooter={false}
           />
         </div>
       ))}

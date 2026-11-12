@@ -17,7 +17,7 @@ import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { BriefCard } from "../components/BriefCard";
 import { highlightFromHash } from "../lib/instructionsCheck";
-import { classCrumb, classFullLabel } from "../lib/classLabel";
+import { classCrumb, classFullLabel, exportClassLabel } from "../lib/classLabel";
 import { EditAssignmentModal } from "../components/EditAssignmentModal";
 import type { BriefAttachment } from "../lib/briefAttachments";
 import { REPO_NOT_LINKED_MESSAGE, repoNotLinked } from "../lib/repoNotice";
@@ -288,7 +288,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         });
         if (!res.ok) continue;
         const stored = (await res.json()) as StoredReportResponse;
-        const assignmentLabel = summary.find((s) => s.projectId === id)?.assignmentLabel ?? "";
+        const assignmentLabel = exportClassLabel(summary.find((s) => s.projectId === id));
         items.push({ projectId: id, stored, narrative: stored.narrative ?? null, assignmentLabel });
       }
       setExportItems(items);

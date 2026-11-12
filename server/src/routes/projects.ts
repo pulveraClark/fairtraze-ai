@@ -244,6 +244,8 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     analyzedAt: latestReport.generatedAt.toISOString(),
     report: stored.report,
     narrative: stored.narrative ?? null,
+    // Read-only: the printed instructor export shows the Report ID only if one already exists for this analysis.
+    evidenceReportId: (await prisma.reportEvidenceId.findUnique({ where: { reportId: latestReport.id }, select: { code: true } }))?.code ?? null,
     unmatchedGitHubLogins: stored.unmatchedLogins ?? [],
     sourceType: project.assignment?.sourceType ?? null,
     scoringConfig:          stored.scoringConfig ?? null,
