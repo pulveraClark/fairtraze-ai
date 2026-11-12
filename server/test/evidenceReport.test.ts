@@ -4,7 +4,7 @@ import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
 import { generateReportId } from "../src/lib/reportId.js";
 import { REPORT_ID_PATTERN } from "@shared/evidenceReport.js";
-import { createUser, authHeaderFor } from "./factories.js";
+import { createUser, authHeaderFor, createClassSection, createAssignment, createProject } from "./factories.js";
 
 const app = createApp();
 
@@ -20,6 +20,18 @@ const ALLOWED_TOP = [
 const ALLOWED_MEMBER = ["name", "githubPct", "docsPct", "combinedPct", "flags"].sort();
 
 describe("GET /api/groups/:id/evidence-report", () => {
+  it("className is the class code and EDP number (no subject name), or the code alone without an EDP", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+    const withEdp = await createClassSection(instructor.id, { subjectCode: "SYSARCH", edpCode: "31400" });
+    const noEdp = await createClassSection(instructor.id, { subjectCode: "SYSARCH", edpCode: "" });
+    const pA = await createProject({ assignmentId: (await createAssignment(withEdp.id, { sourceType: "GITHUB" })).id, groupName: "G A" });
+    const pB = await createProject({ assignmentId: (await createAssignment(noEdp.id, { sourceType: "GITHUB" })).id, groupName: "G B" });
+    await saveReport(pA.id, "GITHUB");
+    await saveReport(pB.id, "GITHUB");
+    expect((await get(pA.id, instructor)).body.className).toBe("SYSARCH · EDP 31400");
+    expect((await get(pB.id, instructor)).body.className).toBe("SYSARCH");
+  });
+
   it("a plain member reads their own group's report, including teammates' shares and real flag names", async () => {
     const { project, member } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");

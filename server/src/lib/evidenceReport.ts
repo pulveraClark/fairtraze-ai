@@ -1,6 +1,7 @@
 import { prisma } from "./prisma.js";
 import { getOrCreateReportId } from "./reportId.js";
 import type { EvidenceMemberRow, EvidenceReportDto } from "@shared/evidenceReport.js";
+import { classFullLabel } from "@shared/classLabel.js";
 import type {
   AnyScoredMember, CombinedScoredMember, DocumentScoredMember, ScoredMember, TeamReport,
 } from "@shared/types.js";
@@ -64,7 +65,7 @@ export async function buildEvidenceDto(
           sourceType: true,
           weightGithub: true,
           weightDocs: true,
-          classSection: { select: { subjectCode: true, subjectName: true, department: { select: { name: true } } } },
+          classSection: { select: { subjectCode: true, edpCode: true, department: { select: { name: true } } } },
         },
       },
       groupMemberships: { where: { role: "LEADER" }, select: { user: { select: { name: true } } }, take: 1 },
@@ -83,7 +84,8 @@ export async function buildEvidenceDto(
   return {
     collegeName: cs.department?.name || "College of Computer Studies",
     groupName: project.groupName || `Group ${projectId}`,
-    className: [cs.subjectCode, cs.subjectName].filter(Boolean).join(" \u00B7 "),
+    // Same wording as the instructor copy and every other class label: "CODE \u00B7 EDP 12345", code only without an EDP.
+    className: classFullLabel({ subjectCode: cs.subjectCode, edpCode: cs.edpCode }),
     projectTitle: asgn.title,
     repoUrl: sourceType === "EDITOR" ? null : project.repoUrl,
     analyzedAt: report.generatedAt.toISOString(),
