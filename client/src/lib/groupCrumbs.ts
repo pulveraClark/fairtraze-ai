@@ -1,9 +1,10 @@
 import { parseClassLabel } from "../components/ClassCard";
-import { NO_CLASS_PLACEHOLDER } from "./classLabel";
+import { NO_CLASS_PLACEHOLDER, classFullLabel } from "./classLabel";
 
 interface CrumbSource {
   assignmentLabel?: string;
   classCode?: string;
+  classEdpCode?: string;
   assignmentTitle?: string;
 }
 
@@ -17,7 +18,8 @@ const NO_LABEL = NO_CLASS_PLACEHOLDER; // the server's placeholder for a group w
 export function groupCrumbLabels(meta: CrumbSource | null | undefined): { classLabel: string; assignmentLabel: string } {
   const legacy = meta?.assignmentLabel && meta.assignmentLabel !== NO_LABEL ? parseClassLabel(meta.assignmentLabel) : null;
   return {
-    classLabel: meta?.classCode || legacy?.code || "Class",
+    // "CODE · EDP 12345" (shared classFullLabel); just the code when the class has no EDP
+    classLabel: (meta?.classCode && classFullLabel({ subjectCode: meta.classCode, edpCode: meta.classEdpCode })) || legacy?.code || "Class",
     assignmentLabel: meta?.assignmentTitle || "Assignment",
   };
 }
