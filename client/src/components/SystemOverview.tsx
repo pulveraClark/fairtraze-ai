@@ -340,8 +340,9 @@ function SystemRoles() {
       items: [
         "Enrolls with the instructor's join code and reads the project instructions",
         "Creates a group (and becomes its leader) or joins an existing group",
-        "Sees their own contribution report and flags. Regular members see only their own",
+        "Sees their own contribution report and flags on screen. Regular members see only their own",
         "A group leader also sees each member's contribution share so work can be distributed fairly. Members are told this on their page",
+        "Any member can print one Contribution Evidence Report for the group: every member's recorded share and flags, with a Report ID the instructor can verify. It never shows the team's health rating, and it is evidence, not a grade",
         "Sees tasks assigned to them, and is notified when a report is ready or a task is assigned",
         "Can flag a finding for review with a free-text note",
       ],
@@ -389,7 +390,7 @@ function PrivacySection() {
     },
     {
       title: "Scoped student visibility",
-      body: "Students see their own report and flags. Regular members cannot see other members' scores or raw data. The group leader additionally sees each member's contribution share, source split, flags and task counts, and members are told so. Dispute details and instructor notes stay instructor-only.",
+      body: "Students see their own report and flags on screen. Regular members cannot see other members' raw data or detailed scores. The group leader additionally sees each member's contribution share, source split, flags and task counts, and members are told so. Any member can print the one-page Contribution Evidence Report, which lists every member's recorded share and flags but never the Gini value, health bands or team health. Dispute details and instructor notes stay instructor-only.",
     },
     {
       title: "Leadership carries no advantage",

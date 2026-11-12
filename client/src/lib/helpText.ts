@@ -27,6 +27,7 @@ export const TIPS = {
   githubUsername: "Your username is how FairTraze matches commits to you. Add it once in Settings.",
   tasksPlanning: "Tasks are for planning. They are never counted in anyone's score.",
   shortcuts: "Press ? on the board to see every keyboard shortcut. Shortcuts pause while you type.",
+  evidenceReport: "One printed page with every member's recorded share and flags, for your instructor. It is evidence, not a grade, and it never shows the team's health rating.",
   leaderTeam: "This view helps your group share the work. Shares come from recorded activity, are not grades, and your instructor makes the final assessment.",
   earlyData: `Early data shows before the project deadline when the most active member has fewer than ${DATA_CONFIDENCE_DAYS.high} active days (fewer than ${DATA_CONFIDENCE_DAYS.low} reads 'too early to tell'), or when the Docs numbers may be approximate. Scores and flags never change because of it.`,
   evenness: "Compares everyone's recorded activity to show how evenly work is spread. It describes the team, not you.",

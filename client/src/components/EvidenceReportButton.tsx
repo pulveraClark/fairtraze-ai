@@ -1,4 +1,6 @@
 import { useRouter } from "../router";
+import { InfoTip } from "./ui/InfoTip";
+import { TIPS, helpLink } from "../lib/helpText";
 
 /**
  * "Print evidence report" on the student group page. Without a stored analysis the button is
@@ -17,6 +19,7 @@ export function EvidenceReportButton({ projectId, hasReport }: { projectId: numb
       >
         Print evidence report
       </button>
+      <InfoTip label="About the evidence report" helpHref={helpLink("roles")}>{TIPS.evidenceReport}</InfoTip>
       {!hasReport && (
         <span id={`evidence-none-${projectId}`} className="text-xs text-slate-700">No analysis yet.</span>
       )}
