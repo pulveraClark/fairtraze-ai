@@ -61,7 +61,11 @@ describe("member findings: a failed run keeps the last good result", () => {
     const good = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: s.report.id, kind: "MEMBER_SUMMARIES" } });
     expect(good.status).toBe("OK");
 
-    await generateMemberSummaries(s.project.id, summaryDeps(failingGenerate(quotaError())));
+    // The failing run must have different input, or the "nothing changed" shortcut reuses the good result
+    // and never calls the AI (see the next test). A new commit by Ben changes the input fingerprint.
+    const changedInput = summaryDeps(failingGenerate(quotaError()));
+    changedInput.listCommits = vi.fn().mockResolvedValue([commit("a1", "lialeader"), commit("b1", "benreyes"), commit("c1", "benreyes")]);
+    await generateMemberSummaries(s.project.id, changedInput);
     const kept = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: s.report.id, kind: "MEMBER_SUMMARIES" } });
     expect(kept.status).toBe("OK");
     expect(kept.createdAt.getTime()).toBe(good.createdAt.getTime());
@@ -85,6 +89,21 @@ describe("member findings: a failed run keeps the last good result", () => {
     const fresh = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: s.report.id, kind: "MEMBER_SUMMARIES" } });
     expect(fresh.content).not.toHaveProperty("lastAttempt");
     expect((await get(s.project.id, s.instructor as never)).body).not.toHaveProperty("refreshFailed");
+  });
+
+  it("with unchanged input the good result is reused: the AI is not called and no failure note appears", async () => {
+    const s = await setup("GITHUB");
+    await generateMemberSummaries(s.project.id, summaryDeps(happyGenerate()));
+    const good = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: s.report.id, kind: "MEMBER_SUMMARIES" } });
+
+    const generate = failingGenerate(quotaError());
+    await generateMemberSummaries(s.project.id, summaryDeps(generate));
+    expect(generate).not.toHaveBeenCalled();
+    const again = await prisma.aiReportReview.findFirstOrThrow({ where: { reportId: s.report.id, kind: "MEMBER_SUMMARIES" } });
+    expect(again.id).toBe(good.id);
+    expect(again.status).toBe("OK");
+    expect(again.createdAt.getTime()).toBe(good.createdAt.getTime());
+    expect(again.content).not.toHaveProperty("lastAttempt");
   });
 
   it("with no earlier good result, a failed run is stored as failed as before", async () => {
