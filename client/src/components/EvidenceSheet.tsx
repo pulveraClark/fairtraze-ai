@@ -2,7 +2,9 @@ import type { CSSProperties, ReactNode } from "react";
 import { EVIDENCE_UNIVERSITY_NAME, type EvidenceReportDto } from "@shared/evidenceReport";
 import { contributionStatus } from "@shared/contributionStatus";
 import { flagsText, manilaDate, pctText, repoShort, sourcesText, tableNote } from "../lib/evidenceText";
-import { pageLabel, sheetDensity } from "../lib/evidenceLayout";
+import { giniBands } from "../lib/giniBands";
+import { pageLabel, sheetDensity, type BulkPosition } from "../lib/evidenceLayout";
+import type { TeamHealth } from "@shared/types";
 
 // The one-page Contribution Evidence Report as it prints: Letter, serif, black and grey only.
 // Evidence, not a grade: the Instructor Decision boxes are always empty and nothing suggests an outcome.
@@ -33,7 +35,23 @@ function InfoColumn({ rows }: { rows: Array<{ label: string; value: ReactNode; b
   );
 }
 
-export function EvidenceSheet({ dto }: { dto: EvidenceReportDto }) {
+/** Only the instructor copy passes this. The student sheet must never receive it. */
+export interface InstructorCopy {
+  gini: number;
+  teamHealth: TeamHealth;
+  /** The Report ID already made for this analysis, or null ("Not issued"). Never minted here. */
+  reportId: string | null;
+  /** Set by the bulk export: this sheet's place among the sheets. */
+  bulk?: BulkPosition;
+}
+
+/** "Healthy", "Moderate" or "High": the first word of the band's label from giniBands(). */
+export function giniBandWord(health: TeamHealth): string {
+  const band = giniBands().find((b) => b.health === health);
+  return (band?.label ?? "").split(" ")[0];
+}
+
+export function EvidenceSheet({ dto, instructor }: { dto: EvidenceReportDto; instructor?: InstructorCopy }) {
   const showGithub = dto.sourceType !== "EDITOR";
   const showDocs = dto.sourceType !== "GITHUB";
   const repo = dto.sourceType === "EDITOR" ? "Not applicable" : repoShort(dto.repoUrl);
@@ -47,6 +65,7 @@ export function EvidenceSheet({ dto }: { dto: EvidenceReportDto }) {
     borderTop: `1.5px solid ${INK}`, borderBottom: `1.5px solid ${INK}`,
   };
   const last = dto.members.length - 1;
+  const reportId = instructor ? instructor.reportId : dto.reportId;
 
   return (
     <article
@@ -58,8 +77,18 @@ export function EvidenceSheet({ dto }: { dto: EvidenceReportDto }) {
       }}
     >
       <header style={{ textAlign: "center", borderBottom: `2px solid ${INK}`, paddingBottom: "0.1in" }}>
+        {instructor && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.06in" }}>
+            <span
+              data-testid="instructor-tag"
+              style={{ border: `1.5px solid ${INK}`, padding: "1px 8px", fontSize: "8.5pt", fontWeight: 700, letterSpacing: "0.06em" }}
+            >
+              INSTRUCTOR COPY
+            </span>
+          </div>
+        )}
         <div style={{ fontSize: "12pt", fontWeight: 700, letterSpacing: "0.02em" }}>{EVIDENCE_UNIVERSITY_NAME}</div>
-        <div style={{ fontSize: "10.5pt", color: GREY }}>{dto.collegeName}</div>
+        {dto.collegeName && <div style={{ fontSize: "10.5pt", color: GREY }}>{dto.collegeName}</div>}
         <h1 style={{ fontSize: "16pt", fontWeight: 700, margin: "0.08in 0 0.02in" }}>Contribution Evidence Report</h1>
         <div style={{ fontSize: "11pt" }}>{dto.groupName}</div>
       </header>
@@ -71,6 +100,9 @@ export function EvidenceSheet({ dto }: { dto: EvidenceReportDto }) {
             { label: "Project", value: dto.projectTitle },
             { label: "Repository", value: repo },
             { label: "Contribution status", value: contributionStatus(dto.members) },
+            ...(instructor
+              ? [{ label: "Gini index", value: `${instructor.gini.toFixed(3)} (${giniBandWord(instructor.teamHealth)})` }]
+              : []),
           ]}
         />
         <InfoColumn
@@ -78,7 +110,7 @@ export function EvidenceSheet({ dto }: { dto: EvidenceReportDto }) {
             { label: "Analyzed", value: manilaDate(dto.analyzedAt) },
             { label: "Generated", value: manilaDate(dto.generatedAt) },
             { label: "Sources", value: sourcesText(dto.sourceType) },
-            { label: "Report ID", value: dto.reportId, bold: true },
+            { label: "Report ID", value: reportId || "Not issued", bold: !!reportId },
           ]}
         />
       </div>
@@ -149,9 +181,19 @@ export function EvidenceSheet({ dto }: { dto: EvidenceReportDto }) {
           display: "flex", justifyContent: "space-between", gap: "0.2in",
         }}
       >
-        <span style={{ fontWeight: 700, color: INK }}>FAIRTRAZE AI</span>
-        <span style={{ textAlign: "center" }}>The instructor can verify this report using the Report ID</span>
-        <span>{pageLabel(dto.members.length)}</span>
+        {instructor ? (
+          <span data-testid="instructor-footer">
+            <span style={{ fontWeight: 700, color: INK }}>FAIRTRAZE AI</span>
+            {" · Instructor copy"}
+            {instructor.reportId ? ` · Report ID ${instructor.reportId}` : ""}
+          </span>
+        ) : (
+          <>
+            <span style={{ fontWeight: 700, color: INK }}>FAIRTRAZE AI</span>
+            <span style={{ textAlign: "center" }}>The instructor can verify this report using the Report ID</span>
+          </>
+        )}
+        <span>{pageLabel(dto.members.length, instructor?.bulk)}</span>
       </footer>
     </article>
   );

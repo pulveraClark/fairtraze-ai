@@ -25,7 +25,7 @@ import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNo
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { DocSectionProvider, useDocSectionNav } from "../hooks/useDocSectionLink";
 import { PrintableReport } from "../components/PrintableReport";
-import { exportClassLabel } from "../lib/classLabel";
+
 import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { groupCrumbLabels } from "../lib/groupCrumbs";
 import { NO_ACTIVITY_LABEL, noActivityFromShares, presentedHealth, quietSource, quietSourceText } from "../lib/groupActivity";
@@ -793,11 +793,7 @@ export function ProjectDetailPage({ projectId }: Props) {
 
       {/* Print-only layout — hidden on screen, rendered when printing */}
       {stored && !reanalyzing && (
-        <PrintableReport
-          stored={stored}
-          narrative={narrativeText}
-          assignmentLabel={exportClassLabel(projectMeta)}
-        />
+        <PrintableReport stored={stored} meta={projectMeta} />
       )}
 
       {/* Scoring settings modal */}
