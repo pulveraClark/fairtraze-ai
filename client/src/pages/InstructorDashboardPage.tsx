@@ -9,6 +9,7 @@ import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { VerifyReportBox } from "../components/VerifyReportBox";
 import { QRCodeSVG } from "qrcode.react";
 import { SEMESTERS, SEMESTER_LABEL, isValidSchoolYear, termOf, type Semester } from "@shared/schoolTerm";
 import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
@@ -870,6 +871,7 @@ export function InstructorDashboardPage() {
           </>
         )}
 
+        <VerifyReportBox />
       </main>
 
       <AppFooter />

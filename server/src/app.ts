@@ -41,6 +41,7 @@ import {
   joinCodeLimiter,
   taskCommentLimiter,
   requirementMarkLimiter,
+  evidenceVerifyLimiter,
   globalLimiter,
 } from "./middleware/security.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
@@ -119,6 +120,7 @@ export function createApp() {
   // Class join codes: the preview and the enrol share one bucket.
   app.get("/api/join/class/:code", authenticateToken, joinCodeLimiter);
   app.post("/api/join/class", authenticateToken, joinCodeLimiter);
+  app.post("/api/evidence-reports/verify", authenticateToken, evidenceVerifyLimiter);
   app.post("/api/groups/:id/tasks/:taskId/comments", authenticateToken, taskCommentLimiter);
   app.use("/api/groups/:id/requirement-marks", authenticateToken, requirementMarkLimiter);
 

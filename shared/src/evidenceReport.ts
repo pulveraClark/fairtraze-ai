@@ -47,7 +47,17 @@ export interface EvidenceReportDto {
 
 export type EvidenceVerifyStatus = "latest" | "older";
 
+/** What "Verify report" shows, and nothing more: the same per-member numbers as the printout. */
 export interface EvidenceVerifyResult {
   status: EvidenceVerifyStatus;
-  report: EvidenceReportDto;
+  groupName: string;
+  projectTitle: string;
+  analyzedAt: string;
+  sourceType: EvidenceReportDto["sourceType"];
+  weights: EvidenceReportDto["weights"];
+  members: EvidenceMemberRow[];
 }
+
+export const REPORT_ID_NOT_FOUND = "Report ID not found.";
+export const VERIFY_LATEST_TEXT = "Matches the latest analysis";
+export const VERIFY_OLDER_TEXT = "Older report. A newer analysis exists.";

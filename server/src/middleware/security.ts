@@ -190,6 +190,16 @@ export const requirementMarkLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// "Verify report" lookups: 10 per minute per instructor, so a Report ID cannot be guessed quickly.
+// Needs authenticateToken first (see app.ts).
+export const evidenceVerifyLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: "You're checking report IDs too quickly. Please wait a minute and try again." },
+  keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
+});
+
 export const taskCommentLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 60 * 1000,
