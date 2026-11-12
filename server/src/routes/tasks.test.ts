@@ -63,16 +63,16 @@ const patch = (u: U, projectId: number, task: { id: number; version: number }, b
     .send({ expectedVersion: task.version, ...body });
 
 describe("board access (who may open a group's tasks)", () => {
-  it("lets members, the owning instructor and an admin read the board", async () => {
+  it("lets members and the owning instructor read the board; an admin gets 403 (admins never see class content)", async () => {
     const { leader, member, instructor, admin, project } = await setupGroup();
-    for (const u of [leader, member, instructor, admin]) {
+    for (const u of [leader, member, instructor]) {
       const b = await board(u, project.id);
       expect(b.group.id).toBe(project.id);
     }
     expect((await board(leader, project.id)).viewer).toMatchObject({ isLeader: true, readOnly: false, canCreate: true });
     expect((await board(member, project.id)).viewer).toMatchObject({ isLeader: false, readOnly: false, canCreate: true });
     expect((await board(instructor, project.id)).viewer).toMatchObject({ readOnly: true, canCreate: false });
-    expect((await board(admin, project.id)).viewer).toMatchObject({ readOnly: true, canCreate: false });
+    expect((await request(app).get(base(project.id)).set("Authorization", as(admin))).status).toBe(403);
   });
 
   it("rejects an outsider and an instructor who does not own the class", async () => {
@@ -85,7 +85,7 @@ describe("board access (who may open a group's tasks)", () => {
     expect((await request(app).get(base(project.id))).status).toBe(401);
   });
 
-  it("does not open an assignment-less group to any instructor (no owner); admin can view, members can use it", async () => {
+  it("does not open an assignment-less group to any instructor (no owner); admin gets 403, members can use it", async () => {
     const { user: someInstructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
     const { user: leader } = await createUser({ systemRole: "STUDENT" });
@@ -94,7 +94,7 @@ describe("board access (who may open a group's tasks)", () => {
 
     expect((await request(app).get(base(project.id)).set("Authorization", as(someInstructor))).status).toBe(403);
     expect((await request(app).post(base(project.id)).set("Authorization", as(someInstructor)).send({ title: "x" })).status).toBe(403);
-    expect((await request(app).get(base(project.id)).set("Authorization", as(admin))).status).toBe(200);
+    expect((await request(app).get(base(project.id)).set("Authorization", as(admin))).status).toBe(403);
     await createTask(leader, project.id, { title: "Works for the group itself" });
   });
 

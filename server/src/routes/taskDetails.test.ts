@@ -63,13 +63,14 @@ const comment = (u: U, projectId: number, taskId: number, body: string) =>
   request(app).post(`${tbase(projectId, taskId)}/comments`).set("Authorization", as(u)).send({ body });
 
 describe("details access", () => {
-  it("lets members, the owning instructor and an admin read; rejects outsiders; instructor/admin are view-only", async () => {
+  it("lets members, the owning instructor and the owning instructor read; rejects outsiders and admins (403); instructor is view-only", async () => {
     const { leader, member, instructor, admin, outsider, project } = await setupGroup();
     const task = await createTask(leader, project.id);
-    for (const u of [leader, member, instructor, admin]) {
+    for (const u of [leader, member, instructor]) {
       expect((await details(u, project.id, task.id)).taskId).toBe(task.id);
     }
     expect((await request(app).get(`${tbase(project.id, task.id)}/details`).set("Authorization", as(outsider))).status).toBe(403);
+    expect((await request(app).get(`${tbase(project.id, task.id)}/details`).set("Authorization", as(admin))).status).toBe(403);
     expect((await request(app).get(`${tbase(project.id, task.id)}/details`)).status).toBe(401);
 
     for (const u of [instructor, admin]) {

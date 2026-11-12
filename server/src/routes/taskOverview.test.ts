@@ -54,9 +54,10 @@ const workload = (u: U, projectId: number) => request(app).get(`/api/groups/${pr
 const summary = (u: U, assignmentId: number | string) => request(app).get(`/api/assignments/${assignmentId}/task-summary`).set("Authorization", as(u));
 
 describe("GET /api/groups/:id/tasks/workload", () => {
-  it("is for the leader, the class's instructor and admins only", async () => {
+  it("is for the leader and the class's instructor only (admins get 403)", async () => {
     const { project, leader, ben, instructor, admin, outsider, otherInstructor } = await setup();
-    for (const u of [leader, instructor, admin]) expect((await workload(u, project.id)).status).toBe(200);
+    for (const u of [leader, instructor]) expect((await workload(u, project.id)).status).toBe(200);
+    expect((await workload(admin, project.id)).status).toBe(403);
     expect((await workload(ben, project.id)).status).toBe(403);
     expect((await workload(outsider, project.id)).status).toBe(403);
     expect((await workload(otherInstructor, project.id)).status).toBe(403);
@@ -79,14 +80,14 @@ describe("GET /api/groups/:id/tasks/workload", () => {
     expect(body.unassigned).toEqual({ open: 1, overdue: 1 });
   });
 
-  it("works for an assignment-less group for the leader and admins, never for another instructor", async () => {
+  it("works for an assignment-less group for the leader, never for an admin or another instructor", async () => {
     const { user: leader } = await createUser({ systemRole: "STUDENT" });
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
     const { user: someInstructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const project = await createProject({ assignmentId: null });
     await createMembership(leader.id, project.id, "LEADER");
     expect((await workload(leader, project.id)).status).toBe(200);
-    expect((await workload(admin, project.id)).status).toBe(200);
+    expect((await workload(admin, project.id)).status).toBe(403);
     expect((await workload(someInstructor, project.id)).status).toBe(403);
   });
 
@@ -129,10 +130,10 @@ describe("GET /api/assignments/:id/task-summary", () => {
     expect((res.body as AssignmentTaskSummary).groups[0]!.projectId).not.toBe(other.project.id);
   });
 
-  it("only the instructor who owns the class (and admins) may read it", async () => {
+  it("only the instructor who owns the class may read it (admins get 403)", async () => {
     const { assignment, instructor, admin, otherInstructor, leader, ben } = await setup();
     expect((await summary(instructor, assignment.id)).status).toBe(200);
-    expect((await summary(admin, assignment.id)).status).toBe(200);
+    expect((await summary(admin, assignment.id)).status).toBe(403);
     expect((await summary(otherInstructor, assignment.id)).status).toBe(403);
     expect((await summary(leader, assignment.id)).status).toBe(403);
     expect((await summary(ben, assignment.id)).status).toBe(403);
