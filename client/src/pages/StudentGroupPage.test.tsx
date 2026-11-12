@@ -517,12 +517,12 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect(screen.queryByText("Summary of your work")).toBeNull();
   });
 
-  it("Team overview: the evenness chip and line, the leader's AI text, then the grey last-analyzed line, in that order", async () => {
+  it("Team overview: the evenness line (the label is the header pill), the leader's AI text, then the grey last-analyzed line, in that order", async () => {
     state.data = leaderFixture();
     renderPage();
     const card = (await screen.findByText("Team overview")).closest("section")!;
     const text = card.textContent ?? "";
-    const order = ["Work is evenly shared", "No one is far above or below the others.", "The team shares the work fairly evenly.", "Last analyzed"].map((t) => text.indexOf(t));
+    const order = ["No one is far above or below the others.", "The team shares the work fairly evenly.", "Last analyzed"].map((t) => text.indexOf(t));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(text).toMatch(/Last analyzed .*\. Updates again when there is new activity\./);

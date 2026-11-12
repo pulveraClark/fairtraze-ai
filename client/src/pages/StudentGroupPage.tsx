@@ -952,7 +952,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   />
                 )}
 
-                {/* Team overview: evenness, the leader's team-level AI text and instructions check, then when it was analyzed */}
+                {/* Team overview: the evenness line (the label itself is the header pill, shown once), the leader's team-level AI text and instructions check, then when it was analyzed */}
                 {!report.noActivity && (
                   <section aria-labelledby="team-overview-title" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
                     <h3 id="team-overview-title" className="text-sm font-semibold text-slate-900">Team overview</h3>
@@ -962,9 +962,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                         <InfoTip label="About how evenly work is shared" helpHref={helpLink("flags")}>{TIPS.evenness}</InfoTip>
                       </p>
                       <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${report.dataConfidence === "low" ? "text-slate-800 bg-slate-100 border-slate-300" : (HEALTH_BADGE[report.teamHealth] ?? "")}`}>
-                          {studentHealthLabel(report.teamHealth)}
-                        </span>
                         <EarlyDataTag level={report.dataConfidence} />
                       </span>
                       <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.teamHealth)}</p>
