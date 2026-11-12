@@ -898,7 +898,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       Nobody in your group has recorded activity yet, so there is nothing to compare. Shares and team health
                       appear after the group has commits or document edits and your instructor analyzes it again.
                     </p>
-                    <LastAnalyzed className="mt-1" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} updateFailed={data.autoUpdateFailed} />
+                    <LastAnalyzed className="mt-1" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} updateFailed={data.autoUpdateFailed} deadline={assignment.deadline} />
                   </div>
                 )}
 
@@ -994,7 +994,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                           : undefined}
                       />
                     )}
-                    <LastAnalyzed variant="student" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} updateFailed={data.autoUpdateFailed} />
+                    <LastAnalyzed variant="student" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} updateFailed={data.autoUpdateFailed} deadline={assignment.deadline} />
                   </section>
                 )}
 

@@ -37,7 +37,7 @@ const WORDS = {
   ],
   freshness: [
     "Last analyzed 3 days ago. The latest update didn't finish. It will try again tonight.",
-    "Last analyzed 3 hours ago (automatic) · Updates automatically",
+    "Last analyzed 3 hours ago (automatic) · Re-analyzes automatically when there is new activity",
   ],
 };
 

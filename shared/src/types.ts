@@ -337,5 +337,7 @@ export interface StoredReportResponse {
   // An automatic run changed the results after the AI explanation was written; the text is kept but no longer matches.
   narrativeOutdated?: boolean;
   docsDataFixedAt?: string; // ISO date of the fix, for the notice text
+  // The assignment deadline (ISO) or null. Display only: lets the "Last analyzed" line say when automatic updates have stopped.
+  deadline?: string | null;
 }
 

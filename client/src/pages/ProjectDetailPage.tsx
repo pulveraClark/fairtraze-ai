@@ -575,6 +575,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             trigger={stored.trigger}
             updating={updating}
             updateFailed={stored.autoUpdateFailed}
+            deadline={stored.deadline}
             analysis={
               <>
                 {SOURCE_LABEL[sourceType ?? ""] ?? "GitHub"}

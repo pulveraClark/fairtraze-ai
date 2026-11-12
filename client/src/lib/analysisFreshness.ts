@@ -16,15 +16,33 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   return plural(Math.floor(hours / 24), "day");
 }
 
-/** "Last analyzed 3 hours ago · Updates automatically", with "(automatic)" or "(manual)" when known. */
-export function formatLastAnalyzed(iso: string, trigger?: "manual" | "auto" | null, now: Date = new Date()): string {
-  const who = trigger === "auto" ? " (automatic)" : trigger === "manual" ? " (manual)" : "";
-  return `Last analyzed ${relativeTime(iso, now)}${who} · Updates automatically`;
+/** Mirrors ACTIVE_GRACE_DAYS in server/src/lib/autoAnalysis.ts: automatic analysis stops this long after the deadline. */
+export const AUTO_ANALYSIS_GRACE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** True once automatic analysis has stopped: a deadline exists and now is more than 7 days past it (same rule as the server's isProjectActive). */
+export function isAutoAnalysisClosed(deadline: string | null | undefined, now: Date = new Date()): boolean {
+  if (!deadline) return false;
+  const due = new Date(deadline).getTime();
+  if (Number.isNaN(due)) return false;
+  return now.getTime() > due + AUTO_ANALYSIS_GRACE_DAYS * DAY_MS;
 }
 
-/** The students' line: "Last analyzed 14 hours ago. Updates every night." */
-export function formatLastAnalyzedStudent(iso: string, now: Date = new Date()): string {
-  return `Last analyzed ${relativeTime(iso, now)}. Updates every night.`;
+/**
+ * Active: "Last analyzed 3 hours ago (manual) · Re-analyzes automatically when there is new activity".
+ * Closed: "Last analyzed 15 days ago · Final report, no more automatic updates".
+ */
+export function formatLastAnalyzed(iso: string, trigger?: "manual" | "auto" | null, now: Date = new Date(), closed = false): string {
+  if (closed) return `Last analyzed ${relativeTime(iso, now)} · Final report, no more automatic updates`;
+  const who = trigger === "auto" ? " (automatic)" : trigger === "manual" ? " (manual)" : "";
+  return `Last analyzed ${relativeTime(iso, now)}${who} · Re-analyzes automatically when there is new activity`;
+}
+
+/** The students' line: "Last analyzed 14 hours ago. Updates again when there is new activity." / "... Final report, no more updates." */
+export function formatLastAnalyzedStudent(iso: string, now: Date = new Date(), closed = false): string {
+  return closed
+    ? `Last analyzed ${relativeTime(iso, now)}. Final report, no more updates.`
+    : `Last analyzed ${relativeTime(iso, now)}. Updates again when there is new activity.`;
 }
 
 /** "Last analyzed 3 hours ago": the short form for lists and summary cards. */

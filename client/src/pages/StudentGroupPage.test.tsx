@@ -510,7 +510,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     const order = ["Work is evenly shared", "No one is far above or below the others.", "The team shares the work fairly evenly.", "Last analyzed"].map((t) => text.indexOf(t));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(text).toMatch(/Last analyzed .*\. Updates every night\./);
+    expect(text).toMatch(/Last analyzed .*\. Updates again when there is new activity\./);
   });
 
   it("a member's Team overview has no AI text and no instructions check", async () => {
@@ -519,7 +519,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     const card = (await screen.findByText("Team overview")).closest("section")!;
     expect(card.textContent).not.toContain("The team shares");
     expect(card.textContent).not.toContain("Project instructions check");
-    expect(card.textContent).toMatch(/Updates every night\./);
+    expect(card.textContent).toMatch(/Updates again when there is new activity\./);
   });
 
   it("a plain member never sees the Gini value, a band or the team index, in the Team overview or in their window", async () => {

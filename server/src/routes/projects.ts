@@ -260,6 +260,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     narrativeOutdated: stored.narrativeOutdated === true,
     repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
+    deadline: project.assignment?.deadline?.toISOString() ?? null,
   };
 
   res.json(response);
