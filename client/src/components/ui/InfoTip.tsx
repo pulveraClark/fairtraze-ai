@@ -47,14 +47,14 @@ export function InfoTip({ label, children, helpHref, large = false }: Props) {
         </svg>
       </button>
       {open && (
-        <div
+        <span
           id={id}
           ref={popRef}
           onClick={(e) => { if ((e.target as HTMLElement).closest("button")) { setOpen(false); triggerRef.current?.focus(); } }} // an action inside the tip closes it
           style={shift ? { transform: `translateX(${shift}px)` } : undefined}
           role={helpHref ? "group" : "tooltip"}
           aria-label={helpHref ? label : undefined}
-          className="absolute left-0 top-full z-30 mt-1 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal leading-normal text-slate-800 shadow-lg"
+          className="absolute left-0 block top-full z-30 mt-1 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-300 bg-white p-3 text-xs font-normal leading-normal text-slate-800 shadow-lg"
         >
           {children}
           {helpHref && (
@@ -68,7 +68,7 @@ export function InfoTip({ label, children, helpHref, large = false }: Props) {
               More in Help
             </a>
           )}
-        </div>
+        </span>
       )}
     </span>
   );
