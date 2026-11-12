@@ -267,6 +267,7 @@ export interface ProjectSummaryItem {
   // Real names for breadcrumbs and labels (display only; absent on older payloads and assignment-less projects).
   classCode?: string;        // ClassSection.subjectCode, e.g. "CC-APPSDEV22"
   classSubjectName?: string; // ClassSection.subjectName
+  classEdpCode?: string;     // ClassSection.edpCode (empty or absent when the class has none)
   assignmentTitle?: string;  // Assignment.title
   // "GITHUB" | "EDITOR" | "COMBINED" | null (legacy projects without assignment).
   // Available even before any report exists — unlike report-derived fields below,

@@ -6,7 +6,8 @@ import type { EvidenceMemberRow, EvidenceReportDto } from "@shared/evidenceRepor
 import type {
   AnyScoredMember, CombinedScoredMember, DocumentScoredMember, ScoredMember, StoredReportResponse,
 } from "@shared/types";
-import { exportClassLabel, type ExportClassSource } from "./classLabel";
+import { classFullLabel } from "@shared/classLabel";
+import type { ExportClassSource } from "./classLabel";
 
 /** Server: `Math.round(share * 1000) / 10` (one decimal, half rounds up). */
 export const sharePct = (share: number): number => Math.round(share * 1000) / 10;
@@ -53,11 +54,10 @@ export function evidenceDtoFromStored(stored: StoredReportResponse, meta?: Expor
   const sourceType = evidenceSourceType(stored.sourceType);
   const members = stored.report.members;
   const blend = stored.scoringConfig?.blend ?? null;
-  const classCodes = [meta?.classCode?.trim(), meta?.classSubjectName?.trim()].filter(Boolean).join(" · ");
   return {
     collegeName: "",
     groupName: stored.groupName,
-    className: classCodes || exportClassLabel(meta) || "—",
+    className: classFullLabel({ subjectCode: meta?.classCode, edpCode: meta?.classEdpCode }) || "—",
     projectTitle: meta?.assignmentTitle?.trim() || "—",
     repoUrl: sourceType === "EDITOR" ? null : stored.repoUrl,
     analyzedAt: stored.analyzedAt,

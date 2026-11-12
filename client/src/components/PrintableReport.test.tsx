@@ -20,7 +20,7 @@ const stored = (over: Record<string, unknown> = {}, members: unknown[] = [member
   ...over,
 }) as never;
 
-const META = { classCode: "CC-APPSDEV22", classSubjectName: "Applications Development", assignmentTitle: "Capstone" };
+const META = { classCode: "CC-APPSDEV22", classEdpCode: "31400", classSubjectName: "Applications Development", assignmentTitle: "Capstone" };
 
 describe("instructor export (same sheet as the student report)", () => {
   it("has the INSTRUCTOR COPY tag on its own line above the university name", () => {
@@ -49,7 +49,7 @@ describe("instructor export (same sheet as the student report)", () => {
 
   it("takes class and project from the summary entry and leaves out the college and the leader name", () => {
     render(<PrintableReport stored={stored()} meta={META} />);
-    expect(screen.getByText("CC-APPSDEV22 · Applications Development")).toBeTruthy();
+    expect(screen.getByText("CC-APPSDEV22 · EDP 31400")).toBeTruthy();
     expect(screen.getByText("Capstone")).toBeTruthy();
     expect(screen.queryByText("College of Computer Studies")).toBeNull();
     expect(screen.getByText("Prepared by (group leader)").nextElementSibling).toBeNull();

@@ -72,9 +72,14 @@ describe("evidenceDtoFromStored", () => {
     expect(dto.reportId).toBe("");
   });
 
-  it("takes class and project names from the summary entry", () => {
-    const dto = evidenceDtoFromStored(stored({}, [combined]), { classCode: "CC-1", classSubjectName: "Apps", assignmentTitle: "Capstone" });
-    expect(dto.className).toBe("CC-1 · Apps");
+  it("takes the class (code and EDP, no subject name) and project from the summary entry", () => {
+    const dto = evidenceDtoFromStored(stored({}, [combined]), { classCode: "SYSARCH", classEdpCode: "31400", classSubjectName: "Systems Architecture", assignmentTitle: "Capstone" });
+    expect(dto.className).toBe("SYSARCH · EDP 31400");
     expect(dto.projectTitle).toBe("Capstone");
+  });
+
+  it("shows only the class code when the class has no EDP number", () => {
+    expect(evidenceDtoFromStored(stored({}, [combined]), { classCode: "SYSARCH", classEdpCode: "", classSubjectName: "Systems Architecture" }).className).toBe("SYSARCH");
+    expect(evidenceDtoFromStored(stored({}, [combined]), { classCode: "SYSARCH" }).className).toBe("SYSARCH");
   });
 });

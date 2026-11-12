@@ -1,18 +1,10 @@
 import type { Crumb } from "../components/layout/Breadcrumbs";
 
-/** The two official codes of a class section. The EDP code is the school's own code and always stays visible. */
-export interface ClassCodes {
-  subjectCode?: string | null;
-  edpCode?: string | null;
-}
-
-/** The one format every screen uses for a class: "UXA-101 · EDP 12345" (just "UXA-101" when it has no EDP code). */
-export function classFullLabel(c: ClassCodes): string {
-  const subject = c.subjectCode?.trim() ?? "";
-  const edp = c.edpCode?.trim() ?? "";
-  if (subject && edp) return `${subject} · EDP ${edp}`;
-  return subject || (edp ? `EDP ${edp}` : "");
-}
+// The class label itself lives in shared/ so the server and the client can never differ; re-exported here
+// so existing imports keep working.
+import { classFullLabel, type ClassCodes } from "@shared/classLabel";
+export { classFullLabel };
+export type { ClassCodes };
 
 /** Where space is tight (breadcrumb, sidebar): the subject code only. The full label goes in a tooltip. */
 export function classShortLabel(c: ClassCodes, fallback = "Class"): string {
@@ -33,6 +25,7 @@ export function classCrumb(c: ClassCodes | null | undefined, href?: string): Cru
 export interface ExportClassSource {
   assignmentLabel?: string;
   classCode?: string;
+  classEdpCode?: string;
   classSubjectName?: string;
   assignmentTitle?: string;
 }
