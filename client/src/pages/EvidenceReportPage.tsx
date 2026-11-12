@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { EvidenceSheet } from "../components/EvidenceSheet";
 import { useAuth } from "../context/AuthContext";
 import { ApiError, useEvidenceReportQuery } from "../hooks/useGroupQueries";
@@ -7,19 +8,19 @@ import { BUTTON_PRIMARY, BUTTON_SECONDARY_COMPACT } from "../components/ui/style
 // Print page for the Contribution Evidence Report (/group/:id/evidence). It renders outside the app
 // shell (see usesShell in App.tsx), so printing needs no navigation hiding beyond the toolbar.
 // The injected @page rule makes the sheet exactly Letter with no margin, which is also what removes
-// the browser's own header and footer; the sheet carries its own 0.6in padding. It overrides the
+// the browser's own header and footer; the sheet carries its own 0.6in padding. The sheet is at least one Letter page and is never clipped. It overrides the
 // app-wide A4 @page only while this page is mounted.
 const PAGE_CSS = `
 @page { size: Letter portrait; margin: 0; }
 .ft-evidence-desk { background: #d4d4d8; min-height: 100vh; padding: 16px; overflow-x: auto; }
 .ft-evidence-sheet {
-  box-sizing: border-box; width: 8.5in; height: 11in; margin: 0 auto; padding: 0.6in 0.65in 0.5in;
-  display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+  box-sizing: border-box; width: 8.5in; min-height: 11in; margin: 0 auto; padding: 0.6in 0.65in 0.5in;
+  display: flex; flex-direction: column; box-shadow: 0 1px 6px rgba(0,0,0,0.25);
 }
 @media print {
   html, body { background: #ffffff !important; margin: 0 !important; }
   .ft-evidence-desk { background: #ffffff; padding: 0; min-height: 0; overflow: visible; }
-  .ft-evidence-sheet { box-shadow: none; margin: 0; break-after: avoid; page-break-after: avoid; }
+  .ft-evidence-sheet { box-shadow: none; margin: 0; }
 }
 `;
 
@@ -35,6 +36,14 @@ export function EvidenceReportPage({ projectId }: { projectId: number }) {
     : status === 403 ? "You do not have access to this report."
     : error ? "Could not load the evidence report. Try again in a moment."
     : null;
+
+  // The browser prints the page title in its header when headers are on; keep it short and restore it on leave.
+  useEffect(() => {
+    if (!data) return;
+    const previous = document.title;
+    document.title = `Contribution Evidence Report - ${data.groupName}`;
+    return () => { document.title = previous; };
+  }, [data]);
 
   return (
     <div className="ft-evidence-desk">
