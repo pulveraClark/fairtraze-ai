@@ -80,13 +80,13 @@ describe("HelpPage", () => {
     expect(within(exact).getByText(new RegExp(`structural ${COMMIT_IMPACT.structural.toFixed(1)}×`))).toBeInTheDocument();
   });
 
-  it("describes the version-2 rules from the constants: Docs weights, line types, 30-character day, Philippine time", async () => {
+  it("describes the current rules from the constants: Docs weights, line types, 30-character day, Philippine time", async () => {
     const user = userEvent.setup();
     renderAs("INSTRUCTOR");
-    expect(DOCUMENT_DEFAULT_WEIGHTS).toEqual({ retainedText: 0.6, sessions: 0.2, activeDays: 0.2 });
+    expect(DOCUMENT_DEFAULT_WEIGHTS).toEqual({ retainedText: 0.37, sessions: 0.3, activeDays: 0.33 });
     await user.click(screen.getByText("Show the exact numbers"));
     const exact = screen.getByText("Show the exact numbers").closest("details")!;
-    expect(within(exact).getByText(/kept text 0\.6, sessions 0\.2, active days 0\.2/)).toBeInTheDocument();
+    expect(within(exact).getByText(/kept text 0\.37, sessions 0\.3, active days 0\.33/)).toBeInTheDocument();
     expect(within(exact).getByText(new RegExp(`code ${LINE_TYPE_WEIGHTS.code}, comment ${LINE_TYPE_WEIGHTS.comment}, blank ${LINE_TYPE_WEIGHTS.blank}`))).toBeInTheDocument();
     expect(document.body.textContent).toContain(`at least ${MIN_ACTIVE_DAY_RETAINED_CHARS} characters`);
     expect(document.body.textContent).toContain("in Philippine time");

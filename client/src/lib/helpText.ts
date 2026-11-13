@@ -1,4 +1,5 @@
 import { DATA_CONFIDENCE_DAYS } from "@shared/dataConfidence";
+import { MIN_ACTIVE_DAY_RETAINED_CHARS } from "@shared/documentScoring";
 // All short (?) tooltip texts and the Help page anchors, in one place. Display only: nothing here
 // reads or changes a score. Every tip is one or two plain sentences (helpText.test.ts enforces it).
 // Numbers that the scoring code owns are never typed here; they are passed in by the caller.
@@ -52,6 +53,11 @@ export const SETTINGS_TIPS = {
   commits: "Number of commits, with diminishing returns so many tiny commits don't win.",
   lines: "Lines added: code counts in full, comments a quarter and blank lines nothing, then by file type and commit size. Deleting your own lines lowers it a little.",
   activeDays: "Days (Philippine time) with at least one commit.",
+  docsWeights: "How much a member's kept text, writing sessions and active days each count in their Docs share. They must add up to 1.",
+  docsRetainedText: "How much of the member's writing is still in the final document.",
+  docsSessions: "How many separate times the member sat down to write.",
+  docsActiveDays: `On how many days the member kept at least ${MIN_ACTIVE_DAY_RETAINED_CHARS} characters.`,
+  provenance: "Default weights come from an expert survey of instructors (AHP).",
   githubWeight: "How much a member's GitHub share counts in the combined share.",
   docsWeight: "How much a member's Docs share counts in the combined share.",
   freeRider: "Flag a member whose share is below this fraction of an equal split.",

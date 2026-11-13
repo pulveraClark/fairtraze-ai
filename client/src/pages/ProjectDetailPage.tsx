@@ -490,14 +490,13 @@ export function ProjectDetailPage({ projectId }: Props) {
                   </div>
                 )}
 
-                {/* Scoring settings — shown only when a report exists, not for admin.
-                    Disabled (not hidden) for EDITOR reports: weight override isn't wired for document scoring yet. */}
+                {/* Scoring settings — shown only when a report exists, not for admin. Docs-only projects
+                    get the writing weights and flag thresholds. */}
                 {stored && !reanalyzing && !isAdmin && stored.assignmentId != null && (
                   <button
                     type="button"
                     onClick={() => setShowScoringModal(true)}
-                    disabled={!showGitHub}
-                    title={showGitHub ? "Adjust scoring weights and flag thresholds for this project (applies to all its groups)" : "Weight adjustment isn't available for Docs-only scoring yet"}
+                    title="Adjust scoring weights and flag thresholds for this project (applies to all its groups)"
                     className={BUTTON_SECONDARY_COMPACT}
                   >
                     Scoring settings

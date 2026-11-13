@@ -395,8 +395,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 Admin view — read only
               </span>
             )}
-            {/* Project-level scoring settings — owning instructor only; Docs-only projects have none */}
-            {!isAdmin && assignment && assignment.sourceType !== "EDITOR" && (
+            {/* Project-level scoring settings — owning instructor only; Docs-only projects get the writing weights */}
+            {!isAdmin && assignment && (
               <button
                 type="button"
                 onClick={() => setShowScoring(true)}
