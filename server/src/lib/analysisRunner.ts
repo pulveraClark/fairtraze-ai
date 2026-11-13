@@ -15,6 +15,7 @@ import { LATEST_REPORT_ORDER } from "./latestReport.js";
 import { reportPolicy, type AnalysisTrigger } from "./resultsChange.js";
 import { withAnalysisLock, ANALYSIS_IN_PROGRESS } from "./analysisLock.js";
 import { classifyGithubFailure, githubFailureBody } from "./githubFailure.js";
+import { blankImageData } from "./snapshotImages.js";
 
 // The analysis itself, independent of Express. routes/analyze.ts wraps it for the manual button
 // (ownership, SSE); the automatic runs call it with a no-op progress emitter.
@@ -151,14 +152,17 @@ export async function writeDocumentSnapshot(documentId: number, reportId: number
   try {
     const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { yjsState: true } });
     if (!doc?.yjsState) return;
+    // Image data is blanked in the copy (Document.yjsState is never changed); the dedupe compares
+    // this blanked copy with the latest snapshot, so an unchanged document writes no new row.
+    const copy = Buffer.from(blankImageData(doc.yjsState));
     const latest = await prisma.documentSnapshot.findFirst({
       where: { documentId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { yjsState: true },
     });
-    if (latest && Buffer.from(latest.yjsState).equals(Buffer.from(doc.yjsState))) return;
+    if (latest && Buffer.from(latest.yjsState).equals(copy)) return;
     await prisma.documentSnapshot.create({
-      data: { documentId, reportId, yjsState: doc.yjsState },
+      data: { documentId, reportId, yjsState: copy },
     });
   } catch (err) {
     console.error(`[analysis] document snapshot not saved for document ${documentId}:`, err instanceof Error ? err.message : "unknown error");
