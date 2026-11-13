@@ -252,7 +252,7 @@ export function HelpPage() {
             ["Active days", <>How many different days (in Philippine time) you wrote at least {MIN_ACTIVE_DAY_RETAINED_CHARS} characters that are still in the document. Default weight {pct(docs.activeDays)}.</>],
           ]} />
           <ul>
-            <li>The colors in the document show who typed each part. Only the logged-in person is credited for typing.</li>
+            <li>The colors in the document show who typed each part. Only the logged-in person is credited for typing. If a teammate removes your text and exactly the same text is put back soon after (for example with undo), it stays credited to you.</li>
             <li>Formatting alone (bold, a heading style, a table's borders, page layout) adds no text, so it earns no share.</li>
             <li>Images count a little toward your kept text, up to a limit your instructor sets. Copies of the same image and very small images do not count, and images never add editing sessions or active days. Images added before this update are shown but not counted.</li>
             <li>Text imported from a .docx counts as kept text. It earns some session credit in proportion to its size, but counts as one active day only (the day of upload), and the report says so.</li>

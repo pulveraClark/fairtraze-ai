@@ -1131,6 +1131,18 @@ The concurrent-edit attribution rule (Section 15) is deterministic but produces 
 
 **Mitigation:** This edge case is unlikely to dominate any member's score in practice — it affects individual sentences during simultaneous edits. However, it is a known measurement gap. The instructor can view the document and read the edit history to investigate specific cases.
 
+### 3b. Text Removed by a Teammate, then Put Back (ownership return)
+
+When a member removes text that belonged to a teammate and then inserts exactly that text again (for example with undo, or by cutting it and pasting it elsewhere), the characters go back to the people who wrote them. They are not credited to the member who put them back, and they are not counted as that member's inserted text. This is decided only by plain counting on the edit log at analysis time (`replayEditEvents`, `server/src/collab/editReplay.ts`); the live editor and the capture are unchanged, and the document colors and the score use the same replay.
+
+The rule is deliberately narrow: exact text match, at least 20 characters, within 24 hours of the removal, once per removal, only for the same member who removed it, and only the characters that were someone else's (the member's own characters in the same text stay theirs). A member remembers at most 200 removals; past that the oldest is forgotten and its text is counted as new, as before. Cutting and pasting your own text is unchanged.
+
+**Still open (documented limits):**
+- **Edited paste-back.** If the text is changed even by one character when it is put back, it counts as new writing by the person who put it back.
+- **Plain copy.** Copying a teammate's text without removing it, and pasting the copy, is new writing by the person who pasted. The system cannot tell a copy from typing; the instructor judges that.
+- **Another member puts it back.** Only the member who removed the text gets the exact-match handling; if a third member inserts the same text, they are credited.
+- **Older events.** Events recorded before the removed and inserted text were stored have no text to match and keep the old behavior.
+
 ### 4. Edit-Type Classification Accuracy
 
 The `classifyEditType` function uses heuristics based on document context to classify edits as SUBSTANTIVE, REVISION, FORMATTING, or TRIVIAL. These heuristics are rule-based and imperfect. An elaborate table format might be classified as FORMATTING when it contains substantive content in its cells. A one-sentence paragraph addition might be classified as TRIVIAL if it is short.

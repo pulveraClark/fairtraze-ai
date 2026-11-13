@@ -91,6 +91,20 @@ describe("GET /api/projects/:id/report — docsOneGo", () => {
     expect((await reportAs(instructor, project.id)).body.docsOneGo).toEqual([]);
   });
 
+  it("a big insert that only handed a teammate's removed text back (undo) does not fire for the member who did it", async () => {
+    const { instructor, project, lead, other, doc } = await setup();
+    const aText = "a".repeat(2000);
+    const back = "a".repeat(1000);
+    await prisma.editEvent.create({ data: { documentId: doc.id, userId: lead.id, eventType: "INSERT", position: 0, length: 2000, timestamp: NOV10, source: "LIVE", editType: "SUBSTANTIVE", insertedText: aText } });
+    await prisma.editEvent.create({ data: { documentId: doc.id, userId: other.id, eventType: "INSERT", position: 2000, length: 600, timestamp: new Date("2026-11-10T13:00:00Z"), source: "LIVE", editType: "SUBSTANTIVE", insertedText: "b".repeat(600) } });
+    await prisma.editEvent.create({ data: { documentId: doc.id, userId: other.id, eventType: "DELETE", position: 0, length: 1000, timestamp: new Date("2026-11-10T14:00:00Z"), source: "LIVE", deletedText: back } });
+    await prisma.editEvent.create({ data: { documentId: doc.id, userId: other.id, eventType: "INSERT", position: 0, length: 1000, timestamp: new Date("2026-11-10T14:01:00Z"), source: "LIVE", editType: "SUBSTANTIVE", insertedText: back } });
+    await saveReport(project.id, doc.id, [lead, other], new Date("2026-11-12T00:00:00Z"));
+    const res = await reportAs(instructor, project.id);
+    // Only the member who really added 2000 characters in one go; the undo of a teammate's removal is not new text.
+    expect(res.body.docsOneGo).toEqual([{ userId: lead.id, day: "2026-11-10" }]);
+  }, 60000);
+
   it("is empty for a group with no events, a GITHUB group and an old report", async () => {
     const empty = await setup();
     await saveReport(empty.project.id, empty.doc.id, [empty.lead]);

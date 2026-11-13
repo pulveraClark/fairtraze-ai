@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { getAuthorshipFixAt } from "./authorshipFix.js";
+import { fetchOrderedEvents, replayEditEvents } from "../collab/editReplay.js";
 import { analysisDayOf } from "@shared/analysisDay.js";
 import { ONE_GO_MIN_CHARS, oneGoHintApplies } from "@shared/oneGoHint.js";
 import type { AnyScoredMember } from "@shared/types.js";
@@ -41,13 +42,26 @@ export async function computeDocsOneGo(
       userId: { in: [...retained.keys()] },
       timestamp: { gte: getAuthorshipFixAt(), lte: reportGeneratedAt },
     },
-    select: { userId: true, length: true, timestamp: true },
+    select: { id: true, userId: true, length: true, timestamp: true },
   });
+
+  // An insert that only handed a teammate's removed text back to its owners (undo, or moving it) is
+  // not new text from this member. The log is replayed only when a big insert exists.
+  let handedBack = new Map<number, number>();
+  if (big.length > 0) {
+    try {
+      handedBack = replayEditEvents(await fetchOrderedEvents(documentId)).restoredByEvent;
+    } catch {
+      handedBack = new Map();
+    }
+  }
 
   const largest = new Map<number, { length: number; timestamp: Date }>();
   for (const e of big) {
+    const length = e.length - (handedBack.get(e.id) ?? 0);
+    if (length < ONE_GO_MIN_CHARS) continue;
     const cur = largest.get(e.userId);
-    if (!cur || e.length > cur.length) largest.set(e.userId, { length: e.length, timestamp: e.timestamp });
+    if (!cur || length > cur.length) largest.set(e.userId, { length, timestamp: e.timestamp });
   }
 
   const out: { userId: number; day: string }[] = [];
