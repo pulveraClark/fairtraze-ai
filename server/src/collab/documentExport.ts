@@ -92,10 +92,18 @@ function runsFromXmlText(xmlText: YTypes.XmlText): TextRun[] {
   return runs;
 }
 
-function runsFromElementChildren(el: YTypes.XmlElement): TextRun[] {
+export interface ReadOptions {
+  /** Show a small "[image]" run where an image is. The image data itself is never put in the result. Used by the history only. */
+  imagePlaceholders?: boolean;
+}
+
+const IMAGE_PLACEHOLDER: TextRun = { text: "[image]", italic: true };
+
+function runsFromElementChildren(el: YTypes.XmlElement, opts: ReadOptions = {}): TextRun[] {
   const runs: TextRun[] = [];
   for (const child of el.toArray()) {
     if (child instanceof Y.XmlText) runs.push(...runsFromXmlText(child));
+    else if (opts.imagePlaceholders && child instanceof Y.XmlElement && child.nodeName === "image") runs.push(IMAGE_PLACEHOLDER);
   }
   return runs;
 }
@@ -105,7 +113,7 @@ function indentOf(el: YTypes.XmlElement): number | undefined {
   return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 8) : undefined;
 }
 
-function walkBlocks(fragment: YTypes.XmlFragment | YTypes.XmlElement): DocBlock[] {
+function walkBlocks(fragment: YTypes.XmlFragment | YTypes.XmlElement, opts: ReadOptions = {}): DocBlock[] {
   const blocks: DocBlock[] = [];
   for (const child of fragment.toArray()) {
     if (!(child instanceof Y.XmlElement)) continue;
@@ -114,22 +122,25 @@ function walkBlocks(fragment: YTypes.XmlFragment | YTypes.XmlElement): DocBlock[
     if (name === "heading") {
       const level = Number(child.getAttribute("level") ?? 1);
       const align = child.getAttribute("textAlign") as string | undefined;
-      blocks.push({ kind: "heading", level, align, indent: indentOf(child), runs: runsFromElementChildren(child) });
+      blocks.push({ kind: "heading", level, align, indent: indentOf(child), runs: runsFromElementChildren(child, opts) });
     } else if (name === "paragraph") {
       const align = child.getAttribute("textAlign") as string | undefined;
-      blocks.push({ kind: "paragraph", align, indent: indentOf(child), runs: runsFromElementChildren(child) });
+      blocks.push({ kind: "paragraph", align, indent: indentOf(child), runs: runsFromElementChildren(child, opts) });
     } else if (name === "bulletList" || name === "orderedList") {
       const listType = name as "bulletList" | "orderedList";
       for (const li of child.toArray()) {
         if (!(li instanceof Y.XmlElement) || li.nodeName !== "listItem") continue;
-        blocks.push({ kind: "listItem", listType, blocks: walkBlocks(li) });
+        blocks.push({ kind: "listItem", listType, blocks: walkBlocks(li, opts) });
       }
     } else if (name === "taskList") {
       for (const li of child.toArray()) {
         if (!(li instanceof Y.XmlElement) || li.nodeName !== "taskItem") continue;
         const raw = li.getAttribute("checked") as unknown;
-        blocks.push({ kind: "taskItem", checked: raw === true || raw === "true", blocks: walkBlocks(li) });
+        blocks.push({ kind: "taskItem", checked: raw === true || raw === "true", blocks: walkBlocks(li, opts) });
       }
+    } else if (name === "image") {
+      // Block-level image (only when asked for): a placeholder line, never the image data.
+      if (opts.imagePlaceholders) blocks.push({ kind: "paragraph", runs: [IMAGE_PLACEHOLDER] });
     } else if (name === "horizontalRule") {
       blocks.push({ kind: "rule" });
     } else if (name === "pageBreak") {
@@ -143,7 +154,7 @@ function walkBlocks(fragment: YTypes.XmlFragment | YTypes.XmlElement): DocBlock[
           if (!(cell instanceof Y.XmlElement)) continue;
           const header = cell.nodeName === "tableHeader";
           if (!header && cell.nodeName !== "tableCell") continue;
-          cells.push({ header, blocks: walkBlocks(cell) });
+          cells.push({ header, blocks: walkBlocks(cell, opts) });
         }
         rows.push({ cells });
       }
@@ -161,7 +172,7 @@ function walkBlocks(fragment: YTypes.XmlFragment | YTypes.XmlElement): DocBlock[
 // persistence.ts's bindState(), which registers attachAuthorshipTracking and an update listener.
 // A scratch Y.Doc that's never added to y-websocket's `docs` map avoids all of that: this is a
 // genuinely clean read with zero interaction with authorshipCapture.ts.
-export function readDocumentStructure(doc: { content: string; yjsState: Uint8Array | null }): DocBlock[] {
+export function readDocumentStructure(doc: { content: string; yjsState: Uint8Array | null }, opts: ReadOptions = {}): DocBlock[] {
   const scratch = new Y.Doc();
   try {
     if (doc.yjsState) {
@@ -176,7 +187,7 @@ export function readDocumentStructure(doc: { content: string; yjsState: Uint8Arr
         console.error("[documentExport] failed to parse legacy content for export", err);
       }
     }
-    return walkBlocks(scratch.getXmlFragment("default"));
+    return walkBlocks(scratch.getXmlFragment("default"), opts);
   } finally {
     scratch.destroy();
   }

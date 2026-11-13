@@ -144,12 +144,25 @@ async function writeDocumentContributionRows(
 // Report. This is a plain Prisma read + insert: it never calls getYDoc(), never touches the live
 // Y.Doc, and registers no Yjs update listener, so it has zero interaction with
 // server/src/collab/authorshipCapture.ts or the live collab room.
-async function writeDocumentSnapshot(documentId: number, reportId: number): Promise<void> {
-  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { yjsState: true } });
-  if (!doc?.yjsState) return;
-  await prisma.documentSnapshot.create({
-    data: { documentId, reportId, yjsState: doc.yjsState },
-  });
+// Best effort: a snapshot problem is logged (no document data) and never fails the analysis or
+// leaves the "outdated" flags uncleared. When the bytes equal the group's latest snapshot, no new
+// row is written (the history list then keeps showing the earlier version and its date).
+export async function writeDocumentSnapshot(documentId: number, reportId: number): Promise<void> {
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { yjsState: true } });
+    if (!doc?.yjsState) return;
+    const latest = await prisma.documentSnapshot.findFirst({
+      where: { documentId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { yjsState: true },
+    });
+    if (latest && Buffer.from(latest.yjsState).equals(Buffer.from(doc.yjsState))) return;
+    await prisma.documentSnapshot.create({
+      data: { documentId, reportId, yjsState: doc.yjsState },
+    });
+  } catch (err) {
+    console.error(`[analysis] document snapshot not saved for document ${documentId}:`, err instanceof Error ? err.message : "unknown error");
+  }
 }
 
 // ── Shared helper: build RawMemberStats from DB members + GitHub data ─────────

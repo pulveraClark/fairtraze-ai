@@ -809,7 +809,8 @@ documentsRouter.get("/api/groups/:id/document/snapshots/:snapshotId", requireAut
   }
 
   try {
-    const blocks = readDocumentStructure({ content: "", yjsState: snapshot.yjsState });
+    // Images appear as a small "[image]" line; their data is never sent (a version stays light).
+    const blocks = readDocumentStructure({ content: "", yjsState: snapshot.yjsState }, { imagePlaceholders: true });
     res.json({ id: snapshot.id, createdAt: snapshot.createdAt, reportId: snapshot.reportId, blocks });
   } catch (err) {
     console.error(`[documents] snapshot reconstruction failed for group ${projectId}, snapshot ${snapshotId}`, err);
