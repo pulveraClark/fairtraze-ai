@@ -17,6 +17,7 @@ import { joinInviteUrl } from "../lib/joinInvite";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
 import { AiReviewSwitch } from "../components/AiReviewSwitch";
 import { BriefEditor } from "../components/BriefEditor";
+import { instructionsProblem } from "../lib/instructionsRule";
 import { EditAssignmentModal, UploadFailurePanel } from "../components/EditAssignmentModal";
 import { emptyDraft, retryUploads, syncBrief, type BriefDraft, type DraftItem } from "../lib/briefAttachments";
 
@@ -114,6 +115,7 @@ function CreateAssignmentModal({
   const [error, setError]           = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [description, setDescription] = useState("");
+  const [instructionsErr, setInstructionsErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<BriefDraft>(emptyDraft());
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [failedUploads, setFailedUploads] = useState<DraftItem[]>([]);
@@ -136,6 +138,9 @@ function CreateAssignmentModal({
     setDeadlineErr(null);
     if (!sourceType) { setSourceTypeErr("Please choose an analysis source"); return; }
     setSourceTypeErr(null);
+    const problem = instructionsProblem("create", description, draft);
+    setInstructionsErr(problem);
+    if (problem) { document.getElementById("brief-description")?.focus(); return; }
     setSubmitting(true);
     setError(null);
     try {
@@ -145,7 +150,7 @@ function CreateAssignmentModal({
         maxGroupSize: parseInt(maxGroupSize) || 5,
         sourceType,
         deadline: new Date(deadline + "T00:00:00").toISOString(),
-        ...(description.trim() ? { description } : {}),
+        description,
       };
 
       const res = await fetch("/api/assignments", {
@@ -310,10 +315,11 @@ function CreateAssignmentModal({
               <BriefEditor
                 assignmentId={null}
                 description={description}
-                onDescriptionChange={setDescription}
+                onDescriptionChange={(v) => { setDescription(v); if (instructionsErr && v.trim()) setInstructionsErr(null); }}
                 draft={draft}
                 onDraftChange={setDraft}
                 disabled={submitting}
+                error={instructionsErr}
               />
 
             </div>

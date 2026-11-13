@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../lib/apiBase";
 import { BriefEditor } from "./BriefEditor";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT } from "./ui/styles";
 import { Modal } from "./ui/Modal";
+import { instructionsProblem } from "../lib/instructionsRule";
 import {
   draftFromAttachments, emptyDraft, retryUploads, syncBrief,
   type BriefAttachment, type BriefDraft, type DraftItem,
@@ -66,6 +67,7 @@ export function EditAssignmentModal({
   const [deadline, setDeadline] = useState("");
   const [maxGroupSize, setMaxGroupSize] = useState("5");
   const [description, setDescription] = useState("");
+  const [instructionsErr, setInstructionsErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<BriefDraft>(emptyDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +99,9 @@ export function EditAssignmentModal({
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!loaded || !title.trim() || !deadline) return;
+    const problem = instructionsProblem("edit", description, draft);
+    setInstructionsErr(problem);
+    if (problem) { document.getElementById("brief-description")?.focus(); return; }
     setSaving(true);
     setError(null);
     try {
@@ -194,10 +199,11 @@ export function EditAssignmentModal({
               <BriefEditor
                 assignmentId={assignmentId}
                 description={description}
-                onDescriptionChange={setDescription}
+                onDescriptionChange={(v) => { setDescription(v); if (instructionsErr && v.trim()) setInstructionsErr(null); }}
                 draft={draft}
-                onDraftChange={setDraft}
+                onDraftChange={(d) => { setDraft(d); if (instructionsErr && (d.images.length > 0 || d.pdf)) setInstructionsErr(null); }}
                 disabled={saving}
+                error={instructionsErr}
               />
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">

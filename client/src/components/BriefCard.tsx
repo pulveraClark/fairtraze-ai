@@ -201,7 +201,7 @@ export function BriefCard({ assignmentId, description, attachments, onEdit, reme
         <div id={bodyId} className="mt-2 space-y-4">
           {!hasContent && (
             <p className="text-sm text-slate-600">
-              {onEdit ? "No instructions yet. Use Edit to add a description or files for your students." : "The instructor has not added project instructions for this project."}
+              {onEdit ? "No instructions yet. Use Edit to add instructions or files for your students." : "The instructor has not added project instructions for this project."}
             </p>
           )}
           {description && (

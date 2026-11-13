@@ -13,14 +13,16 @@ interface Props {
   draft: BriefDraft;
   onDraftChange: (d: BriefDraft) => void;
   disabled?: boolean;
+  /** Inline problem with the instructions (shown under the field, linked by aria-describedby). */
+  error?: string | null;
 }
 
 const INPUT = `w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 ${FOCUS_LIGHT}`;
 let keySeq = 0;
 const nextKey = () => `n${++keySeq}`;
 
-/** Description + image/PDF editor. Pure draft state: the parent syncs it to the server on save. */
-export function BriefEditor({ assignmentId, description, onDescriptionChange, draft, onDraftChange, disabled }: Props) {
+/** Instructions (text) + image/PDF editor. Pure draft state: the parent syncs it to the server on save. */
+export function BriefEditor({ assignmentId, description, onDescriptionChange, draft, onDraftChange, disabled, error }: Props) {
   const imageInput = useRef<HTMLInputElement>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export function BriefEditor({ assignmentId, description, onDescriptionChange, dr
     <div className="space-y-4">
       <div>
         <label htmlFor="brief-description" className="mb-1.5 block text-xs font-medium text-slate-700">
-          Description <span className="font-normal text-slate-600">(optional)</span>
+          Instructions <span className="font-normal text-slate-600">(required)</span>
         </label>
         <textarea
           id="brief-description"
@@ -99,9 +101,15 @@ export function BriefEditor({ assignmentId, description, onDescriptionChange, dr
           rows={6}
           disabled={disabled}
           placeholder="What should students build? Add requirements, links, grading notes… Plain text; links are clickable."
-          className={`${INPUT} resize-y`}
-          aria-describedby="brief-description-count"
+          className={`${INPUT} resize-y ${error ? "border-red-600" : ""}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? "brief-description-error brief-description-count" : "brief-description-count"}
         />
+        {error && (
+          <p id="brief-description-error" role="alert" className="mt-1 text-xs text-red-700">
+            {error}
+          </p>
+        )}
         <p id="brief-description-count" className={`mt-1 text-xs tabular-nums ${remaining < 200 ? "text-amber-800" : "text-slate-600"}`}>
           {remaining.toLocaleString()} characters left
         </p>

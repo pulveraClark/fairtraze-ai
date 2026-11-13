@@ -16,15 +16,20 @@ const createAssignmentSchema = z.object({
   deadline:       z.string({ required_error: "Deadline is required" }).datetime({ offset: true, message: "Deadline is required" }),
   maxGroupSize:   z.number().int().positive().default(5),
   sourceType:     z.enum(["GITHUB", "EDITOR", "COMBINED"]),
-  description:    z.string().max(BRIEF_DESCRIPTION_MAX, `Description must be ${BRIEF_DESCRIPTION_MAX} characters or fewer`).optional(),
+  description:    z.string().max(BRIEF_DESCRIPTION_MAX, `Instructions must be ${BRIEF_DESCRIPTION_MAX} characters or fewer`).optional(),
 });
+
+// Instructions are required when a project is created or saved (the AI review reads them). Old
+// projects with empty instructions are untouched until someone edits them.
+const INSTRUCTIONS_REQUIRED_CREATE = "Write the project instructions. The AI review uses them to check the group's work.";
+const INSTRUCTIONS_REQUIRED_EDIT = "Add instructions as text, or keep a PDF or image. The AI review uses them to check the group's work.";
 
 // sourceType is deliberately not editable: changing it would invalidate existing groups, roles and reports.
 const updateAssignmentSchema = z.object({
   title:        z.string().trim().min(1).optional(),
   deadline:     z.string().datetime({ offset: true }).optional(),
   maxGroupSize: z.number().int().positive().max(20).optional(),
-  description:  z.string().max(BRIEF_DESCRIPTION_MAX, `Description must be ${BRIEF_DESCRIPTION_MAX} characters or fewer`).nullable().optional(),
+  description:  z.string().max(BRIEF_DESCRIPTION_MAX, `Instructions must be ${BRIEF_DESCRIPTION_MAX} characters or fewer`).nullable().optional(),
 });
 
 /** Plain text only: trim, and store empty as null. Rendering escapes it; nothing here is HTML. */
@@ -45,6 +50,11 @@ assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (
   }
 
   const { classSectionId, title, deadline, maxGroupSize, sourceType, description } = result.data;
+
+  if (!normalizeDescription(description)) {
+    res.status(400).json({ error: INSTRUCTIONS_REQUIRED_CREATE });
+    return;
+  }
 
   const cls = await assertOwnsClass(req, res, classSectionId);
   if (!cls) return;
@@ -93,6 +103,16 @@ assignmentsRouter.patch("/api/assignments/:id", ...requireRole("INSTRUCTOR"), as
       res.status(400).json({
         error: `Max group size can't be lower than your largest existing group (${largest} member${largest === 1 ? "" : "s"}).`,
       });
+      return;
+    }
+  }
+
+  // Only when this save touches the instructions: empty text is fine while a PDF/image is still
+  // attached (older file-only projects). The edit form also checks the files it is about to remove.
+  if (description !== undefined && !normalizeDescription(description)) {
+    const files = await prisma.projectAttachment.count({ where: { assignmentId: assignment.id } });
+    if (files === 0) {
+      res.status(400).json({ error: INSTRUCTIONS_REQUIRED_EDIT });
       return;
     }
   }

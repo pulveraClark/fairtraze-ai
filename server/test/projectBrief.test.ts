@@ -206,7 +206,30 @@ describe("description and cascade", () => {
       request(app).patch(`/api/assignments/${asg.id}`).set("Authorization", auth).send({ description });
     expect((await patch("a".repeat(BRIEF_DESCRIPTION_MAX))).status).toBe(200);
     expect((await patch("a".repeat(BRIEF_DESCRIPTION_MAX + 1))).status).toBe(400);
-    expect((await patch("   ")).body.description).toBeNull();
+    // Blank instructions are refused when nothing else is attached.
+    const blank = await patch("   ");
+    expect(blank.status).toBe(400);
+    expect(blank.body.error).toMatch(/Add instructions as text, or keep a PDF or image/);
+  });
+
+  it("instructions are required on create; an edit may leave the text empty only while a file is attached", async () => {
+    const { instructor, cls, asg } = await setup();
+    const auth = authHeaderFor(instructor);
+    const base = { classSectionId: cls.id, title: "T", sourceType: "EDITOR", deadline: new Date().toISOString() };
+
+    const missing = await request(app).post("/api/assignments").set("Authorization", auth).send(base);
+    expect(missing.status).toBe(400);
+    expect(missing.body.error).toMatch(/Write the project instructions/);
+    expect((await request(app).post("/api/assignments").set("Authorization", auth).send({ ...base, description: "  " })).status).toBe(400);
+
+    // A save that does not touch the instructions never trips the rule (old empty projects keep working).
+    expect((await request(app).patch(`/api/assignments/${asg.id}`).set("Authorization", auth).send({ title: "Renamed" })).status).toBe(200);
+
+    // File-only project: blank text is fine once a PDF is attached.
+    await upload(instructor, asg.id, PDF(), "application/pdf");
+    const fileOnly = await request(app).patch(`/api/assignments/${asg.id}`).set("Authorization", auth).send({ description: "" });
+    expect(fileOnly.status).toBe(200);
+    expect(fileOnly.body.description).toBeNull();
   });
 
   it("PATCH rejects maxGroupSize below the largest existing group", async () => {
