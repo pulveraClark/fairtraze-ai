@@ -5,9 +5,14 @@ import { fileURLToPath } from "node:url";
 import { ONE_GO_MIN_CHARS, oneGoHintApplies } from "./oneGoHint";
 
 describe("oneGoHintApplies", () => {
-  it("needs an insert of at least 1500 characters", () => {
-    expect(oneGoHintApplies(1499, 1499)).toBe(false);
-    expect(oneGoHintApplies(ONE_GO_MIN_CHARS, 1500)).toBe(true);
+  it("needs an insert of at least 800 characters", () => {
+    expect(ONE_GO_MIN_CHARS).toBe(800);
+    expect(oneGoHintApplies(799, 799)).toBe(false);
+    expect(oneGoHintApplies(ONE_GO_MIN_CHARS, 800)).toBe(true);
+  });
+  it("the 60% rule applies at the new minimum", () => {
+    expect(oneGoHintApplies(800, 1333)).toBe(true);  // 800 is 60.01% of 1333
+    expect(oneGoHintApplies(800, 1334)).toBe(false); // 59.97%
   });
   it("needs the insert to be at least 60% of retained text", () => {
     expect(oneGoHintApplies(1800, 3000)).toBe(true); // exactly 60%

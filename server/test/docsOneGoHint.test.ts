@@ -69,7 +69,7 @@ describe("GET /api/projects/:id/report — docsOneGo", () => {
   it("ignores IMPORT inserts, small inserts, and inserts newer than the report", async () => {
     const { instructor, project, lead, other, doc } = await setup();
     await insert(doc.id, lead.id, 0, 2000, NOV10, "IMPORT");
-    await insert(doc.id, other.id, 2000, 1000, NOV10);
+    await insert(doc.id, other.id, 2000, 500, NOV10);
     const report = await saveReport(project.id, doc.id, [lead, other], new Date("2026-11-12T00:00:00Z"));
     expect(report.members.length).toBe(2);
     await insert(doc.id, other.id, 3000, 5000, new Date("2026-11-13T00:00:00Z")); // after the report

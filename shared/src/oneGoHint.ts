@@ -3,8 +3,8 @@
 // flag, Gini value or team-health label. It is a pointer ("please check the document history"),
 // not a finding: an honest paste from Word or the member's own notes triggers it too.
 
-/** One single insert of at least this many characters (about 250 words, half a page). */
-export const ONE_GO_MIN_CHARS = 1500;
+/** One single insert of at least this many characters (about 130 words, a quarter of a page). */
+export const ONE_GO_MIN_CHARS = 800;
 /** ...and that insert is at least this share of the member's retained text ("a large part"). */
 export const ONE_GO_MIN_SHARE_OF_RETAINED = 0.6;
 /** ...and the text survived: retained text is at least this share of the insert (a deleted paste does not count). */
