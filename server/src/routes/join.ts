@@ -1,5 +1,6 @@
 import { studentNarrative } from "../lib/studentNarrative.js";
 import { evennessOf } from "../lib/studentEvenness.js";
+import { isNarrativeOutdated } from "../lib/narrativeBasis.js";
 import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -680,7 +681,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean };
+  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean; narrativeBasis?: string };
   if (!stored.report) {
     res.json({ ...base, hasReport: false, report: null });
     return;
@@ -784,7 +785,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       myContribution,
       ...(team ? { team } : {}),
       // The leader reads the same team-level AI explanation as the instructor (without the Gini sentence).
-      ...(team ? { narrative: studentNarrative(stored.narrative), narrativeOutdated: stored.narrativeOutdated === true } : {}),
+      ...(team ? { narrative: studentNarrative(stored.narrative), narrativeOutdated: isNarrativeOutdated({ ...stored, report: teamReport }) } : {}),
     },
   });
 });

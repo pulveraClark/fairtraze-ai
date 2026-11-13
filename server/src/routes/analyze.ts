@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { generateFairnessNarrative, narrativeInputHash } from "../lib/gemini.js";
+import { narrativeBasisOf } from "../lib/narrativeBasis.js";
 import { aiFailureOf, plainAiFailure, NARRATIVE_KEPT_TEXT } from "../lib/aiFailureText.js";
 import { ANALYSIS_FAILURE_TEXT } from "@shared/failureMessages.js";
 import { quotaGate } from "../lib/aiReview/limiter.js";
@@ -148,7 +149,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
 
   const stored = latestReport.content
     ? (JSON.parse(latestReport.content) as {
-        report?: TeamReport; narrative?: string; narrativeOutdated?: boolean; narrativeInputHash?: string; narrativeAt?: string;
+        report?: TeamReport; narrative?: string; narrativeOutdated?: boolean; narrativeInputHash?: string; narrativeBasis?: string; narrativeAt?: string;
       })
     : {};
 
@@ -196,7 +197,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
     await prisma.report.update({
       where: { id: latestReport.id },
       data: {
-        content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined, narrativeInputHash: inputHash, narrativeAt: new Date().toISOString() }),
+        content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined, narrativeInputHash: inputHash, narrativeBasis: narrativeBasisOf(stored.report), narrativeAt: new Date().toISOString() }),
       },
     });
     res.json({ narrative, cached: false });

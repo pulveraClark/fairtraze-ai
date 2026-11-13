@@ -1,4 +1,3 @@
-import { aiFooterLine } from "../lib/aiFooter";
 import { EarlyDataTag } from "../components/EarlyDataTag";
 import { HISTORY_HINT } from "../lib/docActionHints";
 import { AppFooter } from "../components/AppFooter";
@@ -45,14 +44,13 @@ import { NextStepLine } from "../components/NextStepLine";
 import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
-import ReactMarkdown from "react-markdown";
-import { AiBadge } from "../components/ui/AiBadge";
 import { BriefCheckWithMarks } from "../components/BriefCheckWithMarks";
 import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
 import { useAiReview } from "../hooks/useAiReview";
 import { getContributionStatsCards, ownCountedInput, scoreBlendLine, type CombinedMyContribution, type MyContribution } from "../lib/contributionStats";
 import { NoFlags } from "../components/NoFlags";
+import { LeaderNarrativeBlock } from "../components/LeaderNarrativeBlock";
 import { NO_FLAGS_OWN } from "../lib/flagRules";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -961,16 +959,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.evenness)}</p>
                     </div>
                     {isLeader && report.narrative && (
-                      <div>
-                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1"><AiBadge variant="ai" /></p>
-                        <div className="mt-1.5 text-sm leading-relaxed text-slate-800 [&_p]:mb-0 [&_p]:mt-2 [&_p:first-child]:mt-0">
-                          <ReactMarkdown>{report.narrative}</ReactMarkdown>
-                        </div>
-                        <p className="mt-2 text-xs leading-normal text-slate-700">
-                          {aiFooterLine()}
-                          {report.narrativeOutdated ? " Results changed since this was written." : ""}
-                        </p>
-                      </div>
+                      <LeaderNarrativeBlock narrative={report.narrative} outdated={report.narrativeOutdated === true} />
                     )}
                     {isLeader && ai.data?.enabled && ai.data.briefCheck && ai.data.refreshFailed?.brief && (
                       <RefreshFailedNote note={ai.data.refreshFailed.brief} />

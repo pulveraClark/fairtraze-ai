@@ -10,6 +10,7 @@ import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResp
 import { projectsWithRepoChangedSince } from "../lib/repoChange.js";
 import { autoUpdateFailed } from "../lib/autoAnalysis.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
+import { isNarrativeOutdated } from "../lib/narrativeBasis.js";
 
 export const projectsRouter = Router();
 
@@ -203,6 +204,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
         scoringRulesVersion?: number;
         trigger?: "manual" | "auto";
         narrativeOutdated?: boolean;
+        narrativeBasis?: string;
       })
     : {};
 
@@ -261,7 +263,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     scoringRulesVersion: stored.scoringRulesVersion ?? 1,
     trigger: stored.trigger ?? null,
     autoUpdateFailed: autoUpdateFailed(project, project.assignment, latestReport.generatedAt),
-    narrativeOutdated: stored.narrativeOutdated === true,
+    narrativeOutdated: isNarrativeOutdated(stored),
     repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     deadline: project.assignment?.deadline?.toISOString() ?? null,

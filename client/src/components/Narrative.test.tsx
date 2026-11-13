@@ -22,16 +22,16 @@ describe("Narrative", () => {
 describe("Narrative outdated notice", () => {
   it("tells the instructor the results changed and keeps the saved text inline", async () => {
     render(<Narrative narrative="Saved text." outdated projectId={1} onNarrativeGenerated={() => {}} />);
-    expect(screen.getByText("Results changed. Generate new AI findings.")).toBeTruthy();
+    expect(screen.getByText("Out of date. Regenerate.")).toBeTruthy();
     expect(screen.getByText("Saved text.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Team details/ })).toBeNull();
   });
 
   it("shows no notice when the AI findings are current or missing", () => {
     const { rerender } = render(<Narrative narrative="Saved text." projectId={1} onNarrativeGenerated={() => {}} />);
-    expect(screen.queryByText(/Results changed/)).toBeNull();
+    expect(screen.queryByText(/Out of date/)).toBeNull();
     rerender(<Narrative narrative={null} outdated projectId={1} onNarrativeGenerated={() => {}} />);
-    expect(screen.queryByText(/Results changed/)).toBeNull();
+    expect(screen.queryByText(/Out of date/)).toBeNull();
   });
 });
 

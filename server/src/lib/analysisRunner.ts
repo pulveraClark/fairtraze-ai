@@ -191,7 +191,10 @@ function buildRawMembers(
   return { rawMembers, unmatchedLogins };
 }
 
-interface StoredReport { report?: TeamReport; narrative?: string; narrativeOutdated?: boolean }
+interface StoredReport {
+  report?: TeamReport; narrative?: string; narrativeOutdated?: boolean;
+  narrativeBasis?: string; narrativeInputHash?: string; narrativeAt?: string;
+}
 
 export interface AnalysisResult {
   status: number;

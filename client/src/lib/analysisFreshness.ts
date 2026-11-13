@@ -66,4 +66,5 @@ export function formatLastAnalyzedUpdateFailed(iso: string, now: Date = new Date
 }
 
 export const UPDATING_TEXT = "Updating…";
-export const NARRATIVE_OUTDATED_TEXT = "Results changed. Generate new AI findings.";
+// Shown above AI text that was written for other numbers than the ones now on the page.
+export const NARRATIVE_OUTDATED_TEXT = "Out of date. Regenerate.";
