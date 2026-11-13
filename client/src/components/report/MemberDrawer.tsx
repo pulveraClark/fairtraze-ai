@@ -19,6 +19,7 @@ import { InfoTip } from "../ui/InfoTip";
 import { instructorImageLine } from "../../lib/imageCreditText";
 import { TIPS, helpLink } from "../../lib/helpText";
 import { HowCounted } from "./HowCounted";
+import { oneGoLine, ONE_GO_TIP, ONE_GO_HISTORY_BUTTON } from "../../lib/oneGoText";
 
 type Outcome = "RESOLVED" | "DISMISSED";
 
@@ -48,6 +49,10 @@ interface Props {
   /** "Early data": low greys the flag pills; medium adds a "may change" line. Display only. */
   flagsMuted?: boolean;
   flagsMayChange?: boolean;
+  /** Instructor-only: members whose text was largely added in one go, with the Manila day. Display only. */
+  docsOneGo?: { userId: number; day: string }[];
+  /** Opens the group's document history (closes this window first). */
+  onOpenDocumentHistory?: () => void;
 }
 
 export function NotAvailable({ children }: { children?: ReactNode }) {
@@ -183,10 +188,12 @@ type ColumnProps = Omit<Props, "onClose" | "restoreFocusTo" | "position" | "onPr
 
 /** Left column: the share at a glance, the score-driver summary and flags. No state. */
 function MemberSidebar({
-  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes, flagsMuted, flagsMayChange,
+  member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes, flagsMuted, flagsMayChange, docsOneGo, onOpenDocumentHistory,
 }: ColumnProps) {
   const fairPct = memberCount > 0 ? 100 / memberCount : null;
-  const { info, combined, importedChars, imageLine } = viewOf(member, memberRoles);
+  const { info, combined, importedChars, imageLine, docs: docsStats } = viewOf(member, memberRoles);
+  // Instructor-only pointer to the document history; a plain line, not a flag, never red.
+  const oneGo = docsStats && source !== "github" ? docsOneGo?.find((e) => e.userId === docsStats.userId) : undefined;
   const notes = info?.mismatchNotes ?? [];
   const tasks = info?.taskSummary;
   const summary = scoreDriverSummary(member);
@@ -262,7 +269,7 @@ function MemberSidebar({
             {onOpenDisputes && <button type="button" onClick={onOpenDisputes} className={BUTTON_SECONDARY}>View disputes</button>}
           </div>
         )}
-        {(notes.length > 0 || !!tasks || importedChars > 0 || !!imageLine) && (
+        {(notes.length > 0 || !!tasks || importedChars > 0 || !!imageLine || !!oneGo) && (
           <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
             {tasks && (
@@ -285,6 +292,15 @@ function MemberSidebar({
               <p className="flex flex-wrap items-center gap-x-1">
                 <span><span className="font-semibold">Images: </span>{imageLine}</span>
                 <HoverTip label="About inserted images">{IMAGE_TIP}</HoverTip>
+              </p>
+            )}
+            {oneGo && (
+              <p className="flex flex-wrap items-center gap-x-1" data-testid="one-go-line">
+                <span>{oneGoLine(oneGo.day)}</span>
+                <HoverTip label="About this note">{ONE_GO_TIP}</HoverTip>
+                {onOpenDocumentHistory && (
+                  <button type="button" onClick={onOpenDocumentHistory} className={`${BUTTON_SECONDARY} ml-1`}>{ONE_GO_HISTORY_BUTTON}</button>
+                )}
               </p>
             )}
           </div>

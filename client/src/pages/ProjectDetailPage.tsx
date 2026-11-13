@@ -775,6 +775,8 @@ export function ProjectDetailPage({ projectId }: Props) {
           flagsMuted={earlyMuted}
           flagsMayChange={confidence === "medium"}
           rulesVersion={stored.scoringRulesVersion ?? null}
+          docsOneGo={stored.docsOneGo}
+          onOpenDocumentHistory={visibleTabs.includes("document") ? () => { setSelectedName(null); setViewingHistory(true); selectTab("document"); } : undefined}
           disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
           onOpenDisputes={() => { setSelectedName(null); navigate("/disputes"); }}

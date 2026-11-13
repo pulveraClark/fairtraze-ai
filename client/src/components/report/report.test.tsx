@@ -234,6 +234,33 @@ describe("MemberDrawer", () => {
     expect(document.body.textContent).not.toMatch(/\bKB\b|\bpx\b|pixel/i);
   });
 
+  describe("'added in one go' line (instructor only)", () => {
+    it("shows one calm line with the date and opens the history; no danger styling, no flag", async () => {
+      const onOpen = vi.fn();
+      render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} onOpenDocumentHistory={onOpen} />);
+      const line = screen.getByTestId("one-go-line");
+      expect(line).toHaveTextContent("Worth a look: a large part of this member's text was added in one go on Nov 10. Please compare snapshots in the document history.");
+      // No danger colour. (The small (i) info tip is the shared HoverTip, not a warning icon.)
+      expect(line.outerHTML).not.toMatch(/(text|bg|border)-(red|rose)-/);
+      expect(document.body.textContent).not.toMatch(/pasted|cheat|suspicious/i);
+      await userEvent.click(within(line).getByRole("button", { name: "Open document history" }));
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+    it("is absent when the member is not listed, when there is no list (older server), and for GitHub-only", () => {
+      const { rerender } = render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 99, day: "2026-11-10" }]} />);
+      expect(screen.queryByTestId("one-go-line")).toBeNull();
+      rerender(<MemberDrawer {...baseProps} source="document" member={doc} />);
+      expect(screen.queryByTestId("one-go-line")).toBeNull();
+      rerender(<MemberDrawer {...baseProps} source="github" member={gh} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} />);
+      expect(screen.queryByTestId("one-go-line")).toBeNull();
+    });
+    it("shows no history button when the history is not reachable", () => {
+      render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} />);
+      expect(screen.getByTestId("one-go-line")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Open document history" })).toBeNull();
+    });
+  });
+
   it("shows a single 'Not used in this project' line for GITHUB projects", () => {
     render(<MemberDrawer {...baseProps} member={gh} />);
     expect(screen.getByText(/Not used in this project/)).toBeInTheDocument();
