@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { prisma } from "../src/lib/prisma.js";
-import { reasonToReanalyze, selectDueGroups, latestReportOf, type DueGroup } from "../src/lib/autoAnalysis.js";
+import {
+  reasonToReanalyze, selectDueGroups, latestReportOf, runAutoAnalysis, refreshReportIfStale, resetRefreshCooldown, inFailureBackoff,
+  AUTO_FAILURE_BACKOFF_MS, REFRESH_FAILURE_BACKOFF_MS, type DueGroup,
+} from "../src/lib/autoAnalysis.js";
 import { SCORING_RULES_VERSION } from "@shared/scoringRules.js";
 import { createUser, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 
@@ -70,5 +73,81 @@ describe("reasonToReanalyze (skip if unchanged)", () => {
 
     await prisma.report.updateMany({ where: { projectId: project.id }, data: { content: JSON.stringify({ report: {} }) } });
     expect(await reason(group, project)).toBe("rules-outdated");
+  });
+});
+
+
+describe("back-off after a failed automatic run", () => {
+  const HOUR = 60 * 60 * 1000;
+  const NOW = new Date(Date.now() + 10 * 60 * 1000); // after the groups below are created, so they count as active
+  const ago = (ms: number) => new Date(NOW.getTime() - ms);
+  const ok = { status: 200, body: {}, streamed: false };
+  const mark = (id: number, at: Date) => prisma.project.update({ where: { id }, data: { lastAutoFailureAt: at, lastAutoFailureCode: "ANALYSIS_FAILED" } });
+  // a commit newer than the report: without a back-off this group would be analyzed
+  const run = (analyze: () => Promise<typeof ok>) =>
+    runAutoAnalysis(NOW, { change: { latestCommitAt: async () => NOW, githubToken: "t" }, analyze, log: () => {} });
+
+  beforeEach(() => resetRefreshCooldown());
+
+  it("the constants are 6 hours and 30 minutes", () => {
+    expect(AUTO_FAILURE_BACKOFF_MS).toBe(6 * HOUR);
+    expect(REFRESH_FAILURE_BACKOFF_MS).toBe(30 * 60 * 1000);
+  });
+
+  it("pure rule: no failure, an old failure, a failure older than the report, and a recent failure", () => {
+    const report = { generatedAt: ago(10 * HOUR) };
+    expect(inFailureBackoff({ lastAutoFailureAt: null }, report, NOW, 6 * HOUR)).toBe(false);
+    expect(inFailureBackoff({ lastAutoFailureAt: ago(2 * HOUR) }, report, NOW, 6 * HOUR)).toBe(true);
+    expect(inFailureBackoff({ lastAutoFailureAt: ago(6 * HOUR) }, report, NOW, 6 * HOUR)).toBe(false);
+    expect(inFailureBackoff({ lastAutoFailureAt: ago(11 * HOUR) }, report, NOW, 24 * HOUR)).toBe(false);
+    expect(inFailureBackoff({ lastAutoFailureAt: ago(HOUR) }, null, NOW, 6 * HOUR)).toBe(true);
+  });
+
+  it("skips a group within 6 hours of its failure, with no analysis", async () => {
+    const { project } = await setup("GITHUB");
+    await mark(project.id, ago(2 * HOUR));
+    const analyze = vi.fn(async () => ok);
+    const summary = await run(analyze);
+    expect(analyze).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ analyzed: 0, skipped: 1, failed: 0 });
+  });
+
+  it("tries again once the failure is more than 6 hours old", async () => {
+    const { project } = await setup("GITHUB");
+    await mark(project.id, ago(7 * HOUR));
+    const analyze = vi.fn(async () => ok);
+    await run(analyze);
+    expect(analyze).toHaveBeenCalledWith(project.id);
+  });
+
+  it("a report saved after the failure clears the back-off", async () => {
+    const { project } = await setup("GITHUB");
+    await mark(project.id, ago(2 * HOUR));
+    await prisma.report.create({
+      data: { projectId: project.id, generatedAt: ago(HOUR), teamHealth: "Healthy", content: JSON.stringify({ report: {}, scoringRulesVersion: SCORING_RULES_VERSION }) },
+    });
+    const analyze = vi.fn(async () => ok);
+    await run(analyze);
+    expect(analyze).toHaveBeenCalledWith(project.id);
+  });
+
+  it("a group with no report yet is also backed off", async () => {
+    const { project } = await setup("GITHUB", false);
+    await mark(project.id, ago(HOUR));
+    const analyze = vi.fn(async () => ok);
+    await run(analyze);
+    expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it("refresh-on-open may retry after 30 minutes (not 6 hours), but not within 30 minutes", async () => {
+    const { project } = await setup("GITHUB");
+    const analyze = vi.fn(async () => ok);
+    const d = { change: { latestCommitAt: async () => NOW, githubToken: "t" }, analyze };
+    await mark(project.id, ago(10 * 60 * 1000));
+    expect(await refreshReportIfStale(project.id, NOW, d)).toEqual({ refreshing: false, why: "failed-recently" });
+    expect(analyze).not.toHaveBeenCalled();
+    resetRefreshCooldown();
+    await mark(project.id, ago(2 * HOUR));
+    expect(await refreshReportIfStale(project.id, NOW, d)).toEqual({ refreshing: true });
   });
 });

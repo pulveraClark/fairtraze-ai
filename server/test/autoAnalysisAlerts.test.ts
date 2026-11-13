@@ -3,6 +3,7 @@ import { prisma } from "../src/lib/prisma.js";
 import { generateFairnessNarrative } from "../src/lib/gemini.js";
 import { resultsChanged, reportPolicy } from "../src/lib/resultsChange.js";
 import { runAnalysis, silentProgress } from "../src/lib/analysisRunner.js";
+import { runAutoAnalysis } from "../src/lib/autoAnalysis.js";
 import { createUser, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
 
 const rep = (teamHealth: string, flags: string[][]) => ({
@@ -90,5 +91,29 @@ describe("automatic run, end to end (Docs-only group)", () => {
     const { project } = await setup();
     await run(project.id, "auto");
     expect((await latestContent(project.id)).narrativeOutdated).toBeUndefined();
+  });
+});
+
+describe("a failed automatic run", () => {
+  it("records the failure but creates no alert or notification for anyone", async () => {
+    const { user: instructor } = await createUser();
+    const cs = await createClassSection(instructor.id);
+    const asg = await createAssignment(cs.id, { sourceType: "EDITOR" });
+    const project = await createProject({ assignmentId: asg.id, repoUrl: null });
+    const { user: student } = await createUser({ systemRole: "STUDENT" });
+    await createMembership(student.id, project.id, "LEADER");
+    const alertsBefore = await prisma.alert.count();
+
+    const summary = await runAutoAnalysis(new Date(), {
+      change: { latestCommitAt: async () => null, githubToken: "t" },
+      analyze: async () => ({ status: 500, body: { code: "ANALYSIS_FAILED" }, streamed: false }),
+      log: () => {},
+    });
+
+    expect(summary.failed).toBe(1);
+    const row = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, select: { lastAutoFailureAt: true, lastAutoFailureCode: true } });
+    expect(row.lastAutoFailureAt).not.toBeNull();
+    expect(row.lastAutoFailureCode).toBe("ANALYSIS_FAILED");
+    expect(await prisma.alert.count()).toBe(alertsBefore);
   });
 });

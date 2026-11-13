@@ -8,6 +8,7 @@ name: Automatic analysis
 # or more at busy times), and it switches scheduled workflows off after 60 days without repository activity:
 # re-enable it under the Actions tab if that happens. Run it by hand with "Run workflow".
 # To change how often it runs, edit only the cron line below (every 3 hours would be "7 */3 * * *").
+# A group whose last automatic run failed is left alone for 6 hours (AUTO_FAILURE_BACKOFF_MS) unless a report was saved since.
 on:
   schedule:
     - cron: "7 * * * *"

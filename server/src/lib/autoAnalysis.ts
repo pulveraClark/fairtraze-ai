@@ -20,6 +20,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const REFRESH_ON_OPEN_AFTER_MS = 60 * 60 * 1000;
 
 /**
+ * After an automatic run for a group fails, the scheduled (hourly) run leaves that group alone this long, unless a
+ * report has been saved since. Stops a broken repository being retried every hour.
+ */
+export const AUTO_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Shorter pause for refresh-on-open: a person opened the page, so it may retry sooner than the scheduled run,
+ * but not on every open (the 5-minute check cooldown alone would allow 12 tries an hour).
+ */
+export const REFRESH_FAILURE_BACKOFF_MS = 30 * 60 * 1000;
+
+/**
  * Active = created, and not more than ACTIVE_GRACE_DAYS past the deadline. Assignment has no start
  * date, so createdAt stands in for it. No deadline means active.
  */
@@ -36,6 +48,8 @@ export interface DueGroup {
   documentId: number | null;
   membershipChangedAt: Date | null;
   scoringConfigChangedAt: Date | null;
+  /** When an automatic run last failed; cleared in effect by any later saved report. Used only for the back-off. */
+  lastAutoFailureAt: Date | null;
 }
 
 const DUE_SELECT = {
@@ -43,6 +57,7 @@ const DUE_SELECT = {
   repoUrl: true,
   membershipChangedAt: true,
   scoringConfigChangedAt: true,
+  lastAutoFailureAt: true,
   document: { select: { id: true } },
   assignment: { select: { sourceType: true, createdAt: true, deadline: true } },
 } as const;
@@ -52,6 +67,7 @@ type DueRow = {
   repoUrl: string | null;
   membershipChangedAt: Date | null;
   scoringConfigChangedAt: Date | null;
+  lastAutoFailureAt: Date | null;
   document: { id: number } | null;
   assignment: { sourceType: "GITHUB" | "EDITOR" | "COMBINED"; createdAt: Date; deadline: Date | null } | null;
 };
@@ -67,6 +83,7 @@ function toDueGroup(p: DueRow, now: Date): DueGroup | null {
     documentId: p.document?.id ?? null,
     membershipChangedAt: p.membershipChangedAt,
     scoringConfigChangedAt: p.scoringConfigChangedAt,
+    lastAutoFailureAt: p.lastAutoFailureAt,
   };
 }
 
@@ -150,6 +167,23 @@ export async function reasonToReanalyze(
   return null;
 }
 
+/**
+ * True while a failed automatic run is recent enough to leave the group alone: the failure is newer than the
+ * latest report (a saved report clears it, as for the report-page line) and younger than `windowMs`. With no
+ * report yet, any failure inside the window counts. Pure; reads nothing.
+ */
+export function inFailureBackoff(
+  group: Pick<DueGroup, "lastAutoFailureAt">,
+  lastReport: { generatedAt: Date } | null,
+  now: Date,
+  windowMs: number,
+): boolean {
+  const failedAt = group.lastAutoFailureAt;
+  if (!failedAt) return false;
+  if (lastReport && failedAt.getTime() <= lastReport.generatedAt.getTime()) return false;
+  return now.getTime() - failedAt.getTime() < windowMs;
+}
+
 export function latestReportOf(projectId: number) {
   return prisma.report.findFirst({
     where: { projectId },
@@ -194,6 +228,8 @@ export async function recordAutoFailure(projectId: number, code: AnalysisFailure
       where: { id: projectId },
       data:  { lastAutoFailureAt: new Date(), lastAutoFailureCode: code },
     });
+    // The code is stored but not shown on any screen; the log is where a repeatedly failing group stays visible.
+    console.log(`[auto-analyze] group ${projectId}: failure recorded (${code}); the scheduled run waits ${AUTO_FAILURE_BACKOFF_MS / 3600000} hours`);
   } catch (err) {
     console.error(`[auto-analyze] could not record the failure for group ${projectId}:`, err instanceof Error ? err.message : err);
   }
@@ -208,7 +244,7 @@ function failureCodeOf(result: AnalysisResult): AnalysisFailureCode {
 /**
  * Should the report page say the latest automatic update did not finish? Only while that is still true and
  * still useful: the failure is newer than the report (a later analysis clears it anyway) and the project is
- * in its active window, so "it will try again tonight" is accurate. Display only.
+ * in its active window, so "it will try again later" is accurate. Display only.
  */
 export function autoUpdateFailed(
   project: { lastAutoFailureAt: Date | null },
@@ -247,7 +283,13 @@ export async function runAutoAnalysis(now: Date = new Date(), deps: AutoRunDeps 
       continue;
     }
     try {
-      const reason = await reasonToReanalyze(group, await latestReportOf(group.id), deps.change);
+      const last = await latestReportOf(group.id);
+      if (inFailureBackoff(group, last, now, AUTO_FAILURE_BACKOFF_MS)) {
+        summary.skipped++;
+        deps.log(`[auto-analyze] group ${group.id}: skipped, an automatic run failed at ${group.lastAutoFailureAt!.toISOString()}`);
+        continue;
+      }
+      const reason = await reasonToReanalyze(group, last, deps.change);
       if (!reason) {
         summary.skipped++;
         continue;
@@ -312,7 +354,7 @@ export function resetRefreshCooldown(): void {
 
 export type RefreshDecision =
   | { refreshing: true }
-  | { refreshing: false; why: "not-eligible" | "no-report" | "recent" | "busy" | "checked-recently" | "unchanged" };
+  | { refreshing: false; why: "not-eligible" | "no-report" | "recent" | "busy" | "checked-recently" | "failed-recently" | "unchanged" };
 
 export interface RefreshDeps {
   change: ChangeDeps;
@@ -342,6 +384,7 @@ export async function refreshReportIfStale(
   if (!last) return { refreshing: false, why: "no-report" };
   if (now.getTime() - last.generatedAt.getTime() <= REFRESH_ON_OPEN_AFTER_MS) return { refreshing: false, why: "recent" };
   if (isAnalysisRunning(projectId)) return { refreshing: false, why: "busy" };
+  if (inFailureBackoff(group, last, now, REFRESH_FAILURE_BACKOFF_MS)) return { refreshing: false, why: "failed-recently" };
 
   const before = lastChecked.get(projectId);
   if (before !== undefined && now.getTime() - before < REFRESH_CHECK_COOLDOWN_MS) return { refreshing: false, why: "checked-recently" };
