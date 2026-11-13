@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
 import { reportDataConfidence } from "../lib/reportConfidence.js";
 import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
+import { computeDocsOneGo } from "../lib/docsOneGoHint.js";
 import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import type { TeamHealth, TeamReport, Flag, ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig, MemberRoleInfo, FunctionalRole, AnyScoredMember } from "@shared/types.js";
@@ -240,6 +241,15 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   });
 
   const docsDataApproximate = await docsDataApproximateFor(projectId, project.assignment?.sourceType);
+  // Instructor-only pointer to the document history; read time, not stored, display only.
+  const sourceForHint = project.assignment?.sourceType;
+  const docsOneGo = sourceForHint === "EDITOR" || sourceForHint === "COMBINED"
+    ? await computeDocsOneGo(
+        (await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }))?.id,
+        reportMembers,
+        latestReport.generatedAt,
+      ).catch(() => [])
+    : [];
   const response: StoredReportResponse = {
     projectId,
     assignmentId: project.assignment?.id ?? null,
@@ -267,6 +277,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     deadline: project.assignment?.deadline?.toISOString() ?? null,
+    docsOneGo,
   };
 
   res.json(response);

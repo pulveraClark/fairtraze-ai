@@ -353,5 +353,9 @@ export interface StoredReportResponse {
   docsDataFixedAt?: string; // ISO date of the fix, for the notice text
   // The assignment deadline (ISO) or null. Display only: lets the "Last analyzed" line say when automatic updates have stopped.
   deadline?: string | null;
+  // Instructor-only, computed at read time, never stored in Report.content: members whose text was
+  // largely added in one go (a pointer to the document history, not a finding). `day` is the
+  // Asia/Manila day (YYYY-MM-DD) of their largest single insert. Display only; no score reads it.
+  docsOneGo?: { userId: number; day: string }[];
 }
 
