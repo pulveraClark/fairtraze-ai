@@ -135,7 +135,7 @@ describe("ScoringSettingsModal Docs weights", () => {
     expect(num("Writing sessions weight").value).toBe("0.3");
     expect(num("Writing active days weight").value).toBe("0.33");
     expect(screen.getByText("Default 0.37")).toBeTruthy();
-    expect(screen.getByText("Default weights come from an expert survey of instructors (AHP).")).toBeTruthy();
+    expect(screen.getByText("Default weights come from an expert survey of instructors (AHP). Image credit follows the same survey.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/16 instructors/);
   });
 

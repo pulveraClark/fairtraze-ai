@@ -12,6 +12,7 @@ import {
 } from "@shared/scoring";
 import { DOCUMENT_DEFAULT_WEIGHTS, MIN_ACTIVE_DAY_RETAINED_CHARS } from "@shared/documentScoring";
 import { DEFAULT_BLEND_WEIGHTS } from "@shared/weights";
+import { IMAGE_CREDIT_CHARS, DEFAULT_DOCS_IMAGE_LIMIT } from "@shared/imageCredit";
 import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
 import { FILE_WEIGHTS } from "@shared/fileWeights";
 import { COMMIT_IMPACT } from "@shared/commitClassifier";
@@ -241,9 +242,9 @@ function ScoringSection() {
       <p className="text-xs text-slate-600 leading-relaxed">
         These are defaults and starting points, not empirically validated cut-offs. For each project
         (applies to GitHub and Combined projects), the instructor can adjust the GitHub weights,
-        the flag thresholds and the GitHub/Docs blend in Scoring Settings. The Editor formula
-        weights are fixed. The report shows the formulas and per-member breakdowns behind every
-        number.
+        the flag thresholds and the GitHub/Docs blend in Scoring Settings. For Docs and Combined
+        projects it also sets the Docs weights and the most images that count per member. The
+        report shows the formulas and per-member breakdowns behind every number.
       </p>
     </Section>
   );
@@ -298,7 +299,8 @@ function DataAccuracy() {
     `An active day is a day in Philippine time. In Docs it needs at least ${MIN_ACTIVE_DAY_RETAINED_CHARS} characters written that day that are still in the document.`,
     "Writing something and later deleting it yourself reduces credit by at most 50%. Deleting a teammate's lines is not penalized.",
     "Formatting changes do not count as authored text: toggling bold or changing a heading changes no characters, so it records no contribution.",
-    "Inserted images and imported .docx content are disclosed on the report. Images are never scored; imports are scored with the adjustments described above.",
+    `Each counted image adds about ${IMAGE_CREDIT_CHARS} characters to the retained-text share only, up to the project's image limit (default ${DEFAULT_DOCS_IMAGE_LIMIT} per member; 3, 5, 10 or no limit). Duplicate and very small images never count, and images never add sessions or active days. Images added before image credit are shown on the report but not counted.`,
+    "Imported .docx content is disclosed on the report and scored with the adjustments described above.",
   ];
   return (
     <Section
@@ -328,7 +330,7 @@ function SystemRoles() {
         "Creates class sections and projects, and shares join codes",
         "Writes the project instructions: a description, up to 5 images and one PDF",
         "Runs analysis, watches live progress, and reviews the full report with per-member breakdowns",
-        "Adjusts the GitHub weights, flag thresholds and GitHub/Docs blend per project in Scoring Settings",
+        "Adjusts the weights, flag thresholds, GitHub/Docs blend and image limit per project in Scoring Settings",
         "Receives notifications about team-health risk, flagged members and disputes",
         "Reviews student disputes and resolves them with a written outcome",
         "Can reassign group leaders. Reports are evidence, not grades. New instructor sign-ups are reviewed by an admin before access is granted",
@@ -399,7 +401,7 @@ function PrivacySection() {
     },
     {
       title: "Configurable, transparent weights",
-      body: "The GitHub weights, flag thresholds and GitHub/Docs blend are documented defaults, not hidden numbers. Instructors can view and adjust them per project in Scoring Settings. The Editor formula weights are fixed.",
+      body: "The GitHub weights, flag thresholds and GitHub/Docs blend are documented defaults, not hidden numbers. Instructors can view and adjust them per project in Scoring Settings, including the Docs weights and how many images count per member.",
     },
     {
       title: "Dispute path",

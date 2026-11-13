@@ -103,11 +103,12 @@ export function howCounted(input: HowCountedInput): HowCountedModel {
           `Tiny edits count about ${pct(EDIT_TYPE_WEIGHT.trivial)}`,
           `Text ${who} later deleted ${self}${about(deleted, "characters")}`,
           ...(positive(d.importedChars) ? ["Text imported from a Word file is counted by an estimate"] : []),
+          // Same sentence for every member and without any size rule: students never see thresholds.
+          "Images count a little, up to a limit your instructor sets",
         ]),
         group("none", [
-          // No per-project image credit exists: inserted images are disclosed, never scored (see CLAUDE.md "Image insertion").
           "Style changes that leave the text the same, such as bold or headings",
-          "Images are shown but not scored",
+          "Copies of the same image and very small images",
         ]),
       ],
     });

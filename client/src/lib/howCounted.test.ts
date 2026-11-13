@@ -54,13 +54,15 @@ describe("howCounted", () => {
     expect(all(m)).not.toMatch(/trivial|\.docx/i);
   });
 
-  it("images: no per-project image credit exists, so the sentence is the same for 0, 1 or many images and never claims credit", () => {
-    const say = (images: number) => howCounted({ voice: "member", github: null, docs: { images }, rulesVersion: 2 }).blocks[0].groups[2].items.join("\n");
+  it("images: the same plain sentences for 0, 1 or many images, with no thresholds and no number of characters", () => {
+    const groups = (images: number) => howCounted({ voice: "member", github: null, docs: { images }, rulesVersion: 3 }).blocks[0].groups;
+    const text = (images: number) => groups(images).flatMap((g) => g.items).join("\n");
     for (const n of [0, 1, 12]) {
-      expect(say(n)).toContain("Images are shown but not scored");
-      expect(say(n)).not.toMatch(/never scored|short paragraph|up to 5/);
+      expect(groups(n)[1].items).toContain("Images count a little, up to a limit your instructor sets");
+      expect(groups(n)[2].items).toContain("Copies of the same image and very small images");
+      expect(text(n)).not.toMatch(/not scored|never scored|\bKB\b|\bpx\b|pixel|100 characters|up to 5/);
     }
-    expect(say(0)).toBe(say(12));
+    expect(text(0)).toBe(text(12));
   });
 
   it("the real text has no 'here', no harness notes and no developer wording", () => {

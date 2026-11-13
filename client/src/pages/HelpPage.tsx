@@ -253,7 +253,8 @@ export function HelpPage() {
           ]} />
           <ul>
             <li>The colors in the document show who typed each part. Only the logged-in person is credited for typing.</li>
-            <li>Formatting alone (bold, a heading style, a table's borders, an image, page layout) adds no text, so it earns no share. Inserted images are shown as a note and never scored.</li>
+            <li>Formatting alone (bold, a heading style, a table's borders, page layout) adds no text, so it earns no share.</li>
+            <li>Images count a little toward your kept text, up to a limit your instructor sets. Copies of the same image and very small images do not count, and images never add editing sessions or active days. Images added before this update are shown but not counted.</li>
             <li>Text imported from a .docx counts as kept text. It earns some session credit in proportion to its size, but counts as one active day only (the day of upload), and the report says so.</li>
             <li>The system cannot tell typed text from pasted text. The instructor judges that.</li>
             <li>History, under the document, shows how the document looked each time the instructor analyzed the group. It is read-only.</li>

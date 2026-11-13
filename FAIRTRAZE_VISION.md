@@ -620,6 +620,8 @@ The same `contributionShare` formula applies within the editor source, via `DOCU
 editorShare = 0.37 × retainedTextShare + 0.30 × sessionShare + 0.33 × activeDaysShare   (defaults; instructor-adjustable per project)
 ```
 
+Images count a little: each counted image adds the equivalent of 100 characters to the retained-text signal only (an expert survey found 86% of instructors want images to count a little). Duplicate and very small images never count, credit stops after a per-project limit (3, 5, 10 or no limit; default 5), and images never add sessions or active days.
+
 Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — retained text is the primary editor signal. An editor active day needs at least 30 characters written that day that are still in the final document (Philippine-time days).
 
 The editor is implemented using **TipTap** (rich-text editor framework) and **Yjs** (CRDT for real-time collaborative editing). The Yjs document tracks per-user operations with user attribution derived from the authenticated session.

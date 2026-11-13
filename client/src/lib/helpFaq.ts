@@ -15,7 +15,7 @@ export const HELP_FAQ: HelpFaqItem[] = [
   { id: "faq-merges", q: "Do merge commits count?",
     a: "No. Merge commits are left out because they carry work that was already credited to the people who wrote it. Commits you author yourself, including squashed ones, count." },
   { id: "faq-images", q: "Do images count?",
-    a: "No. Images and other non-text items add nothing to a share today. They are visible in the document, so your instructor can see them." },
+    a: "A little. Each different image you add counts a small amount toward your kept text, up to a limit your instructor sets. Copies of the same image and very small images do not count, and images never add editing sessions or active days. Images added before this update are shown but not counted." },
   { id: "faq-comments", q: "Do comments or formatting count?",
     a: `Docs comments (the threads beside the document) are never scored, and formatting-only edits such as bold or headings add no share. In GitHub code, a comment line counts ${LINE_TYPE_WEIGHTS.comment} of a code line and a blank line counts ${LINE_TYPE_WEIGHTS.blank}.` },
   { id: "faq-leader", q: "Does the group leader get extra credit?",

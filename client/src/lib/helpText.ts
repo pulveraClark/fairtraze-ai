@@ -59,7 +59,7 @@ export const SETTINGS_TIPS = {
   docsSessions: "How many separate times the member sat down to write.",
   docsActiveDays: `On how many days the member kept at least ${MIN_ACTIVE_DAY_RETAINED_CHARS} characters.`,
   docsImages: `Each image counts like about ${IMAGE_CREDIT_CHARS} characters of writing. Duplicate and very small images never count.`,
-  provenance: "Default weights come from an expert survey of instructors (AHP).",
+  provenance: "Default weights come from an expert survey of instructors (AHP). Image credit follows the same survey.",
   githubWeight: "How much a member's GitHub share counts in the combined share.",
   docsWeight: "How much a member's Docs share counts in the combined share.",
   freeRider: "Flag a member whose share is below this fraction of an equal split.",

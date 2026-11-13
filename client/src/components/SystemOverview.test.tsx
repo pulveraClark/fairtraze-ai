@@ -50,7 +50,10 @@ describe("SystemOverview", () => {
     expect(t).not.toMatch(/per group/i);
     expect((t.match(/\(applies to GitHub and Combined projects\)/g) ?? []).length).toBe(1);
     expect(t).toMatch(/the GitHub weights, the flag thresholds and the GitHub\/Docs blend/);
-    expect(t).toMatch(/Editor formula weights are fixed/);
+    expect(t).not.toMatch(/Editor formula weights are fixed/);
+    expect(t).toMatch(/most images that count per member/);
+    expect(t).toMatch(/Duplicate and very small images never count/);
+    expect(t).not.toMatch(/Images are never scored/);
     expect(t).not.toMatch(/assignment/i);
     expect(t).not.toMatch(/join requests/i);
     expect(t).not.toMatch(/create, edit, promote/i);

@@ -54,4 +54,11 @@ describe("HELP_FAQ", () => {
     const a = HELP_FAQ.find((f) => f.id === "faq-images")!.a;
     expect(a).not.toMatch(/planned|future|will|soon/i);
   });
+
+  it("the images answer says images count a little, has no thresholds, and covers images added before the update", () => {
+    const a = HELP_FAQ.find((f) => f.id === "faq-images")!.a;
+    expect(a).toContain("Images added before this update are shown but not counted.");
+    expect(a).toMatch(/counts a small amount/);
+    expect(a).not.toMatch(/\bKB\b|\bpx\b|pixel|100 characters/i);
+  });
 });

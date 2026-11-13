@@ -203,6 +203,12 @@ effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)
 
 activeDays        = count of distinct Asia/Manila YYYY-MM-DD days in commitDates[]
                     (Docs: days with >= 30 retained characters written that day)
+
+Docs images:        each counted image adds 100 characters to the retained-text term only
+                    (after the self-churn discount). One credit per distinct content per
+                    document, never a very small image, at most N per member (project
+                    setting 3 / 5 / 10 / no limit, default 5). Images add no session and
+                    no active day. Plain counting; the AI never reads images.
 ```
 
 ### 3.3 Team-level totals
