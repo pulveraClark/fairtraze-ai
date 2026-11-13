@@ -58,9 +58,9 @@ export function formatAnalyzedExact(iso: string): string {
 }
 
 /** The latest automatic update did not finish. Same words for everyone; no cause, no blame. */
-export const AUTO_UPDATE_FAILED_TEXT = "The latest update didn't finish. It will try again tonight.";
+export const AUTO_UPDATE_FAILED_TEXT = "The latest update didn't finish. It will try again soon.";
 
-/** "Last analyzed 3 days ago. The latest update didn't finish. It will try again tonight." */
+/** "Last analyzed 3 days ago. The latest update didn't finish. It will try again soon." */
 export function formatLastAnalyzedUpdateFailed(iso: string, now: Date = new Date()): string {
   return `Last analyzed ${relativeTime(iso, now)}. ${AUTO_UPDATE_FAILED_TEXT}`;
 }

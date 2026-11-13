@@ -25,7 +25,7 @@ const deps = (analyze: AutoRunDeps["analyze"]): AutoRunDeps => ({
 const failureOf = (id: number) => prisma.project.findUniqueOrThrow({ where: { id }, select: { lastAutoFailureAt: true, lastAutoFailureCode: true } });
 
 describe("an automatic run that does not finish is remembered", () => {
-  it("records the code of a failed result, a rate limit, and a thrown error; a success records nothing", async () => {
+  it("records the code of a failed result and a thrown error; a rate limit and a success record nothing", async () => {
     const failed = (await setup("GITHUB")).project;
     const limited = (await setup("GITHUB")).project;
     const threw = (await setup("GITHUB")).project;
@@ -44,7 +44,8 @@ describe("an automatic run that does not finish is remembered", () => {
 
     expect(await failureOf(failed.id)).toMatchObject({ lastAutoFailureCode: "GITHUB_UNREACHABLE" });
     expect((await failureOf(failed.id)).lastAutoFailureAt).toBeInstanceOf(Date);
-    expect(await failureOf(limited.id)).toMatchObject({ lastAutoFailureCode: "GITHUB_RATE_LIMITED" });
+    // A rate limit is waited out (the next scheduled run retries): the group is not marked failed.
+    expect(await failureOf(limited.id)).toEqual({ lastAutoFailureAt: null, lastAutoFailureCode: null });
     expect(await failureOf(threw.id)).toMatchObject({ lastAutoFailureCode: "ANALYSIS_FAILED" });
     expect(await failureOf(fine.id)).toEqual({ lastAutoFailureAt: null, lastAutoFailureCode: null });
   });
@@ -79,7 +80,7 @@ describe("the next analysis that saves a report clears it, and the report page s
     await prisma.project.update({ where: { id: project.id }, data: { lastAutoFailureAt: new Date(Date.now() - 86_400_000) } });
     expect((await get()).body.autoUpdateFailed).toBe(false);
 
-    // Past the active window (deadline more than 7 days ago): not flagged, so "tonight" is never a promise nobody keeps.
+    // Past the active window (deadline more than 7 days ago): not flagged, so "soon" is never a promise nobody keeps.
     await prisma.project.update({ where: { id: project.id }, data: { lastAutoFailureAt: new Date(Date.now() + 60_000) } });
     await prisma.assignment.update({ where: { id: assignment.id }, data: { deadline: new Date(Date.now() - 30 * 86_400_000) } });
     expect((await get()).body.autoUpdateFailed).toBe(false);

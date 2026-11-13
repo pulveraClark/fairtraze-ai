@@ -1,19 +1,30 @@
-name: Nightly analysis
+name: Automatic analysis
 
-# Asks the deployed server to analyze every active group whose data changed (POST /api/internal/analyze-due).
-# 18:00 UTC is 2:00 AM in Manila. GitHub may start scheduled runs late, and it switches scheduled
-# workflows off after 60 days without repository activity: re-enable it under the Actions tab if that happens.
+# Asks the deployed server to analyze every ACTIVE group whose data changed (POST /api/internal/analyze-due).
+# The server decides what is active (until 7 days after the deadline) and skips groups with nothing new, so a
+# run with no news creates no report, no Report ID, no AI call and no new "Last analyzed" time.
+#
+# Schedule: minute 7 of every hour (off the busy top of the hour). GitHub may start scheduled runs late (5 minutes
+# or more at busy times), and it switches scheduled workflows off after 60 days without repository activity:
+# re-enable it under the Actions tab if that happens. Run it by hand with "Run workflow".
+# To change how often it runs, edit only the cron line below (every 3 hours would be "7 */3 * * *").
 on:
   schedule:
-    - cron: "0 18 * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 
 permissions: {}
 
+# A run that is still going is never overlapped by the next one; the next waits its turn. (The server also
+# refuses a second batch while one is running.)
+concurrency:
+  group: auto-analysis
+  cancel-in-progress: false
+
 jobs:
   analyze-due:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Start the automatic analysis
         env:
@@ -24,11 +35,20 @@ jobs:
             echo "Set the APP_URL and CRON_SECRET repository secrets." >&2
             exit 1
           fi
-          # Render's free tier sleeps: the first call wakes it and may time out or answer 502/503,
-          # so retry on any failure, 30 seconds apart. A 202 means the run was accepted.
-          curl --fail-with-body --silent --show-error \
+          # Render's free tier sleeps: the first call wakes it and may time out or answer 502/503, so retry
+          # a few times, 30 seconds apart. A 202 means the run was accepted. The server answers at once and
+          # works in the background; if all tries fail, the next hourly run simply tries again.
+          # Only the status and the server's short JSON answer are printed, never a header or a secret.
+          status=$(curl --silent --show-error \
             --request POST \
             --header "x-cron-secret: $CRON_SECRET" \
             --max-time 120 \
-            --retry 6 --retry-delay 30 --retry-all-errors \
-            "${APP_URL%/}/api/internal/analyze-due"
+            --retry 3 --retry-delay 30 --retry-all-errors \
+            --output response.json --write-out "%{http_code}" \
+            "${APP_URL%/}/api/internal/analyze-due") || status="000"
+          echo "analyze-due answered HTTP $status"
+          if [ -s response.json ]; then cat response.json; echo; fi
+          case "$status" in
+            202) exit 0 ;;
+            *) echo "The server did not accept the run. It will try again at the next scheduled run." >&2; exit 1 ;;
+          esac

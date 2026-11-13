@@ -79,3 +79,41 @@ describe("runAutoAnalysis", () => {
     expect(summary).toMatchObject({ analyzed: 0, skipped: 1 });
   });
 });
+
+describe("rate limits and GitHub errors during an automatic run", () => {
+  const ghError = (status: number, headers: Record<string, string> = {}) => Object.assign(new Error("github"), { status, response: { headers } });
+  const failureOf = (id: number) => prisma.project.findUniqueOrThrow({ where: { id }, select: { lastAutoFailureAt: true, lastAutoFailureCode: true } });
+
+  it("a rate limit thrown by GitHub defers the group: nothing is marked failed, the rest of GitHub is skipped", async () => {
+    const a = await group("GITHUB");
+    const b = await group("GITHUB");
+    const logs: string[] = [];
+    const summary = await runAutoAnalysis(new Date(), {
+      ...deps(async (id) => { if (id === a.id) throw ghError(403, { "x-ratelimit-remaining": "0" }); return ok; }),
+      log: (l) => logs.push(l),
+    });
+    expect(summary).toMatchObject({ analyzed: 0, failed: 0, skipped: 2, skippedRateLimited: 2 });
+    expect(await failureOf(a.id)).toEqual({ lastAutoFailureAt: null, lastAutoFailureCode: null });
+    expect(await failureOf(b.id)).toEqual({ lastAutoFailureAt: null, lastAutoFailureCode: null });
+    expect(logs.join("\n")).toMatch(/rate limit, will retry on the next run/);
+  });
+
+  it("a 403 that is NOT a rate limit (no access to the repository) is a failure with its own code, not a silent wait", async () => {
+    const a = await group("GITHUB");
+    const b = await group("GITHUB");
+    const seen: number[] = [];
+    const summary = await runAutoAnalysis(new Date(), deps(async (id) => { seen.push(id); if (id === a.id) throw ghError(403); return ok; }));
+    expect(summary).toMatchObject({ analyzed: 1, failed: 1, skippedRateLimited: 0 });
+    expect(seen).toEqual([a.id, b.id]);
+    expect(await failureOf(a.id)).toMatchObject({ lastAutoFailureCode: "GITHUB_REPO_UNREADABLE" });
+  });
+
+  it("without GITHUB_TOKEN the run says so in the log instead of silently missing new commits (no secret is printed)", async () => {
+    await group("GITHUB");
+    const logs: string[] = [];
+    await runAutoAnalysis(new Date(), { change: { latestCommitAt: async () => null, githubToken: undefined }, analyze: async () => ok, log: (l) => logs.push(l) });
+    const warning = logs.find((l) => /GITHUB_TOKEN is not set/.test(l));
+    expect(warning).toBeTruthy();
+    expect(logs.join("\n")).not.toMatch(/ghp_|github_pat_|Bearer/);
+  });
+});

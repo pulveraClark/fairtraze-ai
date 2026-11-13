@@ -7,6 +7,7 @@ import { isRulesOutdated } from "@shared/scoringRules.js";
 import { runAnalysis, silentProgress, type AnalysisResult } from "./analysisRunner.js";
 import { isAnalysisRunning } from "./analysisLock.js";
 import { isAnalysisFailureCode, type AnalysisFailureCode } from "@shared/failureMessages.js";
+import { classifyGithubFailure } from "./githubFailure.js";
 
 // Which groups get analyzed automatically, and whether anything changed since their last report.
 // Planning only: nothing here touches the analyzer or the scoring maths.
@@ -179,10 +180,9 @@ const defaultRunDeps = (): AutoRunDeps => ({
   log: (line) => console.log(line),
 });
 
-const isRateLimit = (err: unknown) => {
-  const status = (err as { status?: number } | null)?.status;
-  return status === 403 || status === 429;
-};
+// A thrown GitHub error: a real rate limit (429, or 403 with the limit used up) is told apart from a 403 that
+// just means "no access to this repository", which is a failure worth showing, not something to wait out.
+const hasHttpStatus = (err: unknown) => typeof (err as { status?: unknown } | null)?.status === "number";
 
 /**
  * Remembers that an automatic run for this group did not finish, so its report page can say so calmly.
@@ -233,6 +233,11 @@ export async function runAutoAnalysis(now: Date = new Date(), deps: AutoRunDeps 
   const summary: AutoRunSummary = { analyzed: 0, skipped: 0, failed: 0, skippedRateLimited: 0, skippedLocked: 0 };
   const groups = await selectDueGroups(now);
   let rateLimited = false;
+  // Without the token the new-commit check is skipped, so GitHub groups would never update on their own.
+  // Say so in the log (once per run) instead of failing silently.
+  if (!deps.change.githubToken && groups.some((g) => g.sourceType !== "EDITOR" && g.repoUrl)) {
+    deps.log("[auto-analyze] warning: GITHUB_TOKEN is not set, so new commits cannot be detected and GitHub groups only update when something else changed");
+  }
 
   for (const group of groups) {
     const needsGithub = group.sourceType !== "EDITOR";
@@ -251,25 +256,27 @@ export async function runAutoAnalysis(now: Date = new Date(), deps: AutoRunDeps 
       if (result.status === 200) summary.analyzed++;
       else if (result.status === 409) { summary.skipped++; summary.skippedLocked++; }
       else if (result.status === 429) {
+        // Rate limited: wait for the next scheduled run. Nothing is marked failed and the latest report stays.
         rateLimited = true;
         summary.skipped++;
         summary.skippedRateLimited++;
-        await recordAutoFailure(group.id, "GITHUB_RATE_LIMITED");
+        deps.log(`[auto-analyze] group ${group.id}: GitHub rate limit, will retry on the next run`);
       } else {
         summary.failed++;
         deps.log(`[auto-analyze] group ${group.id} failed: status ${result.status}`);
         await recordAutoFailure(group.id, failureCodeOf(result));
       }
     } catch (err) {
-      if (isRateLimit(err)) {
+      const github = hasHttpStatus(err) ? classifyGithubFailure(err) : null;
+      if (github?.code === "GITHUB_RATE_LIMITED") {
         rateLimited = true;
         summary.skipped++;
         summary.skippedRateLimited++;
-        await recordAutoFailure(group.id, "GITHUB_RATE_LIMITED");
+        deps.log(`[auto-analyze] group ${group.id}: GitHub rate limit, will retry on the next run`);
       } else {
         summary.failed++;
         deps.log(`[auto-analyze] group ${group.id} failed: ${err instanceof Error ? err.message : String(err)}`);
-        await recordAutoFailure(group.id, "ANALYSIS_FAILED");
+        await recordAutoFailure(group.id, github?.code ?? "ANALYSIS_FAILED");
       }
     }
   }
@@ -350,10 +357,13 @@ export async function refreshReportIfStale(
   if (!reason) return { refreshing: false, why: "unchanged" };
 
   deps.analyze(projectId)
-    .then((result) => { if (isFailedResult(result)) return recordAutoFailure(projectId, failureCodeOf(result)); })
+    // A rate limit is waited out (the scheduled run retries); only real failures are remembered.
+    .then((result) => { if (isFailedResult(result) && result.status !== 429) return recordAutoFailure(projectId, failureCodeOf(result)); })
     .catch((err) => {
       console.error(`[auto-analyze] refresh of group ${projectId} failed:`, err);
-      return recordAutoFailure(projectId, isRateLimit(err) ? "GITHUB_RATE_LIMITED" : "ANALYSIS_FAILED");
+      const github = hasHttpStatus(err) ? classifyGithubFailure(err) : null;
+      if (github?.code === "GITHUB_RATE_LIMITED") return undefined;
+      return recordAutoFailure(projectId, github?.code ?? "ANALYSIS_FAILED");
     });
   return { refreshing: true };
 }

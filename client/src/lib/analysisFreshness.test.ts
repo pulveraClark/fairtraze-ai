@@ -81,8 +81,8 @@ describe("short form for lists and cards", () => {
 
 describe("when the latest automatic update did not finish", () => {
   it("says so in one calm sentence, for everyone, without a cause or blame", () => {
-    expect(formatLastAnalyzedUpdateFailed(ago(3 * 24 * HOUR), NOW)).toBe("Last analyzed 3 days ago. The latest update didn't finish. It will try again tonight.");
-    expect(AUTO_UPDATE_FAILED_TEXT).toBe("The latest update didn't finish. It will try again tonight.");
+    expect(formatLastAnalyzedUpdateFailed(ago(3 * 24 * HOUR), NOW)).toBe("Last analyzed 3 days ago. The latest update didn't finish. It will try again soon.");
+    expect(AUTO_UPDATE_FAILED_TEXT).toBe("The latest update didn't finish. It will try again soon.");
   });
 });
 
