@@ -248,7 +248,7 @@ export function HelpPage() {
           <p>The same idea, with three signals:</p>
           <Rows rows={[
             ["Kept text", <>Text you wrote that is still in the document. Text you typed and then deleted does not count, and writing then deleting your own text lowers this by up to half. Default weight {pct(docs.retainedText)}.</>],
-            ["Editing sessions", <>A session is a stretch of editing that ends after 30 minutes without typing. Counted on a log scale, like commits. Default weight {pct(docs.sessions)}.</>],
+            ["Editing sessions", <>A session is a stretch of writing that ends after 30 minutes without typing. Deleting text or adding an image on its own does not start one. Counted on a log scale, like commits. Default weight {pct(docs.sessions)}.</>],
             ["Active days", <>How many different days (in Philippine time) you wrote at least {MIN_ACTIVE_DAY_RETAINED_CHARS} characters that are still in the document. Default weight {pct(docs.activeDays)}.</>],
           ]} />
           <ul>

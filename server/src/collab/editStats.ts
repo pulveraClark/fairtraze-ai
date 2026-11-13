@@ -73,10 +73,13 @@ export async function computeDocumentRawStats(
   const eligibleImages = countEligibleImages(await readPresentImages(documentId));
 
   for (const s of sessions) {
-    // Images earn credit through the retained-text term only. A session made only of image inserts
-    // (no typed characters) is not a writing session, so it adds no session credit and no session
-    // date: nobody can add sessions by inserting an image after each idle gap.
-    if (s.characterCount === 0 && s.imageInsertCount > 0) continue;
+    // A session with no typed characters is not a writing session, so it adds no session credit
+    // (sessionCount, liveSessionCount) and no session date. That covers a session made only of image
+    // inserts (images earn credit through the retained-text term only) and a delete-only session
+    // (characterCount counts inserted characters only): nobody can add sessions by inserting an image
+    // or deleting a character after each idle gap. A session that starts with a delete and then types
+    // has characterCount > 0 and still counts.
+    if (s.characterCount === 0) continue;
     const entry = sessionsByUser.get(s.userId) ?? { count: 0, liveCount: 0, dates: [], imageInsertCount: 0 };
     entry.count += 1;
     if (s.source === "LIVE") entry.liveCount += 1;
