@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getUserColor } from "../lib/collabColors";
+import { FOCUS_LIGHT } from "./ui/styles";
+
+// Real buttons need an explicit pointer cursor (the Tailwind reset removes it), a hover and focus style, and a 32px target.
+const ACTION = `inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-md px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_LIGHT}`;
 
 export interface CommentAuthor {
   id: number;
@@ -99,7 +103,7 @@ function ComposeBox({
           type="button"
           disabled={!text.trim() || submitting}
           onClick={handleSubmit}
-          className="px-3 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+          className={`${ACTION} bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800`}
         >
           {submitting ? "Posting…" : submitLabel}
         </button>
@@ -107,7 +111,8 @@ function ComposeBox({
           <button
             type="button"
             onClick={onCancel}
-            className="text-xs text-slate-600 hover:text-slate-600"
+            disabled={submitting}
+            className={`${ACTION} text-slate-700 hover:bg-slate-100 hover:text-slate-900`}
           >
             Cancel
           </button>
@@ -141,7 +146,25 @@ function Thread({
   onSelect: () => void;
 }) {
   const [replying, setReplying] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // A ref blocks a second click in the same tick, before React has re-rendered the disabled button.
+  const busyRef = useRef(false);
   const resolved = !!root.resolvedAt;
+
+  const run = async (start: () => void, task: () => Promise<void>, end: () => void) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    start();
+    try {
+      await task();
+    } catch {
+      // The parent reports the failure; the button just comes back.
+    } finally {
+      busyRef.current = false;
+      end();
+    }
+  };
 
   return (
     <div
@@ -170,32 +193,38 @@ function Thread({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDelete(c.id);
+                  void run(() => setDeletingId(c.id), () => onDelete(c.id), () => setDeletingId(null));
                 }}
-                className="text-slate-500 hover:text-red-600 text-xs shrink-0"
-                aria-label="Delete comment"
+                disabled={deletingId !== null}
+                aria-busy={deletingId === c.id}
+                className={`${ACTION} shrink-0 text-slate-600 hover:bg-red-50 hover:text-red-700`}
+                aria-label={deletingId === c.id ? "Deleting comment" : "Delete comment"}
               >
-                ✕
+                {deletingId === c.id ? "…" : "✕"}
               </button>
             )}
           </div>
         </div>
       ))}
 
-      <div className="flex items-center gap-3 mt-2.5" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-1 mt-2.5" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={() => setReplying((v) => !v)}
-          className="text-xs font-medium text-slate-500 hover:text-indigo-600"
+          disabled={resolving}
+          aria-expanded={replying}
+          className={`${ACTION} text-slate-700 hover:bg-indigo-50 hover:text-indigo-800`}
         >
           Reply
         </button>
         <button
           type="button"
-          onClick={() => onResolveToggle(root.id, !resolved)}
-          className={`text-xs font-medium ${resolved ? "text-slate-600 hover:text-slate-600" : "text-emerald-600 hover:text-emerald-700"}`}
+          onClick={() => void run(() => setResolving(true), () => onResolveToggle(root.id, !resolved), () => setResolving(false))}
+          disabled={resolving}
+          aria-busy={resolving}
+          className={`${ACTION} ${resolved ? "text-slate-700 hover:bg-slate-100 hover:text-slate-900" : "text-emerald-800 hover:bg-emerald-50"}`}
         >
-          {resolved ? "Reopen" : "Resolve"}
+          {resolving ? (resolved ? "Reopening…" : "Resolving…") : resolved ? "Reopen" : "Resolve"}
         </button>
       </div>
 
