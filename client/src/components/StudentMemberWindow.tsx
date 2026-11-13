@@ -13,6 +13,8 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { taskCountLabel } from "../lib/tasks/countLabel";
 import { studentFlagLabel } from "../lib/studentDisplay";
 import { summaryFor, type AiReviewResponse } from "../lib/aiReview";
+import { NoFlags } from "./NoFlags";
+import { NO_FLAGS_OWN, NO_FLAGS_PEER } from "../lib/flagRules";
 
 /**
  * One member's window on the student side: the same dialog as the instructor's member window (full screen under
@@ -169,7 +171,7 @@ export function StudentMemberWindow({
             <div className="mt-4">
               <h3 className="mb-1.5 text-sm font-semibold text-slate-900">Flags</h3>
               {member.flags.length === 0 ? (
-                <p className="text-sm text-slate-700">No flags</p>
+                <NoFlags reason={isYou ? NO_FLAGS_OWN : NO_FLAGS_PEER} />
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {uniqueByLabel(member.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={isYou ? "own" : "peer"} muted={flagsMuted} />)}

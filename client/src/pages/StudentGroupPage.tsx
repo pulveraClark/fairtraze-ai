@@ -52,6 +52,8 @@ import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
 import { useAiReview } from "../hooks/useAiReview";
 import { getContributionStatsCards, ownCountedInput, scoreBlendLine, type CombinedMyContribution, type MyContribution } from "../lib/contributionStats";
+import { NoFlags } from "../components/NoFlags";
+import { NO_FLAGS_OWN } from "../lib/flagRules";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RoleSuggestionData {
@@ -998,7 +1000,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     )}
                     {report.myContribution.flags.length === 0 ? (
                       <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 text-sm text-slate-600 text-center">
-                        No flags on your contributions.
+                        <NoFlags className="text-sm text-slate-600" label="No flags on your contributions." reason={NO_FLAGS_OWN} />
                       </div>
                     ) : (
                       <div className="space-y-3">

@@ -15,6 +15,31 @@ export type DeadlineBasis = "assignment-deadline" | "activity-span";
 
 const pct = (x: number) => `${+(x * 100).toFixed(1)}%`;
 
+const trim1 = (x: number) => `${+x.toFixed(1)}`;
+const timesWords = (x: number) => (x === 0.5 ? "half of the equal share" : `${x} times the equal share`);
+
+/**
+ * Why a member has no share-based flag, in simple words with the project's real numbers, for the
+ * instructor: "No flags: share 32.2% is above 25% (half of the equal share) and below 87.5%
+ * (1.75 times the equal share)". Restates the stored free-rider / overload thresholds; it never
+ * evaluates a flag. Null when the thresholds or the member count are not known.
+ */
+export function describeNoFlags(
+  share: number,
+  memberCount: number,
+  thresholds: ScoringThresholds | null | undefined
+): string | null {
+  if (!thresholds || memberCount <= 0) return null;
+  const equalPct = 100 / memberCount;
+  const low = thresholds.freeRider * equalPct;
+  const high = thresholds.overload * equalPct;
+  return `No flags: share ${trim1(share * 100)}% is above ${trim1(low)}% (${timesWords(thresholds.freeRider)}) and below ${trim1(high)}% (${timesWords(thresholds.overload)}).`;
+}
+
+/** Student and leader wording: words only. The thresholds are never sent to a student. */
+export const NO_FLAGS_OWN = "No flags: your share is within the expected range for this group.";
+export const NO_FLAGS_PEER = "No flags: this member's share is within the expected range for this group.";
+
 export function describeFlagRule(
   flag: Flag,
   thresholds: ScoringThresholds | null | undefined,

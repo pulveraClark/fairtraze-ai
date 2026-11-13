@@ -12,7 +12,8 @@ import {
 } from "../../lib/memberBreakdown";
 import { RoleChips } from "./MemberContributionList";
 import { Avatar } from "../Avatar";
-import { describeFlagRule, type DeadlineBasis, type FlagSource } from "../../lib/flagRules";
+import { describeFlagRule, describeNoFlags, type DeadlineBasis, type FlagSource } from "../../lib/flagRules";
+import { NoFlags } from "../NoFlags";
 import { docsStatsOf, formatPct, githubStatsOf, isCombinedMember, roleInfoOf } from "../../lib/memberView";
 import { InfoTip } from "../ui/InfoTip";
 import { TIPS, helpLink } from "../../lib/helpText";
@@ -230,7 +231,7 @@ function MemberSidebar({
           <p className="mb-1.5 text-xs leading-normal text-slate-700">Flags may change as more activity is recorded.</p>
         )}
         {member.flags.length === 0 ? (
-          <p className="text-sm text-slate-800">No flags</p>
+          <NoFlags className="text-sm text-slate-800" reason={describeNoFlags(member.contributionShare, memberCount, thresholds)} />
         ) : (
           <ul className="space-y-3">
             {member.flags.map((f) => {

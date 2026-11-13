@@ -678,6 +678,7 @@ export function ProjectDetailPage({ projectId }: Props) {
             <MemberContributionList
               members={stored.report.members}
               memberRoles={stored.memberRoles}
+              thresholds={stored.scoringConfig?.thresholds ?? null}
               mutedFlags={earlyMuted}
               disputedMembers={disputedMembers}
               resolvedFlagOutcomes={resolvedFlagOutcomes}

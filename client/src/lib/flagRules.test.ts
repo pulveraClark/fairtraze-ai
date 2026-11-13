@@ -98,3 +98,33 @@ describe("giniBands", () => {
     expect(giniBands().map((b) => b.health)).toEqual(["Healthy", "Moderate Risk", "High Risk"]);
   });
 });
+
+describe("describeNoFlags / student wording", () => {
+  const t = { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 };
+
+  it("uses the project's real thresholds and equal share (instructor)", async () => {
+    const { describeNoFlags } = await import("./flagRules");
+    // 4 members: equal share 25%, free-rider limit 12.5%, overload limit 43.75%
+    expect(describeNoFlags(0.322, 4, t)).toBe(
+      "No flags: share 32.2% is above 12.5% (half of the equal share) and below 43.8% (1.75 times the equal share)."
+    );
+    // 2 members: 25% and 87.5%, the example from the brief
+    expect(describeNoFlags(0.322, 2, { ...t, freeRider: 0.5 })).toBe(
+      "No flags: share 32.2% is above 25% (half of the equal share) and below 87.5% (1.75 times the equal share)."
+    );
+    // changed settings flow through; nothing is hardcoded
+    expect(describeNoFlags(0.3, 5, { ...t, freeRider: 0.4, overload: 2 })).toBe(
+      "No flags: share 30% is above 8% (0.4 times the equal share) and below 40% (2 times the equal share)."
+    );
+  });
+
+  it("says nothing it cannot back up, and shows no numbers or Gini to a student", async () => {
+    const { describeNoFlags, NO_FLAGS_OWN, NO_FLAGS_PEER } = await import("./flagRules");
+    expect(describeNoFlags(0.3, 3, null)).toBeNull();
+    expect(describeNoFlags(0.3, 0, t)).toBeNull();
+    for (const s of [NO_FLAGS_OWN, NO_FLAGS_PEER]) {
+      expect(s).not.toMatch(/\d|gini/i);
+      expect(s.startsWith("No flags:")).toBe(true);
+    }
+  });
+});

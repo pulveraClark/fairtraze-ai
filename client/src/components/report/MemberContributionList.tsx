@@ -1,4 +1,5 @@
-import type { AnyScoredMember, MemberRoleInfo } from "@shared/types";
+import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared/types";
+import { describeNoFlags } from "../../lib/flagRules";
 import { ListRow, StatusPill, CARD } from "../ui";
 import { BUTTON_SECONDARY } from "../ui/styles";
 import { PILL_TONES } from "../ui/StatusPill";
@@ -21,6 +22,8 @@ interface Props {
   disputedMembers?: Set<string>;
   resolvedFlagOutcomes?: Map<string, Map<string, Outcome>>;
   onOpen: (member: AnyScoredMember, opener: HTMLElement) => void;
+  /** The project's stored free-rider / overload thresholds, to explain "No flags" with the real numbers. */
+  thresholds?: ScoringThresholds | null;
   /** Instructor only: where the AI work summaries stand. Omit (or null) to show no chip. A text chip, not a button. */
   aiSummaryState?: WorkSummaryState | null;
   /** The shared AI generate action. Pass it only for viewers who may generate; omit for no button. */
@@ -51,7 +54,7 @@ export function RoleChips({ info }: { info: MemberRoleInfo | undefined }) {
   );
 }
 
-export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, aiSummaryState, generator, hasNarrative = false, findingsNote, mutedFlags = false }: Props) {
+export function MemberContributionList({ members, memberRoles, disputedMembers, resolvedFlagOutcomes, onOpen, thresholds, aiSummaryState, generator, hasNarrative = false, findingsNote, mutedFlags = false }: Props) {
   // Busy until 90 s have passed; then the button works again and the wording changes.
   const slow = !!generator?.slow;
   const reviewRunning = aiSummaryState === "running";
@@ -113,12 +116,13 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
           const diff = pct - equalPct;
           const disputed = disputedMembers?.has(m.studentName);
           const outcomes = resolvedFlagOutcomes?.get(m.studentName);
+          const noFlagsReason = m.flags.length === 0 ? describeNoFlags(m.contributionShare, n, thresholds) : null;
           return (
             <li key={m.studentName} data-member-row={m.studentName}>
               <ListRow
                 opensDialog
                 onClick={(el) => onOpen(m, el)}
-                ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? m.flags.join(", ") : "no flags"}. Open details`}
+                ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? m.flags.join(", ") : (noFlagsReason ?? "no flags")}. Open details`}
               >
                 <span className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 sm:grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1.4fr)_4rem_12rem]">
                   <Avatar
@@ -143,7 +147,9 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                   <span className="text-right text-sm font-semibold tabular-nums text-slate-900">{formatPct(m.contributionShare)}</span>
                   <span className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
                     {m.flags.length === 0 ? (
-                      <span className="text-sm text-slate-700">No flags</span>
+                      // The whole row is a button, so no nested (i) button here: a native tooltip on hover, and the
+                      // same reason is read out in the row's label. The details window shows it as a keyboard/touch tip.
+                      <span className="text-sm text-slate-700 underline decoration-dotted underline-offset-2" title={noFlagsReason ?? undefined}>No flags</span>
                     ) : (
                       m.flags.map((f) => (
                         <span key={f} className="inline-flex flex-wrap items-center gap-1">

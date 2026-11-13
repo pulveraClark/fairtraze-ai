@@ -9,6 +9,8 @@ import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { SOURCE_COLOR, SOURCE_NAME, type SourceKey } from "../lib/sourceColors";
 import { splitShare, validBlend, type ShareBlend } from "../lib/shareSegments";
+import { NoFlags } from "./NoFlags";
+import { NO_FLAGS_OWN, NO_FLAGS_PEER } from "../lib/flagRules";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -128,7 +130,7 @@ export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, fl
                   )}
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {m.flags.length === 0
-                      ? <span className="text-xs text-slate-700">No flags</span>
+                      ? <NoFlags className="text-xs text-slate-700" reason={m.userId === currentUserId ? NO_FLAGS_OWN : NO_FLAGS_PEER} />
                       : uniqueByLabel(m.flags).map((f) => <FlagTag key={f} flag={f as Flag} view={m.userId === currentUserId ? "own" : "peer"} muted={flagsMuted} />)}
                   </div>
                 </>
