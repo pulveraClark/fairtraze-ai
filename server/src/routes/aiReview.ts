@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { stripTeamMeasures } from "../lib/studentNarrative.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, type LoadedGroup } from "../lib/groupAccess.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
@@ -52,6 +53,8 @@ export function shapeSummariesForViewer(
   const visible = viewer === "member" ? content.members.filter((m) => m.userId === viewerUserId) : content.members;
   const summaries = visible.map((m) => ({
     ...m,
+    // Read-time safety net for students and leaders: no team-health label or Gini wording, even in old stored text.
+    ...(viewer === "instructor" || typeof m.summary !== "string" ? {} : { summary: stripTeamMeasures(m.summary) }),
     // Links are built here, at read time, from the stored shas; `commits` itself is not sent.
     evidence: {
       ...m.evidence,

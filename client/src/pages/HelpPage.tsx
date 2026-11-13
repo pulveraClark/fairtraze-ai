@@ -313,8 +313,8 @@ export function HelpPage() {
                 ["Deadline-driven", <>Most of your recorded activity ({pct(DEADLINE_DRIVEN_THRESHOLD)} or more by default) came in the last third of the time before the deadline. With no deadline, it is the last third of the group's activity.</>],
               ]} />
               <p id="gini" className="scroll-mt-4">
-                How evenly work is shared in your group is shown in words: <strong>{studentHealthLabel("Healthy")}</strong>,{" "}
-                <strong>{studentHealthLabel("Moderate Risk")}</strong> or <strong>{studentHealthLabel("High Risk")}</strong>.
+                How evenly work is shared in your group is shown in words: <strong>{studentHealthLabel("even")}</strong>,{" "}
+                <strong>{studentHealthLabel("a-bit-uneven")}</strong> or <strong>{studentHealthLabel("very-uneven")}</strong>.
                 If nobody in the group has recorded activity yet, it says "Not enough activity yet".
               </p>
               <p>

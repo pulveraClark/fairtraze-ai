@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { notify, activeAdminIds } from "../lib/notify.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
+import { evennessOf } from "../lib/studentEvenness.js";
 
 // Data-subject rights under RA 10173: consent record, export (access/portability) and the
 // erasure request. Erasure itself is performed by an admin (admin.ts) via lib/anonymizeUser.ts.
@@ -178,7 +179,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
       role:            m.role,
       functionalRoles: safeJson(m.functionalRoles),
       joinedAt:        m.joinedAt,
-      latestReport:    latest ? { generatedAt: latest.generatedAt, teamHealth: latest.teamHealth, myContribution: myEntry } : null,
+      latestReport:    latest ? { generatedAt: latest.generatedAt, evenness: evennessOf(latest.teamHealth), myContribution: myEntry } : null,
     };
   });
 

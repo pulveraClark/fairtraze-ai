@@ -37,7 +37,7 @@ export function groupFixture(over: Record<string, unknown> = {}) {
     membership: { role: "MEMBER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null },
     hasReport: true,
     report: {
-      teamHealth: "Moderate Risk", analyzedAt: "2026-10-18T00:00:00Z", memberCount: 3,
+      evenness: "a-bit-uneven", analyzedAt: "2026-10-18T00:00:00Z", memberCount: 3,
       deadlineWindowBasis: "activity-span",
       myContribution: {
         sourceType: "COMBINED", contributionShare: 0.4, githubContributionShare: 0.5, documentContributionShare: 0.3,
@@ -458,7 +458,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null },
     report: {
       ...(groupFixture().report as object),
-      teamHealth: "Healthy",
+      evenness: "even",
       narrative: "The team shares the work fairly evenly.",
       team: [
         { userId: 1, name: "Ana Cruz", isLeader: true, functionalRoles: ["DEVELOPER"], hasAvatar: false, avatarUpdatedAt: null, contributionShare: 0.4, githubContributionShare: 0.5, documentContributionShare: 0.3, flags: [], tasks: { open: 0, done: 0 } },

@@ -14,9 +14,9 @@ describe("studentDisplay (20, 21)", () => {
   });
 
   it("uses plain words for the team health label and leaves unknown values alone", () => {
-    expect(studentHealthLabel("Healthy")).toBe("Work is evenly shared");
-    expect(studentHealthLabel("Moderate Risk")).toBe("Work is a bit uneven");
-    expect(studentHealthLabel("High Risk")).toBe("Work is very uneven");
+    expect(studentHealthLabel("even")).toBe("Work is evenly shared");
+    expect(studentHealthLabel("a-bit-uneven")).toBe("Work is a bit uneven");
+    expect(studentHealthLabel("very-uneven")).toBe("Work is very uneven");
     expect(studentHealthLabel("Something else")).toBe("Something else");
   });
 });

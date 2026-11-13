@@ -18,9 +18,9 @@ import { useSubmitGuard } from "../hooks/useSubmitGuard";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HEALTH_BADGE: Record<string, string> = {
-  "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "Moderate Risk": "text-amber-700 bg-amber-50 border-amber-200",
-  "High Risk":     "text-red-700 bg-red-50 border-red-200",
+  "even":          "text-emerald-700 bg-emerald-50 border-emerald-200",
+  "a-bit-uneven":  "text-amber-700 bg-amber-50 border-amber-200",
+  "very-uneven":   "text-red-700 bg-red-50 border-red-200",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -36,7 +36,7 @@ interface MyGroup {
   repoUrl: string | null;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
-  report: { teamHealth: string | null; generatedAt: string; noActivity?: boolean } | null;
+  report: { evenness: string | null; generatedAt: string; noActivity?: boolean } | null;
 }
 
 interface MyRequest {
@@ -252,9 +252,9 @@ export function ProjectCard({
                 <span className="text-sm font-semibold text-slate-700">{g.groupName}</span>
                 {g.report?.noActivity ? (
                   <NoActivityPill />
-                ) : g.report?.teamHealth && (
-                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                    {studentHealthLabel(g.report.teamHealth)}
+                ) : g.report?.evenness && (
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.evenness] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                    {studentHealthLabel(g.report.evenness)}
                   </span>
                 )}
               </div>

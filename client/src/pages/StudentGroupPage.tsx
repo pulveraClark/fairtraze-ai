@@ -6,8 +6,6 @@ import { BUTTON_SECONDARY_COMPACT } from "../components/ui/styles";
 import { classCrumb } from "../lib/classLabel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LastAnalyzed } from "../components/LastAnalyzed";
-import { useAutoRefresh } from "../hooks/useAutoRefresh";
-import { requestReportRefresh } from "../lib/refreshReport";
 import { useQueryClient } from "@tanstack/react-query";
 import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
@@ -75,7 +73,7 @@ interface GroupDetail {
   scoringRulesVersion?: number;
   docsDataFixedAt?: string;
   report: {
-    teamHealth:  string;
+    evenness:  string;
     /** Server flag: no member has any recorded activity yet (display only). */
     noActivity?: boolean;
     /** Read-time "Early data" level (display only; null when nobody has activity). */
@@ -96,9 +94,9 @@ interface GroupDetail {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HEALTH_BADGE: Record<string, string> = {
-  "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "Moderate Risk": "text-amber-700 bg-amber-50 border-amber-200",
-  "High Risk":     "text-red-700 bg-red-50 border-red-200",
+  "even":          "text-emerald-700 bg-emerald-50 border-emerald-200",
+  "a-bit-uneven":  "text-amber-700 bg-amber-50 border-amber-200",
+  "very-uneven":   "text-red-700 bg-red-50 border-red-200",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -252,15 +250,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
 
   const data    = groupQuery.data ?? null;
 
-  // Open a report older than an hour in an active project: the server refreshes it in the background.
-  // The page keeps showing the current report; the new one replaces it when it arrives.
-  const { updating } = useAutoRefresh({
-    key: projectId,
-    enabled: !!data?.hasReport,
-    analyzedAt: data?.report?.analyzedAt,
-    request: () => requestReportRefresh(projectId, token),
-    refetch: () => groupQuery.refetch(),
-  });
+  // Students never start an analysis. Reports are refreshed by the scheduled run (and by the
+  // instructor); this page only reads the latest one, so there is never an "updating" state here.
+  const updating = false;
   const loading = groupQuery.isLoading;
   const queryErr = groupQuery.error;
   const error   = data || !queryErr
@@ -665,9 +657,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             </button>
             {report?.noActivity ? (
               <NoActivityPill />
-            ) : report?.teamHealth && (
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.teamHealth] ?? ""}`}>
-                {studentHealthLabel(report.teamHealth)}
+            ) : report?.evenness && (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[report.evenness] ?? ""}`}>
+                {studentHealthLabel(report.evenness)}
               </span>
             )}
           </div>
@@ -964,7 +956,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <EarlyDataTag level={report.dataConfidence} />
                       </span>
-                      <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.teamHealth)}</p>
+                      <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.evenness)}</p>
                     </div>
                     {isLeader && report.narrative && (
                       <div>

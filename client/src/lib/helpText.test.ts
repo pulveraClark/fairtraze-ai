@@ -22,6 +22,7 @@ describe("helpText", () => {
     for (const t of Object.values(TIPS)) {
       const text = typeof t === "function" ? (t as (...a: number[]) => string)(33.3, 3) : t;
       expect(text).not.toMatch(/gini/i);
+      expect(text).not.toMatch(/team health|moderate risk|high risk|\bHealthy\b/i);
     }
   });
 

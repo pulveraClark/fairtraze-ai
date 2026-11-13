@@ -106,18 +106,23 @@ describe("refreshReportIfStale: runs only when ALL conditions hold", () => {
 describe("POST /api/groups/:id/refresh-report", () => {
   const app = createApp();
 
-  it("a student cannot force a run: every request, whatever it sends, runs the same checks", async () => {
-    // Fresh report: the server must not start anything no matter what the student asks for.
-    const { project, student } = await setup({ reportAt: new Date() });
+  it("a student gets 403 whatever they send, even with a stale report, and nothing runs", async () => {
+    const { project, student } = await setup({ reportAt: new Date(Date.now() - 3 * 60 * 60 * 1000) });
     const headers = { Authorization: authHeaderFor(student) };
     const before = await prisma.report.count({ where: { projectId: project.id } });
     for (const body of [{}, { force: true }, { refresh: true, olderThanMs: 0 }]) {
       const res = await request(app).post(`/api/groups/${project.id}/refresh-report`).set(headers).query({ force: "true" }).send(body);
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({ refreshing: false });
+      expect(res.status).toBe(403);
     }
     await new Promise((r) => setTimeout(r, 200));
     expect(await prisma.report.count({ where: { projectId: project.id } })).toBe(before);
+  });
+
+  it("the owning instructor still gets the same server-side decision (fresh report: nothing to do)", async () => {
+    const { project, instructor } = await setup({ reportAt: new Date() });
+    const res = await request(app).post(`/api/groups/${project.id}/refresh-report`).set({ Authorization: authHeaderFor(instructor) });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ refreshing: false });
   });
 
   it("someone outside the group gets 403, an anonymous caller 401", async () => {

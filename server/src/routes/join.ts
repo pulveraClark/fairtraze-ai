@@ -1,4 +1,5 @@
 import { studentNarrative } from "../lib/studentNarrative.js";
+import { evennessOf } from "../lib/studentEvenness.js";
 import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -150,7 +151,7 @@ joinRouter.get("/api/student/classes", ...requireRole("STUDENT"), async (req, re
                 role:      myMembership.role,
                 report:    myProject.reports[0]
                   ? {
-                      teamHealth:  myProject.reports[0].teamHealth,
+                      evenness:    evennessOf(myProject.reports[0].teamHealth),
                       generatedAt: myProject.reports[0].generatedAt.toISOString(),
                       noActivity:  contentHasNoRecordedActivity(myProject.reports[0].content),
                     }
@@ -277,7 +278,7 @@ joinRouter.get("/api/student/classes/:id/projects", ...requireRole("STUDENT"), a
             pendingRequestCount:  pendingCountByProject.get(myProject.id) ?? 0,
             report:               myProject.reports[0]
               ? {
-                  teamHealth:  myProject.reports[0].teamHealth,
+                  evenness:    evennessOf(myProject.reports[0].teamHealth),
                   generatedAt: myProject.reports[0].generatedAt.toISOString(),
                   noActivity:  contentHasNoRecordedActivity(myProject.reports[0].content),
                 }
@@ -772,7 +773,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     autoUpdateFailed: autoUpdateFailed(project, asgn, latestReport.generatedAt),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     report: {
-      teamHealth:  teamReport.teamHealth,
+      evenness:    evennessOf(teamReport.teamHealth),
       analyzedAt:  latestReport.generatedAt.toISOString(),
       trigger:     stored.trigger ?? null,
       noActivity:  hasNoRecordedActivity(teamReport.members),

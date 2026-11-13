@@ -17,6 +17,11 @@ refreshReportRouter.post("/api/groups/:id/refresh-report", requireAuth, async (r
     res.status(400).json({ error: "Invalid group id" });
     return;
   }
+  // Students never start an analysis, not even an automatic one; the scheduled run keeps reports fresh.
+  if (req.user!.role === "STUDENT") {
+    res.status(403).json({ error: "Only your instructor can update the analysis." });
+    return;
+  }
   const project = await loadGroup(id.data);
   if (!project) {
     res.status(404).json({ error: "Group not found." });

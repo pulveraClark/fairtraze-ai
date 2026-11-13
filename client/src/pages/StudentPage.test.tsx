@@ -18,7 +18,7 @@ describe("student dashboard class card: last analyzed", () => {
     vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
     const withReport = {
       ...cls,
-      assignments: [{ id: 1, title: "P", myGroup: { id: 3, groupName: "G", role: "MEMBER", report: { teamHealth: "Healthy", generatedAt: "2026-10-18T12:00:00Z" } } }],
+      assignments: [{ id: 1, title: "P", myGroup: { id: 3, groupName: "G", role: "MEMBER", report: { evenness: "even", generatedAt: "2026-10-18T12:00:00Z" } } }],
     } as unknown as EnrolledClass;
     render(<ClassCard cls={withReport} onNavigate={() => {}} />);
     expect(screen.getByText("Last analyzed 2 days ago")).toBeInTheDocument();

@@ -16,9 +16,9 @@ import { useSubmitGuard } from "../hooks/useSubmitGuard";
 
 
 const HEALTH_BADGE: Record<string, string> = {
-  "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "Moderate Risk": "text-amber-700 bg-amber-50 border-amber-200",
-  "High Risk":     "text-red-700 bg-red-50 border-red-200",
+  "even":          "text-emerald-700 bg-emerald-50 border-emerald-200",
+  "a-bit-uneven":  "text-amber-700 bg-amber-50 border-amber-200",
+  "very-uneven":   "text-red-700 bg-red-50 border-red-200",
 };
 
 // ── Join a Class modal ────────────────────────────────────────────────────────
@@ -255,13 +255,13 @@ export function ClassCard({
         )}
 
         {/* Health — shown in addition to (not instead of) join code */}
-        {latestReport?.teamHealth ? (
+        {latestReport?.evenness ? (
           <div className="flex items-center justify-between">
             {latestReport.noActivity ? (
               <NoActivityPill />
             ) : (
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                {studentHealthLabel(latestReport.teamHealth)}
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${HEALTH_BADGE[latestReport.evenness] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                {studentHealthLabel(latestReport.evenness)}
               </span>
             )}
             <p className="text-xs text-slate-700">

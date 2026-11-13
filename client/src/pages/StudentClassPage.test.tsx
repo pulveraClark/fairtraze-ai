@@ -39,7 +39,7 @@ describe("ProjectCard for a student already in a group (R9)", () => {
   });
 
   it("shows team health in plain words, not 'Moderate Risk' (21)", () => {
-    renderCard(asgn({}, { report: { teamHealth: "Moderate Risk", generatedAt: "2026-10-18T00:00:00Z" } }));
+    renderCard(asgn({}, { report: { evenness: "a-bit-uneven", generatedAt: "2026-10-18T00:00:00Z" } }));
     expect(screen.getByText("Work is a bit uneven")).toBeInTheDocument();
     expect(screen.queryByText(/Moderate Risk|0\.31/)).toBeNull();
   });
@@ -51,7 +51,7 @@ describe("ProjectCard last analyzed", () => {
   it("shows 'Last analyzed 5 hours ago' under the health pill, and nothing when there is no report", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
-    const { container } = render(<ProjectCard asgn={asgn({}, { report: { teamHealth: "Healthy", generatedAt: "2026-10-20T07:00:00Z" } }) as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={vi.fn()} />);
+    const { container } = render(<ProjectCard asgn={asgn({}, { report: { evenness: "even", generatedAt: "2026-10-20T07:00:00Z" } }) as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={vi.fn()} />);
     expect(screen.getByText("Last analyzed 5 hours ago")).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/Gini|index|band/i);
   });
