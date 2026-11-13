@@ -8,6 +8,7 @@ import { balanceWeights } from "../lib/balanceWeights";
 import { InfoTip } from "./ui/InfoTip";
 import { SETTINGS_TIPS, helpLink } from "../lib/helpText";
 import { DOCUMENT_DEFAULT_WEIGHTS, DEFAULT_BLEND_WEIGHTS } from "@shared/weights";
+import { DEFAULT_DOCS_IMAGE_LIMIT, DOCS_IMAGE_LIMIT_OPTIONS, resolveDocsImageLimit } from "@shared/imageCredit";
 
 // The Docs weights and the blend are read from shared/, never retyped here.
 const DEFAULTS = {
@@ -45,6 +46,9 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
   const [docsSessions,   setDocsSessions]   = useState(currentConfig.docsWeights?.sessions ?? DEFAULTS.docsWeights.sessions);
   const [docsDays,       setDocsDays]       = useState(currentConfig.docsWeights?.activeDays ?? DEFAULTS.docsWeights.activeDays);
 
+  // 3, 5, 10 or null (No limit). A project saved before this setting existed reads as the default.
+  const [imageLimit, setImageLimit] = useState<number | null>(resolveDocsImageLimit(currentConfig.docsImageLimit));
+
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
@@ -69,6 +73,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
   const codeChanged  = !near(commits, DEFAULTS.weights.commits) || !near(lines, DEFAULTS.weights.lines) || !near(activeDays, DEFAULTS.weights.activeDays);
   const docsChanged  = !near(docsText, DEFAULTS.docsWeights.retainedText) || !near(docsSessions, DEFAULTS.docsWeights.sessions) || !near(docsDays, DEFAULTS.docsWeights.activeDays);
   const blendChanged = !near(wGitHub, DEFAULTS.blend.wGitHub) || !near(wDocs, DEFAULTS.blend.wDocs);
+  const imagesChanged = imageLimit !== DEFAULT_DOCS_IMAGE_LIMIT;
 
   function balanceBase() {
     const [c, l, a] = balanceWeights([commits, lines, activeDays]);
@@ -104,6 +109,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
     setDeadlineDriven(DEFAULTS.thresholds.deadlineDriven);
     resetBlend();
     resetDocs();
+    setImageLimit(DEFAULT_DOCS_IMAGE_LIMIT);
     setSaveError(null);
   }
 
@@ -120,6 +126,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
           thresholds: { freeRider, overload, deadlineDriven },
           blend:      { wGitHub, wDocs },
           docsWeights: { retainedText: docsText, sessions: docsSessions, activeDays: docsDays },
+          docsImageLimit: imageLimit,
         }),
       });
       const data = (await res.json()) as { config?: ProjectScoringConfig; error?: string };
@@ -211,6 +218,51 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
               </div>
 
               <SumRow name="Docs" sum={docsSum} ok={docsSumOk} onBalance={balanceDocs} changed={docsChanged} onReset={resetDocs} />
+            </section>
+          )}
+
+          {/* ── Images in documents: EDITOR and COMBINED projects ─────────────────── */}
+          {showDocs && (
+            <section>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                <span className="inline-flex items-center gap-1">
+                  Images in documents
+                  <InfoTip label="About images in documents" helpHref={helpLink("shares-docs")}>{SETTINGS_TIPS.docsImages}</InfoTip>
+                </span>
+              </h3>
+
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <label htmlFor="docs-image-limit" className="text-xs font-medium text-slate-700">
+                  Most images that count per member
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-600 tabular-nums">
+                    {imagesChanged ? `Changed · default ${DEFAULT_DOCS_IMAGE_LIMIT}` : `Default ${DEFAULT_DOCS_IMAGE_LIMIT}`}
+                  </span>
+                  <select
+                    id="docs-image-limit"
+                    value={imageLimit === null ? "none" : String(imageLimit)}
+                    onChange={(e) => setImageLimit(e.target.value === "none" ? null : Number(e.target.value))}
+                    className="min-h-9 text-xs border border-slate-200 rounded px-2 bg-white focus:outline-none focus:border-indigo-400"
+                  >
+                    {DOCS_IMAGE_LIMIT_OPTIONS.map((o) => (
+                      <option key={o === null ? "none" : o} value={o === null ? "none" : String(o)}>
+                        {o === null ? "No limit" : `${o} images`}
+                      </option>
+                    ))}
+                  </select>
+                  {imagesChanged && (
+                    <button
+                      type="button"
+                      onClick={() => setImageLimit(DEFAULT_DOCS_IMAGE_LIMIT)}
+                      aria-label="Reset image limit to default"
+                      className={`${BUTTON_SECONDARY_COMPACT} min-h-10`}
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </div>
+              </div>
             </section>
           )}
 

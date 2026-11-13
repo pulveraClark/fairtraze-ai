@@ -227,6 +227,13 @@ describe("MemberDrawer", () => {
     expect(screen.queryByRole("button", { name: /Where the work went/ })).toBeNull();
   });
 
+  it("shows 'Images: X counted of Y added' (no thresholds) when the report records counted images", () => {
+    const withImages = { ...doc, insertedImageCount: 4, countedImageCount: 2 };
+    render(<MemberDrawer {...baseProps} source="document" member={withImages} />);
+    expect(screen.getByText(/2 counted of 4 added/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\bKB\b|\bpx\b|pixel/i);
+  });
+
   it("shows a single 'Not used in this project' line for GITHUB projects", () => {
     render(<MemberDrawer {...baseProps} member={gh} />);
     expect(screen.getByText(/Not used in this project/)).toBeInTheDocument();

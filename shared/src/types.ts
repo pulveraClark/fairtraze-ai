@@ -196,8 +196,8 @@ export interface DocumentScoredMember {
   // Gross images inserted: display only (the credit is countedImageCount).
   insertedImageCount: number;
   // Images that earned credit after the project's limit (each adds IMAGE_CREDIT_CHARS to the
-  // retained-text term only).
-  countedImageCount: number;
+  // retained-text term only). Optional because reports stored before image credit do not have it.
+  countedImageCount?: number;
 }
 
 export type DocumentTeamReport = TeamReport<DocumentScoredMember>;

@@ -210,6 +210,88 @@ describe("ScoringSettingsModal Docs weights", () => {
   });
 });
 
+describe("ScoringSettingsModal images in documents", () => {
+  const renderIt = (sourceType: string, config = CONFIG, onSaved = vi.fn()) =>
+    render(<ScoringSettingsModal assignmentId={7} currentConfig={config} sourceType={sourceType} onClose={() => {}} onSaved={onSaved} />);
+  const select = () => screen.getByRole("combobox", { name: "Most images that count per member" }) as HTMLSelectElement;
+  const save = () => screen.getByRole("button", { name: "Save settings" }) as HTMLButtonElement;
+
+  it("shows for Docs-only and Combined projects, not for GitHub-only", () => {
+    const a = renderIt("GITHUB");
+    expect(screen.queryByText("Images in documents")).toBeNull();
+    a.unmount();
+    const b = renderIt("EDITOR");
+    expect(screen.getByText("Images in documents")).toBeTruthy();
+    b.unmount();
+    renderIt("COMBINED");
+    expect(screen.getByText("Images in documents")).toBeTruthy();
+  });
+
+  it("offers 3, 5, 10 and No limit, defaults to 5 and marks it", () => {
+    renderIt("EDITOR");
+    expect(Array.from(select().options).map((o) => o.textContent)).toEqual(["3 images", "5 images", "10 images", "No limit"]);
+    expect(select().value).toBe("5");
+    expect(screen.getByText("Default 5")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reset image limit to default" })).toBeNull();
+  });
+
+  it("an older project with no saved limit reads as 5", () => {
+    const { docsImageLimit: _omit, ...old } = CONFIG as typeof CONFIG & { docsImageLimit?: number | null };
+    renderIt("EDITOR", old as typeof CONFIG);
+    expect(select().value).toBe("5");
+  });
+
+  it("explains the rule in the info tip without thresholds", () => {
+    renderIt("EDITOR");
+    fireEvent.click(screen.getByRole("button", { name: "About images in documents" }));
+    const tip = screen.getByRole("group", { name: "About images in documents" });
+    expect(tip).toHaveTextContent("Each image counts like about 100 characters of writing. Duplicate and very small images never count.");
+    expect(tip.textContent).not.toMatch(/KB|px|pixel/i);
+  });
+
+  it("marks a change, resets just this setting, and does not save until Save", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderIt("COMBINED");
+    fireEvent.change(select(), { target: { value: "10" } });
+    expect(screen.getByText("Changed · default 5")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reset image limit to default" }));
+    expect(select().value).toBe("5");
+    expect(screen.getByText("Default 5")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sends the chosen limit with the save, and null for No limit", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ config: CONFIG }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const onSaved = vi.fn();
+    renderIt("EDITOR", CONFIG, onSaved);
+    fireEvent.change(select(), { target: { value: "3" } });
+    fireEvent.click(save());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).docsImageLimit).toBe(3);
+
+    fireEvent.change(select(), { target: { value: "none" } });
+    fireEvent.click(save());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).docsImageLimit).toBeNull();
+  });
+
+  it("loads a saved No limit, and Reset to defaults puts the limit back to 5", () => {
+    renderIt("EDITOR", { ...CONFIG, docsImageLimit: null });
+    expect(select().value).toBe("none");
+    fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset to defaults" }));
+    expect(select().value).toBe("5");
+  });
+
+  it("is reachable and operable from the keyboard (a native select with a label)", () => {
+    renderIt("EDITOR");
+    expect(select().tagName).toBe("SELECT");
+    expect(document.querySelector('label[for="docs-image-limit"]')).not.toBeNull();
+  });
+});
+
 describe("ScoringSettingsModal dialog semantics", () => {
   it("is a modal dialog; Esc closes it, but with the reset confirmation open Esc closes only that", async () => {
     const onClose = vi.fn();

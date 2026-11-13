@@ -16,6 +16,7 @@ import { describeFlagRule, describeNoFlags, type DeadlineBasis, type FlagSource 
 import { NoFlags } from "../NoFlags";
 import { docsStatsOf, formatPct, githubStatsOf, isCombinedMember, roleInfoOf } from "../../lib/memberView";
 import { InfoTip } from "../ui/InfoTip";
+import { instructorImageLine } from "../../lib/imageCreditText";
 import { TIPS, helpLink } from "../../lib/helpText";
 import { HowCounted } from "./HowCounted";
 
@@ -59,7 +60,7 @@ const n1 = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 1
 const WEIGHT_TONE = { High: "green", Medium: "sky", Low: "amber", "Very low": "neutral" } as const;
 
 const IMPORT_TIP = "Session credit includes an estimate based on import volume; active-day count reflects only the day of upload, not offline drafting time.";
-const IMAGE_TIP = "Disclosed for context only — image insertions are never scored or counted toward contribution share.";
+const IMAGE_TIP = "Each counted image adds a little to the member's kept-text share, up to the project's limit. Duplicate and very small images are not counted.";
 
 function InfoIcon() {
   return (
@@ -174,6 +175,7 @@ function viewOf(member: AnyScoredMember, memberRoles: MemberRoleInfo[] | undefin
     combined: isCombinedMember(member) ? member : null,
     importedChars: docs && docs.importNote ? docs.importedRetainedChars : 0,
     images: docs?.insertedImageCount ?? 0,
+    imageLine: instructorImageLine(docs?.insertedImageCount ?? 0, docs?.countedImageCount),
   };
 }
 
@@ -184,7 +186,7 @@ function MemberSidebar({
   member, source, thresholds, deadlineBasis, memberCount, memberRoles, disputed, flagOutcomes, onOpenDisputes, flagsMuted, flagsMayChange,
 }: ColumnProps) {
   const fairPct = memberCount > 0 ? 100 / memberCount : null;
-  const { info, combined, importedChars, images } = viewOf(member, memberRoles);
+  const { info, combined, importedChars, imageLine } = viewOf(member, memberRoles);
   const notes = info?.mismatchNotes ?? [];
   const tasks = info?.taskSummary;
   const summary = scoreDriverSummary(member);
@@ -260,7 +262,7 @@ function MemberSidebar({
             {onOpenDisputes && <button type="button" onClick={onOpenDisputes} className={BUTTON_SECONDARY}>View disputes</button>}
           </div>
         )}
-        {(notes.length > 0 || !!tasks || importedChars > 0 || images > 0) && (
+        {(notes.length > 0 || !!tasks || importedChars > 0 || !!imageLine) && (
           <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
             {notes.map((note) => <p key={note}><span className="font-semibold">Context: </span>{note}</p>)}
             {tasks && (
@@ -279,9 +281,9 @@ function MemberSidebar({
                 <HoverTip label="About this import">{IMPORT_TIP}</HoverTip>
               </p>
             )}
-            {images > 0 && (
+            {imageLine && (
               <p className="flex flex-wrap items-center gap-x-1">
-                <span><span className="font-semibold">Images: </span>{images} image{images === 1 ? "" : "s"} inserted</span>
+                <span><span className="font-semibold">Images: </span>{imageLine}</span>
                 <HoverTip label="About inserted images">{IMAGE_TIP}</HoverTip>
               </p>
             )}
@@ -300,7 +302,7 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings, wo
   const [rawOpen, setRawOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
 
-  const { gh, docs, importedChars, images } = viewOf(member, memberRoles);
+  const { gh, docs, importedChars, images, imageLine } = viewOf(member, memberRoles);
   const showGithub = source !== "document";
   const typeRows = fileTypeRows(gh);
   const impacts = impactRows(gh);
@@ -477,10 +479,10 @@ function MemberSections({ member, source, memberRoles, onOpenScoringSettings, wo
                   </dl>
                 </>
               ) : null}
-              {(importedChars > 0 || images > 0) && (
+              {(importedChars > 0 || !!imageLine) && (
                 <div className="mt-3 space-y-1 text-sm leading-normal text-slate-800">
                   {importedChars > 0 && <p><span className="font-semibold">Import: </span>{n(importedChars)} characters imported from .docx (session credit includes an estimate).</p>}
-                  {images > 0 && <p><span className="font-semibold">Images: </span>{images} inserted (disclosed only, never scored).</p>}
+                  {imageLine && <p><span className="font-semibold">Images: </span>{imageLine}</p>}
                 </div>
               )}
             </>
