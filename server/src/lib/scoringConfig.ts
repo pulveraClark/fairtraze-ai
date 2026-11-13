@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ProjectScoringConfig } from "@shared/types.js";
+import type { ProjectScoringConfig, DocumentScoringWeights } from "@shared/types.js";
+import { DOCUMENT_DEFAULT_WEIGHTS, DEFAULT_BLEND_WEIGHTS, weightsAreValid } from "@shared/weights.js";
 
 // Scoring settings live on Assignment (the "project" in the UI) and apply to every group in it.
 // The legacy same-named columns on Project are no longer read.
@@ -13,6 +14,9 @@ export interface ScoringConfigRow {
   deadlineDrivenThreshold: number;
   weightGithub: number;
   weightDocs: number;
+  docsWeightRetainedText: number;
+  docsWeightSessions: number;
+  docsWeightActiveDays: number;
 }
 
 export const ASSIGNMENT_CONFIG_SELECT = {
@@ -24,14 +28,22 @@ export const ASSIGNMENT_CONFIG_SELECT = {
   deadlineDrivenThreshold: true,
   weightGithub: true,
   weightDocs: true,
+  docsWeightRetainedText: true,
+  docsWeightSessions: true,
+  docsWeightActiveDays: true,
 } as const;
 
 // Mirrors shared/src/scoring.ts defaults; used for groups without an assignment.
 export const DEFAULT_SCORING_CONFIG: ProjectScoringConfig = {
   weights:    { commits: 0.4, lines: 0.4, activeDays: 0.2 },
   thresholds: { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 },
-  blend:      { wGitHub: 0.5, wDocs: 0.5 },
+  blend:      { ...DEFAULT_BLEND_WEIGHTS },
+  docsWeights: { ...DOCUMENT_DEFAULT_WEIGHTS },
 };
+
+// Docs weights used before scoring rules version 3 (fixed in code). A report snapshot saved without
+// docsWeights was scored with these.
+const LEGACY_DOCS_WEIGHTS: DocumentScoringWeights = { retainedText: 0.6, sessions: 0.2, activeDays: 0.2 };
 
 // blend is always populated on the returned config regardless of sourceType; only meaningful for COMBINED.
 export function assignmentScoringConfig(a: ScoringConfigRow | null | undefined): ProjectScoringConfig {
@@ -40,14 +52,16 @@ export function assignmentScoringConfig(a: ScoringConfigRow | null | undefined):
     weights: { commits: a.weightCommits, lines: a.weightLines, activeDays: a.weightActiveDays },
     thresholds: { freeRider: a.freeRiderThreshold, overload: a.overloadThreshold, deadlineDriven: a.deadlineDrivenThreshold },
     blend: { wGitHub: a.weightGithub, wDocs: a.weightDocs },
+    docsWeights: { retainedText: a.docsWeightRetainedText, sessions: a.docsWeightSessions, activeDays: a.docsWeightActiveDays },
   };
 }
 
 const EPSILON = 1e-6;
 const same = (x: number, y: number) => Math.abs(x - y) <= EPSILON;
 
-// Value equality of two configs. `blend` is compared only when `includeBlend` (COMBINED).
-export function configsEqual(a: ProjectScoringConfig, b: ProjectScoringConfig, includeBlend: boolean): boolean {
+// Value equality of two configs. `blend` is compared only when `includeBlend` (COMBINED); the Docs
+// weights only when `includeDocs` (EDITOR and COMBINED; defaults to `includeBlend`).
+export function configsEqual(a: ProjectScoringConfig, b: ProjectScoringConfig, includeBlend: boolean, includeDocs: boolean = includeBlend): boolean {
   if (!same(a.weights.commits, b.weights.commits) || !same(a.weights.lines, b.weights.lines)
     || !same(a.weights.activeDays, b.weights.activeDays)) return false;
   if (!same(a.thresholds.freeRider, b.thresholds.freeRider) || !same(a.thresholds.overload, b.thresholds.overload)
@@ -55,6 +69,11 @@ export function configsEqual(a: ProjectScoringConfig, b: ProjectScoringConfig, i
   if (includeBlend) {
     if (!a.blend || !b.blend) return false;
     if (!same(a.blend.wGitHub, b.blend.wGitHub) || !same(a.blend.wDocs, b.blend.wDocs)) return false;
+  }
+  if (includeDocs) {
+    const da = a.docsWeights ?? LEGACY_DOCS_WEIGHTS;
+    const db = b.docsWeights ?? LEGACY_DOCS_WEIGHTS;
+    if (!same(da.retainedText, db.retainedText) || !same(da.sessions, db.sessions) || !same(da.activeDays, db.activeDays)) return false;
   }
   return true;
 }
@@ -74,6 +93,12 @@ export const scoringConfigBodySchema = z.object({
     wGitHub: z.number().min(0).max(1),
     wDocs:   z.number().min(0).max(1),
   }),
+  // Optional so an older client that does not send it leaves the stored Docs weights unchanged.
+  docsWeights: z.object({
+    retainedText: z.number().min(0).max(1),
+    sessions:     z.number().min(0).max(1),
+    activeDays:   z.number().min(0).max(1),
+  }).optional(),
 });
 
 // Returns an error message, or null when the weights/blend sums are valid (±0.001).
@@ -86,6 +111,13 @@ export function validateConfigSums(c: z.infer<typeof scoringConfigBodySchema>): 
   if (Math.abs(blendSum - 1.0) > 0.001) {
     return `Blend weights must sum to 1.0 (got ${blendSum.toFixed(3)}). Adjust wGitHub/wDocs so they add up to exactly 1.`;
   }
+  if (c.docsWeights) {
+    const d = c.docsWeights;
+    if (!weightsAreValid([d.retainedText, d.sessions, d.activeDays])) {
+      const docsSum = d.retainedText + d.sessions + d.activeDays;
+      return `Docs weights add up to ${docsSum.toFixed(2)}. They must add up to 1.00.`;
+    }
+  }
   return null;
 }
 
@@ -97,6 +129,8 @@ export async function saveAssignmentScoringConfig(
   next: ProjectScoringConfig,
 ): Promise<ProjectScoringConfig> {
   const current = assignmentScoringConfig(assignment);
+  // A client that sends no Docs weights keeps the stored ones.
+  next = { ...next, docsWeights: next.docsWeights ?? current.docsWeights };
   if (configsEqual(current, next, true)) return current;
   await prismaClient.$transaction([
     prismaClient.assignment.update({
@@ -110,6 +144,9 @@ export async function saveAssignmentScoringConfig(
         deadlineDrivenThreshold: next.thresholds.deadlineDriven,
         weightGithub:            next.blend!.wGitHub,
         weightDocs:              next.blend!.wDocs,
+        docsWeightRetainedText:  next.docsWeights!.retainedText,
+        docsWeightSessions:      next.docsWeights!.sessions,
+        docsWeightActiveDays:    next.docsWeights!.activeDays,
       },
     }),
     prismaClient.project.updateMany({

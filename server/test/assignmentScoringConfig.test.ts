@@ -16,6 +16,7 @@ const NEW_CONFIG = {
   weights: { commits: 0.5, lines: 0.3, activeDays: 0.2 },
   thresholds: { freeRider: 0.4, overload: 2, deadlineDriven: 0.7 },
   blend: { wGitHub: 0.6, wDocs: 0.4 },
+  docsWeights: { retainedText: 0.5, sessions: 0.25, activeDays: 0.25 },
 };
 
 function contributor(login: string, commits: number): GitHubContributorData {
@@ -143,7 +144,8 @@ describe("project-level scoring settings", () => {
 
     // Same values as the current (default) settings, with float noise below epsilon.
     const unchanged = { ...NEW_CONFIG, weights: { commits: 0.4 + 1e-9, lines: 0.4, activeDays: 0.2 },
-      thresholds: { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 }, blend: { wGitHub: 0.5, wDocs: 0.5 } };
+      thresholds: { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 }, blend: { wGitHub: 0.55, wDocs: 0.45 },
+      docsWeights: { retainedText: 0.37, sessions: 0.30, activeDays: 0.33 } };
     expect((await saveConfig(assignment.id, instructor, unchanged)).status).toBe(200);
     let summary = await getSummary(instructor);
     expect(summary.every((s) => s.scoringConfigChangedAt === null && !s.settingsOutdated)).toBe(true);
@@ -181,6 +183,63 @@ describe("project-level scoring settings", () => {
     expect((await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, blend: { wGitHub: 0.9, wDocs: 0.5 } })).status).toBe(400);
   });
 
+  it("rejects Docs weights that do not add up to 1.00 with a clear message, and keeps the stored ones", async () => {
+    const { instructor, assignment } = await setup("COMBINED");
+    const res = await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, docsWeights: { retainedText: 0.4, sessions: 0.3, activeDays: 0.25 } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Docs weights add up to 0.95. They must add up to 1.00.");
+    const row = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+    expect([row.docsWeightRetainedText, row.docsWeightSessions, row.docsWeightActiveDays]).toEqual([0.37, 0.30, 0.33]);
+  });
+
+  it("saves Docs weights, keeps them when an older client omits them, and marks groups stale only on a real change", async () => {
+    const { instructor, assignment, groups } = await setup("COMBINED");
+    expect((await saveConfig(assignment.id, instructor)).status).toBe(200);
+    let row = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+    expect([row.docsWeightRetainedText, row.docsWeightSessions, row.docsWeightActiveDays]).toEqual([0.5, 0.25, 0.25]);
+
+    const { docsWeights: _omit, ...withoutDocs } = NEW_CONFIG;
+    expect((await saveConfig(assignment.id, instructor, withoutDocs)).status).toBe(200);
+    row = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+    expect(row.docsWeightRetainedText).toBe(0.5);
+
+    // Only the Docs weights change -> groups are marked stale.
+    await prisma.project.updateMany({ where: { assignmentId: assignment.id }, data: { scoringConfigChangedAt: null } });
+    const changed = { ...NEW_CONFIG, docsWeights: { retainedText: 0.4, sessions: 0.3, activeDays: 0.3 } };
+    expect((await saveConfig(assignment.id, instructor, changed)).status).toBe(200);
+    const after = await prisma.project.findMany({ where: { id: { in: groups.map((g) => g.id) } } });
+    expect(after.every((g) => g.scoringConfigChangedAt !== null)).toBe(true);
+  });
+
+  it("a Docs-only analysis uses the project's Docs weights and thresholds and snapshots them", async () => {
+    const { instructor, assignment, groups } = await setup("GITHUB");
+    await prisma.assignment.update({ where: { id: assignment.id }, data: { sourceType: "EDITOR" } });
+    expect((await saveConfig(assignment.id, instructor)).status).toBe(200);
+    await analyze(groups[0].id, instructor);
+    const r = await getReport(groups[0].id, instructor);
+    expect(r.scoringConfig?.thresholds).toEqual(NEW_CONFIG.thresholds);
+    expect((r.scoringConfig as { docsWeights?: unknown } | null)?.docsWeights).toEqual(NEW_CONFIG.docsWeights);
+  });
+
+  it("the migration's data step moves only untouched 0.5 / 0.5 blends to 0.55 / 0.45", async () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL("../prisma/migrations/20261113100000_docs_weights_ahp_defaults/migration.sql", import.meta.url)), "utf8");
+    const update = sql.split("
+").filter((l) => !l.trim().startsWith("--")).join("
+").split(";").map((x) => x.trim()).find((x) => x.startsWith("UPDATE"))!;
+    const { user } = await createUser({ systemRole: "INSTRUCTOR" });
+    const cls = await createClassSection(user.id);
+    const untouched = await createAssignment(cls.id);
+    const custom = await createAssignment(cls.id);
+    await prisma.assignment.update({ where: { id: untouched.id }, data: { weightGithub: 0.5, weightDocs: 0.5 } });
+    await prisma.assignment.update({ where: { id: custom.id }, data: { weightGithub: 0.7, weightDocs: 0.3 } });
+    await prisma.$executeRawUnsafe(update);
+    const u = await prisma.assignment.findUniqueOrThrow({ where: { id: untouched.id } });
+    const c = await prisma.assignment.findUniqueOrThrow({ where: { id: custom.id } });
+    expect([u.weightGithub, u.weightDocs]).toEqual([0.55, 0.45]);
+    expect([c.weightGithub, c.weightDocs]).toEqual([0.7, 0.3]);
+  });
+
   it("legacy PATCH /api/projects/:id/config writes the assignment, not the group", async () => {
     const { instructor, assignment, groups } = await setup();
     const res = await request(app)
@@ -202,7 +261,7 @@ describe("project-level scoring settings", () => {
 
 describe("configsEqual", () => {
   it("compares with epsilon and ignores blend unless COMBINED", () => {
-    const a = assignmentScoringConfig({ weightCommits: 0.4, weightLines: 0.4, weightActiveDays: 0.2, freeRiderThreshold: 0.5, overloadThreshold: 1.75, deadlineDrivenThreshold: 0.6, weightGithub: 0.5, weightDocs: 0.5 });
+    const a = assignmentScoringConfig({ weightCommits: 0.4, weightLines: 0.4, weightActiveDays: 0.2, freeRiderThreshold: 0.5, overloadThreshold: 1.75, deadlineDrivenThreshold: 0.6, weightGithub: 0.5, weightDocs: 0.5, docsWeightRetainedText: 0.37, docsWeightSessions: 0.30, docsWeightActiveDays: 0.33 });
     const b = { ...a, weights: { ...a.weights, commits: 0.4 + 1e-9 }, blend: { wGitHub: 0.7, wDocs: 0.3 } };
     expect(configsEqual(a, b, false)).toBe(true);
     expect(configsEqual(a, b, true)).toBe(false);
@@ -253,7 +312,7 @@ describe("migration backfill rule", () => {
     const u = await prisma.assignment.findUniqueOrThrow({ where: { id: uniform.id } });
     expect(u).toMatchObject(CUSTOM);
     const c = await prisma.assignment.findUniqueOrThrow({ where: { id: conflicting.id } });
-    expect(c).toMatchObject({ weightCommits: 0.4, weightLines: 0.4, weightActiveDays: 0.2, freeRiderThreshold: 0.5, overloadThreshold: 1.75, deadlineDrivenThreshold: 0.6, weightGithub: 0.5, weightDocs: 0.5 });
+    expect(c).toMatchObject({ weightCommits: 0.4, weightLines: 0.4, weightActiveDays: 0.2, freeRiderThreshold: 0.5, overloadThreshold: 1.75, deadlineDrivenThreshold: 0.6, weightGithub: 0.55, weightDocs: 0.45 });
     const e = await prisma.assignment.findUniqueOrThrow({ where: { id: empty.id } });
     expect(e.weightCommits).toBe(0.4);
 

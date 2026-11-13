@@ -6,6 +6,7 @@ import type { ScoredMember, TeamReport } from "@shared/types.js";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
 import { createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership } from "./factories.js";
+import { SCORING_RULES_VERSION } from "@shared/scoringRules.js";
 
 const app = createApp();
 
@@ -40,7 +41,7 @@ async function seed(days: [number, number], shares: [number, number] = [0.7, 0.3
     memberCount: 2, gini: 0.4, teamHealth: "High Risk", deadlineWindowBasis: "activity-span",
   };
   const row = await prisma.report.create({
-    data: { projectId: project.id, gini: report.gini, teamHealth: report.teamHealth, content: JSON.stringify({ report, narrative: null, scoringRulesVersion: 2 }) },
+    data: { projectId: project.id, gini: report.gini, teamHealth: report.teamHealth, content: JSON.stringify({ report, narrative: null, scoringRulesVersion: SCORING_RULES_VERSION }) },
   });
   return { instructor, project, a, row };
 }

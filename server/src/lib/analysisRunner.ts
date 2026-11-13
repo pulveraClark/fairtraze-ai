@@ -263,7 +263,9 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     const rawMembers = await computeDocumentRawStats(project.document?.id ?? null, roster);
     emitDocsProgress(progress, rawMembers);
     progress.emit("compute", {});
-    const report = computeDocumentTeamReport(rawMembers, undefined, undefined, deadlineMs);
+    // Settings come from the group's project (Assignment); the value used is snapshotted into the report.
+    const scoringConfig: ProjectScoringConfig = assignmentScoringConfig(project.assignment);
+    const report = computeDocumentTeamReport(rawMembers, scoringConfig.docsWeights, scoringConfig.thresholds, deadlineMs);
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER] });
     const stored = existing?.content ? (JSON.parse(existing.content) as StoredReport) : {};
@@ -275,7 +277,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
         projectId,
         gini:      report.gini,
         teamHealth: report.teamHealth,
-        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig: null, scoringRulesVersion: SCORING_RULES_VERSION, ...policy.contentExtras }),
+        content:   JSON.stringify({ report, narrative: savedNarrative, unmatchedLogins: [], scoringConfig, scoringRulesVersion: SCORING_RULES_VERSION, ...policy.contentExtras }),
       },
     });
 
@@ -355,7 +357,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     progress.emit("compute", {});
     const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
 
-    const documentReport = computeDocumentTeamReport(documentRaw, undefined, undefined, deadlineMs);
+    const documentReport = computeDocumentTeamReport(documentRaw, scoringConfig.docsWeights, scoringConfig.thresholds, deadlineMs);
 
     const report = computeCombinedTeamReport(
       roster, githubRaw, githubReport.members, documentRaw, documentReport.members,

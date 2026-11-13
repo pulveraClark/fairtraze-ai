@@ -373,3 +373,18 @@ describe("active day needs real writing (MIN_ACTIVE_DAY_RETAINED_CHARS)", () => 
     expect(days(mk(undefined))).toBe(3);
   });
 });
+
+describe("computeDocumentTeamReport thresholds", () => {
+  it("uses the thresholds it is given (the runner now passes the project's)", () => {
+    const mk = (n: string, id: number, chars: number): RawDocumentMemberStats => ({
+      studentName: n, userId: id, githubUsername: n, retainedChars: chars, totalInsertedChars: chars,
+      totalDeletedChars: 0, selfDeletedChars: 0, sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
+    });
+    const members = [mk("a", 1, 900), mk("b", 2, 100)];
+    const defaults = computeDocumentTeamReport(members);
+    const strict = computeDocumentTeamReport(members, undefined, { freeRider: 0.9, overload: 1.1, deadlineDriven: 0.6 });
+    expect(strict.members[1].flags).toContain("free-rider");
+    expect(strict.members[0].flags).toContain("overload");
+    expect(defaults.members[1].flags).not.toContain("free-rider");
+  });
+});

@@ -116,9 +116,10 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
       : [];
 
     // Outdated = the stored snapshot differs from the project's current settings. Reports without a
-    // snapshot (EDITOR, legacy) can't be compared and never show as outdated. blend only matters for COMBINED.
+    // snapshot (legacy) can't be compared and never show as outdated. blend only matters for COMBINED;
+    // the Docs weights matter for EDITOR and COMBINED.
     const settingsOutdated = !!(stored?.scoringConfig && p.assignment
-      && !configsEqual(stored.scoringConfig, assignmentScoringConfig(p.assignment), p.assignment.sourceType === "COMBINED"));
+      && !configsEqual(stored.scoringConfig, assignmentScoringConfig(p.assignment), p.assignment.sourceType === "COMBINED", p.assignment.sourceType !== "GITHUB"));
 
     // Scored with older scoring rules (read-time; covers EDITOR reports, which store no snapshot).
     const rulesOutdated = isRulesOutdated(stored);

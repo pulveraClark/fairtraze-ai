@@ -289,8 +289,12 @@ model Assignment {
   freeRiderThreshold       Float @default(0.5)
   overloadThreshold        Float @default(1.75)
   deadlineDrivenThreshold  Float @default(0.6)
-  weightGithub             Float @default(0.5)
-  weightDocs               Float @default(0.5)
+  weightGithub             Float @default(0.55)
+  weightDocs               Float @default(0.45)
+  // Docs (editor) weights for EDITOR and COMBINED projects; expert-survey (AHP) defaults.
+  docsWeightRetainedText   Float @default(0.37)
+  docsWeightSessions       Float @default(0.30)
+  docsWeightActiveDays     Float @default(0.33)
   createdAt      DateTime     @default(now())
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   projects       Project[]
