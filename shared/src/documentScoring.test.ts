@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { computeDocumentTeamReport, TYPICAL_SESSION_CHARS_DEFAULT, DOCUMENT_DEFAULT_WEIGHTS, MIN_ACTIVE_DAY_RETAINED_CHARS } from "./documentScoring";
 import type { RawDocumentMemberStats } from "./types";
 
@@ -78,24 +78,53 @@ describe("computeDocumentTeamReport", () => {
     expect(report.members[0].effectiveRetainedChars).toBeCloseTo(75, 3);
   });
 
-  it("default document weights are 0.6 retained text / 0.2 sessions / 0.2 active days and sum to 1", () => {
-    expect(DOCUMENT_DEFAULT_WEIGHTS).toEqual({ retainedText: 0.6, sessions: 0.2, activeDays: 0.2 });
+  it("default document weights are 0.37 retained text / 0.30 sessions / 0.33 active days and sum to 1", () => {
+    expect(DOCUMENT_DEFAULT_WEIGHTS).toEqual({ retainedText: 0.37, sessions: 0.30, activeDays: 0.33 });
     const w = DOCUMENT_DEFAULT_WEIGHTS;
     expect(w.retainedText + w.sessions + w.activeDays).toBeCloseTo(1, 10);
   });
 
-  it("applies the default weights to the shares: contributionShare = 0.6 text + 0.2 sessions + 0.2 days", () => {
+  it("applies the default weights to the shares: contributionShare = 0.37 text + 0.30 sessions + 0.33 days", () => {
     const mk = (n: string, id: number, chars: number): RawDocumentMemberStats => ({
       studentName: n, userId: id, githubUsername: n, retainedChars: chars, totalInsertedChars: chars,
       totalDeletedChars: 0, selfDeletedChars: 0, sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
     });
     // Same sessions and days; A has 3x the retained text -> text share 0.75 / 0.25
     const r = computeDocumentTeamReport([mk("a", 1, 300), mk("b", 2, 100)]);
-    expect(r.members[0].contributionShare).toBeCloseTo(0.6 * 0.75 + 0.2 * 0.5 + 0.2 * 0.5, 3);
-    expect(r.members[1].contributionShare).toBeCloseTo(0.6 * 0.25 + 0.2 * 0.5 + 0.2 * 0.5, 3);
+    // contributionShare is rounded to 3 decimals, so compare to 2
+    expect(r.members[0].contributionShare).toBeCloseTo(0.37 * 0.75 + 0.30 * 0.5 + 0.33 * 0.5, 2);
+    expect(r.members[1].contributionShare).toBeCloseTo(0.37 * 0.25 + 0.30 * 0.5 + 0.33 * 0.5, 2);
   });
 
-  it("does not change the base formula weights or shape (0.6 retainedText / 0.2 sessions / 0.2 activeDays)", () => {
+  it("uses custom weights when they are valid", () => {
+    const mk = (n: string, id: number, chars: number): RawDocumentMemberStats => ({
+      studentName: n, userId: id, githubUsername: n, retainedChars: chars, totalInsertedChars: chars,
+      totalDeletedChars: 0, selfDeletedChars: 0, sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
+    });
+    const r = computeDocumentTeamReport([mk("a", 1, 300), mk("b", 2, 100)], { retainedText: 0.6, sessions: 0.2, activeDays: 0.2 });
+    expect(r.members[0].contributionShare).toBeCloseTo(0.6 * 0.75 + 0.2 * 0.5 + 0.2 * 0.5, 3);
+  });
+
+  it("invalid weights fall back to the defaults, log a warning and never throw", () => {
+    const mk = (n: string, id: number, chars: number): RawDocumentMemberStats => ({
+      studentName: n, userId: id, githubUsername: n, retainedChars: chars, totalInsertedChars: chars,
+      totalDeletedChars: 0, selfDeletedChars: 0, sessionCount: 1, sessionDates: ["2024-01-01T00:00:00Z"],
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const members = [mk("a", 1, 300), mk("b", 2, 100)];
+    const expected = computeDocumentTeamReport(members).members[0].contributionShare;
+    for (const bad of [
+      { retainedText: 0.5, sessions: 0.2, activeDays: 0.25 },       // adds up to 0.95
+      { retainedText: 1.2, sessions: -0.1, activeDays: -0.1 },      // out of range
+      { retainedText: NaN, sessions: 0.5, activeDays: 0.5 },
+    ]) {
+      expect(computeDocumentTeamReport(members, bad).members[0].contributionShare).toBe(expected);
+    }
+    expect(warn).toHaveBeenCalledTimes(3);
+    warn.mockRestore();
+  });
+
+  it("does not change the base formula shape (zero activity = share 0, inactive)", () => {
     const members: RawDocumentMemberStats[] = [
       {
         studentName: "A", userId: 1, githubUsername: "a",

@@ -5,9 +5,8 @@ import type {
 import { countDistinctAnalysisDays } from "./analysisDay.js";
 import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
-export const DOCUMENT_DEFAULT_WEIGHTS: DocumentScoringWeights = {
-  retainedText: 0.6, sessions: 0.2, activeDays: 0.2,
-};
+import { DOCUMENT_DEFAULT_WEIGHTS, resolveDocumentWeights } from "./weights.js";
+export { DOCUMENT_DEFAULT_WEIGHTS };
 
 // A day counts as an "active day" only if the member wrote at least this many characters that day
 // that are still in the final document (retained). One place for the threshold.
@@ -28,11 +27,13 @@ export const TYPICAL_SESSION_CHARS_DEFAULT = 600;
 
 export function computeDocumentTeamReport(
   rawMembers: RawDocumentMemberStats[],
-  weights: DocumentScoringWeights = DOCUMENT_DEFAULT_WEIGHTS,
+  weightsInput: DocumentScoringWeights = DOCUMENT_DEFAULT_WEIGHTS,
   thresholds: ScoringThresholds = DEFAULT_THRESHOLDS,
   deadline?: number | null,
   typicalSessionChars: number = TYPICAL_SESSION_CHARS_DEFAULT
 ): TeamReport<DocumentScoredMember> {
+  // Invalid weights (not 0-1, or not adding up to 1.00) fall back to the defaults with a warning.
+  const weights = resolveDocumentWeights(weightsInput);
   if (rawMembers.length === 0) {
     return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" };
   }

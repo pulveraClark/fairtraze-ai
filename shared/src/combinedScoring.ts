@@ -4,7 +4,8 @@ import type {
 } from "./types.js";
 import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
-export const DEFAULT_BLEND_WEIGHTS: BlendWeights = { wGitHub: 0.5, wDocs: 0.5 };
+import { DEFAULT_BLEND_WEIGHTS, resolveBlendWeights } from "./weights.js";
+export { DEFAULT_BLEND_WEIGHTS };
 
 export interface CombinedRosterMember {
   userId: number;
@@ -25,10 +26,12 @@ export function computeCombinedTeamReport(
   githubScored: ScoredMember[],
   documentRaw: RawDocumentMemberStats[],
   documentScored: DocumentScoredMember[],
-  blend: BlendWeights = DEFAULT_BLEND_WEIGHTS,
+  blendInput: BlendWeights = DEFAULT_BLEND_WEIGHTS,
   thresholds: ScoringThresholds = DEFAULT_THRESHOLDS,
   deadline?: number | null
 ): TeamReport<CombinedScoredMember> {
+  // Invalid blend (not 0-1, or not adding up to 1.00) falls back to the defaults with a warning.
+  const blend = resolveBlendWeights(blendInput);
   if (roster.length === 0) {
     return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" };
   }

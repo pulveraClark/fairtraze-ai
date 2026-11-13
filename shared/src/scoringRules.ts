@@ -4,7 +4,9 @@
 //   1 = original rules (every added line equal; Docs 0.4/0.2/0.4; UTC session-start days)
 //   2 = line type x file type x commit impact; Docs 0.6/0.2/0.2; Docs active day needs
 //       MIN_ACTIVE_DAY_RETAINED_CHARS retained characters; active days are Asia/Manila days
-export const SCORING_RULES_VERSION = 2;
+//   3 = expert-survey (AHP) defaults: Docs 0.37/0.30/0.33 (instructor-adjustable per project),
+//       GitHub/Docs blend 0.55/0.45
+export const SCORING_RULES_VERSION = 3;
 
 /** True when a stored report was scored with older rules. A missing version means version 1. */
 export function isRulesOutdated(stored: { scoringRulesVersion?: number } | null | undefined): boolean {

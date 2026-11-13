@@ -127,6 +127,9 @@ export interface ProjectScoringConfig {
   // currentConfig (server/src/routes/projects.ts) regardless of sourceType. Optional so historical
   // GITHUB/EDITOR report snapshots (which never set it) remain valid.
   blend?: BlendWeights;
+  // Docs (FairTraze Editor) weights; used by EDITOR and COMBINED projects. Optional so report
+  // snapshots saved before rules version 3 (fixed 0.6/0.2/0.2) remain valid.
+  docsWeights?: DocumentScoringWeights;
 }
 
 // ── Document (FairTraze Docs) scoring pipeline types — mirrors RawMemberStats/ScoredMember ──
@@ -202,7 +205,7 @@ export interface DocumentScoringWeights {
 // ── Combined (GitHub + Docs) scoring pipeline types ──────────────────────────
 
 // Blend weights for COMBINED-sourceType projects. Must sum to 1.0 (validated at the API layer,
-// same pattern as ScoringWeights). Default 50/50 — see shared/src/combinedScoring.ts.
+// same pattern as ScoringWeights). Default 0.55 / 0.45 — see shared/src/weights.ts.
 export interface BlendWeights {
   wGitHub: number;
   wDocs: number;

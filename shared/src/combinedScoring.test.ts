@@ -43,7 +43,14 @@ describe("computeCombinedTeamReport", () => {
     const githubScored   = computeTeamReport(githubRaw).members;
     const documentScored = computeDocumentTeamReport(documentRaw).members;
 
-    const report = computeCombinedTeamReport(roster, githubRaw, githubScored, documentRaw, documentScored);
+    // The default blend is now 0.55 / 0.45: a code-only and a docs-only member get exactly those shares.
+    const withDefault = computeCombinedTeamReport(roster, githubRaw, githubScored, documentRaw, documentScored);
+    expect(withDefault.members.find((m) => m.userId === 1)!.contributionShare).toBeCloseTo(0.55, 3);
+    expect(withDefault.members.find((m) => m.userId === 2)!.contributionShare).toBeCloseTo(0.45, 3);
+
+    const report = computeCombinedTeamReport(
+      roster, githubRaw, githubScored, documentRaw, documentScored, { wGitHub: 0.5, wDocs: 0.5 },
+    );
 
     const anna = report.members.find((m) => m.userId === 1)!;
     const ben  = report.members.find((m) => m.userId === 2)!;
@@ -53,7 +60,7 @@ describe("computeCombinedTeamReport", () => {
     expect(ben.githubContributionShare).toBeCloseTo(0, 3);
     expect(ben.documentContributionShare).toBeCloseTo(1, 3);
 
-    // Neither is penalized to zero for the source they didn't touch — default 50/50 blend
+    // Neither is penalized to zero for the source they didn't touch — explicit 50/50 blend
     expect(anna.contributionShare).toBeCloseTo(0.5, 3);
     expect(ben.contributionShare).toBeCloseTo(0.5, 3);
 
