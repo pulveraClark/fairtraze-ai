@@ -224,9 +224,7 @@ describe("project-level scoring settings", () => {
   it("the migration's data step moves only untouched 0.5 / 0.5 blends to 0.55 / 0.45", async () => {
     const sql = readFileSync(
       fileURLToPath(new URL("../prisma/migrations/20261113100000_docs_weights_ahp_defaults/migration.sql", import.meta.url)), "utf8");
-    const update = sql.split("
-").filter((l) => !l.trim().startsWith("--")).join("
-").split(";").map((x) => x.trim()).find((x) => x.startsWith("UPDATE"))!;
+    const update = sql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n").split(";").map((x) => x.trim()).find((x) => x.startsWith("UPDATE"))!;
     const { user } = await createUser({ systemRole: "INSTRUCTOR" });
     const cls = await createClassSection(user.id);
     const untouched = await createAssignment(cls.id);
