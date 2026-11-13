@@ -130,6 +130,9 @@ export interface ProjectScoringConfig {
   // Docs (FairTraze Editor) weights; used by EDITOR and COMBINED projects. Optional so report
   // snapshots saved before rules version 3 (fixed 0.6/0.2/0.2) remain valid.
   docsWeights?: DocumentScoringWeights;
+  // Image credit limit per member for Docs (EDITOR and COMBINED): 3, 5, 10 or null = no limit.
+  // Absent in older snapshots, which read as the default (5).
+  docsImageLimit?: number | null;
 }
 
 // ── Document (FairTraze Docs) scoring pipeline types — mirrors RawMemberStats/ScoredMember ──
@@ -158,10 +161,12 @@ export interface RawDocumentMemberStats {
   liveSessionCount?: number;              // EditSession count with source: LIVE only; falls back to sessionCount when absent
   importedRetainedChars?: number;         // of retainedChars, how many originated from source: IMPORT rows (unweighted, for display)
   importedWeightedRetainedChars?: number; // of weightedRetainedChars, the IMPORT-origin portion (drives session credit)
-  // Gross count of image nodes this user inserted (net new, not decremented on delete). Disclosed
-  // on the report only — never enters contributionShare or any share/weight formula. Optional so
-  // existing test fixtures without it still compile.
+  // Gross count of image nodes this user inserted (net new, not decremented on delete). Display
+  // only; the credit comes from countedImageCount below. Optional so existing fixtures compile.
   insertedImageCount?: number;
+  // Images still in the final document that are eligible for credit (one per content, big enough),
+  // before the project's image limit. Supplied by the server from the image registry.
+  countedImageCount?: number;
 }
 
 export interface DocumentScoredMember {
@@ -188,8 +193,11 @@ export interface DocumentScoredMember {
   // .docx-import scoring (step 3)
   importedRetainedChars: number; // echoes the raw imported count used in importNote's {N}
   importNote: string | null;
-  // Image insertion disclosure — never scored, purely echoed for display (see MemberTable.tsx).
+  // Gross images inserted: display only (the credit is countedImageCount).
   insertedImageCount: number;
+  // Images that earned credit after the project's limit (each adds IMAGE_CREDIT_CHARS to the
+  // retained-text term only).
+  countedImageCount: number;
 }
 
 export type DocumentTeamReport = TeamReport<DocumentScoredMember>;

@@ -9,6 +9,7 @@
     ".": "./src/types.ts",
     "./scoring": "./src/scoring.ts",
     "./documentScoring": "./src/documentScoring.ts",
+    "./imageCredit": "./src/imageCredit.ts",
     "./documentTemplates": "./src/documentTemplates.ts",
     "./analysisDay": "./src/analysisDay.ts",
     "./scoringRules": "./src/scoringRules.ts",

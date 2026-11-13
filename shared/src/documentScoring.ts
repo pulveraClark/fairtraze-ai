@@ -6,6 +6,7 @@ import { countDistinctAnalysisDays } from "./analysisDay.js";
 import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
 import { DOCUMENT_DEFAULT_WEIGHTS, resolveDocumentWeights } from "./weights.js";
+import { IMAGE_CREDIT_CHARS, DEFAULT_DOCS_IMAGE_LIMIT, applyImageLimit, resolveDocsImageLimit } from "./imageCredit.js";
 export { DOCUMENT_DEFAULT_WEIGHTS };
 
 // A day counts as an "active day" only if the member wrote at least this many characters that day
@@ -30,10 +31,13 @@ export function computeDocumentTeamReport(
   weightsInput: DocumentScoringWeights = DOCUMENT_DEFAULT_WEIGHTS,
   thresholds: ScoringThresholds = DEFAULT_THRESHOLDS,
   deadline?: number | null,
-  typicalSessionChars: number = TYPICAL_SESSION_CHARS_DEFAULT
+  typicalSessionChars: number = TYPICAL_SESSION_CHARS_DEFAULT,
+  // Per-member cap on counted images: 3, 5, 10 or null (no limit). Default 5.
+  imageLimit: number | null = DEFAULT_DOCS_IMAGE_LIMIT
 ): TeamReport<DocumentScoredMember> {
   // Invalid weights (not 0-1, or not adding up to 1.00) fall back to the defaults with a warning.
   const weights = resolveDocumentWeights(weightsInput);
+  const limit = resolveDocsImageLimit(imageLimit);
   if (rawMembers.length === 0) {
     return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" };
   }
@@ -49,7 +53,10 @@ export function computeDocumentTeamReport(
     // unweighted retainedChars input from Step 4. Falls back to retainedChars when absent so
     // existing callers/tests without the new field are unaffected.
     const weightedRetainedChars = m.weightedRetainedChars ?? m.retainedChars;
-    const effectiveRetainedChars = weightedRetainedChars * (1 - 0.5 * selfChurnRatio);
+    // Images add to the retained-text term only, after the self-churn discount (an image that is
+    // still in the document was not deleted). They never touch sessions or active days.
+    const countedImageCount = applyImageLimit(m.countedImageCount ?? 0, limit);
+    const effectiveRetainedChars = weightedRetainedChars * (1 - 0.5 * selfChurnRatio) + countedImageCount * IMAGE_CREDIT_CHARS;
     const editTypeBreakdown = m.editTypeBreakdown ?? { substantive: 0, revision: 0, formatting: 0, trivial: 0 };
     const liveSessionCount = m.liveSessionCount ?? m.sessionCount;
     const importedRetainedChars = m.importedRetainedChars ?? 0;
@@ -62,7 +69,7 @@ export function computeDocumentTeamReport(
     const logSessions = Math.log(liveSessionCount + importedWeightedRetainedChars / typicalSessionChars + 1);
     const activeDays = countActiveDays(m);
     const churn = m.totalInsertedChars + m.totalDeletedChars;
-    return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars, insertedImageCount };
+    return { ...m, selfChurnRatio, effectiveRetainedChars, weightedRetainedChars, editTypeBreakdown, logSessions, activeDays, churn, importedRetainedChars, insertedImageCount, countedImageCount };
   });
 
   const totalLogSessions            = baseStats.reduce((s, m) => s + m.logSessions, 0);
@@ -133,6 +140,7 @@ export function computeDocumentTeamReport(
         ? `Includes ${m.importedRetainedChars} characters imported from .docx — session credit includes an estimate based on import volume; active-day count reflects only the day of upload, not offline drafting time.`
         : null,
       insertedImageCount: m.insertedImageCount,
+      countedImageCount: m.countedImageCount,
     };
   });
 
