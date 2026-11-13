@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { DocBlockRenderer, type DocBlock } from "./DocBlockRenderer";
+import { BUTTON_SECONDARY } from "./ui/styles";
+import { formatAnalyzedExact } from "../lib/analysisFreshness";
+import { HISTORY_NOTE } from "../lib/docActionHints";
 
 interface SnapshotListItem {
   id: number;
@@ -19,17 +22,27 @@ interface Props {
   groupId: number;
 }
 
+function ProblemBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  // Never colour alone: the word "Problem", an icon and a Retry button carry the meaning too.
+  return (
+    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M12 8v5M12 16h.01" />
+      </svg>
+      <span><span className="font-semibold">Problem: </span>{text}</span>
+      {onRetry && <button type="button" onClick={onRetry} className={BUTTON_SECONDARY}>Retry</button>}
+    </div>
+  );
+}
+
 // Read-only browser for a group's document revision history (DocumentSnapshot rows — see
 // server/src/routes/documents.ts's GET /document/snapshots[/:snapshotId]). Entirely separate from
 // DocumentEditor.tsx: this never instantiates TipTap/useEditor or connects to the Yjs
 // collaboration room, so there is no live state to leave stale when switching back — it's plain
 // fetch-then-render over already-tested, already-persisted JSON.
 //
-// Banner uses fuchsia — deliberately distinct from every color already in use nearby: amber
-// (Import disclosure) and cyan (image disclosure) in MemberTable.tsx, emerald/red (toolbar
-// import/export feedback) in DocumentEditor.tsx, and indigo/violet (primary/secondary brand
-// accents, the latter already used for the FairTraze Docs card itself) in index.css — so this
-// reads as a clearly different mode, not another flavor of the existing disclosures or branding.
+// Times are shown on the school's Asia/Manila clock (same formatter as "Last analyzed"). Banner uses
+// fuchsia — deliberately distinct from the disclosure colours nearby, so it reads as a different mode.
 export function DocumentHistoryPanel({ groupId }: Props) {
   const { token } = useAuth();
   const [snapshots, setSnapshots] = useState<SnapshotListItem[] | null>(null);
@@ -37,10 +50,15 @@ export function DocumentHistoryPanel({ groupId }: Props) {
   const [selected, setSelected] = useState<SnapshotDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [lastOpenedId, setLastOpenedId] = useState<number | null>(null);
+  const versionHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const rowRefs = useRef(new Map<number, HTMLButtonElement>());
 
-  useEffect(() => {
-    if (!token) return;
+  const loadList = useCallback(() => {
+    if (!token) return () => {};
     let cancelled = false;
+    setListError(null);
+    setSnapshots(null);
     fetch(`/api/groups/${groupId}/document/snapshots`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -56,91 +74,109 @@ export function DocumentHistoryPanel({ groupId }: Props) {
     };
   }, [groupId, token]);
 
+  useEffect(() => loadList(), [loadList]);
+
+  // Focus follows the screen: opening a version moves focus to its heading, going back returns it to
+  // the row that was opened.
+  useEffect(() => {
+    if (selected) versionHeadingRef.current?.focus();
+  }, [selected]);
+  useEffect(() => {
+    if (!selected && snapshots && lastOpenedId != null) rowRefs.current.get(lastOpenedId)?.focus();
+  }, [selected, snapshots, lastOpenedId]);
+
   const openSnapshot = async (id: number) => {
     if (!token) return;
     setDetailLoading(true);
     setDetailError(null);
+    setLastOpenedId(id);
     try {
       const res = await fetch(`/api/groups/${groupId}/document/snapshots/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = (await res.json().catch(() => null)) as (SnapshotDetail & { error?: undefined }) | { error?: string } | null;
       if (!res.ok || !data || !("blocks" in data)) {
-        setDetailError((data as { error?: string } | null)?.error ?? "Could not load this snapshot.");
+        setDetailError((data as { error?: string } | null)?.error ?? "Could not load this version.");
         return;
       }
       setSelected(data);
     } catch {
-      setDetailError("Could not load this snapshot — check your connection and try again.");
+      setDetailError("Could not load this version. Check your connection and try again.");
     } finally {
       setDetailLoading(false);
     }
   };
 
   if (selected) {
+    const when = formatAnalyzedExact(selected.createdAt);
     return (
       <div>
         <div className="mb-4 flex items-center justify-between gap-3 flex-wrap rounded-lg border border-fuchsia-300 bg-fuchsia-50 px-4 py-2.5">
-          <p className="text-xs font-semibold text-fuchsia-700">
-            Viewing a historical snapshot from {new Date(selected.createdAt).toLocaleString()} — read-only
-          </p>
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            className="text-xs font-medium text-fuchsia-700 hover:text-fuchsia-900 underline shrink-0"
-          >
+          <h3 ref={versionHeadingRef} tabIndex={-1} className="text-sm font-semibold text-fuchsia-900 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">
+            Version saved {when} (Manila time), read-only
+          </h3>
+          <button type="button" onClick={() => setSelected(null)} className={`${BUTTON_SECONDARY} shrink-0`}>
             ← Back to history list
           </button>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6">
           <DocBlockRenderer blocks={selected.blocks} />
         </div>
       </div>
     );
   }
 
+  if (listError) {
+    return <ProblemBox text={listError} onRetry={loadList} />;
+  }
+
   if (snapshots === null) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-600">
+      <div role="status" aria-live="polite" className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-700">
         Loading history…
       </div>
     );
   }
 
-  if (listError) {
-    return <p className="text-xs text-red-600">{listError}</p>;
-  }
-
   if (snapshots.length === 0) {
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-        <p className="text-sm text-slate-500">
-          No history yet — snapshots are captured each time this group's document is analyzed.
+        <p className="text-sm text-slate-700">
+          No history yet. A version is saved each time this group's document is analyzed and has changed.
         </p>
+        <p className="mt-2 text-sm text-slate-700">{HISTORY_NOTE}</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-      {detailError && <p className="px-4 py-2 text-xs text-red-600">{detailError}</p>}
-      {snapshots.map((s) => (
-        <button
-          key={s.id}
-          type="button"
-          disabled={detailLoading}
-          onClick={() => openSnapshot(s.id)}
-          className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors disabled:opacity-50"
-        >
-          <div>
-            <p className="text-sm font-medium text-slate-700">{new Date(s.createdAt).toLocaleString()}</p>
-            {s.reportId != null && (
-              <p className="text-xs text-slate-600 mt-0.5">Captured from a saved analysis report</p>
-            )}
-          </div>
-          <span className="text-xs text-indigo-600 font-medium shrink-0">View →</span>
-        </button>
-      ))}
+    <div>
+      <div role="status" aria-live="polite" className="sr-only">{detailLoading ? "Opening version…" : ""}</div>
+      {detailError && <div className="mb-3"><ProblemBox text={detailError} /></div>}
+      <ul className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+        {snapshots.map((s) => {
+          const when = formatAnalyzedExact(s.createdAt);
+          return (
+            <li key={s.id}>
+              <button
+                type="button"
+                ref={(el) => { if (el) rowRefs.current.set(s.id, el); else rowRefs.current.delete(s.id); }}
+                disabled={detailLoading}
+                aria-label={`Open the version saved ${when}`}
+                onClick={() => openSnapshot(s.id)}
+                className="flex min-h-10 w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-indigo-600"
+              >
+                <span>
+                  <span className="block text-sm font-medium text-slate-900">{when}</span>
+                  {s.reportId != null && <span className="mt-0.5 block text-xs text-slate-700">Saved with an analysis</span>}
+                </span>
+                <span className="shrink-0 text-sm font-medium text-indigo-800" aria-hidden="true">View →</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-3 text-sm text-slate-700">{HISTORY_NOTE}</p>
     </div>
   );
 }
