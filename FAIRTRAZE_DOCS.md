@@ -353,7 +353,7 @@ combinedContributionShare =
   + wDocs    × documentContributionShare
 ```
 
-**Default blend:** `wGitHub = 0.5`, `wDocs = 0.5` (50/50).
+**Default blend:** `wGitHub = 0.55`, `wDocs = 0.45` (expert-survey (AHP) defaults; the instructor can change them per project).
 
 The blend weights are set by the instructor per assignment and must sum to 1.0. All flags, Gini coefficient, and team-health label are computed from `combinedContributionShare`. This ensures that the fairness assessment reflects the complete contribution picture.
 
@@ -889,7 +889,7 @@ Four new software modules are required to implement FairTraze Docs. Each has a d
 **UC-I-D3: Configure the source blend weight**
 - **Actor:** Instructor
 - **Trigger:** Instructor creates or edits an assignment.
-- **Flow:** A slider or input pair lets the instructor set `wGitHub` and `wDocs` (constrained to sum to 1.0). The current selection is shown (e.g., "70% GitHub, 30% Docs"). The default is 50/50. The instructor saves the assignment.
+- **Flow:** A slider or input pair lets the instructor set `wGitHub` and `wDocs` (constrained to sum to 1.0). The current selection is shown (e.g., "70% GitHub, 30% Docs"). The default is 55/45. The instructor saves the assignment.
 - **Result:** All subsequent analyses for this assignment use the configured weights.
 
 **UC-I-D4: View the group document as context**

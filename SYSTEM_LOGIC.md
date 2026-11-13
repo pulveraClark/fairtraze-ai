@@ -732,7 +732,7 @@ The `Report.content` column stores a JSON string with this shape:
 }
 ```
 
-`scoringRulesVersion` is `SCORING_RULES_VERSION` at analysis time. A report without it (or lower) is reported as `rulesOutdated` at read time; nothing is recomputed. Version 2 = line-type weighting, Docs weights 0.6/0.2/0.2, a Docs active day needs 30 retained characters, active days in Asia/Manila time.
+`scoringRulesVersion` is `SCORING_RULES_VERSION` at analysis time. A report without it (or lower) is reported as `rulesOutdated` at read time; nothing is recomputed. Version 2 = line-type weighting, Docs weights 0.6/0.2/0.2, a Docs active day needs 30 retained characters, active days in Asia/Manila time. Version 3 = expert-survey (AHP) defaults: Docs weights 0.37/0.30/0.33 (now stored per project on `Assignment` and adjustable in Scoring settings) and a 0.55/0.45 GitHub/Docs blend.
 
 `Report.gini` and `Report.teamHealth` are also stored as separate top-level columns (Float? and String?) for efficient querying by the summary endpoint without parsing JSON.
 

@@ -11,6 +11,7 @@ import {
   MODERATE_RISK_GINI_THRESHOLD,
 } from "@shared/scoring";
 import { DOCUMENT_DEFAULT_WEIGHTS, MIN_ACTIVE_DAY_RETAINED_CHARS } from "@shared/documentScoring";
+import { DEFAULT_BLEND_WEIGHTS } from "@shared/weights";
 import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
 import { FILE_WEIGHTS } from "@shared/fileWeights";
 import { COMMIT_IMPACT } from "@shared/commitClassifier";
@@ -158,7 +159,7 @@ function DataSources() {
           combinedShare = w<sub>GitHub</sub> × githubShare + w<sub>Docs</sub> × editorShare
         </p>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Default blend 50 / 50; the instructor can adjust it per project in Scoring Settings. Each
+          Default blend {Math.round(DEFAULT_BLEND_WEIGHTS.wGitHub * 100)} / {Math.round(DEFAULT_BLEND_WEIGHTS.wDocs * 100)}; the instructor can adjust it per project in Scoring Settings. Each
           source is normalized on its own before blending, and flags use one merged timeline from
           both sources. The math stays deterministic; the AI only explains the result.
         </p>

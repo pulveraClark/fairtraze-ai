@@ -316,7 +316,7 @@ For assignments where both GitHub and document contributions are relevant, the s
 Combined Share = (GitHub Share × GitHub weight) + (Docs Share × Docs weight)
 ```
 
-The default blend is 50/50, configurable per assignment by the instructor. Both sources go through the same deterministic math — the AI explains the combined result but does not compute it.
+The default blend is 55/45 (GitHub/Docs), configurable per assignment by the instructor. Both sources go through the same deterministic math — the AI explains the combined result but does not compute it.
 
 ## Role-Source Mismatch Detection (Working Now)
 

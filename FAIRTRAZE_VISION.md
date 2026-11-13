@@ -233,7 +233,7 @@ Each source is scored independently, producing a per-source **contribution share
 combinedShare = wGitHub × githubShare + wEditor × editorShare
 ```
 
-The default blend is **50% GitHub, 50% FairTraze Docs**. The instructor can adjust these weights per assignment — for example, setting 70% GitHub / 30% Docs for a coding-heavy project, or 30% GitHub / 70% Docs for a project where documentation is the primary deliverable.
+The default blend is **55% GitHub, 45% FairTraze Docs** (expert-survey values). The instructor can adjust these weights per assignment — for example, setting 70% GitHub / 30% Docs for a coding-heavy project, or 30% GitHub / 70% Docs for a project where documentation is the primary deliverable.
 
 The math-scores-AI-explains principle applies fully to combined scoring. The blending formula is deterministic; the AI only narrates the result.
 
@@ -617,7 +617,7 @@ The FairTraze Docs scoring model mirrors the GitHub model's structure. The four 
 The same `contributionShare` formula applies within the editor source, via `DOCUMENT_DEFAULT_WEIGHTS`:
 
 ```
-editorShare = 0.6 × retainedTextShare + 0.2 × sessionShare + 0.2 × activeDaysShare
+editorShare = 0.37 × retainedTextShare + 0.30 × sessionShare + 0.33 × activeDaysShare   (defaults; instructor-adjustable per project)
 ```
 
 Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — retained text is the primary editor signal. An editor active day needs at least 30 characters written that day that are still in the final document (Philippine-time days).

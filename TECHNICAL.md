@@ -137,7 +137,7 @@ linesShare     = member.effectiveAdditions / sum(all effectiveAdditions)
 activeDaysShare = member.activeDays / sum(all activeDays)
 ```
 
-- `activeDays` = count of distinct Asia/Manila calendar days (YYYY-MM-DD, `analysisDayOf` in `shared/src/analysisDay.ts`) that appear in the member's commit timestamps. Docs: days with at least `MIN_ACTIVE_DAY_RETAINED_CHARS` (30) retained characters written that day (Docs weights are now 0.6 retained text / 0.2 sessions / 0.2 active days).
+- `activeDays` = count of distinct Asia/Manila calendar days (YYYY-MM-DD, `analysisDayOf` in `shared/src/analysisDay.ts`) that appear in the member's commit timestamps. Docs: days with at least `MIN_ACTIVE_DAY_RETAINED_CHARS` (30) retained characters written that day (Docs weights default to 0.37 retained text / 0.30 sessions / 0.33 active days, the expert-survey (AHP) values; the instructor can change them per project, and the GitHub/Docs blend defaults to 0.55 / 0.45).
 - If a total is zero (e.g., no commits at all), the corresponding share is 0.
 
 ### Lines signal: what real runs score

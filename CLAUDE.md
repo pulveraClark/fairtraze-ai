@@ -83,7 +83,7 @@ Each source produces its own per-member contribution share, normalised independe
 combinedShare = wGitHub × githubShare + wDocs × editorShare
 ```
 
-Default blend: 50/50 (`weightGithub = 0.5`, `weightDocs = 0.5` on `Assignment`). Instructor-configurable **per project** (the `Assignment` model — "project" in the UI; a "group" is the `Project` model) via Scoring Settings; applies to GitHub and Combined projects and to every group in the project. The blending is deterministic; the AI only writes the plain-language narrative. The math-scores-AI-explains principle is fully preserved. `flags` (including `deadline-driven`) are computed from a **unified timeline** merging both sources' timestamps, not from either source alone — see `combinedScoring.test.ts`.
+Default blend: 55/45 (`weightGithub = 0.55`, `weightDocs = 0.45` on `Assignment`; expert-survey (AHP) values). Instructor-configurable **per project** (the `Assignment` model — "project" in the UI; a "group" is the `Project` model) via Scoring Settings; applies to GitHub and Combined projects and to every group in the project. The blending is deterministic; the AI only writes the plain-language narrative. The math-scores-AI-explains principle is fully preserved. `flags` (including `deadline-driven`) are computed from a **unified timeline** merging both sources' timestamps, not from either source alone — see `combinedScoring.test.ts`.
 
 ### Identity
 Editor activity is tied to the logged-in `User` account — stronger than GitHub's self-registered usernames (a user cannot mis-attribute their own edits). The same identity unifies activity across both sources; there is no per-group re-registration of editor credentials.
@@ -148,7 +148,7 @@ A member can resize an inserted image via a corner drag handle (aspect ratio loc
 Unlike Comments, a "suggestion" is provisional content that becomes real document content on accept — indistinguishable, once accepted, from a normal typed edit to `authorshipCapture.ts`'s diffing. That means accept/reject cannot avoid interacting with the same collab write path this project has needed four real rounds of hardening on (the writeState/bindState restore race, the authorshipCapture registration-lag race, the room-eviction limitation, the template-picker typing race) — either a new origin/`EditSource` variant would need to thread through `authorshipCapture.ts`'s origin-dispatch logic, or the existing origin-based attribution would silently (and very likely wrongly) credit whoever's WebSocket connection performs the accept transaction, not who wrote the suggested words. Separately, "who gets credit for an accepted suggestion — the suggester, the accepter, or a split" has no safe default and needs an explicit instructor-facing policy decision made outside of an implementation PR, the same way role-based score re-weighting is already treated as "optional and not the default... requires explicit instructor configuration" (see "Roles never change scores" above). Revisit only once both an explicit scoring policy exists and there's a specific reason to believe the collab pipeline has stopped surfacing new timing bugs — neither is true today. Edits-to-others'-text review credit is out of scope for the same reason: it's a variant of the same suggestion-acceptance problem, not a separate one.
 
 ### Default weights (`DOCUMENT_DEFAULT_WEIGHTS`)
-`retainedText: 0.6, sessions: 0.2, activeDays: 0.2` (rules version 2; was 0.4/0.2/0.4). Retained text is the primary signal; this is not a 1:1 mirror of the GitHub weights (0.4/0.4/0.2).
+`retainedText: 0.37, sessions: 0.30, activeDays: 0.33` (rules version 3, expert-survey (AHP) values; was 0.6/0.2/0.2 in version 2 and 0.4/0.2/0.4 before). They live in `shared/src/weights.ts`, are stored per project as `Assignment.docsWeightRetainedText/Sessions/ActiveDays` (migration `20261113100000_docs_weights_ahp_defaults`), and the instructor edits them in Scoring settings ("Writing weights (Docs)", EDITOR and COMBINED projects). `resolveDocumentWeights`/`resolveBlendWeights` fall back to the defaults with a console warning when a set is not 0-1 or does not add up to 1.00 (never throw, never rescale). The runner passes the project's Docs weights and flag thresholds for EDITOR and COMBINED and snapshots them in `Report.content.scoringConfig`.
 
 ### GitHub → Editor signal mapping
 
@@ -508,7 +508,10 @@ contributionShare  = 0.4 × commitShare + 0.4 × linesShare + 0.2 × activeDaysS
 ```
 When `weightedAdditions` is absent (e.g. in existing tests), `effectiveAdditions` falls back to `meaningfulLines`.
 
-### Scoring rules version 2 (approved change; `SCORING_RULES_VERSION = 2`)
+### Scoring rules version 3 (`SCORING_RULES_VERSION = 3`; version 2 below, then the version 3 change)
+Version 3 adds the expert-survey (AHP) defaults: Docs 0.37/0.30/0.33, blend 0.55/0.45, and instructor-adjustable Docs weights per project. Reports saved with an older version read as outdated at read time; the nightly run re-analyzes them.
+
+### Scoring rules version 2 (approved change)
 **Scoring rules version 2** (`SCORING_RULES_VERSION`, `shared/src/scoringRules.ts`) bundles: line-type weighting in real runs; Docs weights 0.6/0.2/0.2; a Docs active day needs 30+ retained characters written that day; and active days (GitHub and Docs) are **Asia/Manila** calendar days via one helper, `shared/src/analysisDay.ts` (`analysisDayOf`; the same time zone as the task due sweep). The deadline/last-third window uses exact timestamps, not days, so it is unchanged. Each new report stores `scoringRulesVersion` in `Report.content`; reports without it (or older) are flagged `rulesOutdated` **at read time** (never recomputed): instructors see "Scoring was updated. Re-analyze to apply the new rules."; students see one calm line "This report uses older scoring rules. It updates when your instructor re-analyzes." Bump the constant for any future change that alters scores.
 
 ## Audience and tone
