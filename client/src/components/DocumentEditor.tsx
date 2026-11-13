@@ -31,6 +31,7 @@ import type { AuthorshipUpdate, AuthorshipUser, AuthorshipDecorationInput } from
 import { CommentHighlight, commentHighlightPluginKey } from "../lib/commentHighlight";
 import type { CommentDecorationRange } from "../lib/commentHighlight";
 import { encodeCommentAnchor, decodeCommentAnchor } from "../lib/commentAnchor";
+import { sameComments, newCommentCount, newCommentsText, openThreadCount } from "../lib/commentsPoll";
 import { insertImageFile } from "../lib/imageInsert";
 import { starterKitOptions, formattingExtensions, EditorShortcuts } from "../lib/formattingExtensions";
 import type { EditorShortcutHandlers } from "../lib/formattingExtensions";
@@ -618,25 +619,72 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
     editor.view.dispatch(editor.state.tr.setMeta(authorshipPluginKey, decorationInput));
   }, [editor, showAuthorship, memberIds]);
 
-  // Fetch the comment list once per group/session. Unlike authorship, there's no live push
-  // channel for other members' newly-added comments (out of scope for v1 — see the comments
-  // feature plan) — the list refreshes on mount and after this session's own create/reply/
-  // resolve/delete actions below.
+  // Comments live in Postgres (not Yjs), so there is no push channel for other members' comments.
+  // Like the page setup above: fetch on mount, once more when the tab becomes visible or the window
+  // gets focus, and on a light 15s poll that is paused while the tab is hidden. A poll never runs
+  // while this session's own create/reply/resolve/delete is in flight, and never replaces the list
+  // when nothing changed (that would re-decorate the page for nothing).
+  const commentsRef = useRef<CommentRecord[]>(comments);
+  commentsRef.current = comments;
+  const commentBusyRef = useRef(0);
+  const showCommentsRef = useRef(false);
+  showCommentsRef.current = showComments;
+  const [newCommentNotice, setNewCommentNotice] = useState("");
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    fetch(`/api/groups/${groupId}/document/comments`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? (res.json() as Promise<{ comments: CommentRecord[] }>) : null))
-      .then((data) => {
-        if (!cancelled && data) setComments(data.comments);
-      })
-      .catch((err) => console.error("[comments] fetch failed", err));
+    let first = true;
+    const pull = async () => {
+      if (commentBusyRef.current > 0) return;
+      try {
+        const res = await fetch(`/api/groups/${groupId}/document/comments`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok || cancelled || commentBusyRef.current > 0) return;
+        const data = (await res.json()) as { comments: CommentRecord[] };
+        if (cancelled || commentBusyRef.current > 0) return;
+        const current = commentsRef.current;
+        const fresh = first ? 0 : newCommentCount(current, data.comments);
+        first = false;
+        if (sameComments(current, data.comments)) return;
+        setComments(data.comments);
+        if (fresh > 0 && !showCommentsRef.current) setNewCommentNotice(newCommentsText(fresh));
+      } catch {
+        /* transient — keep the current list */
+      }
+    };
+    const start = () => {
+      void pull();
+    };
+    start();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void pull();
+    }, 15000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void pull();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [groupId, token]);
+
+  // Opening the list clears the "new comment" notice.
+  useEffect(() => {
+    if (showComments) setNewCommentNotice("");
+  }, [showComments]);
+
+  // Wraps this session's own comment requests so the poll stays out of their way.
+  const withCommentBusy = async (run: () => Promise<void>) => {
+    commentBusyRef.current += 1;
+    try {
+      await run();
+    } finally {
+      commentBusyRef.current -= 1;
+    }
+  };
 
   // Re-resolves every comment's stored anchor against the CURRENT document on every Yjs update
   // (not just once) — anchors are content-relative, so a comment's highlighted range can shift as
@@ -676,16 +724,18 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
     if (!editor || !token || !pendingSelection) return;
     const anchor = encodeCommentAnchor(editor.state, pendingSelection.from, pendingSelection.to);
     if (!anchor) return;
-    const res = await fetch(`/api/groups/${groupId}/document/comments`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ text, anchor }),
+    await withCommentBusy(async () => {
+      const res = await fetch(`/api/groups/${groupId}/document/comments`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ text, anchor }),
+      });
+      if (res.ok) {
+        const created = (await res.json()) as CommentRecord;
+        setComments((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
+        setPendingSelection(null);
+      }
     });
-    if (res.ok) {
-      const created = (await res.json()) as CommentRecord;
-      setComments((prev) => [...prev, created]);
-      setPendingSelection(null);
-    }
   };
 
   const handleReply = async (parentId: number, text: string) => {
@@ -694,39 +744,45 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
     // purposes (the panel groups by parentId, not by anchor), so re-encode the root's own anchor.
     const parent = comments.find((c) => c.id === parentId);
     if (!parent) return;
-    const res = await fetch(`/api/groups/${groupId}/document/comments`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ text, anchor: parent.anchor, parentId }),
+    await withCommentBusy(async () => {
+      const res = await fetch(`/api/groups/${groupId}/document/comments`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ text, anchor: parent.anchor, parentId }),
+      });
+      if (res.ok) {
+        const created = (await res.json()) as CommentRecord;
+        setComments((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
+      }
     });
-    if (res.ok) {
-      const created = (await res.json()) as CommentRecord;
-      setComments((prev) => [...prev, created]);
-    }
   };
 
   const handleResolveToggle = async (commentId: number, resolved: boolean) => {
     if (!token) return;
-    const res = await fetch(`/api/groups/${groupId}/document/comments/${commentId}/resolve`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ resolved }),
+    await withCommentBusy(async () => {
+      const res = await fetch(`/api/groups/${groupId}/document/comments/${commentId}/resolve`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ resolved }),
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as CommentRecord;
+        setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+      }
     });
-    if (res.ok) {
-      const updated = (await res.json()) as CommentRecord;
-      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
-    }
   };
 
   const handleDeleteComment = async (commentId: number) => {
     if (!token) return;
-    const res = await fetch(`/api/groups/${groupId}/document/comments/${commentId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
+    await withCommentBusy(async () => {
+      const res = await fetch(`/api/groups/${groupId}/document/comments/${commentId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+      }
     });
-    if (res.ok) {
-      setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
-    }
   };
 
   const handleSelectThread = (commentId: number) => {
@@ -994,6 +1050,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
   }, ${MARGIN_PRESET_LABELS[pageSetup.marginPreset].split(" (")[0].toLowerCase()} margins`;
 
   const toolbar = (
+    <>
     <Toolbar
       editor={editor}
       editable={effectiveEditable}
@@ -1011,6 +1068,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       showComments={showComments}
       onToggleComments={() => setShowComments((v) => !v)}
       onAddComment={handleAddCommentClick}
+      commentCount={openThreadCount(comments)}
       showToc={showToc}
       onToggleToc={() => setShowToc((v) => !v)}
       hasSelection={hasSelection}
@@ -1025,6 +1083,18 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       onOpenFind={(replace) => setFindBar({ open: true, replace })}
       onOpenLink={() => setLinkDialogOpen(true)}
     />
+    {/* Polite live region: always mounted so screen readers announce the text when it appears. */}
+    <div role="status" aria-live="polite" className={newCommentNotice ? "px-3 py-1 border-t border-slate-200 bg-indigo-50 text-xs text-indigo-900" : "sr-only"}>
+      {newCommentNotice && (
+        <>
+          {newCommentNotice}.{" "}
+          <button type="button" onClick={() => setShowComments(true)} className="underline font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">
+            Show comments
+          </button>
+        </>
+      )}
+    </div>
+    </>
   );
 
   // Inputs, banners, EditorContent, comment panel — everything except the toolbar (rendered

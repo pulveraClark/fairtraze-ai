@@ -19,8 +19,8 @@ export interface PresentUser {
 
 export const ToolbarButton = forwardRef<
   HTMLButtonElement,
-  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean; shortcut?: string; hint?: string }
->(function ToolbarButton({ onClick, active, label, children, disabled, shortcut, hint }, ref) {
+  { onClick: () => void; active: boolean; label: string; children: React.ReactNode; disabled?: boolean; shortcut?: string; hint?: string; badge?: number }
+>(function ToolbarButton({ onClick, active, label, children, disabled, shortcut, hint, badge }, ref) {
   return (
     <button
       ref={ref}
@@ -29,13 +29,21 @@ export const ToolbarButton = forwardRef<
       disabled={disabled}
       title={`${shortcut ? `${label} (${shortcut})` : label}${hint ? `. ${hint}` : ""}`}
       aria-label={label}
-      className={`w-8 h-8 shrink-0 rounded flex items-center justify-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed ${
+      className={`relative w-8 h-8 shrink-0 rounded flex items-center justify-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed ${
         active
           ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
           : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
       }`}
     >
       {children}
+      {badge !== undefined && badge > 0 && (
+        <span
+          aria-hidden="true"
+          className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-indigo-700 text-white text-xs leading-4 text-center font-semibold tabular-nums"
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
     </button>
   );
 });
@@ -839,6 +847,7 @@ export function Toolbar({
   showComments,
   onToggleComments,
   onAddComment,
+  commentCount = 0,
   showToc,
   onToggleToc,
   hasSelection,
@@ -869,6 +878,8 @@ export function Toolbar({
   showComments: boolean;
   onToggleComments: () => void;
   onAddComment: () => void;
+  /** Open (unresolved) comment threads, shown as a number on the Comments button. */
+  commentCount?: number;
   showToc: boolean;
   onToggleToc: () => void;
   hasSelection: boolean;
@@ -1028,6 +1039,19 @@ export function Toolbar({
     </ToolbarButton>
   );
 
+  // The list opener. Editors get it beside "Add comment" (Review group) so it is easy to find;
+  // the read-only view has no Review group, so it stays in the View group there.
+  const commentsToggle = (
+    <ToolbarButton
+      label={commentCount > 0 ? `Comments, ${commentCount} open` : "Comments"}
+      active={showComments}
+      onClick={onToggleComments}
+      badge={commentCount}
+    >
+      <Icon d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </ToolbarButton>
+  );
+
   const viewButtons = (
     <>
       <ToolbarButton label="Highlight authorship" hint={TIPS.authorship} active={showAuthorship} onClick={onToggleAuthorship}>
@@ -1038,9 +1062,7 @@ export function Toolbar({
           <rect x="14" y="14" width="7" height="7" rx="1.5" />
         </svg>
       </ToolbarButton>
-      <ToolbarButton label="Comments" active={showComments} onClick={onToggleComments}>
-        <Icon d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-      </ToolbarButton>
+      {!editable && commentsToggle}
       <ToolbarButton label="Table of contents" active={showToc} onClick={onToggleToc}>
         <Icon d="M4 6h16M4 12h10M4 18h7" />
       </ToolbarButton>
@@ -1085,7 +1107,7 @@ export function Toolbar({
         </MoreSection>
       );
     }
-    if (ov.review) moreSections.push(<MoreSection key="rev" title="Review">{commentButton}</MoreSection>);
+    if (ov.review) moreSections.push(<MoreSection key="rev" title="Review">{commentButton}{commentsToggle}</MoreSection>);
   }
   if (ov.edit) {
     moreSections.push(
@@ -1148,6 +1170,7 @@ export function Toolbar({
             <>
               <Divider />
               {commentButton}
+              {commentsToggle}
             </>
           )}
         </>

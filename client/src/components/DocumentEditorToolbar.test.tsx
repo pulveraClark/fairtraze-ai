@@ -40,7 +40,7 @@ function makeEditor() {
   return ed;
 }
 
-function renderToolbar(editor: Editor, { editable = true, width }: { editable?: boolean; width: number }) {
+function renderToolbar(editor: Editor, { editable = true, width, commentCount = 0 }: { editable?: boolean; width: number; commentCount?: number }) {
   // jsdom has no layout: report the toolbar's width explicitly so the overflow logic runs.
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
     width, height: 40, top: 0, left: 0, right: width, bottom: 40, x: 0, y: 0, toJSON: () => ({}),
@@ -62,6 +62,7 @@ function renderToolbar(editor: Editor, { editable = true, width }: { editable?: 
     showComments: false,
     onToggleComments: vi.fn(),
     onAddComment: vi.fn(),
+    commentCount,
     showToc: false,
     onToggleToc: vi.fn(),
     hasSelection: false,
@@ -98,6 +99,20 @@ describe("editor toolbar", () => {
     // Tools with no keyboard shortcut still have a text tooltip and accessible name.
     expect(title("Clear formatting")).toBe("Clear formatting");
     expect(title("Insert image")).toBe("Insert image");
+  });
+
+  it("shows the open-comment count on the Comments button, next to Add comment", async () => {
+    const { props } = renderToolbar(makeEditor(), { width: 1500, commentCount: 3 });
+    const btn = screen.getByRole("button", { name: "Comments, 3 open" });
+    expect(btn.textContent).toContain("3");
+    await userEvent.setup().click(btn);
+    expect(props.onToggleComments).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Add comment" })).toBeTruthy();
+  });
+
+  it("has a plain Comments button and no badge when nothing is open", () => {
+    renderToolbar(makeEditor(), { width: 1500 });
+    expect(screen.getByRole("button", { name: "Comments" }).textContent).toBe("");
   });
 
   it("runs the formatting commands", async () => {
