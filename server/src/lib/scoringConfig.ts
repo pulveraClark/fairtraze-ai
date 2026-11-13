@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ProjectScoringConfig, DocumentScoringWeights } from "@shared/types.js";
 import { DOCUMENT_DEFAULT_WEIGHTS, DEFAULT_BLEND_WEIGHTS, weightsAreValid } from "@shared/weights.js";
+import { DEFAULT_DOCS_IMAGE_LIMIT, resolveDocsImageLimit } from "@shared/imageCredit.js";
 
 // Scoring settings live on Assignment (the "project" in the UI) and apply to every group in it.
 // The legacy same-named columns on Project are no longer read.
@@ -17,6 +18,7 @@ export interface ScoringConfigRow {
   docsWeightRetainedText: number;
   docsWeightSessions: number;
   docsWeightActiveDays: number;
+  docsImageLimit: number | null;
 }
 
 export const ASSIGNMENT_CONFIG_SELECT = {
@@ -31,6 +33,7 @@ export const ASSIGNMENT_CONFIG_SELECT = {
   docsWeightRetainedText: true,
   docsWeightSessions: true,
   docsWeightActiveDays: true,
+  docsImageLimit: true,
 } as const;
 
 // Mirrors shared/src/scoring.ts defaults; used for groups without an assignment.
@@ -39,6 +42,7 @@ export const DEFAULT_SCORING_CONFIG: ProjectScoringConfig = {
   thresholds: { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 },
   blend:      { ...DEFAULT_BLEND_WEIGHTS },
   docsWeights: { ...DOCUMENT_DEFAULT_WEIGHTS },
+  docsImageLimit: DEFAULT_DOCS_IMAGE_LIMIT,
 };
 
 // Docs weights used before scoring rules version 3 (fixed in code). A report snapshot saved without
@@ -53,6 +57,7 @@ export function assignmentScoringConfig(a: ScoringConfigRow | null | undefined):
     thresholds: { freeRider: a.freeRiderThreshold, overload: a.overloadThreshold, deadlineDriven: a.deadlineDrivenThreshold },
     blend: { wGitHub: a.weightGithub, wDocs: a.weightDocs },
     docsWeights: { retainedText: a.docsWeightRetainedText, sessions: a.docsWeightSessions, activeDays: a.docsWeightActiveDays },
+    docsImageLimit: a.docsImageLimit,
   };
 }
 
@@ -74,6 +79,8 @@ export function configsEqual(a: ProjectScoringConfig, b: ProjectScoringConfig, i
     const da = a.docsWeights ?? LEGACY_DOCS_WEIGHTS;
     const db = b.docsWeights ?? LEGACY_DOCS_WEIGHTS;
     if (!same(da.retainedText, db.retainedText) || !same(da.sessions, db.sessions) || !same(da.activeDays, db.activeDays)) return false;
+    // A snapshot saved without the field reads as the default (5); null is "No limit".
+    if (resolveDocsImageLimit(a.docsImageLimit) !== resolveDocsImageLimit(b.docsImageLimit)) return false;
   }
   return true;
 }
@@ -99,6 +106,8 @@ export const scoringConfigBodySchema = z.object({
     sessions:     z.number().min(0).max(1),
     activeDays:   z.number().min(0).max(1),
   }).optional(),
+  // 3, 5 or 10 images per member, or null for no limit. Omitted keeps the stored value.
+  docsImageLimit: z.union([z.literal(3), z.literal(5), z.literal(10), z.null()]).optional(),
 });
 
 // Returns an error message, or null when the weights/blend sums are valid (±0.001).
@@ -130,7 +139,11 @@ export async function saveAssignmentScoringConfig(
 ): Promise<ProjectScoringConfig> {
   const current = assignmentScoringConfig(assignment);
   // A client that sends no Docs weights keeps the stored ones.
-  next = { ...next, docsWeights: next.docsWeights ?? current.docsWeights };
+  next = {
+    ...next,
+    docsWeights: next.docsWeights ?? current.docsWeights,
+    docsImageLimit: next.docsImageLimit === undefined ? current.docsImageLimit : next.docsImageLimit,
+  };
   if (configsEqual(current, next, true)) return current;
   await prismaClient.$transaction([
     prismaClient.assignment.update({
@@ -147,6 +160,7 @@ export async function saveAssignmentScoringConfig(
         docsWeightRetainedText:  next.docsWeights!.retainedText,
         docsWeightSessions:      next.docsWeights!.sessions,
         docsWeightActiveDays:    next.docsWeights!.activeDays,
+        docsImageLimit:          next.docsImageLimit ?? null,
       },
     }),
     prismaClient.project.updateMany({

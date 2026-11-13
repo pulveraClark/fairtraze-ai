@@ -295,6 +295,9 @@ model Assignment {
   docsWeightRetainedText   Float @default(0.37)
   docsWeightSessions       Float @default(0.30)
   docsWeightActiveDays     Float @default(0.33)
+  // Image credit limit per member for Docs (EDITOR and COMBINED): 3, 5 or 10; NULL = no limit.
+  // Existing rows take 5. Allowed values are checked in server/src/lib/scoringConfig.ts.
+  docsImageLimit           Int?  @default(5)
   createdAt      DateTime     @default(now())
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   projects       Project[]
@@ -838,6 +841,26 @@ model Document {
   comments     Comment[]
   documentContributions DocumentContribution[]
   snapshots    DocumentSnapshot[]
+  images       DocumentImage[]
+}
+
+// One row per distinct image content ever inserted into a group's document (registry for image
+// credit). Written by the collab update listener, insert-if-missing: the first inserter stays the
+// owner, a restart or a later re-insert never changes it. Holds no image bytes, only the hash and
+// the size read from the file header. Whether an image still counts is decided at analysis time
+// from the saved document. Never read by anything except the Docs raw-stats builder.
+model DocumentImage {
+  id              Int      @id @default(autoincrement())
+  documentId      Int
+  contentHash     String
+  ownerUserId     Int
+  byteSize        Int
+  width           Int
+  height          Int
+  firstInsertedAt DateTime @default(now())
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, contentHash])
 }
 
 // A point-in-time copy of Document.yjsState, taken whenever an analysis run produces a new
@@ -926,7 +949,8 @@ model EditSession {
   characterCount Int       @default(0)
   // Gross count of image nodes inserted during this session (net new, not decremented on
   // delete — same "gross" convention as characterCount). Disclosed on the report; never fed
-  // into any scoring formula. See server/src/collab/authorshipCapture.ts's countImageNodes.
+  // into any scoring formula (the credit comes from DocumentImage, not from this counter). See
+  // server/src/collab/authorshipCapture.ts's countImageNodes.
   imageInsertCount Int     @default(0)
   // LIVE vs. a future .docx-import feature (not yet built) — see EditSource.
   source         EditSource @default(LIVE)

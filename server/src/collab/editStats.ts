@@ -1,5 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { fetchOrderedEvents, replayEditEvents } from "./editReplay.js";
+import { readPresentImages } from "./imageRegistry.js";
+import { countEligibleImages } from "@shared/imageCredit.js";
 import type { RawDocumentMemberStats } from "@shared/types.js";
 
 const EMPTY_EDIT_TYPE_BREAKDOWN = { substantive: 0, revision: 0, formatting: 0, trivial: 0 };
@@ -33,6 +35,7 @@ export async function computeDocumentRawStats(
       importedRetainedChars: 0,
       importedWeightedRetainedChars: 0,
       insertedImageCount: 0,
+      countedImageCount: 0,
       editTypeBreakdown: { ...EMPTY_EDIT_TYPE_BREAKDOWN },
     }));
   }
@@ -61,12 +64,23 @@ export async function computeDocumentRawStats(
 
   const sessions = await prisma.editSession.findMany({ where: { documentId } });
   const sessionsByUser = new Map<number, { count: number; liveCount: number; dates: string[]; imageInsertCount: number }>();
+  // Gross images inserted (display) still comes from every session, image-only ones included.
+  const grossImages = new Map<number, number>();
+  for (const s of sessions) grossImages.set(s.userId, (grossImages.get(s.userId) ?? 0) + s.imageInsertCount);
+
+  // Images still in the saved document, once per content, big enough (shared/imageCredit.ts). The
+  // project's image limit is applied by computeDocumentTeamReport.
+  const eligibleImages = countEligibleImages(await readPresentImages(documentId));
+
   for (const s of sessions) {
+    // Images earn credit through the retained-text term only. A session made only of image inserts
+    // (no typed characters) is not a writing session, so it adds no session credit and no session
+    // date: nobody can add sessions by inserting an image after each idle gap.
+    if (s.characterCount === 0 && s.imageInsertCount > 0) continue;
     const entry = sessionsByUser.get(s.userId) ?? { count: 0, liveCount: 0, dates: [], imageInsertCount: 0 };
     entry.count += 1;
     if (s.source === "LIVE") entry.liveCount += 1;
     entry.dates.push(s.startedAt.toISOString());
-    entry.imageInsertCount += s.imageInsertCount;
     sessionsByUser.set(s.userId, entry);
   }
 
@@ -83,7 +97,8 @@ export async function computeDocumentRawStats(
       weightedRetainedChars: weightedRetainedChars.get(r.userId) ?? 0,
       importedRetainedChars: importedRetainedChars.get(r.userId) ?? 0,
       importedWeightedRetainedChars: importedWeightedRetainedChars.get(r.userId) ?? 0,
-      insertedImageCount: sess.imageInsertCount,
+      insertedImageCount: grossImages.get(r.userId) ?? 0,
+      countedImageCount: eligibleImages.get(r.userId) ?? 0,
       editTypeBreakdown: editTypeBreakdown.get(r.userId) ?? { ...EMPTY_EDIT_TYPE_BREAKDOWN },
       sessionCount: sess.count,
       liveSessionCount: sess.liveCount,

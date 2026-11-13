@@ -221,6 +221,61 @@ describe("project-level scoring settings", () => {
     expect((r.scoringConfig as { docsWeights?: unknown } | null)?.docsWeights).toEqual(NEW_CONFIG.docsWeights);
   });
 
+  it("image limit: new and existing assignments default to 5; 3, 5, 10 and No limit (null) save; other values are rejected", async () => {
+    const { instructor, assignment } = await setup("COMBINED");
+    let row = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+    expect(row.docsImageLimit).toBe(5);
+
+    for (const v of [3, 10, null, 5]) {
+      const res = await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, docsImageLimit: v });
+      expect(res.status).toBe(200);
+      expect(res.body.config.docsImageLimit).toBe(v);
+      row = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+      expect(row.docsImageLimit).toBe(v);
+    }
+
+    await prisma.assignment.update({ where: { id: assignment.id }, data: { docsImageLimit: 10 } });
+    for (const v of [0, 4, 11, -1, "5", 7.5]) {
+      const res = await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, docsImageLimit: v });
+      expect(res.status).toBe(400);
+    }
+    row = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+    expect(row.docsImageLimit).toBe(10);
+  });
+
+  it("image limit: an older client that omits it keeps the stored value, and a real change marks groups stale", async () => {
+    const { instructor, assignment, groups } = await setup("COMBINED");
+    expect((await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, docsImageLimit: null })).status).toBe(200);
+    await prisma.project.updateMany({ where: { assignmentId: assignment.id }, data: { scoringConfigChangedAt: null } });
+
+    // Same values, limit omitted -> nothing changes, nothing is marked stale.
+    expect((await saveConfig(assignment.id, instructor, NEW_CONFIG)).status).toBe(200);
+    expect((await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } })).docsImageLimit).toBeNull();
+    let after = await prisma.project.findMany({ where: { id: { in: groups.map((g) => g.id) } } });
+    expect(after.every((g) => g.scoringConfigChangedAt === null)).toBe(true);
+
+    // Only the limit changes -> every group is marked stale.
+    expect((await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, docsImageLimit: 3 })).status).toBe(200);
+    after = await prisma.project.findMany({ where: { id: { in: groups.map((g) => g.id) } } });
+    expect(after.every((g) => g.scoringConfigChangedAt !== null)).toBe(true);
+  });
+
+  it("image limit: a Docs-only analysis snapshots it in the report's scoringConfig", async () => {
+    const { instructor, assignment, groups } = await setup("GITHUB");
+    await prisma.assignment.update({ where: { id: assignment.id }, data: { sourceType: "EDITOR" } });
+    expect((await saveConfig(assignment.id, instructor, { ...NEW_CONFIG, docsImageLimit: 10 })).status).toBe(200);
+    await analyze(groups[0].id, instructor);
+    const r = await getReport(groups[0].id, instructor);
+    expect((r.scoringConfig as { docsImageLimit?: unknown } | null)?.docsImageLimit).toBe(10);
+  });
+
+  it("the image-credit migration gives existing assignments the default of 5", () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL("../prisma/migrations/20261113110000_docs_image_credit/migration.sql", import.meta.url)), "utf8");
+    expect(sql).toContain('ADD COLUMN     "docsImageLimit" INTEGER DEFAULT 5');
+    expect(sql).not.toMatch(/NOT NULL DEFAULT 5/);
+  });
+
   it("the migration's data step moves only untouched 0.5 / 0.5 blends to 0.55 / 0.45", async () => {
     const sql = readFileSync(
       fileURLToPath(new URL("../prisma/migrations/20261113100000_docs_weights_ahp_defaults/migration.sql", import.meta.url)), "utf8");

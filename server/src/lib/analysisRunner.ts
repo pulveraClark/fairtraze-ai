@@ -268,7 +268,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     progress.emit("compute", {});
     // Settings come from the group's project (Assignment); the value used is snapshotted into the report.
     const scoringConfig: ProjectScoringConfig = assignmentScoringConfig(project.assignment);
-    const report = computeDocumentTeamReport(rawMembers, scoringConfig.docsWeights, scoringConfig.thresholds, deadlineMs);
+    const report = computeDocumentTeamReport(rawMembers, scoringConfig.docsWeights, scoringConfig.thresholds, deadlineMs, undefined, scoringConfig.docsImageLimit);
 
     const existing = await prisma.report.findFirst({ where: { projectId }, orderBy: [...LATEST_REPORT_ORDER] });
     const stored = existing?.content ? (JSON.parse(existing.content) as StoredReport) : {};
@@ -360,7 +360,7 @@ async function runAnalysisUnlocked(projectId: number, { progress, actorInstructo
     progress.emit("compute", {});
     const githubReport = computeTeamReport(githubRaw, scoringConfig.weights, scoringConfig.thresholds, deadlineMs);
 
-    const documentReport = computeDocumentTeamReport(documentRaw, scoringConfig.docsWeights, scoringConfig.thresholds, deadlineMs);
+    const documentReport = computeDocumentTeamReport(documentRaw, scoringConfig.docsWeights, scoringConfig.thresholds, deadlineMs, undefined, scoringConfig.docsImageLimit);
 
     const report = computeCombinedTeamReport(
       roster, githubRaw, githubReport.members, documentRaw, documentReport.members,

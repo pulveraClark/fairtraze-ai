@@ -8,6 +8,7 @@ const ROW = {
   freeRiderThreshold: 0.5, overloadThreshold: 1.75, deadlineDrivenThreshold: 0.6,
   weightGithub: 0.55, weightDocs: 0.45,
   docsWeightRetainedText: 0.37, docsWeightSessions: 0.30, docsWeightActiveDays: 0.33,
+  docsImageLimit: 5 as number | null,
 };
 
 describe("Docs weights in the scoring config", () => {
@@ -58,5 +59,45 @@ describe("Docs weights in the scoring config", () => {
     const { docsWeights: _omit, ...old } = a;
     expect(configsEqual(old, a, false, true)).toBe(false);
     expect(configsEqual({ ...old, docsWeights: { retainedText: 0.6, sessions: 0.2, activeDays: 0.2 } }, { ...old, docsWeights: undefined }, false, true)).toBe(true);
+  });
+});
+
+describe("Image limit in the scoring config", () => {
+  const body = (extra: object) => scoringConfigBodySchema.safeParse({
+    weights: { commits: 0.4, lines: 0.4, activeDays: 0.2 },
+    thresholds: { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 },
+    blend: { wGitHub: 0.55, wDocs: 0.45 },
+    ...extra,
+  });
+
+  it("the default is 5", () => {
+    expect(DEFAULT_SCORING_CONFIG.docsImageLimit).toBe(5);
+    expect(assignmentScoringConfig(ROW).docsImageLimit).toBe(5);
+  });
+
+  it("reads No limit (null) from the column", () => {
+    expect(assignmentScoringConfig({ ...ROW, docsImageLimit: null }).docsImageLimit).toBeNull();
+  });
+
+  it("accepts only 3, 5, 10 or null, and an older body without it", () => {
+    for (const v of [3, 5, 10, null]) expect(body({ docsImageLimit: v }).success).toBe(true);
+    expect(body({}).success).toBe(true);
+    for (const v of [0, 1, 4, 11, 100, -5, "5", 5.5]) expect(body({ docsImageLimit: v }).success).toBe(false);
+  });
+
+  it("configsEqual compares the limit only for EDITOR and COMBINED", () => {
+    const a = assignmentScoringConfig(ROW);
+    const b = { ...a, docsImageLimit: 10 };
+    expect(configsEqual(a, b, false, false)).toBe(true);  // GITHUB
+    expect(configsEqual(a, b, false, true)).toBe(false);  // EDITOR
+    expect(configsEqual(a, b, true)).toBe(false);         // COMBINED
+    expect(configsEqual(a, { ...a, docsImageLimit: null }, false, true)).toBe(false);
+  });
+
+  it("a snapshot saved without the field reads as the default (5)", () => {
+    const a = assignmentScoringConfig(ROW);
+    const { docsImageLimit: _omit, ...old } = a;
+    expect(configsEqual(old, a, false, true)).toBe(true);
+    expect(configsEqual(old, { ...a, docsImageLimit: 3 }, false, true)).toBe(false);
   });
 });

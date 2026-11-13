@@ -8,6 +8,7 @@ import { computeAuthorshipMap } from "./authorshipMap.js";
 import { broadcastAuthorship } from "./authorshipBroadcast.js";
 import { classifyEdit } from "@shared/editClassifier.js";
 import type { EditType } from "@shared/editClassifier.js";
+import { ImageDecodeCache, currentImages, writeImageRegistry, type NewImageRecord } from "./imageRegistry.js";
 
 const FLUSH_DEBOUNCE_MS = 1500;
 const SESSION_IDLE_MS = 30 * 60 * 1000;
@@ -76,6 +77,12 @@ interface RoomState {
   documentId: number | null;
   lastText: string;
   lastImageCount: number;
+  // Image credit registry (imageRegistry.ts). lastImageHashes is the set of image contents in the
+  // document after the previous update; it is re-seeded by EVERY update, including the persisted-state
+  // restore (no user origin), so images already in the saved document are never registered as new.
+  lastImageHashes: Set<string>;
+  imageCache: ImageDecodeCache;
+  pendingImages: NewImageRecord[]; // new image contents waiting for documentId / the next flush
   pendingEvents: PendingEvent[];
   closedSessions: ClosedSession[];
   sessions: Map<number, SessionState>; // userId -> active in-memory session
@@ -223,6 +230,11 @@ async function flushRoom(room: string): Promise<void> {
   }
   const documentId = state.documentId;
 
+  // Image registry rows (insert-if-missing). Never throws, so it cannot hold up the event flush.
+  const newImages = state.pendingImages;
+  state.pendingImages = [];
+  await writeImageRegistry(documentId, newImages);
+
   const events = state.pendingEvents;
   state.pendingEvents = [];
   const closed = state.closedSessions;
@@ -320,12 +332,20 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     documentId: null,
     lastText: extractPlainText(fragment),
     lastImageCount: countImageNodes(fragment),
+    lastImageHashes: new Set(),
+    imageCache: new ImageDecodeCache(),
+    pendingImages: [],
     pendingEvents: [],
     closedSessions: [],
     sessions: new Map(),
     flushTimer: null,
   };
   rooms.set(room, state);
+  try {
+    state.lastImageHashes = new Set(currentImages(fragment, state.imageCache).keys());
+  } catch {
+    // Seeding is best effort; the restore update re-seeds it.
+  }
 
   ydoc.on("update", (_update: Uint8Array, origin: unknown) => {
     // lastText is kept in sync with every update regardless of origin — including the
@@ -345,6 +365,21 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     const imageDelta = newImageCount - state.lastImageCount;
     state.lastImageCount = newImageCount;
 
+    // Image credit registry: which image contents are new in the document since the last update.
+    // Resynced on every update (restore included) like lastText, so only an attributable update
+    // can register anything. Wrapped so a failure here can never reach the collab listener.
+    let freshImages: NewImageRecord[] = [];
+    try {
+      const current = currentImages(fragment, state.imageCache);
+      const previous = state.lastImageHashes;
+      state.lastImageHashes = new Set(current.keys());
+      for (const [hash, decoded] of current) {
+        if (!previous.has(hash)) freshImages.push({ ...decoded, ownerUserId: -1 });
+      }
+    } catch {
+      freshImages = [];
+    }
+
     // y-websocket sets `origin` to the raw ws connection for every update that arrived over
     // the wire from that connection (verified against y-websocket/y-protocols source). Updates
     // applied locally with no origin (persisted-state restore, legacy-content migration) are
@@ -360,6 +395,11 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
       source = EditSource.IMPORT;
     }
     if (userId === undefined) return;
+
+    if (freshImages.length > 0) {
+      for (const img of freshImages) state.pendingImages.push({ ...img, ownerUserId: userId });
+      scheduleFlush(room);
+    }
 
     // insertedImages only counts net-new image nodes (imageDelta > 0); a net decrease (an image
     // deleted) is never subtracted from a session's running total — same "gross, not net of
