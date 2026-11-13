@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useToast } from "../Toast";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, type BoardResponse, type TaskPriority } from "@shared/taskTypes";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
 import type { TaskActions } from "../../hooks/useTaskActions";
 import { TitleCombobox } from "./TitleCombobox";
+
+const SLOW_AFTER_MS = 15_000;
 
 // No "item N": the order of AI-listed requirements is not guaranteed to match the instructions text.
 const FROM_INSTRUCTIONS = "From the project instructions.";
@@ -19,21 +22,45 @@ const FIELD = `min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5
 
 /** "New task". Any member can create one (it starts unassigned in To do); only the leader can assign. */
 export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
-  const ref = useFocusTrap<HTMLDivElement>(onClose);
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(false);
+  // After this long still waiting, say so and let the person close the dialog (the task may still arrive).
+  const [slow, setSlow] = useState(false);
+  const busyRef = useRef(false);
+  const slowRef = useRef(false);
+  const mountedRef = useRef(true);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (slowTimer.current) clearTimeout(slowTimer.current);
+  }, []);
+  // While the request is running the dialog stays open (Esc, Cancel and the backdrop do nothing),
+  // except once the "taking longer" message is showing.
+  const close = () => {
+    if (busyRef.current && !slowRef.current) return;
+    onClose();
+  };
+  const ref = useFocusTrap<HTMLDivElement>(close);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [assignee, setAssignee] = useState("");
   const [requirementKey, setRequirementKey] = useState<string | undefined>();
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || busy) return;
+    if (!title.trim() || busyRef.current) return; // a ref, so two quick clicks cannot both get through
+    busyRef.current = true;
+    slowRef.current = false;
     setBusy(true);
+    setSlow(false);
     setError("");
+    slowTimer.current = setTimeout(() => {
+      slowRef.current = true;
+      if (mountedRef.current) setSlow(true);
+    }, SLOW_AFTER_MS);
     try {
       const created = await actions.createTask({
         title: title.trim(),
@@ -43,10 +70,18 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
         ...(requirementKey ? { requirementKey } : {}),
         ...(board.viewer.isLeader && assignee ? { assignedToUserId: Number(assignee) } : {}),
       });
-      onCreated(created.id);
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      busyRef.current = false;
+      showToast({ message: `${created.key} created.`, tone: "success" });
+      if (mountedRef.current) onCreated(created.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the task.");
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      busyRef.current = false;
+      slowRef.current = false;
+      if (!mountedRef.current) return; // the person closed the dialog while it was slow
+      setError(err instanceof Error && err.message ? err.message : "Could not create the task. Check your connection and try again. Your text is still here.");
       setBusy(false);
+      setSlow(false);
     }
   }
 
@@ -54,7 +89,7 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="new-task-title" className="max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
         <h2 id="new-task-title" className="text-lg font-semibold text-slate-900">New task</h2>
-        <form onSubmit={submit} className="mt-3 space-y-3">
+        <form onSubmit={submit} aria-busy={busy} className="mt-3 space-y-3">
           <div>
             <label htmlFor="nt-title" className="mb-1 block text-sm font-medium text-slate-900">Title</label>
             <TitleCombobox
@@ -99,9 +134,16 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
             <p className="text-sm text-slate-700">New tasks start unassigned in To do. The group leader can assign them.</p>
           )}
           {error && <p role="alert" className="text-sm font-medium text-red-800">{error}</p>}
+          <p role="status" aria-live="polite" className={slow ? "text-sm text-slate-800" : "sr-only"}>
+            {slow ? "Taking longer than usual. The task may still appear on the board." : busy ? "Creating the task." : ""}
+          </p>
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
-            <button type="submit" disabled={!title.trim() || busy} className={BUTTON_PRIMARY_COMPACT}>Create task</button>
+            <button type="button" onClick={close} disabled={busy && !slow} className={BUTTON_SECONDARY_COMPACT}>
+              {busy && slow ? "Close" : "Cancel"}
+            </button>
+            <button type="submit" disabled={!title.trim() || busy} className={BUTTON_PRIMARY_COMPACT}>
+              {busy ? "Creating…" : "Create task"}
+            </button>
           </div>
         </form>
       </div>
