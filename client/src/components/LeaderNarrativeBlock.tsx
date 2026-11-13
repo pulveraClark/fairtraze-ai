@@ -1,10 +1,8 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { AiBadge } from "./ui/AiBadge";
-import { aiFooterLine } from "../lib/aiFooter";
 import { FOCUS_LIGHT } from "./ui/styles";
 
-export const LEADER_OUTDATED_TEXT = "Out of date. Your instructor can regenerate it.";
+export const LEADER_OUTDATED_TEXT = "May be out of date. Your instructor can refresh it.";
 
 /**
  * The AI explanation the group leader may read. When it was written for other numbers than the ones now on
@@ -16,9 +14,9 @@ export function LeaderNarrativeBlock({ narrative, outdated }: { narrative: strin
   const textVisible = !outdated || showPrevious;
   return (
     <div>
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1"><AiBadge variant="ai" /></p>
+      {/* The one "AI findings" pill and the "can be wrong" note belong to the Team overview card around this block. */}
       {outdated && (
-        <p role="status" className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
+        <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
           <span>{LEADER_OUTDATED_TEXT}</span>
           <button
             type="button"
@@ -31,11 +29,10 @@ export function LeaderNarrativeBlock({ narrative, outdated }: { narrative: strin
         </p>
       )}
       {textVisible && (
-        <div className="mt-1.5 text-sm leading-relaxed text-slate-800 [&_p]:mb-0 [&_p]:mt-2 [&_p:first-child]:mt-0">
+        <div className={`${outdated ? "mt-1.5 " : ""}text-sm leading-relaxed text-slate-800 [&_p]:mb-0 [&_p]:mt-2 [&_p:first-child]:mt-0`}>
           <ReactMarkdown>{narrative}</ReactMarkdown>
         </div>
       )}
-      {textVisible && <p className="mt-2 text-xs leading-normal text-slate-700">{aiFooterLine()}</p>}
     </div>
   );
 }

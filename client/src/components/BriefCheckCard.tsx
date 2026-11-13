@@ -254,7 +254,7 @@ function WorkedOnBy({ line, inline = false }: { line: WorkedOn; inline?: boolean
  * marks, "Mark as covered" (instructor) / "We have this" (leader) or the mark's own box. Shared by the rows of the
  * check and by the items of the "Needs a look" box, so both behave the same.
  */
-export function RequirementActions({ r, access, marks, keyMarks }: { r: Req; access: InstructionsAccess; marks?: MarksApi; keyMarks?: KeyMarks }) {
+export function RequirementActions({ r, access, marks, keyMarks, compact = false }: { r: Req; access: InstructionsAccess; marks?: MarksApi; keyMarks?: KeyMarks; compact?: boolean }) {
   const covered = kindOf(r) === "COVERED";
   const showSee = !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
   const showOpen = !covered && fromFileOnly(r) && !!access.openFile;
@@ -269,6 +269,7 @@ export function RequirementActions({ r, access, marks, keyMarks }: { r: Req; acc
         canClaim={marks.role === "leader" && isMarkable(r)}
         canCheck={marks.role === "instructor" && isMarkable(r)}
         lead={lead}
+        compact={compact}
       />
     );
   }

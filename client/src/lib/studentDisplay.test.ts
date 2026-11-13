@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { studentFlagLabel, studentFlagLabels, studentHealthLabel } from "./studentDisplay";
+import { studentFlagLabel, studentFlagLabels, studentHealthLabel, AI_CARD_NOTE } from "./studentDisplay";
 
 describe("studentDisplay (20, 21)", () => {
   it("shows free-rider and inactive as Low contribution, other flags unchanged", () => {
@@ -18,5 +18,12 @@ describe("studentDisplay (20, 21)", () => {
     expect(studentHealthLabel("a-bit-uneven")).toBe("Work is a bit uneven");
     expect(studentHealthLabel("very-uneven")).toBe("Work is very uneven");
     expect(studentHealthLabel("Something else")).toBe("Something else");
+  });
+});
+
+describe("AI_CARD_NOTE", () => {
+  it("is the one short note under the leader's AI parts and says nothing about generating", () => {
+    expect(AI_CARD_NOTE).toBe("AI findings can be wrong and are not a grade.");
+    expect(AI_CARD_NOTE).not.toMatch(/generate|gini|band|health/i);
   });
 });

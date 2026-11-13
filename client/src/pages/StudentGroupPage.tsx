@@ -31,7 +31,7 @@ import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
 import { InfoTip } from "../components/ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
-import { studentHealthLabel, evennessLine, earlyDataFlagsNote } from "../lib/studentDisplay";
+import { studentHealthLabel, evennessLine, earlyDataFlagsNote, AI_CARD_NOTE } from "../lib/studentDisplay";
 import { groupTabs, resolveTab, tabFromSearch, type GroupTab } from "../lib/groupTabs";
 import { YourShareTile } from "../components/YourShareTile";
 import { openAttachmentByName, type BriefAttachment } from "../lib/briefAttachments";
@@ -44,7 +44,8 @@ import { NextStepLine } from "../components/NextStepLine";
 import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
-import { BriefCheckWithMarks } from "../components/BriefCheckWithMarks";
+import { StudentTeamCheck, hasStudentCheck } from "../components/StudentTeamCheck";
+import { AiBadge } from "../components/ui/AiBadge";
 import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
 import { useAiReview } from "../hooks/useAiReview";
@@ -947,35 +948,47 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 {/* Team overview: the evenness line (the label itself is the header pill, shown once), the leader's team-level AI text and instructions check, then when it was analyzed */}
                 {!report.noActivity && (
                   <section aria-labelledby="team-overview-title" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                    <h3 id="team-overview-title" className="text-sm font-semibold text-slate-900">Team overview</h3>
-                    <div>
-                      <p className="mb-1.5 flex items-center gap-1 text-xs text-slate-700">
-                        How evenly work is shared
-                        <InfoTip label="About how evenly work is shared" helpHref={helpLink("flags")}>{TIPS.evenness}</InfoTip>
-                      </p>
-                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <EarlyDataTag level={report.dataConfidence} />
-                      </span>
-                      <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.evenness)}</p>
-                    </div>
-                    {isLeader && report.narrative && (
-                      <LeaderNarrativeBlock narrative={report.narrative} outdated={report.narrativeOutdated === true} />
-                    )}
-                    {isLeader && ai.data?.enabled && ai.data.briefCheck && ai.data.refreshFailed?.brief && (
-                      <RefreshFailedNote note={ai.data.refreshFailed.brief} />
-                    )}
-                    {isLeader && ai.data?.enabled && ai.data.briefCheck && (
-                      <BriefCheckWithMarks
-                        projectId={projectId}
-                        check={ai.data.briefCheck}
-                        repoUrl={ai.data.repoUrl}
-                        sourceType={sourceType}
-                        onOpenFile={token ? (name) => openAttachmentByName(assignment.id, assignment.attachments, name, token) : undefined}
-                        onViewInstructions={assignment.description || assignment.attachments.length > 0
-                          ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
-                          : undefined}
-                      />
-                    )}
+                    {(() => {
+                      // Leader only: the AI explanation and the instructions check. One "AI findings" pill and one note cover both.
+                      const showNarrative = isLeader && !!report.narrative;
+                      const briefCheck = isLeader && ai.data?.enabled ? ai.data.briefCheck : undefined;
+                      const showCheck = hasStudentCheck(briefCheck);
+                      return (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            <h3 id="team-overview-title" className="text-sm font-semibold text-slate-900">Team overview</h3>
+                            {(showNarrative || showCheck) && <AiBadge variant="ai" />}
+                          </div>
+                          <div>
+                            <p className="mb-1.5 flex items-center gap-1 text-xs text-slate-700">
+                              How evenly work is shared
+                              <InfoTip label="About how evenly work is shared" helpHref={helpLink("flags")}>{TIPS.evenness}</InfoTip>
+                            </p>
+                            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <EarlyDataTag level={report.dataConfidence} />
+                            </span>
+                            <p className="mt-1.5 text-sm leading-normal text-slate-900">{evennessLine(report.evenness)}</p>
+                          </div>
+                          {showNarrative && (
+                            <LeaderNarrativeBlock narrative={report.narrative!} outdated={report.narrativeOutdated === true} />
+                          )}
+                          {briefCheck && ai.data?.enabled && ai.data.refreshFailed?.brief && (
+                            <RefreshFailedNote note={ai.data.refreshFailed.brief} />
+                          )}
+                          {showCheck && briefCheck && (
+                            <StudentTeamCheck
+                              projectId={projectId}
+                              check={briefCheck}
+                              onOpenFile={token ? (name) => openAttachmentByName(assignment.id, assignment.attachments, name, token) : undefined}
+                              onViewInstructions={assignment.description || assignment.attachments.length > 0
+                                ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
+                                : undefined}
+                            />
+                          )}
+                          {(showNarrative || showCheck) && <p className="text-xs leading-normal text-slate-700">{AI_CARD_NOTE}</p>}
+                        </>
+                      );
+                    })()}
                     <LastAnalyzed variant="student" analyzedAt={report.analyzedAt} trigger={report.trigger} updating={updating} updateFailed={data.autoUpdateFailed} deadline={assignment.deadline} />
                   </section>
                 )}

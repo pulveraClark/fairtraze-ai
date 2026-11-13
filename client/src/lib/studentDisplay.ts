@@ -40,3 +40,6 @@ export function earlyDataFlagsNote(level: "low" | "medium" | "high" | "final" | 
   if (level === "medium") return "These notes may change as more work is recorded.";
   return null;
 }
+
+/** The one note under the AI parts of the leader's Team overview card. Replaces the five earlier disclaimers. */
+export const AI_CARD_NOTE = "AI findings can be wrong and are not a grade.";

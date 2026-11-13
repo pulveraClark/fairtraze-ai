@@ -35,11 +35,31 @@ export function stripTeamMeasures(text: string): string {
  * team-level measure (see above). Null when there is no text at all; the fixed "no extra comment" line when text
  * existed but no clean sentence is left. Display only: the stored text and every score are untouched.
  */
+// Sentences that only restate how evenly the work is shared. The leader's card already shows that in plain words
+// ("No one is far above or below the others."), so the AI's version is dropped. Used ONLY for the team explanation,
+// never for member summaries (a summary may say "spread her commits evenly").
+const EVEN_WORDS = "(?:evenly|equally|fairly|unevenly|unequally)";
+const SHARE_VERBS = "(?:spread|shared|distributed|divided|split)";
+const EVENNESS_PATTERNS: RegExp[] = [
+  /\bthis\s+(?:value|figure|number|score|measure|result)\b/i,
+  new RegExp(`\\b${SHARE_VERBS}\\s+(?:(?:very|quite|fairly|pretty|rather|somewhat)\\s+)?${EVEN_WORDS}\\b`, "i"),
+  new RegExp(`\\b${EVEN_WORDS}\\s+${SHARE_VERBS}\\b`, "i"),
+  /\bevenness\b/i,
+  /\b(?:balanced|equal|even|uneven|unequal)\s+(?:contribution|contributions|workload|participation|effort|distribution|share|shares)\b/i,
+  /\b(?:contribution|contributions|workload|participation|effort|distribution)\s+(?:was|were|is|are|looks?|seems?|appears?)\s+(?:\w+\s+)?(?:balanced|even|evenly|equal|uneven|unevenly|unequal|unbalanced)\b/i,
+];
+
+export function isEvennessSentence(sentence: string): boolean {
+  return EVENNESS_PATTERNS.some((re) => re.test(sentence));
+}
+
+/** Null when no clean sentence is left, so the card hides the AI block instead of showing an empty one. */
 export function studentNarrative(text: string | null | undefined): string | null {
   if (!text || !text.trim()) return null;
+  const drop = (s: string) => isTeamMeasureSentence(s) || isEvennessSentence(s);
   const kept = text
     .split(/\n{2,}/)
-    .map((para) => para.split(/(?<=[.!?])\s+/).filter((s) => s.trim() !== "" && !isTeamMeasureSentence(s)).join(" ").trim())
+    .map((para) => para.split(/(?<=[.!?])\s+/).filter((s) => s.trim() !== "" && !drop(s)).join(" ").trim())
     .filter((para) => para.length > 0);
-  return kept.length > 0 ? kept.join("\n\n") : NO_TEAM_COMMENT;
+  return kept.length > 0 ? kept.join("\n\n") : null;
 }

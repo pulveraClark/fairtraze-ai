@@ -307,11 +307,10 @@ describe("GET /api/student/group/:projectId — team-level AI explanation (leade
     expect(studentNarrative("Alice edited index.html and the Band page.")).toBe("Alice edited index.html and the Band page.");
   });
 
-  it("shows the fixed line when nothing clean is left, and nothing when there was no text", () => {
-    const fixed = "The AI has no extra comment on the team this time.";
-    expect(NO_TEAM_COMMENT).toBe(fixed);
-    expect(studentNarrative("Gini is 0.31. The inequality score is 0.31. Work concentration is high.")).toBe(fixed);
-    expect(studentNarrative("The Gini coefficient is 0.3.")).toBe(fixed);
+  it("returns null (the AI block is hidden) when nothing clean is left, and when there was no text", () => {
+    expect(NO_TEAM_COMMENT).toBe("The AI has no extra comment on the team this time.");
+    expect(studentNarrative("Gini is 0.31. The inequality score is 0.31. Work concentration is high.")).toBeNull();
+    expect(studentNarrative("The Gini coefficient is 0.3.")).toBeNull();
     expect(studentNarrative(null)).toBeNull();
     expect(studentNarrative("   ")).toBeNull();
   });

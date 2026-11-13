@@ -17,6 +17,7 @@ const BTN = `inline-flex min-h-10 items-center justify-center rounded-lg border 
 export const LINK_CLS = `inline-flex min-h-10 min-w-0 max-w-full items-center text-sm font-medium text-blue-800 underline decoration-blue-800/40 underline-offset-2 hover:decoration-blue-800 ${FOCUS_LIGHT}`;
 const BTN_PRIMARY =`${BTN} border-indigo-700 bg-indigo-700 text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-60`;
 const BTN_PLAIN = `${BTN} border-slate-300 bg-white text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60`;
+const BTN_SMALL = BTN_PLAIN.replace("min-h-10", "min-h-8").replace("px-3", "px-2.5").replace("text-sm", "text-xs");
 
 /** A picture that needs the sign-in token, loaded as an object URL (revoked on unmount). */
 function useBlobUrl(load: (() => Promise<Blob>) | null, dep: string | null): { src: string | null; failed: boolean } {
@@ -189,8 +190,10 @@ const Box = ({ children, label }: { children: React.ReactNode; label: string }) 
  * `canClaim` (leader) and `canCheck` (instructor, "I checked: covered"): both come from the shared `isMarkable`,
  * so a row the AI did not confirm; one it marked covered gets neither.
  */
-export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, canCheck, lead }: {
+export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, canCheck, lead, compact = false }: {
   requirementKey: string; marks: KeyMarks | undefined; api: MarksApi; canClaim: boolean; canCheck: boolean;
+  /** A smaller (32px) "We have this" button, for the student card where it must not read as the main action. Same action. */
+  compact?: boolean;
   /** The row's "See in the instructions" / "Open file" link: it sits on the action line, before "Mark as covered". */
   lead?: React.ReactNode;
 }) {
@@ -264,6 +267,6 @@ export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, can
   return form ? withLead(
     <Box label="We have this"><ClaimForm requirementKey={requirementKey} initialNote="" api={api} onDone={() => setForm(false)} /></Box>
   ) : withLead(
-    <div className="mt-1"><button type="button" onClick={() => setForm(true)} className={BTN_PLAIN}>We have this</button></div>
+    <div className="mt-1"><button type="button" onClick={() => setForm(true)} className={compact ? BTN_SMALL : BTN_PLAIN}>We have this</button></div>
   );
 }
