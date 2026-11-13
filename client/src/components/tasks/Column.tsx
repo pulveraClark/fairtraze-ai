@@ -3,7 +3,6 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import type { BoardResponse, BoardTask, TaskStatus } from "@shared/taskTypes";
 import { TASK_STATUS_LABELS } from "@shared/taskTypes";
 import { SortableTaskCard } from "./TaskCard";
-import { QuickAddTask } from "./QuickAddTask";
 
 export type DropState = "allowed" | "denied" | null;
 
@@ -21,7 +20,6 @@ interface Props {
   /** Total tasks in this column before filters, to explain an empty filtered column. */
   unfilteredCount: number;
   /** Present only where the viewer may create a task in this column. */
-  onQuickAdd?: (title: string) => Promise<string | void>;
   /** Tasks whose move is still saving. */
   savingIds?: ReadonlySet<number>;
   onSavingBlocked?: () => void;
@@ -31,7 +29,7 @@ export function columnId(status: TaskStatus): string {
   return `col:${status}`;
 }
 
-export function Column({ status, ids, tasksById, board, today, onOpen, dropState, showDropHint, unfilteredCount, onQuickAdd, savingIds, onSavingBlocked }: Props) {
+export function Column({ status, ids, tasksById, board, today, onOpen, dropState, showDropHint, unfilteredCount, savingIds, onSavingBlocked }: Props) {
   const label = TASK_STATUS_LABELS[status];
   const { setNodeRef } = useDroppable({ id: columnId(status), data: { type: "column", status } });
 
@@ -70,12 +68,6 @@ export function Column({ status, ids, tasksById, board, today, onOpen, dropState
         <p className="px-1 py-2 text-xs text-slate-700">
           {unfilteredCount > 0 ? "No tasks match the filters." : "No tasks here yet."}
         </p>
-      )}
-
-      {onQuickAdd && (
-        <div className="mt-2">
-          <QuickAddTask label={label} onAdd={onQuickAdd} />
-        </div>
       )}
 
       {dropState === "allowed" && showDropHint && (

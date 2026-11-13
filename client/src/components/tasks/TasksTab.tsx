@@ -161,13 +161,6 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
     else void runBulk(action, selectedIds);
   }
 
-  /** Quick add: title only. The server forces members to an unassigned To do task. */
-  async function quickAdd(title: string, status: TaskStatus = "TODO"): Promise<string> {
-    const created = await actions.createTask({ title }, status);
-    const hidden = filterTasks([created], filters, { userId: user?.id ?? 0, today }).length === 0;
-    return hidden ? `Added ${created.key} (hidden by your filters).` : `Added ${created.key}.`;
-  }
-
   /** Drag on the calendar: change only the due date, offer Undo. The server checks permission. */
   async function reschedule(task: BoardTask, date: string) {
     const before = task.dueDate;
@@ -250,7 +243,6 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
           onDenied={actions.showError}
           savingIds={savingIds}
           onSavingBlocked={onSavingBlocked}
-          onQuickAdd={board.viewer.canCreate ? quickAdd : undefined}
         />
       )}
 
@@ -263,7 +255,6 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
             sort={sort}
             onSortChange={setSort}
             onOpen={open}
-            onQuickAdd={board.viewer.canCreate ? (title) => quickAdd(title) : undefined}
             selection={canBulk ? {
               ids: new Set(selectedIds),
               onToggle: toggleSelected,
@@ -288,12 +279,13 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
 
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
         <span>Tasks help your group plan. They don't change contribution scores.</span>
-        {board.group.hasRepo && (
-          <InfoTip label="About commit linking" helpHref={helpLink("tasks")}>
-            Put a task's key, like {board.group.taskKey}-12, in a commit message to link that commit to the task. Only commit messages are read.
-          </InfoTip>
-        )}
-        <InfoTip label="About keyboard shortcuts">
+        {/* One (i) for both short notes: two identical icons side by side looked like a duplicate. */}
+        <InfoTip label="About tasks" helpHref={helpLink("tasks")}>
+          {board.group.hasRepo && (
+            <span className="mb-2 block">
+              Put a task's key, like {board.group.taskKey}-12, in a commit message to link that commit to the task. Only commit messages are read.
+            </span>
+          )}
           {TIPS.shortcuts}
           <button type="button" onClick={() => setHelp(true)} className={`mt-2 block rounded font-semibold text-indigo-700 underline ${FOCUS_LIGHT}`}>
             Show shortcuts

@@ -21,7 +21,6 @@ interface Props {
   onMove: (task: BoardTask, to: Placement, previous: Placement | null) => void;
   onDenied: (message: string) => void;
   /** Quick add. Leaders may add to any column; everyone else only to To do (the server decides too). */
-  onQuickAdd?: (title: string, status: TaskStatus) => Promise<string | void>;
   /** Tasks whose move is still saving; each of those cards is locked, the others stay draggable. */
   savingIds?: readonly number[];
   /** The user tried to pick up a saving card. */
@@ -42,7 +41,7 @@ function statusOfContainer(id: UniqueIdentifier): TaskStatus | null {
  * and saved through `onMove`. A card can only be dropped where the server would allow it
  * (`task.permissions.allowedStatuses`); anything else snaps back with an explanation.
  */
-export function Board({ board, tasks, today, onOpen, onMove, onDenied, onQuickAdd, savingIds, onSavingBlocked }: Props) {
+export function Board({ board, tasks, today, onOpen, onMove, onDenied, savingIds, onSavingBlocked }: Props) {
   const saving = useMemo(() => new Set(savingIds ?? []), [savingIds]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -223,7 +222,6 @@ export function Board({ board, tasks, today, onOpen, onMove, onDenied, onQuickAd
             unfilteredCount={unfilteredCounts[status]}
             savingIds={saving}
             onSavingBlocked={onSavingBlocked}
-            onQuickAdd={onQuickAdd && (board.viewer.isLeader || status === "TODO") ? (title) => onQuickAdd(title, status) : undefined}
           />
         ))}
       </div>
