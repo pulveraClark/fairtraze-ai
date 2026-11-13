@@ -299,7 +299,10 @@ function MemberSidebar({
                 <span>{oneGoLine(oneGo.day)}</span>
                 <HoverTip label="About this note">{ONE_GO_TIP}</HoverTip>
                 {onOpenDocumentHistory && (
-                  <button type="button" onClick={onOpenDocumentHistory} className={`${BUTTON_SECONDARY} ml-1`}>{ONE_GO_HISTORY_BUTTON}</button>
+                  // Own row on a narrow screen (full width, easy to hit); beside the text from the sm breakpoint.
+                  <span className="mt-1 basis-full sm:ml-1 sm:mt-0 sm:basis-auto">
+                    <button type="button" onClick={onOpenDocumentHistory} className={`${BUTTON_SECONDARY} w-full sm:w-auto`}>{ONE_GO_HISTORY_BUTTON}</button>
+                  </span>
                 )}
               </p>
             )}

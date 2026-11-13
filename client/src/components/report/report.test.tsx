@@ -254,6 +254,13 @@ describe("MemberDrawer", () => {
       rerender(<MemberDrawer {...baseProps} source="github" member={gh} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} />);
       expect(screen.queryByTestId("one-go-line")).toBeNull();
     });
+    it("the history button sits on its own row on a narrow screen and beside the text from sm up", () => {
+      render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} onOpenDocumentHistory={vi.fn()} />);
+      const button = within(screen.getByTestId("one-go-line")).getByRole("button", { name: "Open document history" });
+      expect(button.parentElement!.className).toMatch(/basis-full/);
+      expect(button.parentElement!.className).toMatch(/sm:basis-auto/);
+      expect(button.className).toMatch(/w-full/);
+    });
     it("shows no history button when the history is not reachable", () => {
       render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} />);
       expect(screen.getByTestId("one-go-line")).toBeInTheDocument();

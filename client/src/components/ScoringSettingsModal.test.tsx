@@ -289,6 +289,10 @@ describe("ScoringSettingsModal images in documents", () => {
     renderIt("EDITOR");
     expect(select().tagName).toBe("SELECT");
     expect(document.querySelector('label[for="docs-image-limit"]')).not.toBeNull();
+    // The shared focus outline (not a border colour only) and the same 40px height as the Reset button next to it.
+    expect(select().className).toContain("focus-visible:outline-2");
+    expect(select().className).not.toContain("focus:outline-none");
+    expect(select().className).toContain("min-h-10");
   });
 });
 

@@ -68,6 +68,41 @@ describe("DocumentHistoryPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Nov 11, 2026/ })).toHaveFocus());
   });
 
+  it("the clicked row shows 'Opening…' while the version loads", async () => {
+    let finish!: (v: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.endsWith("/snapshots")) return Promise.resolve({ ok: true, status: 200, json: async () => LIST });
+      return new Promise((resolve) => { finish = resolve; });
+    }));
+    render(<DocumentHistoryPanel groupId={1} />);
+    const row = await screen.findByRole("button", { name: /Nov 11, 2026/ });
+    await userEvent.click(row);
+    expect(await screen.findByText("Opening…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Nov 11, 2026/ })).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByText("View →", { selector: "span" })).not.toBeNull(); // the other row keeps its normal label
+    finish({ ok: true, status: 200, json: async () => VERSION });
+    await screen.findByRole("heading", { name: /Version saved/ });
+  });
+
+  it("after Retry, focus moves to the loading line and then to the first row (not the top of the page)", async () => {
+    let fail = true;
+    stubFetch({ "/snapshots": () => (fail ? { __status: 500 } : LIST) });
+    render(<DocumentHistoryPanel groupId={1} />);
+    await screen.findByRole("alert");
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    const first = await screen.findAllByRole("button", { name: /Open the version saved/ });
+    await waitFor(() => expect(first[0]).toHaveFocus());
+  });
+
+  it("after a failed Retry the new Retry button has focus", async () => {
+    stubFetch({ "/snapshots": () => ({ __status: 500 }) });
+    render(<DocumentHistoryPanel groupId={1} />);
+    await screen.findByRole("alert");
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toHaveFocus());
+  });
+
   it("a version error is an alert and the list stays usable", async () => {
     stubFetch({ "/snapshots": () => LIST, "/snapshots/2": () => ({ __status: 500, error: "x" }) });
     render(<DocumentHistoryPanel groupId={1} />);

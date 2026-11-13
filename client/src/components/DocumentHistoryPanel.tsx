@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+// Item 3 polish: "Opening…" on the clicked row, and focus that follows Retry.
 import { useAuth } from "../context/AuthContext";
 import { DocBlockRenderer, type DocBlock } from "./DocBlockRenderer";
 import { BUTTON_SECONDARY } from "./ui/styles";
@@ -22,7 +23,12 @@ interface Props {
   groupId: number;
 }
 
-function ProblemBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
+function ProblemBox({ text, onRetry, focusRetry = false }: { text: string; onRetry?: () => void; focusRetry?: boolean }) {
+  const retryRef = useRef<HTMLButtonElement | null>(null);
+  // After a failed Retry the old button is gone; the new one takes focus so a keyboard user is not sent back to the top.
+  useEffect(() => {
+    if (focusRetry) retryRef.current?.focus();
+  }, [focusRetry]);
   // Never colour alone: the word "Problem", an icon and a Retry button carry the meaning too.
   return (
     <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -30,7 +36,7 @@ function ProblemBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
         <circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M12 8v5M12 16h.01" />
       </svg>
       <span><span className="font-semibold">Problem: </span>{text}</span>
-      {onRetry && <button type="button" onClick={onRetry} className={BUTTON_SECONDARY}>Retry</button>}
+      {onRetry && <button type="button" ref={retryRef} onClick={onRetry} className={BUTTON_SECONDARY}>Retry</button>}
     </div>
   );
 }
@@ -53,6 +59,19 @@ export function DocumentHistoryPanel({ groupId }: Props) {
   const [lastOpenedId, setLastOpenedId] = useState<number | null>(null);
   const versionHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const rowRefs = useRef(new Map<number, HTMLButtonElement>());
+  const loadingRef = useRef<HTMLDivElement | null>(null);
+  // True after the user pressed Retry: focus follows the screen (loading line, then the first row or the new error).
+  const [retried, setRetried] = useState(false);
+  const openingId = detailLoading ? lastOpenedId : null;
+  const firstRowId = snapshots?.[0]?.id;
+  useEffect(() => {
+    if (!retried) return;
+    if (snapshots === null && !listError) loadingRef.current?.focus();
+    else if (snapshots && snapshots.length > 0 && firstRowId != null) {
+      rowRefs.current.get(firstRowId)?.focus();
+      setRetried(false);
+    } else if (snapshots) setRetried(false);
+  }, [retried, snapshots, listError, firstRowId]);
 
   const loadList = useCallback(() => {
     if (!token) return () => {};
@@ -127,12 +146,12 @@ export function DocumentHistoryPanel({ groupId }: Props) {
   }
 
   if (listError) {
-    return <ProblemBox text={listError} onRetry={loadList} />;
+    return <ProblemBox text={listError} onRetry={() => { setRetried(true); loadList(); }} focusRetry={retried} />;
   }
 
   if (snapshots === null) {
     return (
-      <div role="status" aria-live="polite" className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-700">
+      <div ref={loadingRef} tabIndex={-1} role="status" aria-live="polite" className="outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-700">
         Loading history…
       </div>
     );
@@ -163,6 +182,7 @@ export function DocumentHistoryPanel({ groupId }: Props) {
                 ref={(el) => { if (el) rowRefs.current.set(s.id, el); else rowRefs.current.delete(s.id); }}
                 disabled={detailLoading}
                 aria-label={`Open the version saved ${when}`}
+                aria-busy={openingId === s.id}
                 onClick={() => openSnapshot(s.id)}
                 className="flex min-h-10 w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-indigo-600"
               >
@@ -170,7 +190,7 @@ export function DocumentHistoryPanel({ groupId }: Props) {
                   <span className="block text-sm font-medium text-slate-900">{when}</span>
                   {s.reportId != null && <span className="mt-0.5 block text-xs text-slate-700">Saved with an analysis</span>}
                 </span>
-                <span className="shrink-0 text-sm font-medium text-indigo-800" aria-hidden="true">View →</span>
+                <span className="shrink-0 text-sm font-medium text-indigo-800" aria-hidden="true">{openingId === s.id ? "Opening…" : "View →"}</span>
               </button>
             </li>
           );

@@ -100,6 +100,9 @@ export function ProjectDetailPage({ projectId }: Props) {
     window.history.replaceState(window.history.state, "", url);
   }
   const [viewingHistory, setViewingHistory]     = useState(false);
+  // "Open document history" from the member window closes that window; keyboard focus then goes to the History heading.
+  const [focusHistoryHeading, setFocusHistoryHeading] = useState(false);
+  const historyHeadingRef = useRef<HTMLHeadingElement>(null);
   // "Open in document" from a task: the editor scrolls to the task's linked heading (read-only here).
   const docFocus = useDocHeadingFocus(() => { setViewingHistory(false); selectTab("document"); });
   // Evidence in the AI review links to a Docs section: same tab, with a history entry so Back returns.
@@ -293,6 +296,12 @@ export function ProjectDetailPage({ projectId }: Props) {
   const flagSource: FlagSource = showCombined ? "combined" : sourceType === "EDITOR" ? "document" : "github";
   const visibleTabs: Tab[] = groupTabs("instructor", sourceType);
   const effectiveTab: Tab = resolveTab(activeTab, visibleTabs);
+  useEffect(() => {
+    if (focusHistoryHeading && viewingHistory && effectiveTab === "document" && historyHeadingRef.current) {
+      historyHeadingRef.current.focus();
+      setFocusHistoryHeading(false);
+    }
+  }, [focusHistoryHeading, viewingHistory, effectiveTab, selectedName]);
 
   // ── Breadcrumb derivation ──────────────────────────────────────────────────
   const assignmentLabel = projectMeta?.assignmentLabel ?? "";
@@ -724,7 +733,9 @@ export function ProjectDetailPage({ projectId }: Props) {
         {effectiveTab === "document" && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <h2 className="text-lg font-semibold text-slate-900">FairTraze Docs</h2>
+              <h2 ref={historyHeadingRef} tabIndex={-1} className="text-lg font-semibold text-slate-900 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                {viewingHistory ? "FairTraze Docs history" : "FairTraze Docs"}
+              </h2>
               <p className="hidden text-sm leading-normal text-slate-700 sm:block">
                 {viewingHistory
                   ? "Past versions of this group's document, captured at each analysis run"
@@ -776,7 +787,7 @@ export function ProjectDetailPage({ projectId }: Props) {
           flagsMayChange={confidence === "medium"}
           rulesVersion={stored.scoringRulesVersion ?? null}
           docsOneGo={stored.docsOneGo}
-          onOpenDocumentHistory={visibleTabs.includes("document") ? () => { setSelectedName(null); setViewingHistory(true); selectTab("document"); } : undefined}
+          onOpenDocumentHistory={visibleTabs.includes("document") ? () => { setSelectedName(null); setViewingHistory(true); setFocusHistoryHeading(true); selectTab("document"); } : undefined}
           disputed={selectedMember ? disputedMembers.has(selectedMember.studentName) : false}
           flagOutcomes={selectedMember ? resolvedFlagOutcomes.get(selectedMember.studentName) : undefined}
           onOpenDisputes={() => { setSelectedName(null); navigate("/disputes"); }}

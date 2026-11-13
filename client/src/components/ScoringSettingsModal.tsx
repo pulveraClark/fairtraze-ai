@@ -3,7 +3,7 @@ import type { ProjectScoringConfig } from "@shared/types";
 import { useToast } from "./Toast";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { Modal } from "./ui/Modal";
-import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "./ui/styles";
 import { balanceWeights } from "../lib/balanceWeights";
 import { InfoTip } from "./ui/InfoTip";
 import { SETTINGS_TIPS, helpLink } from "../lib/helpText";
@@ -243,7 +243,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
                     id="docs-image-limit"
                     value={imageLimit === null ? "none" : String(imageLimit)}
                     onChange={(e) => setImageLimit(e.target.value === "none" ? null : Number(e.target.value))}
-                    className="min-h-9 text-xs border border-slate-200 rounded px-2 bg-white focus:outline-none focus:border-indigo-400"
+                    className={`min-h-10 rounded border border-slate-300 bg-white px-2 text-xs text-slate-900 ${FOCUS_LIGHT}`}
                   >
                     {DOCS_IMAGE_LIMIT_OPTIONS.map((o) => (
                       <option key={o === null ? "none" : o} value={o === null ? "none" : String(o)}>
