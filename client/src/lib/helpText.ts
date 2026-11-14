@@ -5,6 +5,9 @@ import { IMAGE_CREDIT_CHARS } from "@shared/imageCredit";
 // reads or changes a score. Every tip is one or two plain sentences (helpText.test.ts enforces it).
 // Numbers that the scoring code owns are never typed here; they are passed in by the caller.
 
+/** How the equal share is counted. One wording for the (?) tips and the Help page. */
+export const ROSTER_COUNTS = "Everyone on the roster counts, including members with no recorded activity.";
+
 /** Anchors on the /help page. HelpPage renders an element with each of these ids. */
 export const HELP_ANCHORS = [
   "what", "shares", "shares-github", "shares-docs", "combined", "settings",
@@ -42,9 +45,9 @@ export const TIPS = {
   workSummary: "Written by AI from this member's commits and their own part of the Docs. It can be wrong, so check the evidence.",
   authorship: "Colors show who typed each part of the document. Turn it off to read without colors.",
   equalShareMember: (equalPct: number, members: number) =>
-    `The marker is an equal split of the work: ${pct(equalPct)} each for ${members} members. It is a reference point, not a target.`,
+    `The marker is an equal split of the work (${pct(equalPct)} each for ${members} members), a reference point and not a target. ${ROSTER_COUNTS}`,
   equalShareList: (equalPct: number) =>
-    `The marker on each bar is an equal split of the work (${pct(equalPct)} each), so you can see who is above or below it.`,
+    `The marker on each bar is an equal split of the work (${pct(equalPct)} each), so you can see who is above or below it. ${ROSTER_COUNTS}`,
 } as const;
 
 /** Scoring settings (instructors only). */

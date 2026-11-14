@@ -69,6 +69,13 @@ describe("HelpPage", () => {
     }
   });
 
+  it("says in How shares are calculated that everyone on the roster counts", () => {
+    renderAs("STUDENT");
+    expect(document.querySelector('[data-help-section="shares"]')?.textContent).toContain(
+      "Everyone on the roster counts, including members with no recorded activity."
+    );
+  });
+
   it("reads the numbers from the scoring constants", async () => {
     const user = userEvent.setup();
     renderAs("INSTRUCTOR");

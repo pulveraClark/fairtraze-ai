@@ -388,6 +388,7 @@ describe("MemberContributionList", () => {
     expect(screen.getByText("No flags")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "About the equal-share marker" }));
     expect(screen.getByRole("group", { name: "About the equal-share marker" })).toHaveTextContent(/equal split of the work \(50% each\)/);
+    expect(screen.getByRole("group", { name: "About the equal-share marker" })).toHaveTextContent("Everyone on the roster counts, including members with no recorded activity.");
     await userEvent.click(rows[0]);
     expect(onOpen).toHaveBeenCalledWith(gh, expect.any(HTMLElement));
   });

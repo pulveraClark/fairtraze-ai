@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { HELP_ANCHORS, SETTINGS_TIPS, TIPS, helpLink } from "./helpText";
+import { HELP_ANCHORS, ROSTER_COUNTS, SETTINGS_TIPS, TIPS, helpLink } from "./helpText";
 
 function allTips(): string[] {
   const out: string[] = [];
@@ -23,6 +23,15 @@ describe("helpText", () => {
       const text = typeof t === "function" ? (t as (...a: number[]) => string)(33.3, 3) : t;
       expect(text).not.toMatch(/gini/i);
       expect(text).not.toMatch(/team health|moderate risk|high risk|\bHealthy\b/i);
+    }
+  });
+
+  it("says in both equal-share tips that the whole roster counts, with no thresholds", () => {
+    const sentence = "Everyone on the roster counts, including members with no recorded activity.";
+    expect(ROSTER_COUNTS).toBe(sentence);
+    for (const text of [TIPS.equalShareMember(33.3, 3), TIPS.equalShareList(33.3)]) {
+      expect(text).toContain(sentence);
+      expect(text).not.toMatch(/0\.5|1\.75|threshold/i);
     }
   });
 

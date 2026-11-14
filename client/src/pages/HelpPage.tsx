@@ -20,7 +20,7 @@ import {
 import {
   EDIT_TYPE_WEIGHT, SUBSTANTIVE_MIN_CHARS, TRIVIAL_MAX_CHARS,
 } from "@shared/editClassifier";
-import { HELP_ANCHORS } from "../lib/helpText";
+import { HELP_ANCHORS, ROSTER_COUNTS } from "../lib/helpText";
 import { HELP_FAQ } from "../lib/helpFaq";
 import { findRanges, highlightTerms, matches, queryWords } from "../lib/helpSearch";
 
@@ -223,7 +223,7 @@ export function HelpPage() {
           <p>
             Your <strong>share</strong> is your part of the group's total recorded work, as a percentage. Everyone's
             shares add up to 100%. In a group of 4 the <strong>equal share</strong> is 25% each, and the marker on each
-            bar shows it. Being above or below the marker is not good or bad on its own.
+            bar shows it. {ROSTER_COUNTS} Being above or below the marker is not good or bad on its own.
           </p>
 
           <h3 id="shares-github" className="scroll-mt-4 font-semibold text-slate-900">GitHub</h3>
