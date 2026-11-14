@@ -1,42 +1,90 @@
-// Fixed palette so each member gets a distinct, consistent cursor/presence color across
-// sessions and reconnects — indexed by the member's position within their group's own member
-// roster (memberIds), not by their raw global User.id. Indexing by the raw id would let two
-// members in the same group collide on the identical color whenever their ids happen to be
-// congruent mod PALETTE.length (a realistic occurrence once the app has more than a handful of
-// accounts); a group-local index can't collide as long as the group has PALETTE.length members
-// or fewer.
-const PALETTE = [
-  "#F87171", // red
-  "#FB923C", // orange
-  "#FBBF24", // amber
-  "#A3E635", // lime
-  "#34D399", // emerald
-  "#22D3EE", // cyan
-  "#60A5FA", // blue
-  "#818CF8", // indigo
-  "#C084FC", // purple
-  "#F472B6", // pink
-];
+// Author colors for the Docs editor (authorship highlight, legend, presence chips, cursors,
+// comment avatars). Display only: nothing here is read by scoring, capture or the server.
+//
+// Each slot has a full-strength MARKER color and an underline STYLE. The text highlight is the
+// marker at TINT_ALPHA over the page plus a thin underline in the marker color, so authors are
+// told apart by color AND by line style (never color alone). Markers are all at least 4.5:1
+// against white (so a white initial on a chip is readable and the underline passes 3:1), and the
+// first six differ clearly in hue and lightness. Blue and orange come first (colorblind-safe
+// pairing). `collabColors.test.ts` measures all of this, including protan/deutan simulation.
 
-// The single canonical place a group's roster is built for coloring purposes — every caller
-// (DocumentEditor's awareness/cursor color, AuthorshipLegend, CommentPanel's Avatar,
-// authorshipHighlight's buildDecorations) must be handed the SAME array, sorted the same way,
-// or they'll disagree on a member's color. DocumentEditor.tsx fetches the roster once per group
-// and calls this; everything else receives that same array via state/props/refs — never builds
-// its own copy.
-export function buildMemberRoster(members: { userId: number }[]): number[] {
-  return members.map((m) => m.userId).sort((a, b) => a - b);
+// Tunable look. Change these after looking at the editor in the browser.
+export const TINT_ALPHA = 0.35; // strength of the colored wash behind an author's text (0-1)
+export const UNDERLINE_WIDTH_PX = 2; // thickness of the author underline
+export type UnderlineStyle = "solid" | "dashed" | "dotted"; // wavy/double are avoided on purpose
+
+interface AuthorSlot {
+  name: string; // only for tests and tooltips of the palette itself
+  marker: string;
+  style: UnderlineStyle;
 }
 
-// Colors are positional (a member's index in the sorted roster), not identity-pinned to their
-// userId. This means a member's color is NOT stable across roster changes: if a member with a
-// lower userId later joins the group, everyone already above them in the sorted order shifts
-// one slot and is reassigned a different color than they had before. Accepted tradeoff of the
-// group-local-index scheme (it trades long-term color stability for collision-freedom within a
-// group) — not a bug.
-export function getUserColor(userId: number, memberIds: number[]): string {
+// Styles cycle solid, dashed, dotted by slot, so neighbours and the colorblind-weak pairs
+// (orange/gold, teal/magenta, magenta/slate) never share a style.
+const SLOTS: readonly AuthorSlot[] = [
+  { name: "blue", marker: "#0072B2", style: "solid" },
+  { name: "orange", marker: "#C75000", style: "dashed" },
+  { name: "teal", marker: "#00806A", style: "dotted" },
+  { name: "magenta", marker: "#A8467A", style: "solid" },
+  { name: "violet", marker: "#5B3FA0", style: "dashed" },
+  { name: "slate", marker: "#52606D", style: "dotted" },
+  { name: "gold", marker: "#8C6D00", style: "solid" },
+  { name: "rose", marker: "#B03A2E", style: "dashed" },
+  { name: "sky", marker: "#1A72A3", style: "dotted" },
+  { name: "olive", marker: "#5F7A00", style: "solid" },
+];
+
+export const AUTHOR_SLOTS = SLOTS;
+
+// The single canonical place a group's roster is built for coloring purposes - every caller
+// (DocumentEditor's awareness/cursor color, AuthorshipLegend, CommentPanel's Avatar,
+// authorshipHighlight's buildDecorations) must be handed the SAME array, or they'll disagree on a
+// member's color.
+//
+// Order is join order (joinedAt, then userId), so a member who joins later is appended and nobody
+// already in the group changes color. `extraIds` are people who wrote text but are no longer
+// members; they are appended after the members (by id) so they keep a color. Known limit: if an
+// earlier member leaves, later members move up one slot (nothing is stored per member).
+export function buildMemberRoster(
+  members: { userId: number; joinedAt?: string | null }[],
+  extraIds: number[] = []
+): number[] {
+  const time = (m: { joinedAt?: string | null }) => {
+    const t = m.joinedAt ? Date.parse(m.joinedAt) : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const ordered = [...members].sort((a, b) => time(a) - time(b) || a.userId - b.userId).map((m) => m.userId);
+  const seen = new Set(ordered);
+  const extras = Array.from(new Set(extraIds)).filter((id) => !seen.has(id)).sort((a, b) => a - b);
+  return [...ordered, ...extras];
+}
+
+function slotFor(userId: number, memberIds: number[]): AuthorSlot {
   const idx = memberIds.indexOf(userId);
-  // Falls back to the raw id (old behavior) only for a userId absent from the roster — e.g. a
-  // since-removed member whose earlier spans are still on record.
-  return PALETTE[(idx === -1 ? userId : idx) % PALETTE.length]!;
+  // Falls back to the raw id only for a userId absent from the roster.
+  return SLOTS[(idx === -1 ? userId : idx) % SLOTS.length]!;
+}
+
+// Full-strength color: chips, cursors, avatars, legend, and the underline.
+export function getUserColor(userId: number, memberIds: number[]): string {
+  return slotFor(userId, memberIds).marker;
+}
+
+export function getUserUnderlineStyle(userId: number, memberIds: number[]): UnderlineStyle {
+  return slotFor(userId, memberIds).style;
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
+}
+
+// The wash behind an author's text, as an rgba() string.
+export function getUserTint(userId: number, memberIds: number[], alpha: number = TINT_ALPHA): string {
+  const [r, g, b] = hexToRgb(slotFor(userId, memberIds).marker);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// The tint as an opaque color over white (what the eye sees on the page); used by tests.
+export function tintOverWhite(marker: string, alpha: number = TINT_ALPHA): [number, number, number] {
+  return hexToRgb(marker).map((c) => Math.round(c * alpha + 255 * (1 - alpha))) as [number, number, number];
 }
