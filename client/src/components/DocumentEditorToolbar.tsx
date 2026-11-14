@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import type { AuthorshipUser } from "../lib/authorshipHighlight";
-import { UNDERLINE_WIDTH_PX, getUserColor, getUserTint, getUserUnderlineStyle } from "../lib/collabColors";
+import { UNDERLINE_WIDTH_PX, authorInitials, getUserColor, getUserTint, getUserUnderlineStyle } from "../lib/collabColors";
 import { DocsDataApproximateNotice } from "./DocsDataApproximateNotice";
 import { TIPS } from "../lib/helpText";
 
@@ -719,13 +719,15 @@ export function AuthorshipLegend({
   fixedAt?: string | null;
 }) {
   if (users.length === 0) return null;
+  const initials = authorInitials(users.map((u) => u.name));
   return (
     <div className="flex items-center gap-x-4 gap-y-1 px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 flex-wrap" role="list" aria-label="Who wrote what">
-      {users.map((u) => (
+      {users.map((u, i) => (
         <span key={u.id} role="listitem" className="flex items-center gap-1.5 text-xs text-slate-700">
           {/* Same look as the author's text in the page: wash + underline in their color and line style. */}
           <span
             aria-hidden="true"
+            title={`Written by ${u.name}`}
             className="px-1 text-slate-900 shrink-0"
             style={{
               backgroundColor: getUserTint(u.id, memberIds),
@@ -734,7 +736,7 @@ export function AuthorshipLegend({
               textDecorationSkipInk: "none",
             }}
           >
-            Aa
+            {initials[i]}
           </span>
           {u.name}
         </span>

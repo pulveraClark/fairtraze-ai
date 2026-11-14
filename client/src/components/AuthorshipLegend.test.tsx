@@ -12,6 +12,9 @@ describe("AuthorshipLegend", () => {
     expect(screen.getByText("Ana")).toBeTruthy();
     expect(screen.getByText("Ben")).toBeTruthy();
     const swatches = Array.from(container.querySelectorAll('[aria-hidden="true"]')) as HTMLElement[];
+    expect(swatches[0]!.textContent).toBe("AN");
+    expect(swatches[1]!.textContent).toBe("BE");
+    expect(swatches[0]!.getAttribute("title")).toBe("Written by Ana");
     expect(swatches[0]!.style.textDecoration).toContain("solid");
     expect(swatches[1]!.style.textDecoration).toContain("dashed");
   });

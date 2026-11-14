@@ -59,6 +59,24 @@ export function buildMemberRoster(
   return [...ordered, ...extras];
 }
 
+// Two-letter uppercase initials for the legend swatches, in legend order. First letter of the first
+// and last word; a single word gives its first two letters. If a later member would get initials an
+// earlier one already has, they get the first two letters of their first name instead. Letters are
+// taken by code point (Array.from) so an emoji is never split in half.
+export function authorInitials(names: string[]): string[] {
+  const taken = new Set<string>();
+  return names.map((name) => {
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return "?";
+    const first = (w: string) => Array.from(w)[0]!;
+    const twoLetters = Array.from(words[0]!).slice(0, 2).join("").toUpperCase();
+    const normal = (words.length > 1 ? first(words[0]!) + first(words[words.length - 1]!) : twoLetters).toUpperCase();
+    const result = taken.has(normal) ? twoLetters : normal;
+    taken.add(result);
+    return result;
+  });
+}
+
 function slotFor(userId: number, memberIds: number[]): AuthorSlot {
   const idx = memberIds.indexOf(userId);
   // Falls back to the raw id only for a userId absent from the roster.
