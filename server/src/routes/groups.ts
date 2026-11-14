@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { removeMemberRowFor } from "../lib/memberSync.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify, resolveNotifications } from "../lib/notify.js";
@@ -629,13 +630,8 @@ groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: 
     }),
   ]);
 
-  // Remove the corresponding analysis Member row (matched by githubUsername + projectId)
-  const targetGitHub = targetMembership.user.githubUsername;
-  if (targetGitHub) {
-    await prisma.member.deleteMany({
-      where: { projectId, githubUsername: targetGitHub },
-    });
-  }
+  // Remove the corresponding legacy Member row, also for a user with no GitHub username.
+  await removeMemberRowFor(prisma, projectId, targetMembership.user);
 
   if (selfRemove) {
     // The leader can't self-leave (blocked above), so the leader is always a different user.

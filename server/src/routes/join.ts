@@ -11,6 +11,7 @@ import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify } from "../lib/notify.js";
+import { removeMemberRowFor } from "../lib/memberSync.js";
 import type {
   TeamReport, AnyScoredMember, ScoredMember, DocumentScoredMember, CombinedScoredMember,
 } from "@shared/types.js";
@@ -488,7 +489,7 @@ joinRouter.delete("/api/student/classes/:classSectionId/leave", ...requireRole("
     prisma.classEnrollment.findUnique({
       where: { userId_classSectionId: { userId, classSectionId } },
     }),
-    prisma.user.findUnique({ where: { id: userId }, select: { githubUsername: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true, githubUsername: true } }),
   ]);
 
   if (!enrollment) {
@@ -531,11 +532,7 @@ joinRouter.delete("/api/student/classes/:classSectionId/leave", ...requireRole("
           where: { id: mem.projectId },
           data:  { membershipChangedAt: new Date() },
         });
-        if (user?.githubUsername) {
-          await tx.member.deleteMany({
-            where: { projectId: mem.projectId, githubUsername: user.githubUsername },
-          });
-        }
+        if (user) await removeMemberRowFor(tx, mem.projectId, user);
       }
     }
     await tx.classEnrollment.delete({
