@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
@@ -173,9 +173,15 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
   // From the initial authorship fetch only (the live push socket doesn't carry it).
   const [authorshipApproximate, setAuthorshipApproximate] = useState(false);
   const [authorshipFixedAt, setAuthorshipFixedAt] = useState<string | null>(null);
-  // The group's full, stable member roster (sorted userIds) — used to color-index spans/cursors
-  // collision-free within the group, instead of by raw global User.id (see collabColors.ts).
-  const [memberIds, setMemberIds] = useState<number[]>([]);
+  // The group's members (with join dates) and the roster derived from them, in join order, plus
+  // people who wrote text but have since left - used to color-index spans/cursors collision-free
+  // within the group and stable when someone joins later (see collabColors.ts).
+  const [rosterMembers, setRosterMembers] = useState<{ userId: number; joinedAt?: string }[]>([]);
+  const authorIdsKey = authorshipUsers.map((u) => u.id).sort((a, b) => a - b).join(",");
+  const memberIds = useMemo(
+    () => buildMemberRoster(rosterMembers, authorIdsKey ? authorIdsKey.split(",").map(Number) : []),
+    [rosterMembers, authorIdsKey]
+  );
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "success" | "error"; text: string; action?: { label: string; run: () => void } } | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -258,16 +264,16 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
   }, []);
 
   // Fetch the group's full member roster once per group — the stable, collision-free basis for
-  // getUserColor (see collabColors.ts). Sorted ascending by userId for a canonical order that
-  // doesn't depend on fetch-time join-order.
+  // getUserColor (see collabColors.ts). The roster is ordered by join date (then userId), so it
+  // doesn't depend on fetch order and a later joiner never changes anyone's color.
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     fetch(`/api/groups/${groupId}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? (res.json() as Promise<{ members: { userId: number }[] }>) : null))
+      .then((res) => (res.ok ? (res.json() as Promise<{ members: { userId: number; joinedAt?: string }[] }>) : null))
       .then((data) => {
         if (cancelled || !data) return;
-        setMemberIds(buildMemberRoster(data.members));
+        setRosterMembers(data.members.map((m) => ({ userId: m.userId, joinedAt: m.joinedAt })));
       })
       .catch((err) => console.error("[document] group roster fetch failed", err));
     return () => {

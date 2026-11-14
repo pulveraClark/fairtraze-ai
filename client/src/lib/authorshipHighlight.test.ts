@@ -1,6 +1,25 @@
 import { describe, it, expect } from "vitest";
 import { Schema } from "@tiptap/pm/model";
-import { plainTextRangeToPMRange } from "./authorshipHighlight";
+import { plainTextRangeToPMRange, authorshipDecorationAttrs } from "./authorshipHighlight";
+import { TINT_ALPHA, UNDERLINE_WIDTH_PX } from "./collabColors";
+
+describe("authorshipDecorationAttrs", () => {
+  it("gives a wash, a thin underline in the author's color and style, and the name as a hover title", () => {
+    const attrs = authorshipDecorationAttrs(12, [5, 12], "Ana");
+    expect(attrs.style).toContain(`rgba(199, 80, 0, ${TINT_ALPHA})`);
+    expect(attrs.style).toContain(`underline dashed ${UNDERLINE_WIDTH_PX}px #C75000`);
+    expect(attrs.style).not.toMatch(/wavy|double/);
+    expect(attrs.title).toBe("Written by Ana");
+  });
+
+  it("differs between two authors in color and in underline style, and omits the title without a name", () => {
+    const a = authorshipDecorationAttrs(5, [5, 12]);
+    const b = authorshipDecorationAttrs(12, [5, 12]);
+    expect(a.style).not.toBe(b.style);
+    expect(a.style).toContain("underline solid");
+    expect(a.title).toBeUndefined();
+  });
+});
 
 const schema = new Schema({
   nodes: {
