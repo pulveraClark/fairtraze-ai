@@ -75,7 +75,9 @@ export function stripShareClauses(sentence: string): string {
 
 /** "free-rider" and "inactive" read as "low contribution" for students and leaders; "overload" is unchanged. */
 export function studentFlagWords(text: string): string {
+  const HAS: Record<string, string> = { is: "has", was: "had", are: "have", were: "had" };
   return text
+    .replace(/\b(is|was|are|were)\s+an?\s+(?:free[\s-]?rider|inactive\s+member)\b/gi, (_m, v: string) => `${HAS[v.toLowerCase()]} low contribution`)
     .replace(/\bas\s+an?\s+(?:free[\s-]?rider|inactive\s+member)\b/gi, "for low contribution")
     .replace(/\ban?\s+(?:free[\s-]?rider|inactive\s+member)\b/gi, "low contribution")
     .replace(/\bfree[\s-]?riders?\b/gi, "low contribution")
@@ -88,6 +90,24 @@ const FLAG_PHRASE: Record<string, string> = {
   overload: "overload",
   "deadline-driven": "deadline-driven work",
 };
+
+/**
+ * AI text about ONE member (work summaries) for students and leaders: share clauses cut, any sentence that still
+ * holds a percentage or states a team measure dropped, flag words in plain form. Unlike the team explanation there
+ * is no pronoun rule (a summary is about one person) and no evenness rule ("spread her commits evenly" is fine).
+ * Returns "" when nothing is left; callers then leave the summary out.
+ */
+export function studentSafeText(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((para) => para.split(/(?<=[.!?])\s+/)
+      .map((s) => stripShareClauses(s.trim()))
+      .filter((s) => s !== "" && !new RegExp(PCT).test(s) && !isTeamMeasureSentence(s))
+      .map(studentFlagWords)
+      .join(" ").trim())
+    .filter((para) => para.length > 0)
+    .join("\n\n");
+}
 
 /** Null when no clean sentence is left, so the card hides the AI block instead of showing an empty one. */
 export function studentNarrative(text: string | null | undefined, people: Array<{ name: string; flags: string[] }> = []): string | null {

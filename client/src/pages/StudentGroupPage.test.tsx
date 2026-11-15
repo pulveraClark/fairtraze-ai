@@ -565,6 +565,68 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect(card.textContent).toMatch(/Updates again when there is new activity\./);
   });
 
+  const withCheck = {
+    ...aiBody,
+    briefCheck: {
+      requirements: [
+        { text: "Has a login page", state: "COVERED", evidence: [], sourceQuote: "Has a login page" },
+        { text: "Has a survey", state: "NOT_FOUND", evidence: [] },
+      ],
+      nothingFound: false, generatedAt: "2026-10-26T01:00:00Z", outdated: false,
+    },
+  };
+
+  it("leader: Team contributions rows hold a closed 'What … worked on'; opening it does not open the member window", async () => {
+    state.data = leaderFixture();
+    renderPage();
+    const ben = await screen.findByRole("button", { name: "What Ben worked on" });
+    expect(ben).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "What you worked on" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Wrote the User Guide.")).toBeNull();
+    await userEvent.click(ben);
+    expect(screen.getByText("Wrote the User Guide.")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText("Added the login page.")).toBeNull(); // the leader's own row stays closed
+  });
+
+  it("plain member: own summary sits closed in the Team overview, and no teammate's summary exists on the page", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...aiBody, summaries: [aiBody.summaries[0]] }) }));
+    state.data = groupFixture();
+    renderPage();
+    const card = (await screen.findByText("Team overview")).closest("section")!;
+    const mine = await screen.findByRole("button", { name: "What you worked on" });
+    expect(card.contains(mine)).toBe(true);
+    expect(mine).toHaveAttribute("aria-expanded", "false");
+    expect(card.textContent).not.toContain("Added the login page.");
+    await userEvent.click(mine);
+    expect(card.textContent).toContain("Added the login page.");
+    expect(screen.queryByText(/Ben Lim|User Guide/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /What Ben/ })).toBeNull();
+  });
+
+  it("plain member: the instructions check is there, closed, read-only, with no 'We have this'", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => withCheck }));
+    state.data = groupFixture();
+    renderPage();
+    const header = await screen.findByRole("button", { name: "Project instructions: 1 of 2 covered" });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(header);
+    expect(screen.getByText("Covered")).toBeTruthy();
+    expect(screen.getByText("Not found yet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "We have this" })).toBeNull();
+  });
+
+  it("AI off for the class, or nothing generated: no AI parts, no AI pill, no note", async () => {
+    for (const body of [{ enabled: false }, { enabled: true, running: false, hasReport: true, summaries: null }]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => body }));
+      state.data = groupFixture();
+      const { unmount } = renderPage();
+      const card = (await screen.findByText("Team overview")).closest("section")!;
+      expect(card.textContent).not.toMatch(/worked on|Project instructions|AI findings can be wrong/);
+      unmount();
+    }
+  });
+
   it("a plain member never sees the Gini value, a band or the team index, in the Team overview or in their window", async () => {
     state.data = groupFixture();
     renderPage();

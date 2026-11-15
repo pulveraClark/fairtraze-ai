@@ -139,10 +139,10 @@ function evidenceOf(r: Req) {
 }
 
 /** Covered rows start their proof with where in the instructions the requirement comes from; other rows show that as a link on their line. */
-const hasProof = (r: Req, showSource: boolean) => evidenceOf(r).length > 0 || (showSource && hasSource(r));
+export const hasProof = (r: Req, showSource: boolean) => evidenceOf(r).length > 0 || (showSource && hasSource(r));
 
 /** What opens under a row's "Proof" button. */
-function ProofBody({ r, access, showSource }: { r: Req; access: InstructionsAccess; showSource: boolean }) {
+export function ProofBody({ r, access, showSource }: { r: Req; access: InstructionsAccess; showSource: boolean }) {
   const evidence = evidenceOf(r);
   const withSource = showSource && hasSource(r);
   return (

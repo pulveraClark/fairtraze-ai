@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AI_POLL_MAX_MS, AI_POLL_MS, type AiReviewResponse } from "../lib/aiReview";
+import { AI_POLL_MAX_MS, AI_POLL_MS, normalizeBriefCheck, type AiReviewResponse } from "../lib/aiReview";
 import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 
 export interface UseAiReview {
@@ -32,7 +32,8 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
     try {
       const res = await fetch(`/api/groups/${projectId}/ai-review`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return null;
-      const body = (await res.json()) as AiReviewResponse;
+      const raw = (await res.json()) as AiReviewResponse;
+      const body: AiReviewResponse = raw.briefCheck ? { ...raw, briefCheck: normalizeBriefCheck(raw.briefCheck) } : raw;
       if (held.current && body.running && settled.current) {
         shown.current = { ...settled.current, running: true };
       } else {

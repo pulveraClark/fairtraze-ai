@@ -68,13 +68,14 @@ describe("brief check visibility", () => {
     expect(JSON.stringify(res.body)).not.toContain("authors");
   });
 
-  it("an ordinary member and outsiders never get it", async () => {
+  it("an ordinary member reads it as plain states only; outsiders never get it", async () => {
     const s = await setup();
     const member = await get(s.project.id, s.ben);
     expect(member.status).toBe(200);
-    expect(member.body).not.toHaveProperty("briefCheck");
+    expect(member.body.briefCheck.requirements[0]).toMatchObject({ text: "Has a login page", state: "COVERED" });
+    expect(member.body.briefCheck.requirements[0]).not.toHaveProperty("status");
+    expect(member.body.briefCheck.requirements[0]).not.toHaveProperty("unverified");
     expect(member.body).not.toHaveProperty("briefFailed");
-    expect(JSON.stringify(member.body)).not.toMatch(/Has a login page|src\/Login/);
     expect((await get(s.project.id, s.other)).status).toBe(403);
   });
 
@@ -142,7 +143,9 @@ describe("brief check visibility", () => {
       for (const viewer of [s.instructor, s.leader]) {
         const b = (await get(s.project.id, viewer)).body.briefCheck;
         expect(b.requirements).toHaveLength(1);
-        expect(b.sources).toEqual(sources);
+        // What the AI read (and which files it skipped) is for the instructor only.
+        if (viewer === s.instructor) expect(b.sources).toEqual(sources);
+        else expect(b).not.toHaveProperty("sources");
       }
       expect(JSON.stringify((await get(s.project.id, s.leader)).body)).not.toContain("synthetic");
     });
@@ -161,7 +164,7 @@ describe("brief check visibility", () => {
         const b = (await get(s.project.id, viewer)).body.briefCheck;
         // The "left out" count is for the owning instructor only; the leader never receives it.
         if (viewer === s.instructor) expect(b.sources.droppedCount).toBe(2);
-        else expect(b.sources).not.toHaveProperty("droppedCount");
+        else expect(b).not.toHaveProperty("sources");
         expect(b.requirements[0]).toMatchObject({ sourceQuote: "The app has a login page." });
         expect(b.requirements[0]).not.toHaveProperty("sourceFile");
         expect(b.requirements[1]).toMatchObject({ sourceFile: "brief.pdf", sourcePage: 3 });
@@ -208,10 +211,12 @@ describe("brief check visibility", () => {
       await storeHash(s.report.id, await fingerprintOf(s.asg.id, ""));
       for (const viewer of [s.instructor, s.leader]) {
         const res = (await get(s.project.id, viewer)).body;
-        expect(res.briefCheck).toMatchObject({ requirements: [], nothingFound: false, nothingRead: true, outdated: false, sources });
+        expect(res.briefCheck).toMatchObject({ requirements: [], nothingFound: false, nothingRead: true, outdated: false, ...(viewer === s.instructor ? { sources } : {}) });
+        if (viewer !== s.instructor) expect(res.briefCheck).not.toHaveProperty("sources");
         expect(res).not.toHaveProperty("briefFailed");
       }
-      expect((await get(s.project.id, s.ben)).body).not.toHaveProperty("briefCheck");
+      expect((await get(s.project.id, s.ben)).body.briefCheck).toMatchObject({ nothingRead: true });
+      expect(JSON.stringify((await get(s.project.id, s.ben)).body)).not.toContain("scan.pdf");
       // Adding a written brief later makes it outdated.
       await prisma.assignment.update({ where: { id: s.asg.id }, data: { description: "Now there is a written brief." } });
       expect((await get(s.project.id, s.instructor)).body.briefCheck.outdated).toBe(true);

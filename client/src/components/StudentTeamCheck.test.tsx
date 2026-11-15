@@ -1,28 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { AiBriefCheck } from "../lib/aiReview";
-import { StudentTeamCheck, CHECK_OUTDATED_TEXT, checkHeaderText, hasStudentCheck } from "./StudentTeamCheck";
+import { normalizeBriefCheck, type AiBriefCheck } from "../lib/aiReview";
+import { StudentTeamCheck, STATE_WORDS, CHECK_OUTDATED_TEXT, checkHeaderText, hasStudentCheck } from "./StudentTeamCheck";
 
+const marksHook = vi.fn();
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t" }) }));
 vi.mock("../hooks/useRequirementMarks", () => ({
-  useRequirementMarks: () => ({
-    marks: [], role: "leader", error: null,
-    claim: vi.fn(), confirm: vi.fn(), decline: vi.fn(), remove: vi.fn(), loadImage: vi.fn(),
-  }),
+  useRequirementMarks: (...args: unknown[]) => {
+    marksHook(...args);
+    return { marks: [], role: "leader", error: null, claim: vi.fn(), confirm: vi.fn(), decline: vi.fn(), remove: vi.fn(), loadImage: vi.fn() };
+  },
 }));
 
 type Req = AiBriefCheck["requirements"][number];
-const req = (i: number, status: Req["status"]): Req => ({
-  key: `k${i}`, text: `Requirement ${i}`, status, unverified: false, evidence: [], sourceQuote: `Requirement ${i}`,
-});
-const check = (reqs: Req[], extra: Partial<AiBriefCheck> = {}): AiBriefCheck => ({
-  requirements: reqs, nothingFound: false, generatedAt: new Date().toISOString(), outdated: false, ...extra,
-});
+type State = NonNullable<Req["state"]>;
+// A requirement as the server sends it to a student: a plain state, no status or unverified.
+const req = (i: number, state: State, evidence: Req["evidence"] = []): Req =>
+  ({ key: `k${i}`, text: `Requirement ${i}`, state, evidence, sourceQuote: `Requirement ${i}` }) as Req;
+const check = (reqs: Req[], extra: Partial<AiBriefCheck> = {}): AiBriefCheck =>
+  normalizeBriefCheck({ requirements: reqs, nothingFound: false, generatedAt: new Date().toISOString(), outdated: false, ...extra })!;
 
-describe("StudentTeamCheck (leader's instructions check)", () => {
+describe("StudentTeamCheck (every member's instructions check)", () => {
   it("is collapsed by default with one header line, and no AI pill, disclaimer or time", () => {
-    render(<StudentTeamCheck projectId={1} onViewInstructions={() => {}} check={check([req(1, "FOUND"), req(2, "FOUND"), req(3, "NOT_FOUND")])} />);
+    render(<StudentTeamCheck projectId={1} onViewInstructions={() => {}} check={check([req(1, "COVERED"), req(2, "COVERED"), req(3, "NOT_FOUND")])} />);
     const header = screen.getByRole("button", { name: checkHeaderText(2, 3) });
     expect(header).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Requirement 3")).toBeNull();
@@ -30,36 +31,72 @@ describe("StudentTeamCheck (leader's instructions check)", () => {
     expect(screen.queryByText(/can be wrong|May be wrong|not a grade|Based on the analysis|Generate/i)).toBeNull();
   });
 
-  it("opened, it lists only what is not covered, with a small 'We have this' and 'See in the instructions'", async () => {
+  it("opened, every requirement shows its plain status word", async () => {
     const user = userEvent.setup();
-    render(<StudentTeamCheck projectId={1} onViewInstructions={() => {}} check={check([req(1, "FOUND"), req(2, "NOT_FOUND")])} />);
-    await user.click(screen.getByRole("button", { name: "Project instructions: 1 of 2 covered" }));
-    expect(screen.getByText("Requirement 2")).toBeTruthy();
-    expect(screen.queryByText("Requirement 1")).toBeNull();
-    expect(screen.getByRole("button", { name: "See in the instructions" })).toBeTruthy();
-    const mark = screen.getByRole("button", { name: "We have this" });
-    expect(mark.className).toContain("min-h-8");
-    expect(mark.className).not.toContain("min-h-10");
-    // The covered ones are one small click away.
-    await user.click(screen.getByRole("button", { name: "Show 1 covered" }));
-    expect(screen.getByText("Requirement 1")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Hide 1 covered" }));
-    expect(screen.queryByText("Requirement 1")).toBeNull();
+    render(<StudentTeamCheck projectId={1} check={check([
+      req(1, "COVERED"), req(2, "PARTLY"), req(3, "NOT_FOUND"), req(4, "NOT_CONFIRMED"), req(5, "CONFIRMED"),
+    ])} />);
+    await user.click(screen.getByRole("button", { name: "Project instructions: 2 of 5 covered" }));
+    const word = (n: number) => within(screen.getByText(`Requirement ${n}`).closest("li")!);
+    expect(word(1).getByText("Covered")).toBeTruthy();
+    expect(word(2).getByText("Partly covered")).toBeTruthy();
+    expect(word(3).getByText("Not found yet")).toBeTruthy();
+    expect(word(4).getByText("Not confirmed yet")).toBeTruthy();
+    expect(word(5).getByText("Confirmed by your instructor")).toBeTruthy();
   });
 
-  it("all covered: 'All N covered', nothing to open, and a small 'Show N covered'", async () => {
+  it("never shows instructor words, scores or the raw status", async () => {
     const user = userEvent.setup();
-    render(<StudentTeamCheck projectId={1} check={check([req(1, "FOUND"), req(2, "FOUND")])} />);
-    expect(screen.getByText("Project instructions: All 2 covered")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Project instructions/ })).toBeNull();
+    render(<StudentTeamCheck projectId={1} check={check([req(1, "NOT_CONFIRMED"), req(2, "NOT_FOUND")])} />);
+    await user.click(screen.getByRole("button", { name: /Project instructions/ }));
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/needs your check|unverified|free[\s-]?rider|gini|%|!/i);
+    for (const s of Object.values(STATE_WORDS)) expect(`${s.icon} ${s.word}`).not.toMatch(/!|free[\s-]?rider|gini|band|team health/i);
+  });
+
+  it("proof is closed until 'See proof' is pressed", async () => {
+    const user = userEvent.setup();
+    const evidence: Req["evidence"] = [{ type: "doc", ref: "Intro", quote: "Our login page lets people sign in.", quoteHidden: false }];
+    render(<StudentTeamCheck projectId={1} check={check([req(1, "COVERED", evidence)])} />);
+    await user.click(screen.getByRole("button", { name: /Project instructions/ }));
+    expect(screen.queryByText(/Our login page lets people sign in/)).toBeNull();
+    const proof = screen.getByRole("button", { name: /See proof/ });
+    expect(proof).toHaveAttribute("aria-expanded", "false");
+    await user.click(proof);
+    expect(screen.getByText(/Our login page lets people sign in/)).toBeTruthy();
+  });
+
+  it("a plain member is read-only: no 'We have this', and no marks request is made", async () => {
+    marksHook.mockClear();
+    const user = userEvent.setup();
+    render(<StudentTeamCheck projectId={1} onViewInstructions={() => {}} check={check([req(1, "NOT_FOUND")])} />);
+    await user.click(screen.getByRole("button", { name: /Project instructions/ }));
+    expect(screen.queryByRole("button", { name: "We have this" })).toBeNull();
+    expect(screen.getByRole("button", { name: "See in the instructions" })).toBeTruthy();
+    expect(marksHook).not.toHaveBeenCalled();
+  });
+
+  it("the leader keeps 'We have this' on a requirement that is not covered, and not on a covered one", async () => {
+    const user = userEvent.setup();
+    render(<StudentTeamCheck projectId={1} canClaim onViewInstructions={() => {}} check={check([req(1, "COVERED"), req(2, "NOT_FOUND")])} />);
+    await user.click(screen.getByRole("button", { name: "Project instructions: 1 of 2 covered" }));
+    expect(within(screen.getByText("Requirement 2").closest("li")!).getByRole("button", { name: "We have this" })).toBeTruthy();
+    expect(within(screen.getByText("Requirement 1").closest("li")!).queryByRole("button", { name: "We have this" })).toBeNull();
+    expect(marksHook).toHaveBeenCalled();
+  });
+
+  it("all covered: 'All N covered' on the same collapsible header", async () => {
+    const user = userEvent.setup();
+    render(<StudentTeamCheck projectId={1} check={check([req(1, "COVERED"), req(2, "CONFIRMED")])} />);
+    const header = screen.getByRole("button", { name: "Project instructions: All 2 covered" });
     expect(screen.queryByText("Requirement 1")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Show 2 covered" }));
+    await user.click(header);
     expect(screen.getByText("Requirement 1")).toBeTruthy();
     expect(screen.getByText("Requirement 2")).toBeTruthy();
   });
 
   it("out of date: says the instructor can refresh it, never 'Generate again'", () => {
-    render(<StudentTeamCheck projectId={1} check={check([req(1, "FOUND")], { outdated: true })} />);
+    render(<StudentTeamCheck projectId={1} check={check([req(1, "COVERED")], { outdated: true })} />);
     expect(screen.getByText(CHECK_OUTDATED_TEXT)).toBeTruthy();
     expect(CHECK_OUTDATED_TEXT).toBe("May be out of date. Your instructor can refresh it.");
     expect(screen.queryByText(/Generate again/)).toBeNull();
@@ -69,6 +106,6 @@ describe("StudentTeamCheck (leader's instructions check)", () => {
     expect(hasStudentCheck(undefined)).toBe(false);
     expect(hasStudentCheck(check([]))).toBe(false);
     expect(hasStudentCheck(check([], { nothingRead: true }))).toBe(true);
-    expect(hasStudentCheck(check([req(1, "FOUND")]))).toBe(true);
+    expect(hasStudentCheck(check([req(1, "COVERED")]))).toBe(true);
   });
 });

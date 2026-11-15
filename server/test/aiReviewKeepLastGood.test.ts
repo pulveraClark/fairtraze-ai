@@ -150,11 +150,13 @@ describe("instructions check: a failed run keeps the card", () => {
 
     const asLeader = await get(s.project.id, s.leader as never);
     expect(asLeader.body.briefCheck.requirements).toHaveLength(1);
-    expect(asLeader.body.refreshFailed.brief.errorCode).toBe("AI_QUOTA_DAILY");
+    // The leader is told it could not be refreshed, with dates only: no error code, no reset time.
+    expect(Object.keys(asLeader.body.refreshFailed.brief).sort()).toEqual(["at", "shownFrom"]);
     expect(asLeader.body.canGenerate).toBe(false);
 
     const asMember = await get(s.project.id, s.ben as never);
-    expect(asMember.body).not.toHaveProperty("briefCheck");
+    // A plain member now reads the check too (states only, read-only); they get no refresh note.
+    expect(asMember.body.briefCheck.requirements).toEqual([{ evidence: [], state: "COVERED", text: "A login page" }]);
     expect(asMember.body).not.toHaveProperty("refreshFailed");
   });
 });

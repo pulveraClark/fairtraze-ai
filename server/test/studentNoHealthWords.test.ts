@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { AI_REVIEW_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
@@ -9,6 +10,8 @@ import type { AiMemberSummariesContent } from "@shared/aiReviewTypes.js";
 
 const app = createApp();
 const GINI = 0.31377;
+beforeEach(() => { process.env.AI_REVIEW_ENABLED = "true"; });
+afterEach(() => { delete process.env.AI_REVIEW_ENABLED; });
 
 // Nothing a student or a group leader receives may contain any of these.
 // ("Healthy" is the capitalised label; ordinary lower-case "a healthy mix of tasks" is harmless prose.)
@@ -39,6 +42,23 @@ async function setup() {
   return { cls, project, leader, member, instructor };
 }
 
+
+// The AI review answer (member summaries and the instructions check) is also student-visible: stored text that
+// states the measure is cleaned at read time, for a member and for a leader.
+async function seedAiReview(s: { project: { id: number }; leader: { id: number }; member: { id: number } }, poison: string) {
+  const report = await prisma.report.findFirstOrThrow({ where: { projectId: s.project.id } });
+  const evidence = { files: [], docSections: ["Intro"], commitCount: 0, otherCommits: 0 };
+  await prisma.aiReportReview.create({
+    data: {
+      reportId: report.id, kind: "MEMBER_SUMMARIES", status: "OK", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m",
+      content: { members: [
+        { userId: s.leader.id, summary: `Wrote the Intro. ${poison}`, source: "ai", evidence },
+        { userId: s.member.id, summary: `Added the login page. ${poison}`, source: "ai", evidence },
+      ], aiAddressed: [] },
+    },
+  });
+}
+
 describe("student and leader responses carry no health label, band or Gini", () => {
   it("group page, class lists and data export, for a member and a leader, even with old stored AI text", async () => {
     const s = await setup();
@@ -51,6 +71,18 @@ describe("student and leader responses carry no health label, band or Gini", () 
         const body = JSON.stringify(res.body);
         for (const bad of FORBIDDEN) expect(body, `${path} ${bad}`).not.toMatch(bad);
       }
+    }
+  });
+
+  it("the AI review answer carries no health label, Gini, percentage or free-rider word, for a member and a leader", async () => {
+    const s = await setup();
+    await seedAiReview(s, "The team health is Healthy. The group is Moderate Risk. Gini is 0.3137. A teammate is a free-rider with a share of 12.5%.");
+    for (const user of [s.member, s.leader]) {
+      const res = await request(app).get(`/api/groups/${s.project.id}/ai-review`).set("Authorization", authHeaderFor(user));
+      expect(res.status).toBe(200);
+      expect(res.body.summaries.length).toBeGreaterThan(0);
+      const body = JSON.stringify(res.body);
+      for (const bad of [...FORBIDDEN, /free[\s-]?rider/i, /%/]) expect(body, String(bad)).not.toMatch(bad);
     }
   });
 

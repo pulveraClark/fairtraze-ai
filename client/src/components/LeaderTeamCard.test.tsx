@@ -142,3 +142,27 @@ describe("LeaderTeamCard GitHub/Docs split bar", () => {
     expect(screen.queryByText("Docs")).toBeNull();
   });
 });
+
+describe("LeaderTeamCard work summaries", () => {
+  const ai = {
+    enabled: true, running: false, canGenerate: false, hasReport: true, generatedAt: "2026-10-26T01:00:00Z", basedOnReportAt: "2026-10-24T01:00:00Z", outdated: false,
+    summaries: [{ userId: 2, name: "Ben Lim", githubUsername: null, isYou: false, summary: "Wrote the User Guide.", source: "ai", evidence: { files: [], docSections: [], commitCount: 0, otherCommits: 0 } }],
+  } as never;
+  const team = [member({ userId: 1, name: "Ana Cruz" }), member({ userId: 2, name: "Ben Lim" })];
+
+  it("only a member the server sent a summary for gets the closed row; it opens on a press", async () => {
+    render(<LeaderTeamCard sourceType="GITHUB" team={team} currentUserId={1} ai={ai} />);
+    expect(screen.queryByRole("button", { name: "What you worked on" })).toBeNull();
+    const ben = screen.getByRole("button", { name: "What Ben worked on" });
+    expect(screen.queryByText("Wrote the User Guide.")).toBeNull();
+    await userEvent.setup().click(ben);
+    expect(screen.getByText("Wrote the User Guide.")).toBeTruthy();
+  });
+
+  it("no AI answer, or AI off: no summary rows at all", () => {
+    const { rerender } = render(<LeaderTeamCard sourceType="GITHUB" team={team} />);
+    expect(screen.queryByText(/worked on/)).toBeNull();
+    rerender(<LeaderTeamCard sourceType="GITHUB" team={team} ai={{ enabled: false } as never} />);
+    expect(screen.queryByText(/worked on/)).toBeNull();
+  });
+});

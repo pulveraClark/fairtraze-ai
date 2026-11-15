@@ -11,6 +11,8 @@ import { SOURCE_COLOR, SOURCE_NAME, type SourceKey } from "../lib/sourceColors";
 import { splitShare, validBlend, type ShareBlend } from "../lib/shareSegments";
 import { NoFlags } from "./NoFlags";
 import { NO_FLAGS_OWN, NO_FLAGS_PEER } from "../lib/flagRules";
+import { CollapsedWorkSummary } from "./report/CollapsedWorkSummary";
+import { summaryFor, type AiReviewResponse } from "../lib/aiReview";
 
 /** Mirrors LeaderTeamMemberView in server/src/routes/join.ts. */
 export interface LeaderTeamMember {
@@ -54,12 +56,14 @@ function RowLead({ open, name, children }: { open?: (opener: HTMLElement) => voi
 }
 
 /** Leader-only team view. The server only sends `team` to the group's leader. */
-export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, flagsMuted = false, currentUserId, onOpenMember }: {
+export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, flagsMuted = false, currentUserId, onOpenMember, ai }: {
   team: LeaderTeamMember[]; sourceType: string; noActivity?: boolean; flagsMuted?: boolean; currentUserId?: number;
   /** The project's public blend weights. With them a Combined card draws the GitHub/Docs split bar and legend. */
   blend?: Partial<ShareBlend> | null;
   /** Opens that member's window. With it, every row is clickable; without it the rows are plain. */
   onOpenMember?: (userId: number, opener: HTMLElement) => void;
+  /** The stored AI review. With it, a row shows a closed "What {name} worked on" when the server sent that member's summary. */
+  ai?: AiReviewResponse | null;
 }) {
   const combined = sourceType === "COMBINED";
   const equalPct = team.length > 0 ? 100 / team.length : 0;
@@ -139,6 +143,16 @@ export function LeaderTeamCard({ team, sourceType, blend, noActivity = false, fl
             <p className="text-xs tabular-nums text-slate-700 sm:text-right">
               {m.tasks.open + m.tasks.done === 0 ? "No tasks" : `Tasks: ${taskCountLabel(m.tasks.done, m.tasks.open + m.tasks.done)}`}
             </p>
+            {(() => {
+              const summary = ai?.enabled ? summaryFor(ai, { userId: m.userId }) : null;
+              if (!summary || !ai) return null;
+              const who = m.userId === currentUserId ? "you" : m.name.split(/\s+/)[0];
+              return (
+                <div className="sm:col-span-3">
+                  <CollapsedWorkSummary label={`What ${who} worked on`} summary={summary} data={ai} sourceType={sourceType} />
+                </div>
+              );
+            })()}
           </li>
         ))}
       </ul>

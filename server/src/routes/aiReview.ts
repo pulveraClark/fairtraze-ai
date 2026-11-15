@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { stripTeamMeasures } from "../lib/studentNarrative.js";
+import { studentSafeText } from "../lib/studentNarrative.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, type LoadedGroup } from "../lib/groupAccess.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
@@ -12,7 +12,7 @@ import { generateBriefComparison } from "../lib/aiReview/briefComparison.js";
 import { briefFingerprint } from "../lib/aiReview/briefEvidence.js";
 import { attachmentMetaFor } from "../lib/briefAttachments.js";
 import { activeQuotaLimit } from "../lib/aiFailureText.js";
-import { requirementKeys } from "../lib/requirementMarks.js";
+import { isMarkStale, requirementKeys } from "../lib/requirementMarks.js";
 import { AI_REVIEW_PROMPT_VERSION, BRIEF_PROMPT_VERSION } from "../lib/aiReview/prompts.js";
 import { canonicalRepoUrl, linkFile, linkFileAtCommit, repoRefOf, type RepoRef } from "../lib/aiReview/evidenceLinks.js";
 import { contributorsFor, evidenceShas, hasHeadingProof, headingAuthorIds, type ContributorLookup } from "../lib/aiReview/contributors.js";
@@ -51,31 +51,57 @@ export function shapeSummariesForViewer(
   repo: RepoRef | null = null,
 ): { summaries: AiMemberSummaryView[]; aiAddressed?: Array<AiAddressedNote & { name: string }> } {
   const visible = viewer === "member" ? content.members.filter((m) => m.userId === viewerUserId) : content.members;
+  const link = (m: AiMemberSummary) =>
+    // Links are built here, at read time, from the stored shas; `commits` itself is not sent.
+    m.evidence.files.map(({ commits, ...f }) => ({ ...f, ...(linkFile(repo, f.path, commits) ?? {}) }));
+  if (viewer !== "instructor") {
+    // Students and leaders get a whitelist, built field by field (nothing is removed from a bigger object, so a
+    // field added later never leaks). The text goes through studentSafeText: no percentages, no team measures,
+    // no "free-rider". A summary with nothing clean left is left out.
+    const summaries: AiMemberSummaryView[] = [];
+    for (const m of visible) {
+      const summary = typeof m.summary === "string" ? studentSafeText(m.summary) : "";
+      if (!summary) continue;
+      summaries.push({
+        userId: m.userId,
+        name: people.get(m.userId)?.name ?? "Former member",
+        isYou: m.userId === viewerUserId,
+        summary,
+        source: m.source,
+        githubUsername: null,
+        evidence: {
+          files: link(m),
+          docSections: m.evidence.docSections,
+          commitCount: m.evidence.commitCount,
+          otherCommits: m.evidence.otherCommits,
+        },
+      });
+    }
+    return { summaries };
+  }
   const summaries = visible.map((m) => ({
     ...m,
-    // Read-time safety net for students and leaders: no team-health label or Gini wording, even in old stored text.
-    ...(viewer === "instructor" || typeof m.summary !== "string" ? {} : { summary: stripTeamMeasures(m.summary) }),
-    // Links are built here, at read time, from the stored shas; `commits` itself is not sent.
-    evidence: {
-      ...m.evidence,
-      files: m.evidence.files.map(({ commits, ...f }) => ({ ...f, ...(linkFile(repo, f.path, commits) ?? {}) })),
-    },
+    evidence: { ...m.evidence, files: link(m) },
     name: people.get(m.userId)?.name ?? "Former member",
     githubUsername: people.get(m.userId)?.githubUsername ?? null,
     isYou: m.userId === viewerUserId,
   }));
-  if (viewer !== "instructor") return { summaries };
   return {
     summaries,
     aiAddressed: content.aiAddressed.map((a) => ({ ...a, name: people.get(a.userId)?.name ?? "Former member" })),
   };
 }
 
+// What a student reads for one requirement, computed here: the raw status and the "unverified" flag are internal.
+export type StudentRequirementState = "COVERED" | "PARTLY" | "NOT_FOUND" | "NOT_CONFIRMED" | "CONFIRMED";
+
 export interface AiBriefView {
   requirements: Array<{
     text: string;
-    status: AiRequirementStatus;
-    unverified: boolean;
+    status?: AiRequirementStatus; // instructor only
+    unverified?: boolean; // instructor only
+    // Group leader and plain member only (the instructor reads status/unverified).
+    state?: StudentRequirementState;
     evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean } & AiFileLinks>;
     // Where the requirement comes from (see AiBriefRequirement). Absent on older checks.
     sourceQuote?: string;
@@ -118,9 +144,11 @@ export function shapeBriefForViewer(
   current: { brief: string; attachments?: Array<{ id: number; size: number; mime: string }>; latestReportId: number | null },
   repo: RepoRef | null = null,
   who?: ContributorLookup,
+  // Keys the owning instructor confirmed (current marks only). A leader's claim never counts.
+  confirmed: ReadonlySet<string> = new Set(),
 ): AiBriefView | null {
   const attachments = current.attachments ?? [];
-  if (!row || viewer === "member" || (!current.brief.trim() && attachments.length === 0)) return null;
+  if (!row || (!current.brief.trim() && attachments.length === 0)) return null;
   if (row.status === "FAILED") return null;
   const content = row.content as AiBriefContent;
   const outdated =
@@ -128,36 +156,54 @@ export function shapeBriefForViewer(
   if (row.status === "SKIPPED") {
     const s = content.sources;
     if (!s || s.writtenBrief || s.filesRead > 0 || s.skipped.length === 0) return null;
-    return { requirements: [], nothingFound: false, nothingRead: true, generatedAt: row.createdAt.toISOString(), outdated, sources: sourcesFor(s, viewer) };
+    return { requirements: [], nothingFound: false, nothingRead: true, generatedAt: row.createdAt.toISOString(), outdated, ...(viewer === "instructor" ? { sources: sourcesFor(s, viewer) } : {}) };
   }
   if (!content.requirements?.length) return null;
   const keys = requirementKeys(content.requirements);
-  const requirements = content.requirements.map((r, i) => ({
-    key: keys[i] ?? undefined,
-    text: r.text,
-    status: r.status,
-    unverified: !!r.unverified,
-    ...(r.sourceQuote ? { sourceQuote: r.sourceQuote } : {}),
-    ...(r.sourceFile ? { sourceFile: r.sourceFile } : {}),
-    ...(r.sourceFile && r.sourcePage ? { sourcePage: r.sourcePage } : {}),
-    // A plain member returned above, so only the instructor and the leader reach this.
-    ...(who ? { contributors: contributorsFor(r.evidence, who) } : {}),
-    evidence: r.evidence.map((e) => {
-      const othersWrote = e.type === "doc" && viewer === "leader" && !!e.quote && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
+  const all = content.requirements.map((r, i) => {
+    const key = keys[i] ?? undefined;
+    const evidence = r.evidence.map((e) => {
+      const othersWrote = e.type === "doc" && viewer !== "instructor" && !!e.quote && (!e.authors || e.authors.length === 0 || e.authors.some((a) => a !== viewerUserId));
       // A code proof read at a pinned commit links to the file (and the quoted lines) at that commit; older
       // checks keep the commit link. The code quote is shown only when it was confirmed safe to show.
       const links = e.type === "file" ? (linkFileAtCommit(repo, e.ref, e.headSha, e.lines) ?? linkFile(repo, e.ref, e.commits) ?? {}) : {};
       const quote = e.type === "file" ? (e.quoteSafe ? e.quote : "") : othersWrote ? "" : e.quote;
       return { type: e.type, ref: e.ref, quote, quoteHidden: othersWrote, ...(e.heading ? { heading: true } : {}), ...links };
-    }),
-  }));
+    });
+    const source = {
+      ...(r.sourceQuote ? { sourceQuote: r.sourceQuote } : {}),
+      ...(r.sourceFile ? { sourceFile: r.sourceFile } : {}),
+      ...(r.sourceFile && r.sourcePage ? { sourcePage: r.sourcePage } : {}),
+    };
+    if (viewer === "instructor") {
+      return { key, text: r.text, status: r.status, unverified: !!r.unverified, ...source, evidence };
+    }
+    // Student view: a plain state word's worth of information and nothing else. Built field by field.
+    const state: StudentRequirementState =
+      r.unverified ? "NOT_CONFIRMED"
+      : r.status === "FOUND" ? "COVERED"
+      : key && confirmed.has(key) ? "CONFIRMED"
+      : r.status === "PARTLY_FOUND" ? "PARTLY" : "NOT_FOUND";
+    return {
+      // The key is only for the leader's "We have this"; a plain member has nothing to claim.
+      ...(viewer === "leader" ? { key } : {}),
+      text: r.text,
+      state,
+      ...source,
+      ...(who && viewer === "leader" ? { contributors: contributorsFor(r.evidence, who) } : {}),
+      evidence,
+    };
+  });
+  const base = { generatedAt: row.createdAt.toISOString(), outdated };
+  if (viewer !== "instructor") {
+    return { requirements: all, nothingFound: (all as Array<{ state?: string }>).every((r) => r.state === "NOT_FOUND"), ...base };
+  }
   return {
-    requirements,
-    nothingFound: requirements.every((r) => r.status === "NOT_FOUND"),
-    generatedAt: row.createdAt.toISOString(),
-    outdated,
+    requirements: all,
+    nothingFound: (all as Array<{ status?: string }>).every((r) => r.status === "NOT_FOUND"),
+    ...base,
     ...(content.sources ? { sources: sourcesFor(content.sources, viewer) } : {}),
-    ...(viewer === "instructor" ? { aiAddressedCount: content.aiAddressedCount ?? 0 } : {}),
+    aiAddressedCount: content.aiAddressedCount ?? 0,
   };
 }
 
@@ -215,6 +261,41 @@ async function contributorLookup(project: LoadedGroup, requirements: Array<{ evi
   return { names, userByLogin, loginBySha, headingAuthors };
 }
 
+// What a student (group leader or plain member) may receive, built key by key from the full answer. Anything
+// not named here is dropped, so a field added to the instructor's answer later cannot reach a student by accident.
+// Not sent to students, ever: status, errorCode, retryAt, aiLimit, upToDate, aiAddressed, briefFailed,
+// hasInstructions, brief sources, githubUsername, prompt version, model, scores, shares, flags.
+const STUDENT_BRIEF_REQ_KEYS = ["key", "text", "state", "sourceQuote", "sourceFile", "sourcePage", "contributors", "evidence"] as const;
+function pick<T extends object>(o: T, keys: readonly string[]): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) if ((o as Record<string, unknown>)[k] !== undefined) out[k] = (o as Record<string, unknown>)[k];
+  return out as Partial<T>;
+}
+export function studentReviewView(full: Record<string, unknown>, viewer: AiViewer = "member"): Record<string, unknown> {
+  const out: Record<string, unknown> = pick(full, ["enabled", "repoUrl", "running", "hasReport", "generatedAt", "basedOnReportAt", "outdated", "summaries"]);
+  out.canGenerate = false;
+  const check = full.briefCheck as AiBriefView | undefined;
+  if (check) {
+    out.briefCheck = {
+      ...pick(check, ["nothingFound", "nothingRead", "generatedAt", "outdated"]),
+      requirements: check.requirements.map((r) => pick(r, STUDENT_BRIEF_REQ_KEYS)),
+    };
+  }
+  const rf = full.refreshFailed as { findings?: AiRefreshNote; brief?: AiRefreshNote } | undefined;
+  // Only the leader is told a refresh failed (as before), and only with dates: no error code, no reset time.
+  if (rf && viewer === "leader") {
+    out.refreshFailed = {
+      ...(rf.findings ? { findings: pick(rf.findings, ["at", "shownFrom"]) } : {}),
+      ...(rf.brief ? { brief: pick(rf.brief, ["at", "shownFrom"]) } : {}),
+    };
+  }
+  return out;
+}
+
+function sendReview(res: import("express").Response, viewer: AiViewer, full: Record<string, unknown>) {
+  res.json(viewer === "instructor" ? full : studentReviewView(full, viewer));
+}
+
 // GET /api/groups/:id/ai-review - the stored AI review of the group's work, shaped for the caller.
 // Never calls Gemini. `{ enabled: false }` when the server switch or the class switch is off.
 aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) => {
@@ -264,7 +345,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   let brief: { briefCheck?: AiBriefView; briefFailed?: boolean; hasInstructions?: boolean } = {};
   let briefAttempt: AiLastAttempt | undefined;
   let briefStored: { createdAt: Date } | null = null;
-  if (viewer !== "member") {
+  {
     // The assignment (and so the attachments) is resolved from this group; no id comes from the client.
     const [assignment, briefRow] = await Promise.all([
       prisma.assignment.findFirst({ where: { projects: { some: { id: project.id } } }, select: { id: true, description: true } }),
@@ -277,9 +358,21 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     briefStored = briefRow;
     const text = assignment?.description ?? "";
     const attachments = assignment ? (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [] : [];
-    const who = await contributorLookup(project, (briefRow?.content as AiBriefContent | null)?.requirements ?? []);
+    // "Worked on by" names: instructor and leader only. A plain member gets no author information at all.
+    const who = viewer === "member" ? undefined : await contributorLookup(project, (briefRow?.content as AiBriefContent | null)?.requirements ?? []);
+    // Requirements the owning instructor confirmed (current marks only; a leader's claim never counts).
+    const confirmed = new Set<string>();
+    if (viewer !== "instructor" && briefRow) {
+      const reqKeys = new Set(requirementKeys(((briefRow.content as AiBriefContent | null)?.requirements ?? []) as never).filter((k): k is string => !!k));
+      const current = { description: text, attachmentNames: attachments.map((a) => (a as { filename?: string }).filename ?? "") };
+      const marks = await prisma.requirementMark.findMany({
+        where: { projectId: project.id, role: "INSTRUCTOR", status: "INSTRUCTOR_CONFIRMED" },
+        select: { requirementKey: true, sourceQuote: true, sourceFile: true },
+      });
+      for (const m of marks) if (reqKeys.has(m.requirementKey) && !isMarkStale(m, current)) confirmed.add(m.requirementKey);
+    }
     const view = shapeBriefForViewer(
-      briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo, who,
+      briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo, who, confirmed,
     );
     if (view) brief.briefCheck = view;
     const hasInstructions = !!text.trim() || attachments.length > 0;
@@ -298,19 +391,19 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   // A failed refresh that left the previous good result in place: the page shows it with a small note.
   const findingsNote = refreshNote(memberAttempt, review?.createdAt);
   const briefNote = refreshNote(briefAttempt, briefStored?.createdAt);
-  const refreshFailed = viewer !== "member" && (findingsNote || briefNote)
+  const refreshFailed = findingsNote || briefNote
     ? { refreshFailed: { ...(findingsNote ? { findings: findingsNote } : {}), ...(briefNote ? { brief: briefNote } : {}) } }
     : {};
 
   if (!review) {
-    res.json({ ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit, ...refreshFailed, ...upToDate });
+    sendReview(res, viewer, { ...base, generatedAt: null, summaries: null, ...brief, ...aiLimit, ...refreshFailed, ...upToDate });
     return;
   }
 
   const people = new Map(project.groupMemberships.map((m) => [m.userId, { name: m.user.name, githubUsername: m.user.githubUsername ?? null }]));
   const shaped = shapeSummariesForViewer(review.content as unknown as AiMemberSummariesContent, viewer, req.user!.sub, people, repo);
   const basedOn = await prisma.report.findUnique({ where: { id: review.reportId }, select: { generatedAt: true } });
-  res.json({
+  sendReview(res, viewer, {
     ...base,
     generatedAt: review.createdAt.toISOString(),
     basedOnReportAt: basedOn?.generatedAt.toISOString() ?? null,

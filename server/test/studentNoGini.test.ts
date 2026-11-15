@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { AI_REVIEW_PROMPT_VERSION } from "../src/lib/aiReview/prompts.js";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
@@ -6,6 +7,8 @@ import { createUser, authHeaderFor, createClassSection, createAssignment, create
 
 const app = createApp();
 const GINI = 0.31377;
+beforeEach(() => { process.env.AI_REVIEW_ENABLED = "true"; });
+afterEach(() => { delete process.env.AI_REVIEW_ENABLED; });
 
 // Every key name found anywhere in a JSON-like body.
 function keysOf(node: unknown, out: string[] = []): string[] {
@@ -31,6 +34,23 @@ async function setup() {
   return { cls, project, leader, member };
 }
 
+
+// The AI review answer (member summaries and the instructions check) is also student-visible: stored text that
+// states the measure is cleaned at read time, for a member and for a leader.
+async function seedAiReview(s: { project: { id: number }; leader: { id: number }; member: { id: number } }, poison: string) {
+  const report = await prisma.report.findFirstOrThrow({ where: { projectId: s.project.id } });
+  const evidence = { files: [], docSections: ["Intro"], commitCount: 0, otherCommits: 0 };
+  await prisma.aiReportReview.create({
+    data: {
+      reportId: report.id, kind: "MEMBER_SUMMARIES", status: "OK", promptVersion: AI_REVIEW_PROMPT_VERSION, model: "m",
+      content: { members: [
+        { userId: s.leader.id, summary: `Wrote the Intro. ${poison}`, source: "ai", evidence },
+        { userId: s.member.id, summary: `Added the login page. ${poison}`, source: "ai", evidence },
+      ], aiAddressed: [] },
+    },
+  });
+}
+
 // The Gini value is the instructor's measure. Students never see it, so the server does not even send it.
 describe("student API responses carry no Gini", () => {
   it("the group page, the class list and the class's group list, for a member and for a leader", async () => {
@@ -44,6 +64,18 @@ describe("student API responses carry no Gini", () => {
         expect(keysOf(res.body).filter((k) => /gini/i.test(k)), path).toEqual([]);
         expect(JSON.stringify(res.body), path).not.toContain("0.3137");
       }
+    }
+  });
+
+  it("the AI review answer (summaries and instructions check) carries no Gini, for a member and for a leader", async () => {
+    const s = await setup();
+    await seedAiReview(s, "The Gini coefficient is 0.3137, so the work is concentrated. Spread is 0.3137 overall.");
+    for (const user of [s.member, s.leader]) {
+      const res = await request(app).get(`/api/groups/${s.project.id}/ai-review`).set("Authorization", authHeaderFor(user));
+      expect(res.status).toBe(200);
+      expect(res.body.summaries.length).toBeGreaterThan(0);
+      expect(keysOf(res.body).filter((k) => /gini/i.test(k))).toEqual([]);
+      expect(JSON.stringify(res.body)).not.toMatch(/gini|0\.3137/i);
     }
   });
 

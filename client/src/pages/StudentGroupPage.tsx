@@ -52,6 +52,8 @@ import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { StudentTeamCheck, hasStudentCheck } from "../components/StudentTeamCheck";
+import { CollapsedWorkSummary } from "../components/report/CollapsedWorkSummary";
+import { summaryFor } from "../lib/aiReview";
 import { AiBadge } from "../components/ui/AiBadge";
 import { RefreshFailedNote } from "../components/RefreshFailedNote";
 import { StudentMemberWindow, type StudentMemberView } from "../components/StudentMemberWindow";
@@ -957,6 +959,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     blend={sourceType === "COMBINED" ? (report.myContribution as CombinedMyContribution | null) : null}
                     noActivity={report.noActivity}
                     flagsMuted={report.dataConfidence === "low"}
+                    ai={ai.data}
                     onOpenMember={(id, el) => { memberOpener.current = el; setOpenMemberId(id); }}
                   />
                 )}
@@ -967,13 +970,16 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                     {(() => {
                       // Leader only: the AI explanation and the instructions check. One "AI findings" pill and one note cover both.
                       const showNarrative = isLeader && !!report.narrative;
-                      const briefCheck = isLeader && ai.data?.enabled ? ai.data.briefCheck : undefined;
+                      // Every member reads the instructions check (read-only); the server sends a member plain states only.
+                      const briefCheck = ai.data?.enabled ? ai.data.briefCheck : undefined;
                       const showCheck = hasStudentCheck(briefCheck);
+                      // A plain member's own summary sits here, closed. The leader's own summary is in the Team contributions row.
+                      const mine = !isLeader && ai.data?.enabled && user ? summaryFor(ai.data, { userId: user.id }) : null;
                       return (
                         <>
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                             <h3 id="team-overview-title" className="text-sm font-semibold text-slate-900">Team overview</h3>
-                            {(showNarrative || showCheck) && <AiBadge variant="ai" />}
+                            {(showNarrative || showCheck || !!mine) && <AiBadge variant="ai" />}
                           </div>
                           <div>
                             <p className="mb-1.5 flex items-center gap-1 text-xs text-slate-700">
@@ -995,13 +1001,17 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                             <StudentTeamCheck
                               projectId={projectId}
                               check={briefCheck}
+                              canClaim={isLeader}
                               onOpenFile={token ? (name) => openAttachmentByName(assignment.id, assignment.attachments, name, token) : undefined}
                               onViewInstructions={assignment.description || assignment.attachments.length > 0
                                 ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
                                 : undefined}
                             />
                           )}
-                          {(showNarrative || showCheck) && <p className="text-xs leading-normal text-slate-700">{AI_CARD_NOTE}</p>}
+                          {mine && ai.data && (
+                            <CollapsedWorkSummary label="What you worked on" summary={mine} data={ai.data} sourceType={sourceType} />
+                          )}
+                          {(showNarrative || showCheck || !!mine) && <p className="text-xs leading-normal text-slate-700">{AI_CARD_NOTE}</p>}
                         </>
                       );
                     })()}

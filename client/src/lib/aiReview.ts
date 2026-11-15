@@ -14,6 +14,9 @@ export interface AiBriefCheck {
     // Identifies the requirement for "We have this" marks (a hash of its source); absent on older checks.
     key?: string;
     text: string;
+    // Students (leader and plain member) receive this plain state instead of status/unverified; `normalizeBriefCheck`
+    // fills status/unverified from it so shared pieces keep working. Absent on the instructor's answer.
+    state?: "COVERED" | "PARTLY" | "NOT_FOUND" | "NOT_CONFIRMED" | "CONFIRMED";
     status: "FOUND" | "PARTLY_FOUND" | "NOT_FOUND";
     unverified: boolean;
     evidence: Array<{ type: "file" | "doc"; ref: string; quote: string; quoteHidden: boolean; heading?: boolean } & AiFileLinks>;
@@ -42,7 +45,8 @@ export interface AiBriefCheck {
 export interface AiRefreshNote {
   at: string;
   shownFrom: string;
-  errorCode: string;
+  // The instructor's answer only; a student's note carries dates alone.
+  errorCode?: string;
   retryAt?: string;
 }
 
@@ -71,6 +75,23 @@ export interface AiReviewResponse {
   hasInstructions?: boolean;
   // Instructor and group leader only.
   briefCheck?: AiBriefCheck;
+}
+
+/** Turns a student's `state` into the status/unverified pair the shared pieces read. The instructor's check passes through. */
+export function normalizeBriefCheck(check: AiBriefCheck | undefined): AiBriefCheck | undefined {
+  if (!check || !check.requirements.some((r) => r.state && r.status === undefined)) return check;
+  return {
+    ...check,
+    requirements: check.requirements.map((r) => {
+      if (!r.state || r.status !== undefined) return r;
+      switch (r.state) {
+        case "COVERED": case "CONFIRMED": return { ...r, status: "FOUND", unverified: false };
+        case "PARTLY": return { ...r, status: "PARTLY_FOUND", unverified: false };
+        case "NOT_CONFIRMED": return { ...r, status: "NOT_FOUND", unverified: true };
+        default: return { ...r, status: "NOT_FOUND", unverified: false };
+      }
+    }),
+  };
 }
 
 export const AI_POLL_MS = 5000;
