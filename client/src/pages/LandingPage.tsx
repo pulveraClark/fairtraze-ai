@@ -447,9 +447,9 @@ export function LandingPage() {
               <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-display font-extrabold text-lg mb-5 group-hover:scale-105 transition-transform shadow-sm shadow-indigo-600/25">
                 1
               </div>
-              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Connect Your Sources</h3>
+              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Connect your sources</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                Link a GitHub repository for your project. Students connect with a join code — no manual roster entry.
+                Link a GitHub repository and add the project instructions. Students join with a code. No manual roster.
               </p>
             </motion.div>
 
@@ -458,9 +458,9 @@ export function LandingPage() {
               <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-display font-extrabold text-lg mb-5 group-hover:scale-105 transition-transform shadow-sm shadow-indigo-600/25">
                 2
               </div>
-              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Scores Computed Automatically</h3>
+              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Scores computed automatically</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                Deterministic math — commits, meaningful lines of code, and active days — combined into a transparent contribution share for every member. No AI guesswork in the numbers.
+                Deterministic math: commits, meaningful lines and active days from GitHub, and retained writing from FairTraze Docs. No AI guesswork in the numbers.
               </p>
             </motion.div>
 
@@ -469,9 +469,9 @@ export function LandingPage() {
               <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-display font-extrabold text-lg mb-5 group-hover:scale-105 transition-transform shadow-sm shadow-indigo-600/25">
                 3
               </div>
-              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Get an Explainable Report</h3>
+              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Get an explainable report</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                AI writes a plain-language narrative explaining the already-computed numbers, flags imbalances, and surfaces evidence for your review. Outputs support judgment — they never assign grades.
+                AI explains the finished numbers and checks the team's work (code and documents) against the requirements, with quotes checked word for word. It never assigns grades.
               </p>
             </motion.div>
 
