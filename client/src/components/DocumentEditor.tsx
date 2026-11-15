@@ -56,6 +56,8 @@ import { LinkDialog } from "./LinkDialog";
 import type { TocHeading } from "./TocPanel";
 import { Toolbar, AuthorshipLegend } from "./DocumentEditorToolbar";
 import type { ConnStatus, PresentUser } from "./DocumentEditorToolbar";
+import { useSaveState } from "../hooks/useSaveState";
+import type { SaveState } from "../lib/saveState";
 
 interface Props {
   groupId: number;
@@ -75,6 +77,8 @@ interface Props {
    */
   scrollToHeading?: string | null;
   onHeadingResolved?: (found: boolean) => void;
+  /** Students only: reports the save state (connecting / saving / saved / offline) so the page can show it. Never called for the read-only view. */
+  onSaveStateChange?: (state: SaveState | null) => void;
 }
 
 interface CollabHandle {
@@ -158,7 +162,7 @@ function PaperStage({ pageWidth, zoom, children }: { pageWidth: number; zoom: nu
   );
 }
 
-export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title, scrollToHeading, onHeadingResolved }: Props) {
+export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title, scrollToHeading, onHeadingResolved, onSaveStateChange }: Props) {
   const { token, user } = useAuth();
   const collabRef = useRef<CollabHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -253,6 +257,11 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
   }
 
   const collab = collabRef.current;
+
+  // Save status for the page header (editable view only; the instructor's read-only view reports nothing).
+  const saveState = useSaveState(collab?.provider ?? null, collab?.ydoc ?? null, editable && !!onSaveStateChange);
+  useEffect(() => { onSaveStateChange?.(saveState); }, [saveState, onSaveStateChange]);
+  useEffect(() => () => onSaveStateChange?.(null), [onSaveStateChange]);
 
   // Final cleanup on unmount.
   useEffect(() => {

@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { DocumentEditor } from "./DocumentEditor";
 import { DOCUMENT_TEMPLATES, findDocumentTemplate } from "@shared/documentTemplates";
 import type { DocumentTemplate } from "@shared/documentTemplates";
+import type { SaveState } from "../lib/saveState";
 
 interface Props {
   groupId: number;
@@ -19,13 +20,14 @@ interface Props {
   /** Heading a task is linked to: the editor scrolls to it once the document has synced. */
   scrollToHeading?: string | null;
   onHeadingResolved?: (found: boolean) => void;
+  onSaveStateChange?: (state: SaveState | null) => void;
 }
 
 // Gates DocumentEditor behind a one-time "start your document" step: before any Document row
 // exists for the group, the leader (or instructor) picks a template or starts blank. Once a
 // document exists, this renders DocumentEditor exactly as before — no behavior change for
 // already-started documents.
-export function DocumentGate({ groupId, editable, canChooseTemplate, title, scrollToHeading, onHeadingResolved }: Props) {
+export function DocumentGate({ groupId, editable, canChooseTemplate, title, scrollToHeading, onHeadingResolved, onSaveStateChange }: Props) {
   const { token } = useAuth();
   const [exists, setExists] = useState<boolean | null>(null);
   // Whether the document is still safe to reset (no real typed/imported content, no image
@@ -162,6 +164,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
           awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
           scrollToHeading={scrollToHeading}
           onHeadingResolved={onHeadingResolved}
+          onSaveStateChange={onSaveStateChange}
         />
       </div>
     );

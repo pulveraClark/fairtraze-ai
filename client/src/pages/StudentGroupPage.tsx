@@ -23,6 +23,8 @@ import { NOTE_STAGE, noteOutcomeText, noteStage, sortNotes } from "../lib/notes"
 import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
+import { SaveStatus } from "../components/SaveStatus";
+import type { SaveState } from "../lib/saveState";
 import { TasksTab } from "../components/tasks/TasksTab";
 import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
 import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
@@ -286,6 +288,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     window.history.replaceState(window.history.state, "", url);
   }
   const [viewingHistory, setViewingHistory]     = useState(false);
+  const [saveState, setSaveState]               = useState<SaveState | null>(null);
   // "Open in document" from a task: the editor scrolls to the task's linked heading.
   const docFocus = useDocHeadingFocus(() => { setViewingHistory(false); selectTab("document"); });
   // Evidence in the AI review links to a Docs section: same tab, with a history entry so Back returns.
@@ -1115,6 +1118,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               <span className="text-xs text-slate-600 hidden sm:inline">
                 {viewingHistory ? "Past versions of this document, captured at each analysis run" : "Collaborative editor — shared document for this group"}
               </span>
+              {!viewingHistory && <SaveStatus state={saveState} />}
               <button
                 type="button"
                 onClick={() => setViewingHistory((v) => !v)}
@@ -1138,6 +1142,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                   title={project.groupName}
                   scrollToHeading={docFocus.focus?.heading ?? docSection.heading}
                   onHeadingResolved={docFocus.focus ? docFocus.onResolved : docSection.onResolved}
+                  onSaveStateChange={setSaveState}
                 />
               </>
             )}
