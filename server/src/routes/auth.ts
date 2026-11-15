@@ -7,7 +7,7 @@ import type { SystemRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { authenticateToken, isEmailVerificationRequired } from "../middleware/auth.js";
-import { recordSignIn, recordSessionRefresh } from "../lib/lastLogin.js";
+import { recordSessionRefresh } from "../lib/lastLogin.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
@@ -222,19 +222,29 @@ authRouter.post("/api/auth/login", async (req, res) => {
     return;
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { failedLoginAttempts: 0, lockedUntil: null },
-  });
-
   if (!user.active) {
+    // As before, a correct password clears the failure counters even for a deactivated account (and does nothing
+    // else); the write is skipped when they are already clean.
+    if (user.failedLoginAttempts !== 0 || user.lockedUntil !== null) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+    }
     res.status(403).json({ error: "Your account has been deactivated. Contact an administrator." });
     return;
   }
 
-  await recordSignIn(user.id);
+  // One write for the counter reset and the sign-in time, started together with the refresh token insert
+  // (neither needs the other). Same end state as the old reset, then recordSignIn, then token.
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
-  const refreshToken = await issueRefreshToken(user.id);
+  const [, refreshToken] = await Promise.all([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+    }),
+    issueRefreshToken(user.id),
+  ]);
   setRefreshCookie(res, refreshToken);
 
   res.json({
