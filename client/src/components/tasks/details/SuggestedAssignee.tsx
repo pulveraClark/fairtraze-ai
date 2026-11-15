@@ -13,14 +13,14 @@ interface Props {
 
 /**
  * Leader-only hint under the assignee. A task linked to a document heading or labelled "Documentation"
- * goes to Documentation members, anything else to Developers; among them, whoever has the fewest open
- * tasks. It only suggests: nothing is assigned until the leader confirms, and it never affects scores.
+ * goes to Documentation members, anything else to Developers; among them, skip anyone flagged for overload and
+ * take the lowest contribution so far (fewest open tasks without a saved report). It only suggests: nothing is assigned until the leader confirms, and it never affects scores.
  */
 export function SuggestedAssignee({ board, task, onConfirm, onChange }: Props) {
   const suggestion = useMemo(() => {
     const labelNames = board.labels.filter((l) => task.labelIds.includes(l.id)).map((l) => l.name);
-    return suggestAssigneeForTask(board.members, board.tasks, task, labelNames);
-  }, [board.labels, board.members, board.tasks, task]);
+    return suggestAssigneeForTask(board.members, board.tasks, task, labelNames, board.assigneeHints);
+  }, [board.labels, board.members, board.tasks, board.assigneeHints, task]);
 
   // Already assigned: a second name next to the real assignee only confuses.
   if (task.assignedToUserId !== null || !suggestion) return null;

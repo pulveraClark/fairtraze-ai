@@ -173,6 +173,18 @@ export interface BoardResponse {
    * yet, as plain text. Absent for everyone else and when there is nothing to suggest.
    */
   suggestions?: TaskSuggestion[];
+  /**
+   * Leader only: each member's contribution share and overload state from the latest saved report, so the
+   * "Suggested" assignee can prefer the lowest share. Absent for everyone else. Planning aid; read only.
+   */
+  assigneeHints?: AssigneeHint[];
+}
+
+export interface AssigneeHint {
+  userId: number;
+  /** 0-1, or null when there is no saved report or no share for this member. */
+  share: number | null;
+  overloaded: boolean;
 }
 
 export interface TaskSuggestion {

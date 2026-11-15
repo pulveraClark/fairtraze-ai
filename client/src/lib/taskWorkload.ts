@@ -57,9 +57,11 @@ export function suggestAssignee(
 }
 
 // ── Suggested assignee for one task (leader-only hint in the details window) ─────────────────────
-// Role match first (a task linked to a document heading, or labelled "Documentation", goes to
-// Documentation members; anything else to Developers), then fewest open tasks. Display only: the
-// leader confirms or picks someone else, and nothing here touches a score.
+// Eligible = holds the role the task needs (a task linked to a document heading, or labelled "Documentation",
+// needs Documentation; anything else Developer), else everyone. Then: skip members flagged Overload, take the
+// LOWEST contribution share from the latest saved report, tie-break fewest open tasks, then name. Without a
+// saved report (or a share) it is fewest open tasks, then name. Display only: the leader confirms or picks
+// someone else, and nothing here writes a score. Shares come from the server's leader-only `assigneeHints`.
 
 export interface RoleMember extends WorkloadMember {
   functionalRoles: string[];
@@ -69,14 +71,23 @@ export type SuggestedRole = "DOCUMENTATION" | "DEVELOPER";
 
 export const ROLE_NAMES: Record<SuggestedRole, string> = { DOCUMENTATION: "Documentation", DEVELOPER: "Developer" };
 
+export interface AssigneeHintInput {
+  userId: number;
+  share: number | null;
+  overloaded: boolean;
+}
+
+export const SUGGEST_REASON_LOWEST = "Lowest contribution so far.";
+export const SUGGEST_REASON_FEWEST = "Fewest open tasks";
+
 export interface AssigneeSuggestion {
   userId: number;
   name: string;
   role: SuggestedRole;
-  /** Whether the suggested member actually holds the role (false for the fewest-open-tasks fallback). */
+  /** Whether the suggested member actually holds the role (false when nobody does and everyone was considered). */
   roleMatched: boolean;
   open: number;
-  /** One sentence naming the real roles, e.g. "Documentation member with the fewest open tasks (1)". */
+  /** "Lowest contribution so far." or "Fewest open tasks". Plain words only. */
   reason: string;
 }
 
@@ -84,24 +95,41 @@ export function taskRoleNeeded(task: { docHeading: string | null }, labelNames: 
   return task.docHeading || labelNames.some((n) => n.trim().toLowerCase() === "documentation") ? "DOCUMENTATION" : "DEVELOPER";
 }
 
+/** Shares are compared at the precision people see (one decimal of a percent), so 6.2% and 6.2% are a tie. */
+const shareKey = (share: number) => Math.round(share * 1000);
+
 export function suggestAssigneeForTask(
   members: RoleMember[],
   tasks: WorkloadTask[],
   task: { id: number; docHeading: string | null },
   labelNames: string[],
+  hints: AssigneeHintInput[] = [],
 ): AssigneeSuggestion | null {
   if (members.length === 0) return null;
   const role = taskRoleNeeded(task, labelNames);
   const { entries } = suggestAssignee(members, tasks, {}, task.id);
-  const byOpen = (list: typeof entries) => [...list].sort((a, b) => a.open - b.open || a.name.localeCompare(b.name));
-
+  const hintOf = new Map(hints.map((h) => [h.userId, h]));
   const holders = new Set(members.filter((m) => m.functionalRoles.includes(role)).map((m) => m.userId));
-  const matched = byOpen(entries.filter((e) => holders.has(e.userId)));
-  const pick = matched[0] ?? byOpen(entries)[0]!;
-  const roleMatched = matched.length > 0;
-  const roleName = ROLE_NAMES[role];
-  const reason = roleMatched
-    ? `${roleName} member with the fewest open tasks (${pick.open})`
-    : `Fewest open tasks (${pick.open}); no ${roleName} member`;
+
+  const roleMatched = entries.some((e) => holders.has(e.userId));
+  let pool = roleMatched ? entries.filter((e) => holders.has(e.userId)) : entries;
+  const notOverloaded = pool.filter((e) => !hintOf.get(e.userId)?.overloaded);
+  if (notOverloaded.length > 0) pool = notOverloaded; // everyone overloaded: still pick someone, never an empty card
+
+  const shareOf = (userId: number) => hintOf.get(userId)?.share ?? null;
+  const withShare = pool.filter((e) => shareOf(e.userId) !== null);
+  const byShare = withShare.length >= 2; // "lowest" only means something when at least two can be compared
+  const ranked = [...pool].sort((a, b) => {
+    if (byShare) {
+      const sa = shareOf(a.userId);
+      const sb = shareOf(b.userId);
+      if (sa !== null && sb !== null && shareKey(sa) !== shareKey(sb)) return shareKey(sa) - shareKey(sb);
+      if (sa !== null && sb === null) return -1;
+      if (sa === null && sb !== null) return 1;
+    }
+    return a.open - b.open || a.name.localeCompare(b.name);
+  });
+  const pick = ranked[0]!;
+  const reason = byShare && shareOf(pick.userId) !== null ? SUGGEST_REASON_LOWEST : SUGGEST_REASON_FEWEST;
   return { userId: pick.userId, name: pick.name, role, roleMatched, open: pick.open, reason };
 }

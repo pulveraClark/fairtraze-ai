@@ -46,7 +46,7 @@ describe("static: scoring and the AI input do not read task data", () => {
   });
 
   it("none of the task libraries import scoring", () => {
-    for (const rel of ["../src/lib/taskCommitLinks.ts", "../src/lib/taskDueSweep.ts", "../src/lib/taskOverviewSummary.ts", "../src/lib/taskBoard.ts", "../src/lib/taskWatchers.ts"]) {
+    for (const rel of ["../src/lib/taskCommitLinks.ts", "../src/lib/taskDueSweep.ts", "../src/lib/taskOverviewSummary.ts", "../src/lib/taskBoard.ts", "../src/lib/taskAssigneeHints.ts", "../src/lib/taskWatchers.ts"]) {
       const src = read(rel);
       const importLines = src.split("\n").filter((l) => /^\s*import\b/.test(l)).join("\n");
       expect(importLines, rel).not.toMatch(/[Ss]coring|scoringConfig|gemini/);

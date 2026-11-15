@@ -9,6 +9,7 @@ import {
 } from "./taskPermissions.js";
 import { effectiveTaskKey } from "./taskKey.js";
 import { openSuggestions } from "./taskSuggestions.js";
+import { assigneeHintsFor } from "./taskAssigneeHints.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -125,10 +126,11 @@ export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise
 
   const ids = rows.map((t) => t.id);
   // Leader only (members never receive the brief check). Two small indexed reads, and only for the leader.
-  const [counts, commits, suggestions] = await Promise.all([
+  const [counts, commits, suggestions, assigneeHints] = await Promise.all([
     subtaskCountsFor(ids),
     commitCountsFor(ids),
     actor.isLeader && actor.isMember ? openSuggestions(project.id) : Promise.resolve([]),
+    actor.isLeader && actor.isMember ? assigneeHintsFor(project) : Promise.resolve(null),
   ]);
   const tasks = rows.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id), commitCount: commits.get(t.id) }));
   const boardMilestones: BoardMilestone[] = milestones.map((m) => {
@@ -173,6 +175,7 @@ export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise
     milestones: boardMilestones,
     labels: boardLabels,
     ...(suggestions.length ? { suggestions } : {}),
+    ...(assigneeHints ? { assigneeHints } : {}),
   };
 }
 

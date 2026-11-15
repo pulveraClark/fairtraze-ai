@@ -529,7 +529,7 @@ describe("More details (14)", () => {
 });
 
 describe("suggested assignee (leader only)", () => {
-  it("suggests a Documentation member for a task linked to a heading, naming the roles, and Confirm assigns", async () => {
+  it("suggests a Documentation member for a task linked to a heading, and Confirm assigns", async () => {
     signInAs(1);
     const server = installFakeServer(mkBoard({}, [mkTask({ id: 1, title: "Write the intro", docHeading: "Introduction" })]));
     renderTab({ onOpenDocument: vi.fn() });
@@ -537,12 +537,12 @@ describe("suggested assignee (leader only)", () => {
     await user.click(await screen.findByRole("button", { name: /Write the intro/ }));
     const box = await screen.findByRole("group", { name: "Suggested assignee" });
     expect(within(box).getByText("Ana Reyes")).toBeInTheDocument();
-    expect(within(box).getByText("Documentation member with the fewest open tasks (0)")).toBeInTheDocument();
+    expect(within(box).getByText("Fewest open tasks")).toBeInTheDocument();
     await user.click(within(box).getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(server.calls.find((c) => c.method === "PATCH")?.body).toMatchObject({ assignedToUserId: ANA.userId }));
   });
 
-  it("falls back to the fewest open tasks and says no member has the role", async () => {
+  it("falls back to the fewest open tasks when no member has the role", async () => {
     signInAs(1);
     installFakeServer(mkBoard(
       { members: [LEADER, BEN] },
@@ -553,7 +553,7 @@ describe("suggested assignee (leader only)", () => {
     await user.click(await screen.findByRole("button", { name: /Docs work/ }));
     const box = await screen.findByRole("group", { name: "Suggested assignee" });
     expect(within(box).getByText("Ben Cruz")).toBeInTheDocument();
-    expect(within(box).getByText("Fewest open tasks (0); no Documentation member")).toBeInTheDocument();
+    expect(within(box).getByText("Fewest open tasks")).toBeInTheDocument();
   });
 
   it("is not shown once the task is assigned (R8)", async () => {
