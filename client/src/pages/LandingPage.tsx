@@ -44,17 +44,21 @@ function AnimatedPercent({ value }: { value: number }) {
 }
 
 // ── Typewriter effect for the AI narrative text (loops while on-screen) ───────
-function TypewriterNarrative({ text }: { text: string }) {
+function TypewriterNarrative({ text, onDone }: { text: string; onDone?: () => void }) {
   const ref = useRef<HTMLParagraphElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-40px" });
   const shouldReduceMotion = useReducedMotion();
   const [displayLength, setDisplayLength] = useState(shouldReduceMotion ? text.length : 0);
   const [isTyping, setIsTyping] = useState(!shouldReduceMotion);
+  // Keep the latest callback in a ref so it never restarts the typing effect.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     if (shouldReduceMotion) {
       setDisplayLength(text.length);
       setIsTyping(false);
+      onDoneRef.current?.();
       return;
     }
     if (!isInView) return;
@@ -72,6 +76,7 @@ function TypewriterNarrative({ text }: { text: string }) {
         if (charIndex >= text.length) {
           clearInterval(typeInterval);
           setIsTyping(false);
+          onDoneRef.current?.();
           restartTimeout = setTimeout(startTyping, 3500);
         }
       }, 35);
@@ -96,6 +101,8 @@ function TypewriterNarrative({ text }: { text: string }) {
 // ── Hero product mockup (light-mode card) ─────────────────────────────────────
 function ProductPreview() {
   const shouldReduceMotion = useReducedMotion();
+  // Requirements check shows after the narrative has typed (at once with reduced motion).
+  const [typingDone, setTypingDone] = useState(!!shouldReduceMotion);
   return (
     <div className="relative w-full max-w-[560px] mx-auto">
       {/* Soft indigo halo behind the card */}
@@ -183,8 +190,13 @@ function ProductPreview() {
                   </div>
                   <p className="text-xs font-bold text-indigo-700">AI explains and reviews</p>
                 </div>
-                <TypewriterNarrative text={AI_NARRATIVE_TEXT} />
-                <div className="mt-4 rounded-lg bg-white border border-indigo-100 p-3">
+                <TypewriterNarrative text={AI_NARRATIVE_TEXT} onDone={() => setTypingDone(true)} />
+                <div
+                  aria-hidden={!typingDone}
+                  className={`mt-4 rounded-lg bg-white border border-indigo-100 p-3 ${
+                    shouldReduceMotion ? "" : "transition-opacity duration-300"
+                  } ${typingDone ? "opacity-100 visible" : "opacity-0 invisible"}`}
+                >
                   <p className="text-xs font-bold text-slate-800 mb-1">Requirements check</p>
                   <p className="text-xs text-slate-700 leading-relaxed">{REQUIREMENTS_CHECK_TEXT}</p>
                 </div>
