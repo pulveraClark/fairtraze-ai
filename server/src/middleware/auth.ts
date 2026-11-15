@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import type { SystemRole } from "@prisma/client";
+import type { SystemRole, InstructorStatus } from "@prisma/client";
 import { verifyToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
 import { isEmailEnabled } from "../lib/emailConfig.js";
@@ -19,22 +19,40 @@ export function authenticateToken(req: Request, _res: Response, next: NextFuncti
   next();
 }
 
+// The account row every request needs: liveness (active, not erased) and, for instructors, approval status.
+// One query serves both requireAuth and requireRole.
+export interface LiveAccount {
+  id: number;
+  active: boolean;
+  deletedAt: Date | null;
+  instructorStatus: InstructorStatus;
+}
+
+/** The account row, or null when it is missing, deactivated or erased. Always read from the database, never the JWT. */
+export async function checkAccountLive(userId: number): Promise<LiveAccount | null> {
+  const row = await prisma.user.findUnique({
+    where:  { id: userId },
+    select: { id: true, active: true, deletedAt: true, instructorStatus: true },
+  });
+  return !row || !row.active || row.deletedAt ? null : row;
+}
+
 // Besides verifying the JWT, reads the account's liveness from the DB (id/active/deletedAt only)
 // so deactivation or erasure takes effect on the very next request instead of after the 15-minute
-// access-token expiry.
+// access-token expiry. The row is kept on res.locals.liveUser so requireRole does not read it again.
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   authenticateToken(req, res, () => {
     if (!req.user) {
       res.status(401).json({ error: "Authentication required" });
       return;
     }
-    prisma.user
-      .findUnique({ where: { id: req.user.sub }, select: { id: true, active: true, deletedAt: true } })
+    checkAccountLive(req.user.sub)
       .then((row) => {
-        if (!row || !row.active || row.deletedAt) {
+        if (!row) {
           res.status(401).json({ error: "Account no longer available", code: "ACCOUNT_UNAVAILABLE" });
           return;
         }
+        res.locals.liveUser = row;
         next();
       })
       .catch(next);
@@ -58,10 +76,14 @@ export function requireRole(...roles: SystemRole[]) {
         }
 
         if (req.user.role === "INSTRUCTOR") {
-          const row = await prisma.user.findUnique({
-            where:  { id: req.user.sub },
-            select: { instructorStatus: true, active: true },
-          });
+          // Normally already read by requireAuth in this same request; the query is only a fallback.
+          const live = res.locals.liveUser as LiveAccount | undefined;
+          const row = live && live.id === req.user.sub
+            ? live
+            : await prisma.user.findUnique({
+                where:  { id: req.user.sub },
+                select: { instructorStatus: true, active: true },
+              });
           if (!row || !row.active) {
             res.status(403).json({ error: "Insufficient permissions" });
             return;
