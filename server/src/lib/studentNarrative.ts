@@ -112,7 +112,13 @@ export function studentNarrative(text: string | null | undefined, people: Array<
   if (paragraphs.length === 0) return null;
   // Every flagged person is named: if the text lost the sentence that named them, say it again in plain words.
   const body = paragraphs.join("\n\n");
-  const lost = people.filter((p) => p.flags.length > 0 && !body.includes(p.name));
+  const lowerBody = body.toLowerCase();
+  const named = (name: string) => {
+    const first = name.trim().split(/\s+/)[0] ?? "";
+    const re = first ? new RegExp(`(?<![\\p{L}\\p{N}])${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "iu") : null;
+    return lowerBody.includes(name.trim().toLowerCase()) || (re !== null && re.test(body));
+  };
+  const lost = people.filter((p) => p.flags.length > 0 && !named(p.name));
   if (lost.length === 0) return body;
   const extra = lost.map((p) => {
     const phrases = [...new Set(p.flags.map((f) => FLAG_PHRASE[f] ?? f))];

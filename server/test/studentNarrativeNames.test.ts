@@ -67,6 +67,14 @@ describe("studentNarrative: names, percentages and flag words", () => {
     expect(out).toBe("Christian Lenizo was flagged for overload.");
   });
 
+  it("does not repeat a person the text names by first name only, in any letter case", () => {
+    const people = [{ name: "Christian Lenizo", flags: ["overload"] }];
+    expect(studentNarrative("Christian was flagged for overload.", people)).toBe("Christian was flagged for overload.");
+    expect(studentNarrative("CHRISTIAN made 2 commits.", people)).toBe("CHRISTIAN made 2 commits.");
+    // A different name that only starts with the same letters is not the same person.
+    expect(studentNarrative("Christiana made 2 commits.", people)).toContain("Christian Lenizo was flagged for overload.");
+  });
+
   it("Gini and health sentences are still dropped, and nothing left gives null", () => {
     expect(studentNarrative("The Gini coefficient is 0.31. Moderate Risk team health.")).toBeNull();
     expect(studentNarrative(null)).toBeNull();
