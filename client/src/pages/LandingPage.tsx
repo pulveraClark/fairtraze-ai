@@ -551,6 +551,27 @@ export function LandingPage() {
               </div>
             </motion.div>
           </div>
+
+          {/* Also included */}
+          <div className="max-w-3xl mx-auto mt-10">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-600 mb-4 text-center">Also included</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h4 className="font-display font-bold text-slate-900 text-base">Evidence you can verify</h4>
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 shrink-0">NEW</span>
+                </div>
+                <p className="text-slate-600 text-sm leading-relaxed">Every printed report carries an ID. The instructor can enter it later to confirm the numbers are the ones that were saved.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h4 className="font-display font-bold text-slate-900 text-base">Task board for planning</h4>
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 shrink-0">NEW</span>
+                </div>
+                <p className="text-slate-600 text-sm leading-relaxed">Teams plan their work in one place. Tasks help the team organize and never change a score.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
