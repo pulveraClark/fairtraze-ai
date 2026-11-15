@@ -11,7 +11,7 @@ const q: { requests: any[]; suggestions: any[] } = { requests: [], suggestions: 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ token: "t", user: { id: 1, name: "Ana Cruz", systemRole: "STUDENT" } }),
 }));
-vi.mock("./Toast", () => ({ useToast: () => ({ showSuccessToast: vi.fn() }) }));
+vi.mock("./Toast", () => ({ useToast: () => ({ showSuccessToast: vi.fn(), showError: vi.fn(), showToast: vi.fn() }) }));
 vi.mock("../hooks/useGroupQueries", () => ({
   groupKeys: { manage: () => ["m"], all: () => ["a"], requests: () => ["r"], roleSuggestions: () => ["s"] },
   useGroupManageQuery: () => ({

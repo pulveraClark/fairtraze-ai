@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SetupNudgeBar } from "./SetupNudgeBar";
+import { ToastProvider } from "./Toast";
 import type { GroupSetup } from "../lib/groupSetup";
 
 const setup = (over: Partial<GroupSetup> = {}): GroupSetup => ({
@@ -13,7 +14,7 @@ describe("SetupNudgeBar", () => {
   it("shows progress and the leader's action, and 'Finish setup' opens the steps even after a skip", async () => {
     // The skip flag is not an input here at all: the bar never depends on it.
     localStorage.setItem("ft.setup.skip.1.7", "1");
-    render(<SetupNudgeBar projectId={7} setup={setup()} token="t" onSaved={vi.fn()} />);
+    render(<ToastProvider><SetupNudgeBar projectId={7} setup={setup()} token="t" onSaved={vi.fn()} /></ToastProvider>);
     expect(screen.getByText("Setup 0 of 3")).toBeTruthy();
     expect(screen.getByText("Paste the repository link")).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -37,7 +38,7 @@ describe("SetupNudgeBar", () => {
   });
 
   it("a member sees only their own action", () => {
-    render(<SetupNudgeBar projectId={7} setup={setup({ isLeader: false, canLinkRepo: true, viewerHasGithubUsername: true })} token="t" onSaved={vi.fn()} />);
+    render(<ToastProvider><SetupNudgeBar projectId={7} setup={setup({ isLeader: false, canLinkRepo: true, viewerHasGithubUsername: true })} token="t" onSaved={vi.fn()} /></ToastProvider>);
     expect(screen.getByText("Paste the repository link")).toBeTruthy();
     expect(screen.queryByText(/leader/i)).toBeNull();
   });

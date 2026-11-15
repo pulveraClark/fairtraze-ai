@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { GroupSetupCard } from "./GroupSetupCard";
+import { ToastProvider } from "./Toast";
 import type { GroupSetup } from "../lib/groupSetup";
 
 const base = (over: Partial<GroupSetup> = {}): GroupSetup => ({
@@ -14,7 +15,9 @@ const partial = (over: Partial<GroupSetup> = {}) =>
   });
 
 const renderCard = (setup: GroupSetup, onSaved = vi.fn()) =>
-  render(<GroupSetupCard projectId={7} setup={setup} token="t" onSaved={onSaved} />);
+  render(<ToastProvider><GroupSetupCard projectId={7} setup={setup} token="t" onSaved={onSaved} /></ToastProvider>);
+
+const cardOnly = (c: HTMLElement) => c.querySelector(":scope > :not([data-toast-region])");
 
 beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -44,12 +47,12 @@ describe("GroupSetupCard states", () => {
 
   it("done: renders nothing", () => {
     const { container } = renderCard(partial({ usernames: { linked: 5, total: 5, missingNames: [] } }));
-    expect(container).toBeEmptyDOMElement();
+    expect(cardOnly(container)).toBeNull(); // only the toast region may be present
   });
 
   it("Docs-only: renders nothing and never mentions a repository", () => {
     const { container } = renderCard(base({ needsRepo: false, canLinkRepo: false }));
-    expect(container).toBeEmptyDOMElement();
+    expect(cardOnly(container)).toBeNull(); // only the toast region may be present
   });
 });
 
@@ -95,6 +98,16 @@ describe("GroupSetupCard link field", () => {
     expect(url).toBe("/api/groups/7/repo");
     expect(init).toMatchObject({ method: "PUT" });
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ repoUrl: "https://github.com/acme/app" });
+    expect(await screen.findByText("Repository linked.")).toBeInTheDocument();
+  });
+
+  it("a network failure shows a calm message inline and no success toast", async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    renderCard(base());
+    type("github.com/acme/app");
+    fireEvent.click(screen.getByRole("button", { name: "Save link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not reach the server");
+    expect(screen.queryByText("Repository linked.")).not.toBeInTheDocument();
   });
 
   it("shows the server message when the repository cannot be found, and keeps what was typed", async () => {

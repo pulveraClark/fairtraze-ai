@@ -4,6 +4,10 @@ import { useAuth } from "../context/AuthContext";
 import { planAcceptAll } from "../lib/acceptAll";
 import { useRouter } from "../router";
 import { useToast } from "./Toast";
+import { useAction } from "../hooks/useAction";
+import { BusyLabel } from "./ui/BusyLabel";
+import { SlowNote } from "./ui/LoadingState";
+import { ensureOk } from "../lib/feedback";
 import {
   groupKeys, useGroupManageQuery, useGroupRequestsQuery, useRoleSuggestionsQuery,
 } from "../hooks/useGroupQueries";
@@ -95,20 +99,23 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const { user, token } = useAuth();
   const { navigate }    = useRouter();
   const { showSuccessToast } = useToast();
+  const action = useAction();      // every button in the list/confirm steps (one action at a time)
+  const nameAction = useAction();  // the rename field has its own busy state
 
   const queryClient = useQueryClient();
   const currentUserId = user?.id ?? 0;
   const uid = user?.id ?? null;
 
   const [step, setStep]         = useState<Step>("list");
-  const [busy, setBusy]         = useState(false);
+  const busy = action.busy;
+  const [pending, setPending]  = useState<string | null>(null);
   const [actionErr, setActionErr] = useState("");
   const [reassignTarget, setReassignTarget] = useState<number | null>(null);
   const [roleBusy, setRoleBusy] = useState<number | null>(null);
   const [roleErr, setRoleErr]   = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft]     = useState("");
-  const [nameBusy, setNameBusy]       = useState(false);
+  const nameBusy = nameAction.busy;
   const [nameErr, setNameErr]         = useState("");
 
   // The modal is mounted only while open, so these queries only run while it is open.
@@ -138,138 +145,119 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const amLeader     = myMembership?.role === "LEADER";
   const canManage    = isInstructor || amLeader;
 
+  // ── Actions ────────────────────────────────────────────────────────────────
+  // One shared runner: blocks a double submit, shows the busy label, and gives feedback. The success
+  // toast appears only after the server says ok; errors stay inline in the modal (setActionErr).
+  const authHeaders = { Authorization: `Bearer ${token}` };
+
+  async function runAction<T>(
+    key: string,
+    work: () => Promise<T>,
+    opts: { success: string | ((v: T) => string); error: string; onSuccess?: (v: T) => void; onFail?: () => void },
+  ) {
+    setActionErr("");
+    setPending(key);
+    try {
+      await action.run(work, {
+        success: opts.success,
+        error: opts.error,
+        onSuccess: opts.onSuccess,
+        onError: (message) => { setActionErr(message); opts.onFail?.(); },
+      });
+    } finally {
+      setPending(null);
+    }
+  }
+
   // ── Reassign leader ────────────────────────────────────────────────────────
   async function handleReassign() {
     if (!reassignTarget) return;
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/reassign-leader`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ userId: reassignTarget }),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not change the leader."); return; }
-      onChanged();
-      setStep("list");
-      setReassignTarget(null);
-      await refreshGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction("reassign", () => fetch(`/api/groups/${projectId}/reassign-leader`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body:    JSON.stringify({ userId: reassignTarget }),
+    }), {
+      success: "Leader changed.",
+      error: "Could not change the leader. Try again.",
+      onSuccess: () => { onChanged(); setStep("list"); setReassignTarget(null); void refreshGroup(); },
+    });
   }
 
   // ── Accept / decline join requests ────────────────────────────────────────
   async function handleAccept(requestId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/requests/${requestId}/accept`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not accept request."); return; }
-      onChanged();
-      await refreshGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`accept:${requestId}`, () => fetch(`/api/groups/requests/${requestId}/accept`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Request accepted.",
+      error: "Could not accept the request. Try again.",
+      onSuccess: () => { onChanged(); void refreshGroup(); },
+    });
   }
 
   async function handleAcceptAll() {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/requests/accept-all`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string; accepted?: number; skipped?: number };
-      if (!res.ok) { setActionErr(data.error ?? "Could not accept the requests."); setStep("list"); return; }
-      const n = data.accepted ?? 0;
-      showSuccessToast(`Accepted ${n} request${n === 1 ? "" : "s"}.`);
-      onChanged();
-      setStep("list");
-      await refreshGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction("accept-all", async () => {
+      const res = await fetch(`/api/groups/${projectId}/requests/accept-all`, { method: "POST", headers: authHeaders });
+      await ensureOk(res, "Could not accept the requests. Try again.");
+      return (await res.json()) as { accepted?: number };
+    }, {
+      success: (data) => {
+        const n = data.accepted ?? 0;
+        return `${n} request${n === 1 ? "" : "s"} accepted.`;
+      },
+      error: "Could not accept the requests. Try again.",
+      onSuccess: () => { onChanged(); setStep("list"); void refreshGroup(); },
+      onFail: () => setStep("list"),
+    });
   }
 
   async function handleDecline(requestId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/requests/${requestId}/decline`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not decline request."); return; }
-      await refreshRequests();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`decline:${requestId}`, () => fetch(`/api/groups/requests/${requestId}/decline`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Request declined.",
+      error: "Could not decline the request. Try again.",
+      onSuccess: () => { void refreshRequests(); },
+    });
   }
 
   // ── Accept / decline role suggestions ────────────────────────────────────
   async function handleAcceptSuggestion(suggestionId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/role-suggestions/${suggestionId}/accept`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not accept suggestion."); return; }
-      onChanged();
-      await refreshGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`sug-accept:${suggestionId}`, () => fetch(`/api/groups/role-suggestions/${suggestionId}/accept`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Role request accepted.",
+      error: "Could not accept the role request. Try again.",
+      onSuccess: () => { onChanged(); void refreshGroup(); },
+    });
   }
 
   async function handleDeclineSuggestion(suggestionId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/role-suggestions/${suggestionId}/decline`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not decline suggestion."); return; }
-      await refreshSuggestions();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`sug-decline:${suggestionId}`, () => fetch(`/api/groups/role-suggestions/${suggestionId}/decline`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Role request declined.",
+      error: "Could not decline the role request. Try again.",
+      onSuccess: () => { void refreshSuggestions(); },
+    });
   }
 
   // ── Remove / leave ─────────────────────────────────────────────────────────
-  async function handleRemove(targetUserId: number) {
+  // `disband` is the "only member leaves, group is deleted" path. The toast survives the modal closing
+  // (and any later navigation) because ToastProvider sits above the routes.
+  async function handleRemove(targetUserId: number, disband = false) {
     const isSelf = targetUserId === currentUserId;
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/members/${targetUserId}`, {
-        method:  "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not remove member."); setStep("list"); return; }
-      onChanged();
-      if (isSelf) {
-        onClose();
-      } else {
-        setStep("list");
-        await refreshGroup();
-      }
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`remove:${targetUserId}`, () => fetch(`/api/groups/${projectId}/members/${targetUserId}`, {
+      method: "DELETE", headers: authHeaders,
+    }), {
+      success: disband ? "Group deleted." : isSelf ? "You left the group." : "Member removed.",
+      error: isSelf ? "Could not leave the group. Try again." : "Could not remove the member. Try again.",
+      onSuccess: () => {
+        onChanged();
+        if (isSelf) onClose();
+        else { setStep("list"); void refreshGroup(); }
+      },
+      onFail: () => setStep("list"),
+    });
   }
 
   // ── Rename group ────────────────────────────────────────────────────────
@@ -284,25 +272,25 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     if (!group) return;
     const trimmed = nameDraft.trim();
     if (!trimmed) { setNameErr("Group name is required."); return; }
-    setNameBusy(true);
     setNameErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}`, {
+    await nameAction.run(async () => {
+      const res = await fetch(`/api/groups/${projectId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ groupName: trimmed }),
       });
-      const data = await res.json() as { groupName?: string; error?: string };
-      if (!res.ok) { setNameErr(data.error ?? "Could not update name."); return; }
-      const confirmed = data.groupName ?? trimmed;
-      setGroup((g) => g ? { ...g, groupName: confirmed } : g);
-      setEditingName(false);
-      showSuccessToast("Group name updated.");
-    } catch {
-      setNameErr("Network error — could not update name.");
-    } finally {
-      setNameBusy(false);
-    }
+      await ensureOk(res, "Could not update the name. Try again.");
+      return (await res.json()) as { groupName?: string };
+    }, {
+      success: "Group name updated.",
+      error: "Could not update the name. Try again.",
+      onError: setNameErr,
+      onSuccess: (data) => {
+        const confirmed = data.groupName ?? trimmed;
+        setGroup((g) => g ? { ...g, groupName: confirmed } : g);
+        setEditingName(false);
+      },
+    });
   }
 
   // ── Set functional roles (optimistic update, revert on error) ─────────────
@@ -394,7 +382,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   disabled={nameBusy}
                   className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1.5 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                 >
-                  {nameBusy ? "Saving…" : "Save"}
+                  <BusyLabel busy={nameBusy} idle="Save" busyText="Saving…" />
                 </button>
                 <button
                   onClick={() => setEditingName(false)}
@@ -633,14 +621,14 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         disabled={busy}
                         className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                       >
-                        Accept
+                        <BusyLabel busy={pending === `accept:${r.id}`} idle="Accept" busyText="Accepting…" />
                       </button>
                       <button
                         onClick={() => void handleDecline(r.id)}
                         disabled={busy}
                         className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
-                        Decline
+                        <BusyLabel busy={pending === `decline:${r.id}`} idle="Decline" busyText="Declining…" />
                       </button>
                     </div>
                   </li>
@@ -689,14 +677,14 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         disabled={busy}
                         className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                       >
-                        Accept
+                        <BusyLabel busy={pending === `sug-accept:${s.id}`} idle="Accept" busyText="Accepting…" />
                       </button>
                       <button
                         onClick={() => void handleDeclineSuggestion(s.id)}
                         disabled={busy}
                         className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
-                        Decline
+                        <BusyLabel busy={pending === `sug-decline:${s.id}`} idle="Decline" busyText="Declining…" />
                       </button>
                     </div>
                   </li>
@@ -812,7 +800,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy ? "Changing leader…" : "Confirm leader change"}
+            <BusyLabel busy={busy} idle="Confirm leader change" busyText="Changing leader…" />
           </button>
         </div>
       </>
@@ -849,10 +837,11 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy
-              ? (isSelf ? "Leaving…" : "Removing…")
-              : (isSelf ? "Leave group" : `Remove ${targetName}`)
-            }
+            <BusyLabel
+              busy={busy}
+              idle={isSelf ? "Leave group" : `Remove ${targetName}`}
+              busyText={isSelf ? "Leaving…" : "Removing…"}
+            />
           </button>
         </div>
       </>
@@ -886,7 +875,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               disabled={busy}
               className="px-4 py-2 rounded-lg text-sm text-white bg-emerald-700 hover:bg-emerald-800 transition-colors font-semibold disabled:opacity-50"
             >
-              {busy ? "Accepting…" : `Accept ${plan.accepting}`}
+              <BusyLabel busy={busy} idle={`Accept ${plan.accepting}`} busyText="Accepting…" />
             </button>
           )}
         </div>
@@ -914,11 +903,11 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             Cancel
           </button>
           <button
-            onClick={() => void handleRemove(currentUserId)}
+            onClick={() => void handleRemove(currentUserId, true)}
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy ? "Leaving…" : "Leave and delete group"}
+            <BusyLabel busy={busy} idle="Leave and delete group" busyText="Deleting group…" />
           </button>
         </div>
       </>
@@ -983,6 +972,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 </div>
               )}
 
+              <SlowNote show={action.slow || nameAction.slow} />
               {step === "list" && renderList()}
               {step === "reassign-select" && renderReassignSelect()}
               {typeof step === "object" && step.type === "confirm-reassign" &&

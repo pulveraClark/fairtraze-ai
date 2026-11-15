@@ -1,5 +1,8 @@
 import { useId, useState, type FormEvent } from "react";
-import { useSubmitGuard } from "../hooks/useSubmitGuard";
+import { useAction } from "../hooks/useAction";
+import { BusyLabel } from "./ui/BusyLabel";
+import { SlowNote } from "./ui/LoadingState";
+import { ensureOk } from "../lib/feedback";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, CARD, FOCUS_LIGHT } from "./ui/styles";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
@@ -15,20 +18,14 @@ const LINK = `font-semibold text-indigo-700 underline underline-offset-2 hover:t
 const INPUT =
   `block w-full min-h-9 rounded-lg border bg-white px-3 py-1.5 font-mono text-sm text-slate-900 placeholder-slate-500 ${FOCUS_LIGHT}`;
 
-/** Message of a failed save, taken from the server so the wording lives in one place. */
-async function saveRepo(projectId: number, token: string | null, repoUrl: string): Promise<{ ok: true } | { ok: false; message: string }> {
-  try {
-    const res = await fetch(`/api/groups/${projectId}/repo`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ repoUrl }),
-    });
-    if (res.ok) return { ok: true };
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    return { ok: false, message: body.error ?? "Could not save the link. Try again." };
-  } catch {
-    return { ok: false, message: "We couldn't reach the server. Check your connection and try again." };
-  }
+/** Saves the link. A non-ok answer throws the server's plain message (see ensureOk). */
+async function saveRepo(projectId: number, token: string | null, repoUrl: string): Promise<void> {
+  const res = await fetch(`/api/groups/${projectId}/repo`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ repoUrl }),
+  });
+  await ensureOk(res, "Could not save the link. Try again.");
 }
 
 function StepMark({ step }: { step: SetupStep }) {
@@ -93,7 +90,7 @@ function LinkStep({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [touched, setTouched] = useState(false);
-  const { submitting: saving, run } = useSubmitGuard();
+  const { busy: saving, slow, run } = useAction();
   const [serverError, setServerError] = useState("");
 
   const canEdit = setup.canLinkRepo || (setup.canChangeRepo && editing);
@@ -103,19 +100,19 @@ function LinkStep({
     e.preventDefault();
     setTouched(true);
     if (feedback.kind !== "ok") return;
-    const result = await run(async () => {
-      setServerError("");
-      return saveRepo(projectId, token, feedback.url);
+    setServerError("");
+    const wasLinked = setup.repoLinked;
+    await run(() => saveRepo(projectId, token, feedback.url), {
+      success: wasLinked ? "Repository changed." : "Repository linked.",
+      error: "Could not save the link. Try again.",
+      onError: setServerError,
+      onSuccess: () => {
+        setEditing(false);
+        setValue("");
+        setTouched(false);
+        onSaved();
+      },
     });
-    if (!result) return; // a save is already running
-    if (result.ok) {
-      setEditing(false);
-      setValue("");
-      setTouched(false);
-      onSaved();
-    } else {
-      setServerError(result.message);
-    }
   }
 
   return (
@@ -167,9 +164,10 @@ function LinkStep({
           {serverError && (
             <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">{serverError}</p>
           )}
+          <SlowNote show={slow} />
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={saving || feedback.kind !== "ok"} className={BUTTON_PRIMARY_COMPACT}>
-              {saving ? "Saving…" : setup.repoLinked ? "Save new link" : "Save link"}
+              <BusyLabel busy={saving} idle={setup.repoLinked ? "Save new link" : "Save link"} busyText="Saving…" />
             </button>
             {editing && (
               <button type="button" disabled={saving} onClick={() => { setEditing(false); setValue(""); setTouched(false); setServerError(""); }} className={BUTTON_SECONDARY_COMPACT}>

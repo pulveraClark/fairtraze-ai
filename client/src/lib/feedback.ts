@@ -46,7 +46,8 @@ export async function ensureOk(res: Response, fallback: string): Promise<Respons
   if (res.ok) return res;
   let message = fallback;
   try {
-    const body = (await res.clone().json()) as { error?: unknown };
+    const source = typeof res.clone === "function" ? res.clone() : res; // plain objects in tests have no clone()
+    const body = (await source.json()) as { error?: unknown };
     if (typeof body?.error === "string" && body.error.trim()) message = body.error;
   } catch {
     // not JSON: keep the fallback

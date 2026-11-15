@@ -43,6 +43,10 @@ import { SetupNudgeBar } from "../components/SetupNudgeBar";
 import { SetupGate } from "../components/SetupGate";
 import { readSetupSkipped, storeSetupSkipped, readSetupCompleteShown, storeSetupCompleteShown } from "../lib/setupSkip";
 import { useToast } from "../components/Toast";
+import { useAction } from "../hooks/useAction";
+import { ensureOk } from "../lib/feedback";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { LoadingState } from "../components/ui/LoadingState";
 import { NextStepLine } from "../components/NextStepLine";
 import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/groupSetup";
 import { nextStepText } from "../lib/nextStep";
@@ -318,7 +322,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const myRoles      = data?.membership?.functionalRoles ?? [];
   const mySuggestion = data?.membership?.roleSuggestion ?? null;
   const [suggestDraft, setSuggestDraft]   = useState<string[]>([]);
-  const [suggestBusy, setSuggestBusy]     = useState(false);
+  const suggestAction = useAction();
+  const suggestBusy = suggestAction.busy;
   const [suggestErr, setSuggestErr]       = useState("");
   // Seed the draft once per group so a background refetch never overwrites what the user is picking.
   const draftSeededFor = useRef<number | null>(null);
@@ -331,7 +336,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   // Group name rename (leader only)
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [groupNameDraft, setGroupNameDraft]     = useState("");
-  const [groupNameBusy, setGroupNameBusy]       = useState(false);
+  const renameAction = useAction();
+  const groupNameBusy = renameAction.busy;
   const [groupNameErr, setGroupNameErr]         = useState("");
   // My open tasks (read-only preview — the board lives on the Tasks tab)
   const myTasks = useMemo(
@@ -382,27 +388,26 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     });
     if (toSuggest.length === 0) return;
     setSuggestErr("");
-    setSuggestBusy(true);
-    try {
+    await suggestAction.run(async () => {
       const res  = await fetch(`/api/groups/${projectId}/role-suggestions`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ suggestedRoles: toSuggest }),
       });
-      const json = await res.json() as RoleSuggestionData & { error?: string };
-      if (!res.ok) { setSuggestErr(json.error ?? "Could not submit suggestion."); return; }
-      patchDetail((d) => ({
+      await ensureOk(res, "Could not send the role request. Try again.");
+      return (await res.json()) as RoleSuggestionData;
+    }, {
+      success: "Role request sent.",
+      error: "Could not send the role request. Try again.",
+      onError: setSuggestErr,
+      onSuccess: (json) => patchDetail((d) => ({
         ...d,
         membership: {
           ...d.membership,
           roleSuggestion: { id: json.id, suggestedRoles: json.suggestedRoles, status: "PENDING", createdAt: json.createdAt },
         },
-      }));
-    } catch {
-      setSuggestErr("Network error — could not submit suggestion.");
-    } finally {
-      setSuggestBusy(false);
-    }
+      })),
+    });
   }
 
   function startEditGroupName() {
@@ -416,33 +421,31 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
     if (!token || !data) return;
     const trimmed = groupNameDraft.trim();
     if (!trimmed) { setGroupNameErr("Group name is required."); return; }
-    setGroupNameBusy(true);
     setGroupNameErr("");
-    try {
+    await renameAction.run(async () => {
       const res  = await fetch(`/api/groups/${projectId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ groupName: trimmed }),
       });
-      const json = await res.json() as { groupName?: string; error?: string };
-      if (!res.ok) { setGroupNameErr(json.error ?? "Could not update name."); return; }
-      patchDetail((d) => ({ ...d, project: { ...d.project, groupName: json.groupName ?? trimmed } }));
-      setEditingGroupName(false);
-    } catch {
-      setGroupNameErr("Network error — could not update name.");
-    } finally {
-      setGroupNameBusy(false);
-    }
+      await ensureOk(res, "Could not update the name. Try again.");
+      return (await res.json()) as { groupName?: string };
+    }, {
+      success: "Group name updated.",
+      error: "Could not update the name. Try again.",
+      onError: setGroupNameErr,
+      onSuccess: (json) => {
+        patchDetail((d) => ({ ...d, project: { ...d.project, groupName: json.groupName ?? trimmed } }));
+        setEditingGroupName(false);
+      },
+    });
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <main className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <span className="h-4 w-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
-            Loading…
-          </div>
+          <LoadingState label="Loading group…" />
         </main>
       </div>
     );
@@ -595,7 +598,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                       disabled={groupNameBusy}
                       className="min-h-10 text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                     >
-                      {groupNameBusy ? "Saving…" : "Save"}
+                      <BusyLabel busy={groupNameBusy} idle="Save" busyText="Saving…" />
                     </button>
                     <button
                       onClick={() => setEditingGroupName(false)}
