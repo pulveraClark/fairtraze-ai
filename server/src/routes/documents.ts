@@ -356,12 +356,13 @@ documentsRouter.patch("/api/groups/:id/document/page-setup", requireAuth, async 
 // would under-detect "real content exists" and a reset would silently cascade-delete that
 // discussion. Recomputed fresh on every call — never cached, never trusted from the client.
 async function isDocumentResettable(documentId: number): Promise<boolean> {
-  const [editEventCount, editSessionCount, commentCount] = await Promise.all([
-    prisma.editEvent.count({ where: { documentId } }),
-    prisma.editSession.count({ where: { documentId } }),
-    prisma.comment.count({ where: { documentId } }),
+  // Existence checks (stop at the first row) instead of counting every row; same boolean.
+  const [anyEvent, anySession, anyComment] = await Promise.all([
+    prisma.editEvent.findFirst({ where: { documentId }, select: { id: true } }),
+    prisma.editSession.findFirst({ where: { documentId }, select: { id: true } }),
+    prisma.comment.findFirst({ where: { documentId }, select: { id: true } }),
   ]);
-  return editEventCount === 0 && editSessionCount === 0 && commentCount === 0;
+  return anyEvent === null && anySession === null && anyComment === null;
 }
 
 // GET /api/groups/:id/document/status — whether a Document row exists yet, WITHOUT creating one
@@ -377,7 +378,11 @@ documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: 
   }
   const projectId = idResult.data;
 
-  const project = await loadGroup(projectId);
+  // The document id is read alongside the group (read-only, id only); the 404 and 403 checks still decide first.
+  const [project, doc] = await Promise.all([
+    loadGroup(projectId),
+    prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
+  ]);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
@@ -388,7 +393,6 @@ documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: 
     return;
   }
 
-  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
   const resettable = doc ? await isDocumentResettable(doc.id) : false;
   res.json({ exists: !!doc, resettable });
 });
@@ -585,7 +589,11 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
   }
   const projectId = idResult.data;
 
-  const project = await loadGroup(projectId);
+  // The document id is read alongside the group (read-only, id only); the checks below still decide first.
+  const [project, doc] = await Promise.all([
+    loadGroup(projectId),
+    prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
+  ]);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
@@ -601,7 +609,6 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
     return;
   }
 
-  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
   if (!doc) {
     res.json({ spans: [], users: [], docsDataApproximate: false });
     return;

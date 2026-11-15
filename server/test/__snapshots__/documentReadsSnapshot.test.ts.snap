@@ -1,0 +1,211 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`document reads: responses stay identical (characterisation) > authorship: no document, with events, wrong source type, no access 1`] = `
+{
+  "githubGroup": {
+    "body": {
+      "error": "Authorship data is only available for EDITOR or COMBINED assignments.",
+    },
+    "status": 403,
+  },
+  "instructor": {
+    "body": {
+      "docsDataApproximate": true,
+      "docsDataFixedAt": "<ts>",
+      "spans": [
+        {
+          "end": 5,
+          "start": 0,
+          "userId": "<leader>",
+        },
+      ],
+      "users": [
+        {
+          "id": "<leader>",
+          "name": "Test User 23",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "missing": {
+    "body": {
+      "error": "Group not found.",
+    },
+    "status": 404,
+  },
+  "noDoc": {
+    "body": {
+      "docsDataApproximate": false,
+      "spans": [],
+      "users": [],
+    },
+    "status": 200,
+  },
+  "outsider": {
+    "body": {
+      "error": "You do not have access to this document.",
+    },
+    "status": 403,
+  },
+  "withEvent": {
+    "body": {
+      "docsDataApproximate": true,
+      "docsDataFixedAt": "<ts>",
+      "spans": [
+        {
+          "end": 5,
+          "start": 0,
+          "userId": "<leader>",
+        },
+      ],
+      "users": [
+        {
+          "id": "<leader>",
+          "name": "Test User 23",
+        },
+      ],
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`document reads: responses stay identical (characterisation) > comments: none, root plus reply, no access, no document 1`] = `
+{
+  "empty": {
+    "body": {
+      "comments": [],
+    },
+    "status": 200,
+  },
+  "missing": {
+    "body": {
+      "error": "Group not found.",
+    },
+    "status": 404,
+  },
+  "noDoc": {
+    "body": {
+      "comments": [],
+    },
+    "status": 200,
+  },
+  "outsider": {
+    "body": {
+      "error": "You do not have access to this document.",
+    },
+    "status": 403,
+  },
+  "thread": {
+    "body": {
+      "comments": [
+        {
+          "anchor": "YW5jaG9yLTE=",
+          "author": {
+            "id": "<leader>",
+            "name": "Test User 33",
+          },
+          "createdAt": "<ts>",
+          "documentId": "<doc>",
+          "id": "<doc>",
+          "parentId": null,
+          "resolvedAt": null,
+          "text": "Root",
+        },
+        {
+          "anchor": "YW5jaG9yLTE=",
+          "author": {
+            "id": "<member>",
+            "name": "Test User 34",
+          },
+          "createdAt": "<ts>",
+          "documentId": "<doc>",
+          "id": 2,
+          "parentId": "<doc>",
+          "resolvedAt": null,
+          "text": "Reply",
+        },
+      ],
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`document reads: responses stay identical (characterisation) > status: no document, fresh, with event, with session, with comment 1`] = `
+{
+  "anon": {
+    "body": {
+      "error": "Authentication required",
+    },
+    "status": 401,
+  },
+  "badId": {
+    "body": {
+      "error": "Invalid group id",
+    },
+    "status": 400,
+  },
+  "fresh": {
+    "body": {
+      "exists": true,
+      "resettable": true,
+    },
+    "status": 200,
+  },
+  "freshInstructor": {
+    "body": {
+      "exists": true,
+      "resettable": true,
+    },
+    "status": 200,
+  },
+  "missing": {
+    "body": {
+      "error": "Group not found.",
+    },
+    "status": 404,
+  },
+  "noDoc": {
+    "body": {
+      "exists": false,
+      "resettable": false,
+    },
+    "status": 200,
+  },
+  "otherInstructor": {
+    "body": {
+      "error": "You do not have access to this document.",
+    },
+    "status": 403,
+  },
+  "outsider": {
+    "body": {
+      "error": "You do not have access to this document.",
+    },
+    "status": 403,
+  },
+  "withComment": {
+    "body": {
+      "exists": true,
+      "resettable": false,
+    },
+    "status": 200,
+  },
+  "withEvent": {
+    "body": {
+      "exists": true,
+      "resettable": false,
+    },
+    "status": 200,
+  },
+  "withSession": {
+    "body": {
+      "exists": true,
+      "resettable": false,
+    },
+    "status": 200,
+  },
+}
+`;

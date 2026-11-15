@@ -54,7 +54,11 @@ commentsRouter.get("/api/groups/:id/document/comments", requireAuth, async (req:
   }
   const projectId = idResult.data;
 
-  const project = await loadGroup(projectId);
+  // The document id is read alongside the group (read-only, id only); the 404 and 403 checks still decide first.
+  const [project, document] = await Promise.all([
+    loadGroup(projectId),
+    prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
+  ]);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
@@ -65,7 +69,6 @@ commentsRouter.get("/api/groups/:id/document/comments", requireAuth, async (req:
     return;
   }
 
-  const document = await prisma.document.findUnique({ where: { groupId: projectId } });
   if (!document) {
     res.json({ comments: [] });
     return;
