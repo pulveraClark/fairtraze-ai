@@ -13,10 +13,11 @@ export const PREVIEW_MEMBERS = [
   { name: "Member D", pct: 10, flag: "free-rider" as const },
 ] as const;
 
-export const PREVIEW_GINI = 0.27;
-
 export const AI_NARRATIVE_TEXT =
-  "Member A's contribution share (46%) is well above the team's equal share, indicating a workload concentration. Member D's share (10%) falls significantly below the expected minimum…";
+  "Member A's share (46%) is well above an equal split, so the work is concentrated. Member D's share (10%) is well below it. The scores come from the math; this text only explains them.";
+
+export const REQUIREMENTS_CHECK_TEXT =
+  "5 of 6 covered. Missing: README. Quotes checked word for word.";
 
 // ── Count-up stat number (animates 0 → value once it enters the viewport) ─────
 function AnimatedPercent({ value }: { value: number }) {
@@ -127,37 +128,19 @@ function ProductPreview() {
         {/* The card */}
         <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-[0_20px_60px_-10px_rgba(99,102,241,0.12),0_8px_24px_-4px_rgba(0,0,0,0.07)]">
 
-          {/* Faux browser chrome */}
-          <div className="bg-slate-50 px-5 py-3 flex items-center justify-between border-b border-slate-200">
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-            </div>
-            <div className="flex-1 max-w-[200px] mx-4 bg-white rounded border border-slate-200 py-1 text-center">
-              <span className="text-xs text-slate-600 font-mono">app.fairtraze.ai/report/cs101</span>
-            </div>
-            <div className="w-10" />
+          {/* Card header */}
+          <div className="bg-slate-50 px-5 py-3 flex items-center justify-between gap-3 border-b border-slate-200">
+            <p className="text-sm font-bold text-slate-900">Example report</p>
+            <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-1 whitespace-nowrap">
+              Instructor view
+            </span>
           </div>
 
           {/* Card content */}
           <div className="flex flex-col sm:flex-row p-6 gap-6">
 
-            {/* Left: team health + bars */}
-            <div className="flex-1 space-y-5">
-              <div className="pb-4 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-3">Team Health</p>
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
-                    Moderate Risk
-                  </span>
-                  <span className="text-slate-500 text-sm">
-                    Gini: <span className="font-bold text-slate-800">{PREVIEW_GINI.toFixed(2)}</span>
-                  </span>
-                </div>
-              </div>
-
+            {/* Left: contribution bars */}
+            <div className="flex-1 min-w-0 space-y-5">
               <div>
                 <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
                 <div className="space-y-3">
@@ -198,13 +181,21 @@ function ProductPreview() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
-                  <p className="text-xs font-bold text-indigo-700 uppercase tracking-widest">AI Narrative</p>
+                  <p className="text-xs font-bold text-indigo-700">AI explains and reviews</p>
                 </div>
                 <TypewriterNarrative text={AI_NARRATIVE_TEXT} />
+                <div className="mt-4 rounded-lg bg-white border border-indigo-100 p-3">
+                  <p className="text-xs font-bold text-slate-800 mb-1">Requirements check</p>
+                  <p className="text-xs text-slate-700 leading-relaxed">{REQUIREMENTS_CHECK_TEXT}</p>
+                </div>
               </div>
             </div>
 
           </div>
+
+          <p className="px-6 py-3 border-t border-slate-100 bg-slate-50 text-xs text-slate-600">
+            Scores come from the math. The instructor decides what to do.
+          </p>
         </div>
       </motion.div>
     </div>
@@ -274,7 +265,7 @@ export function LandingPage() {
           {/* Wordmark */}
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2.5 group shrink-0"
+            className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 rounded flex items-center gap-2.5 group shrink-0"
           >
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-9 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
@@ -291,7 +282,7 @@ export function LandingPage() {
                 <motion.button
                   {...ctaHover}
                   onClick={() => navigate(dashboardPath)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
+                  className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
                 >
                   Go to Dashboard
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -305,14 +296,14 @@ export function LandingPage() {
               <>
                 <button
                   onClick={() => navigate("/login")}
-                  className="text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all px-4 py-2 rounded-lg"
+                  className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all px-4 py-2 rounded-lg"
                 >
                   Sign in
                 </button>
                 <motion.button
                   {...ctaHover}
                   onClick={() => navigate("/register")}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
+                  className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
                 >
                   Get Started
                 </motion.button>
@@ -363,9 +354,9 @@ export function LandingPage() {
                 {...fadeUp(0.15)}
                 className="text-slate-600 leading-relaxed font-medium text-base sm:text-lg mb-8 max-w-lg"
               >
-                Collect digital collaboration traces from GitHub and the FairTraze Editor.
-                Score contributions deterministically. Get an evidence-based fairness report —
-                so you can assess individual work with confidence.
+                Collect collaboration traces from GitHub and the FairTraze Editor. The math scores
+                each member. The AI explains the numbers and checks the team's work against your
+                project requirements. You decide.
               </motion.p>
 
               {/* CTAs */}
@@ -374,7 +365,7 @@ export function LandingPage() {
                   <motion.button
                     {...ctaHover}
                     onClick={() => navigate(dashboardPath)}
-                    className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
+                    className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
                   >
                     Go to Dashboard
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -386,7 +377,7 @@ export function LandingPage() {
                     <motion.button
                       {...ctaHover}
                       onClick={() => navigate("/login")}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
+                      className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
                     >
                       Sign In
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -397,7 +388,7 @@ export function LandingPage() {
                       onClick={() => {
                         document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
                       }}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 hover:text-indigo-700 hover:bg-indigo-50/50 active:scale-[0.98] transition-all"
+                      className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 hover:text-indigo-700 hover:bg-indigo-50/50 active:scale-[0.98] transition-all"
                     >
                       How it works
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -412,10 +403,10 @@ export function LandingPage() {
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-8 pt-7 border-t border-slate-100">
                 {[
                   "100% deterministic scoring",
-                  "Evidence-based fairness reports",
-                  "Supports instructor judgment",
+                  "Every quote checked word for word",
+                  "The instructor decides",
                 ].map((fact) => (
-                  <p key={fact} className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                  <p key={fact} className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -588,7 +579,7 @@ export function LandingPage() {
             <motion.button
               {...ctaHover}
               onClick={() => navigate("/register")}
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-indigo-700 bg-white hover:bg-indigo-50 rounded-xl shadow-sm hover:shadow-[0_0_28px_rgba(199,210,254,0.7)] active:scale-[0.98] transition-all"
+              className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-indigo-700 bg-white hover:bg-indigo-50 rounded-xl shadow-sm hover:shadow-[0_0_28px_rgba(199,210,254,0.7)] active:scale-[0.98] transition-all"
             >
               Get Started Free
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -608,7 +599,7 @@ export function LandingPage() {
           {/* Wordmark */}
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 group shrink-0"
+            className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 rounded flex items-center gap-2 group shrink-0"
           >
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-7 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
@@ -624,13 +615,13 @@ export function LandingPage() {
           <div className="flex items-center gap-5 shrink-0">
             <button
               onClick={() => navigate("/privacy")}
-              className="min-h-9 text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="min-h-9 cursor-pointer text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             >
               Privacy Notice
             </button>
             <button
               onClick={() => navigate("/overview")}
-              className="min-h-9 text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="min-h-9 cursor-pointer text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             >
               System Overview →
             </button>

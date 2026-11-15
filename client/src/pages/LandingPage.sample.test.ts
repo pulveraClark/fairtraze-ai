@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { computeTeamReport } from "@shared/scoring";
 import type { RawMemberStats } from "@shared/types";
-import { PREVIEW_MEMBERS, PREVIEW_GINI, AI_NARRATIVE_TEXT } from "./LandingPage";
+import { PREVIEW_MEMBERS, AI_NARRATIVE_TEXT } from "./LandingPage";
 
 // Feed the landing-page sample through the real scoring code, using only the lines
 // signal so each member's contributionShare is exactly the sample percentage.
@@ -34,8 +34,7 @@ describe("landing page sample report", () => {
     });
   });
 
-  it("Gini and health match", () => {
-    expect(report.gini).toBeCloseTo(PREVIEW_GINI, 2);
+  it("the sample is a Moderate Risk team (not shown on the page)", () => {
     expect(report.teamHealth).toBe("Moderate Risk");
   });
 
