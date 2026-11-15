@@ -26,9 +26,14 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
   const slowRef = useRef(false);
   const mountedRef = useRef(true);
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    mountedRef.current = false;
-    if (slowTimer.current) clearTimeout(slowTimer.current);
+  useEffect(() => {
+    // Set to true on every mount: React StrictMode (dev) runs mount, cleanup, mount, and a flag that
+    // only the cleanup touches would stay false for good, so the dialog never closed after a create.
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+    };
   }, []);
   // While the request is running the dialog stays open (Esc, Cancel and the backdrop do nothing),
   // except once the "taking longer" message is showing.

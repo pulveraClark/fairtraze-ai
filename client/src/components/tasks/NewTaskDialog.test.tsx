@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -105,5 +106,58 @@ describe("NewTaskDialog: creating state", () => {
     expect(close).toBeEnabled();
     await user.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The app runs under <StrictMode> (main.tsx): effects mount, clean up and mount again in dev.
+// Regression: the dialog stayed on "Creating…" after the toast because the mounted flag stayed false.
+describe("NewTaskDialog under StrictMode", () => {
+  beforeEach(() => resetFixtureIds());
+
+  function setupStrict(createTask: (...a: unknown[]) => Promise<unknown>) {
+    const onCreated = vi.fn();
+    const actions = { createTask } as unknown as TaskActions;
+    render(
+      <StrictMode>
+        <ToastProvider>
+          <NewTaskDialog board={mkBoard({}, [])} actions={actions} onClose={vi.fn()} onCreated={onCreated} />
+        </ToastProvider>
+      </StrictMode>,
+    );
+    return { onCreated };
+  }
+
+  it("success tells the parent to close the dialog", async () => {
+    const createTask = vi.fn().mockResolvedValue(mkTask({ id: 7 }));
+    const { onCreated } = setupStrict(createTask);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Title"), "Write intro");
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    await screen.findByText(/created\./);
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    expect(onCreated).toHaveBeenCalledWith(7);
+  });
+
+  it("failure keeps the dialog open with a message and a usable button", async () => {
+    const createTask = vi.fn().mockRejectedValue(new Error("The server is busy."));
+    const { onCreated } = setupStrict(createTask);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Title"), "Keep me");
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The server is busy.");
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Title")).toHaveValue("Keep me");
+    expect(screen.getByRole("button", { name: "Create task" })).toBeEnabled();
+  });
+
+  it("two quick submits create one task", async () => {
+    const d = deferred<ReturnType<typeof mkTask>>();
+    const createTask = vi.fn(() => d.promise);
+    setupStrict(createTask);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Title"), "Once");
+    await user.dblClick(screen.getByRole("button", { name: "Create task" }));
+    expect(createTask).toHaveBeenCalledTimes(1);
+    await act(async () => { d.resolve(mkTask({ id: 9 })); });
   });
 });
