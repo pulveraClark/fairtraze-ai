@@ -3,6 +3,8 @@ import type { BoardResponse } from "@shared/taskTypes";
 import { formatDue, todayManila } from "../../lib/tasks/dates";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
+import { BusyLabel } from "../ui/BusyLabel";
+import { errorMessage } from "../../lib/feedback";
 import { AlertTriangleIcon, FlagIcon } from "./icons";
 
 interface Props {
@@ -87,7 +89,7 @@ export function AddMilestoneDialog({ deadline, onClose, onCreate }: {
     try {
       await onCreate({ name: name.trim(), dueDate: dueDate || null });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add the milestone.");
+      setError(errorMessage(err, "Could not add the milestone. Try again."));
       setBusy(false);
     }
   }
@@ -126,8 +128,8 @@ export function AddMilestoneDialog({ deadline, onClose, onCreate }: {
           )}
           {error && <p role="alert" className="text-sm font-medium text-red-800">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
-            <button type="submit" disabled={!name.trim() || busy} className={BUTTON_PRIMARY_COMPACT}>Add milestone</button>
+            <button type="button" onClick={onClose} disabled={busy} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
+            <button type="submit" disabled={!name.trim() || busy} className={BUTTON_PRIMARY_COMPACT}><BusyLabel busy={busy} idle="Add milestone" busyText="Adding…" /></button>
           </div>
         </form>
       </div>

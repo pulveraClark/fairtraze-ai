@@ -648,3 +648,105 @@ describe("attachments", () => {
     expect(server.calls.some((c) => c.method === "POST" && c.url.endsWith("/attachments"))).toBe(false);
   });
 });
+
+describe("feedback after a change (success only once the server confirmed)", () => {
+  /** Lets one test make chosen requests fail or succeed on top of the in-memory server. */
+  function intercept(handler: (method: string, url: string) => { status: number; body: unknown } | null) {
+    const inner = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      const hit = handler(init?.method ?? "GET", url);
+      if (hit) return { ok: hit.status < 400, status: hit.status, json: async () => hit.body };
+      return inner(url, init);
+    }));
+  }
+
+  it("a priority change shows 'Task updated.' after the save, and assigning says 'Task assigned.'", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, three()));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.selectOptions(await screen.findByLabelText("Priority", { selector: "select" }), "HIGH");
+    expect(await screen.findByText("Task updated.")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Assignee", { selector: "select" }), String(ANA.userId));
+    expect(await screen.findByText("Task assigned.")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Assignee", { selector: "select" }), "");
+    expect(await screen.findByText("Task unassigned.")).toBeInTheDocument();
+  });
+
+  it("a failed save shows the error and never says 'Task updated.'", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, three()));
+    intercept((method, url) => (method === "PATCH" && /tasks\/1$/.test(url) ? { status: 500, body: { error: "The server could not save this. Try again." } } : null));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.selectOptions(await screen.findByLabelText("Priority", { selector: "select" }), "HIGH");
+    expect(await screen.findByText("The server could not save this. Try again.")).toBeInTheDocument();
+    expect(screen.queryByText("Task updated.")).not.toBeInTheDocument();
+  });
+
+  it("adding a subtask says 'Subtask added.' but ticking one says nothing (the box shows it)", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, three()));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.click(await screen.findByRole("button", { name: "More details" }));
+    await user.type(await screen.findByLabelText("New subtask"), "Draft outline");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText("Subtask added.")).toBeInTheDocument();
+
+    const box = await screen.findByRole("checkbox");
+    await user.click(box);
+    await waitFor(() => expect(box).toBeChecked());
+    expect(screen.getAllByRole("status").filter((el) => /updated|added|deleted/i.test(el.textContent ?? "") && el.textContent !== "Subtask added.")).toHaveLength(0);
+  });
+
+  it("watching shows no toast", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, three()));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.click(await screen.findByRole("button", { name: /^Watch/ }));
+    expect(await screen.findByRole("button", { name: /^Watching/ })).toBeInTheDocument();
+    expect(document.querySelector("[data-toast-region]")?.children).toHaveLength(0);
+  });
+
+  it("a failed subtask add shows the error toast and no success toast", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, three()));
+    intercept((method, url) => (method === "POST" && url.endsWith("/subtasks") ? { status: 500, body: { error: "Could not add the subtask. Try again." } } : null));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.click(await screen.findByRole("button", { name: "More details" }));
+    await user.type(await screen.findByLabelText("New subtask"), "Draft outline");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not add the subtask. Try again.");
+    expect(screen.queryByText("Subtask added.")).not.toBeInTheDocument();
+  });
+
+  it("deleting shows 'Deleting…' on the button, then the existing 'Deleted FT-1.' toast", async () => {
+    signInAs(1);
+    installFakeServer(mkBoard({}, three()));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const inner = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") { await gate; return { ok: true, status: 200, json: async () => ({}) }; }
+      return inner(url, init);
+    }));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /First task/ }));
+    await user.click(await screen.findByRole("button", { name: "Delete task" }));
+    await user.click(within(screen.getByRole("alertdialog", { name: "Confirm delete" })).getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("button", { name: /Deleting/ })).toBeDisabled();
+    expect(screen.queryByText("Deleted FT-1.")).not.toBeInTheDocument();
+    release();
+    expect(await screen.findByText("Deleted FT-1.")).toBeInTheDocument();
+  });
+});

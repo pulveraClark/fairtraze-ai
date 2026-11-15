@@ -98,10 +98,14 @@ describe("NewTaskDialog: creating state", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.type(screen.getByLabelText("Title"), "Slow one");
     await user.click(screen.getByRole("button", { name: "Create task" }));
-    expect(screen.queryByText(/Taking longer than usual/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/taking longer than usual/i)).not.toBeInTheDocument();
 
-    await act(async () => { vi.advanceTimersByTime(15_000); });
-    expect(screen.getByText("Taking longer than usual. The task may still appear on the board.")).toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(3_500); });
+    expect(screen.getByText("This is taking longer than usual.")).toBeInTheDocument(); // shared 3 s line
+    expect(screen.getByRole("button", { name: /Creating/ })).toBeDisabled();
+
+    await act(async () => { vi.advanceTimersByTime(12_000); });
+    expect(screen.getByText("This is taking longer than usual. The task may still appear on the board.")).toBeInTheDocument();
     const close = screen.getByRole("button", { name: "Close" });
     expect(close).toBeEnabled();
     await user.click(close);

@@ -1,5 +1,6 @@
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, type BoardResponse, type BulkAction } from "@shared/taskTypes";
 import { FOCUS_LIGHT } from "../ui/styles";
+import { Spinner } from "../ui/Spinner";
 
 interface Props {
   board: BoardResponse;
@@ -31,6 +32,12 @@ export function BulkBar({ board, count, busy, onAction, onClear }: Props) {
       className="sticky bottom-3 z-20 flex flex-wrap items-center gap-2 rounded-xl bg-slate-900 p-3 text-white shadow-lg"
     >
       <span role="status" className="mr-1 text-sm font-semibold tabular-nums">{count} selected</span>
+      {busy && (
+        <span role="status" className="mr-1 inline-flex items-center gap-1.5 text-sm">
+          <Spinner />
+          Applying…
+        </span>
+      )}
 
       <button type="button" disabled={busy} onClick={() => onAction({ type: "status", status: "DONE" })} className={BUTTON}>
         Move to Done

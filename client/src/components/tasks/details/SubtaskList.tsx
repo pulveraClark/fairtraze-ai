@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { TASK_LIMITS, type BoardTask, type TaskSubtask } from "@shared/taskTypes";
 import { BUTTON_PRIMARY_COMPACT, FOCUS_LIGHT } from "../../ui/styles";
+import { BusyLabel } from "../../ui/BusyLabel";
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon } from "../icons";
 
 interface Props {
@@ -101,7 +102,7 @@ export function SubtaskList({ task, subtasks, lockedReason, onAdd, onToggle, onR
             onChange={(e) => setTitle(e.target.value)}
             className={`min-h-9 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 disabled:bg-slate-100 ${FOCUS_LIGHT}`}
           />
-          <button type="submit" disabled={!title.trim() || busy || full} className={BUTTON_PRIMARY_COMPACT}>Add</button>
+          <button type="submit" disabled={!title.trim() || busy || full} className={BUTTON_PRIMARY_COMPACT}><BusyLabel busy={busy} idle="Add" busyText="Adding…" /></button>
         </form>
       )}
       {locked && <p className="mt-2 text-xs text-slate-700">{lockedReason}</p>}

@@ -17,6 +17,9 @@ import { LinkedCommits } from "./LinkedCommits";
 import { MoreDetails, hasMoreContent } from "./MoreDetails";
 import { MentionText, MentionTextarea, displayFromStored, storedFromDisplay } from "./MentionTextarea";
 import { SubtaskList } from "./SubtaskList";
+import { Spinner } from "../../ui/Spinner";
+import { LoadingState } from "../../ui/LoadingState";
+import { errorMessage } from "../../../lib/feedback";
 
 interface Props {
   board: BoardResponse;
@@ -70,6 +73,10 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
 
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
+  // Field edits save on blur, so they are never blocked (a disabled field would drop keyboard focus);
+  // a small "Saving..." note shows while any are in flight.
+  const [saving, setSaving] = useState(0);
+  const [deleting, setDeleting] = useState(false);
 
   // Keep the page behind from scrolling while the window is open.
   useEffect(() => {
@@ -98,15 +105,22 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
 
   async function save(input: UpdateTaskInput) {
     setError("");
+    setSaving((n) => n + 1);
     try {
       const saved = await actions.updateTask(task, input);
       const w = (saved as BoardTask & { warnings?: string[] }).warnings;
       setWarning(w?.[0] ?? "");
       void details.query.refetch(); // History shows the change
+      // Shown only now that the server confirmed. Repeated edits merge into one toast.
+      actions.showSuccess(
+        "assignedToUserId" in input ? (input.assignedToUserId ? "Task assigned." : "Task unassigned.") : "Task updated.",
+      );
     } catch (err) {
       if (!(err instanceof TaskApiError && err.isConflict)) {
-        setError(err instanceof Error ? err.message : "Could not save the change.");
+        setError(errorMessage(err, "Could not save the change. Try again."));
       }
+    } finally {
+      setSaving((n) => n - 1);
     }
   }
 
@@ -122,16 +136,19 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
       const created = await actions.createLabel(input);
       if (perms.edit) await save({ labelIds: [...task.labelIds, created.id] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add the label.");
+      setError(errorMessage(err, "Could not add the label. Try again."));
     }
   }
 
   async function remove() {
+    if (deleting) return;
+    setDeleting(true);
     try {
       await actions.deleteTask(task);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete the task.");
+      setError(errorMessage(err, "Could not delete the task. Try again."));
+      setDeleting(false);
     }
   }
 
@@ -153,6 +170,12 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
           <div className="flex min-w-0 items-baseline gap-2">
             <h2 id="task-details-key" className="text-lg font-semibold text-slate-900">{task.key}</h2>
             <span className="text-sm text-slate-700">{TASK_STATUS_LABELS[task.status]}{viewer.readOnly ? " · View only" : ""}</span>
+            {(saving > 0 || details.busy) && (
+              <span role="status" className="inline-flex items-center gap-1.5 text-sm text-slate-700">
+                <Spinner />
+                Saving…
+              </span>
+            )}
           </div>
           <div className="ml-auto flex items-center gap-1">
             {index >= 0 && (
@@ -249,7 +272,7 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
                 <button type="button" onClick={() => void details.query.refetch()} className={`mt-2 ${BUTTON_SECONDARY_COMPACT}`}>Try again</button>
               </div>
             )}
-            {!d && !details.query.isError && <p className="text-sm text-slate-700">Loading…</p>}
+            {!d && !details.query.isError && <LoadingState label="Loading subtasks, comments and history…" />}
 
             {d && (
               <>
@@ -306,6 +329,7 @@ export function TaskDetailsModal({ board, task, actions, orderedIds, onNavigate,
               save={save}
               changeStatus={changeStatus}
               onDelete={remove}
+              deleting={deleting}
             />
           </div>
         </div>

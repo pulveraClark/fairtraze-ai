@@ -6,6 +6,7 @@ import { useToast } from "../components/Toast";
 import { groupKeys } from "./useGroupQueries";
 import { taskApi, TaskApiError, type CreateTaskInput, type UpdateTaskInput } from "../lib/tasks/api";
 import { applyMove, removeTaskFrom, replaceTaskIn, statusLabel } from "../lib/tasks/board";
+import { errorMessage } from "../lib/feedback";
 import { columnsFromTasks, placementOf, type Placement } from "../lib/tasks/placement";
 import { clearMovePending, markMovePending } from "../lib/tasks/pendingMoves";
 
@@ -35,7 +36,7 @@ export function useTaskActions(projectId: number) {
       if (err.task) setBoard((b) => replaceTaskIn(b, err.task!));
       showToast({ tone: "error", message: "Someone else changed this task. The latest version is shown." });
     } else {
-      showToast({ tone: "error", message: err instanceof Error ? err.message : "Something went wrong." });
+      showToast({ tone: "error", message: errorMessage(err, "Could not save the change. Try again.") });
     }
     void refresh();
   }, [queryClient, key, setBoard, showToast, refresh]);
@@ -141,27 +142,31 @@ export function useTaskActions(projectId: number) {
   const createMilestone = useCallback(async (input: { name: string; dueDate?: string | null }) => {
     const created = await taskApi.createMilestone(token, projectId, input);
     await refresh();
+    showSuccessToast("Milestone added.");
     return created;
-  }, [token, projectId, refresh]);
+  }, [token, projectId, refresh, showSuccessToast]);
 
   const createLabel = useCallback(async (input: Parameters<typeof taskApi.createLabel>[2]) => {
     const created = await taskApi.createLabel(token, projectId, input);
     await refresh();
+    showSuccessToast("Label added.");
     return created;
-  }, [token, projectId, refresh]);
+  }, [token, projectId, refresh, showSuccessToast]);
 
   const renameLabel = useCallback(async (labelId: number, name: string) => {
     const updated = await taskApi.updateLabel(token, projectId, labelId, { name });
     await refresh();
+    showSuccessToast("Label renamed.");
     return updated;
-  }, [token, projectId, refresh]);
+  }, [token, projectId, refresh, showSuccessToast]);
 
   const deleteLabel = useCallback(async (labelId: number) => {
     await taskApi.deleteLabel(token, projectId, labelId);
     await refresh();
-  }, [token, projectId, refresh]);
+    showSuccessToast("Label deleted.");
+  }, [token, projectId, refresh, showSuccessToast]);
 
-  return { moveTask, moveToStatus, createTask, updateTask, bulkEdit, deleteTask, createMilestone, createLabel, renameLabel, deleteLabel, refresh, showError: (message: string) => showToast({ tone: "error", message }) };
+  return { moveTask, moveToStatus, createTask, updateTask, bulkEdit, deleteTask, createMilestone, createLabel, renameLabel, deleteLabel, refresh, showError: (message: string) => showToast({ tone: "error", message }), showSuccess: (message: string) => showSuccessToast(message) };
 }
 
 export type TaskActions = ReturnType<typeof useTaskActions>;

@@ -7,6 +7,8 @@ import { useToast } from "../Toast";
 import { taskApi } from "../../lib/tasks/api";
 import { formatAgo } from "../../lib/tasks/dates";
 import { useFocusTrap } from "../../lib/useFocusTrap";
+import { BusyLabel } from "../ui/BusyLabel";
+import { errorMessage } from "../../lib/feedback";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
 
 interface Props {
@@ -53,7 +55,7 @@ export function CommitLinkingDialog({ board, onClose }: Props) {
           : `Commits refreshed. Linked ${result.linked} new ${result.linked === 1 ? "commit" : "commits"}.`,
       );
     } catch (err) {
-      const text = err instanceof Error ? err.message : "Could not refresh commits.";
+      const text = errorMessage(err, "Could not refresh commits. Try again.");
       setMessage(text);
       showToast({ tone: "error", message: text });
       // A refused (too soon) refresh still tells us when the last one was.
@@ -78,7 +80,7 @@ export function CommitLinkingDialog({ board, onClose }: Props) {
         {canRefresh && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <button type="button" onClick={() => void refresh()} disabled={busy} className={BUTTON_SECONDARY_COMPACT}>
-              {busy ? "Refreshing…" : "Refresh commits"}
+              <BusyLabel busy={busy} idle="Refresh commits" busyText="Refreshing…" />
             </button>
             <span className="text-sm text-slate-700" aria-live="polite">
               {group.commitsRefreshedAt ? `Last refreshed ${formatAgo(group.commitsRefreshedAt)}` : "Not refreshed yet"}
@@ -118,7 +120,7 @@ export function TaskKeyDialog({ board, onClose }: { board: BoardResponse; onClos
       showSuccessToast(`Task key is now ${result.taskKey}. ${current}-… in commit messages still links.`);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not change the task key.");
+      setError(errorMessage(err, "Could not change the task key. Try again."));
       setBusy(false);
     }
   }
@@ -147,8 +149,8 @@ export function TaskKeyDialog({ board, onClose }: { board: BoardResponse; onClos
           </div>
           {error && <p role="alert" className="text-sm font-medium text-red-800">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
-            <button type="submit" disabled={busy || !key.trim()} className={BUTTON_PRIMARY_COMPACT}>Change key</button>
+            <button type="button" onClick={onClose} disabled={busy} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
+            <button type="submit" disabled={busy || !key.trim()} className={BUTTON_PRIMARY_COMPACT}><BusyLabel busy={busy} idle="Change key" busyText="Changing…" /></button>
           </div>
         </form>
       </div>

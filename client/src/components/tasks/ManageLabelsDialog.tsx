@@ -3,6 +3,8 @@ import { TASK_LABEL_COLORS, TASK_LIMITS, type BoardLabel, type BoardResponse, ty
 import { LABEL_CHIP_CLASSES } from "../../lib/tasks/labels";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
+import { BusyLabel } from "../ui/BusyLabel";
+import { errorMessage } from "../../lib/feedback";
 
 interface Props {
   board: BoardResponse;
@@ -31,7 +33,7 @@ export function ManageLabelsDialog({ board, onCreate, onRename, onDelete, onClos
       await onCreate({ name: name.trim(), color });
       setName("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add the label.");
+      setError(errorMessage(err, "Could not add the label. Try again."));
     } finally {
       setBusy(false);
     }
@@ -49,7 +51,7 @@ export function ManageLabelsDialog({ board, onCreate, onRename, onDelete, onClos
       await onRename(renaming.id, next);
       setRenaming(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not rename the label.");
+      setError(errorMessage(err, "Could not rename the label. Try again."));
     } finally {
       setBusy(false);
     }
@@ -64,7 +66,7 @@ export function ManageLabelsDialog({ board, onCreate, onRename, onDelete, onClos
       setDeleting(null);
     } catch (err) {
       setDeleting(null);
-      setError(err instanceof Error ? err.message : "Could not delete the label.");
+      setError(errorMessage(err, "Could not delete the label. Try again."));
     } finally {
       setBusy(false);
     }
@@ -94,7 +96,7 @@ export function ManageLabelsDialog({ board, onCreate, onRename, onDelete, onClos
                   disabled={busy}
                   className="inline-flex min-h-8 items-center rounded-lg bg-red-800 px-3 text-sm font-semibold text-white hover:bg-red-900 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
                 >
-                  {busy ? "Deleting…" : "Delete label"}
+                  <BusyLabel busy={busy} idle="Delete label" busyText="Deleting…" />
                 </button>
               </div>
             </div>
@@ -115,8 +117,8 @@ export function ManageLabelsDialog({ board, onCreate, onRename, onDelete, onClos
                         onChange={(e) => setRenaming({ id: l.id, draft: e.target.value })}
                         className={`min-h-9 min-w-0 flex-1 rounded-lg border border-slate-300 px-2 text-sm text-slate-900 ${FOCUS_LIGHT}`}
                       />
-                      <button type="submit" disabled={busy || !renaming.draft.trim()} className={BUTTON_PRIMARY_COMPACT}>Save</button>
-                      <button type="button" onClick={() => setRenaming(null)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
+                      <button type="submit" disabled={busy || !renaming.draft.trim()} className={BUTTON_PRIMARY_COMPACT}><BusyLabel busy={busy} idle="Save" busyText="Saving…" /></button>
+                      <button type="button" disabled={busy} onClick={() => setRenaming(null)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
                     </form>
                   ) : (
                     <>
@@ -159,7 +161,7 @@ export function ManageLabelsDialog({ board, onCreate, onRename, onDelete, onClos
             {error && <p role="alert" className="text-sm font-medium text-red-800">{error}</p>}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className={BUTTON_SECONDARY_COMPACT}>Close</button>
-              <button type="submit" disabled={!name.trim() || busy} className={BUTTON_PRIMARY_COMPACT}>Add label</button>
+              <button type="submit" disabled={!name.trim() || busy} className={BUTTON_PRIMARY_COMPACT}><BusyLabel busy={busy && !renaming && !deleting} idle="Add label" busyText="Adding…" /></button>
             </div>
           </form>
         </div>

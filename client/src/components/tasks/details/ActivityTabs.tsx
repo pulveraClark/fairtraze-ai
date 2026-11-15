@@ -4,6 +4,7 @@ import { TASK_LIMITS, type BoardResponse, type BoardTask, type TaskActivityEntry
 import { Avatar } from "../../Avatar";
 import { describeActivity, formatWhen } from "../../../lib/tasks/activityText";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "../../ui/styles";
+import { BusyLabel } from "../../ui/BusyLabel";
 import { MentionText, MentionTextarea, displayFromStored, storedFromDisplay } from "./MentionTextarea";
 
 type Tab = "comments" | "history";
@@ -102,12 +103,22 @@ function CommentsPanel({ board, task, comments, lockedReason, onAdd, onEdit, onR
     if (saved) setDraft("");
   }
 
+  async function removeComment(id: number) {
+    if (busy) return;
+    setBusy(true);
+    await onRemove(id);
+    setBusy(false);
+    setConfirmId(null);
+  }
+
   async function saveEdit(id: number) {
     const stored = storedFromDisplay(editDraft, board.members).trim();
     if (!stored) return;
     if (stored.length > TASK_LIMITS.comment) { setError(`Comments can be up to ${TASK_LIMITS.comment} characters.`); return; }
     setError("");
+    setBusy(true);
     const saved = await onEdit(id, stored);
+    setBusy(false);
     if (saved) setEditingId(null);
   }
 
@@ -146,8 +157,8 @@ function CommentsPanel({ board, task, comments, lockedReason, onAdd, onEdit, onR
                       onSubmit={() => void saveEdit(c.id)}
                     />
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => void saveEdit(c.id)} disabled={!editDraft.trim()} className={BUTTON_PRIMARY_COMPACT}>Save</button>
-                      <button type="button" onClick={() => setEditingId(null)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
+                      <button type="button" onClick={() => void saveEdit(c.id)} disabled={!editDraft.trim() || busy} className={BUTTON_PRIMARY_COMPACT}><BusyLabel busy={busy} idle="Save" busyText="Saving…" /></button>
+                      <button type="button" disabled={busy} onClick={() => setEditingId(null)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
                     </div>
                   </div>
                 ) : (
@@ -165,7 +176,7 @@ function CommentsPanel({ board, task, comments, lockedReason, onAdd, onEdit, onR
                     {confirmId === c.id ? (
                       <span className="flex items-center gap-2" role="alertdialog" aria-label="Confirm delete comment">
                         <span className="font-medium text-slate-900">Delete this comment?</span>
-                        <button type="button" onClick={() => { void onRemove(c.id); setConfirmId(null); }} className="min-h-8 rounded font-semibold text-red-800 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800">Delete</button>
+                        <button type="button" disabled={busy} onClick={() => { void removeComment(c.id); }} className="min-h-8 rounded font-semibold text-red-800 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800">Delete</button>
                         <button type="button" onClick={() => setConfirmId(null)} className="min-h-8 rounded text-slate-800 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700">Keep</button>
                       </span>
                     ) : (

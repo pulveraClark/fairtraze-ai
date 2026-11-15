@@ -3,6 +3,9 @@ import { useToast } from "../Toast";
 import { TASK_LIMITS, TASK_PRIORITIES, TASK_PRIORITY_LABELS, type BoardResponse, type TaskPriority } from "@shared/taskTypes";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
+import { BusyLabel } from "../ui/BusyLabel";
+import { useSlowAfter } from "../../hooks/useSlowAfter";
+import { SLOW_AFTER_MS as SLOW_SHORT_MS, SLOW_TEXT, errorMessage } from "../../lib/feedback";
 import type { TaskActions } from "../../hooks/useTaskActions";
 
 const SLOW_AFTER_MS = 15_000;
@@ -20,6 +23,7 @@ const FIELD = `min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5
 export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const slowShort = useSlowAfter(busy, SLOW_SHORT_MS); // shared 3 s line; `slow` below is the 15 s unlock
   // After this long still waiting, say so and let the person close the dialog (the task may still arrive).
   const [slow, setSlow] = useState(false);
   const busyRef = useRef(false);
@@ -78,7 +82,7 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
       busyRef.current = false;
       slowRef.current = false;
       if (!mountedRef.current) return; // the person closed the dialog while it was slow
-      setError(err instanceof Error && err.message ? err.message : "Could not create the task. Check your connection and try again. Your text is still here.");
+      setError(errorMessage(err, "Could not create the task. Try again. Your text is still here."));
       setBusy(false);
       setSlow(false);
     }
@@ -121,15 +125,15 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
             <p className="text-sm text-slate-700">New tasks start unassigned in To do. The group leader can assign them.</p>
           )}
           {error && <p role="alert" className="text-sm font-medium text-red-800">{error}</p>}
-          <p role="status" aria-live="polite" className={slow ? "text-sm text-slate-800" : "sr-only"}>
-            {slow ? "Taking longer than usual. The task may still appear on the board." : busy ? "Creating the task." : ""}
+          <p role="status" aria-live="polite" className={slow || slowShort ? "text-sm text-slate-800" : "sr-only"}>
+            {slow ? `${SLOW_TEXT} The task may still appear on the board.` : slowShort ? SLOW_TEXT : busy ? "Creating the task." : ""}
           </p>
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={close} disabled={busy && !slow} className={BUTTON_SECONDARY_COMPACT}>
               {busy && slow ? "Close" : "Cancel"}
             </button>
             <button type="submit" disabled={!title.trim() || busy} className={BUTTON_PRIMARY_COMPACT}>
-              {busy ? "Creating…" : "Create task"}
+              <BusyLabel busy={busy} idle="Create task" busyText="Creating…" />
             </button>
           </div>
         </form>

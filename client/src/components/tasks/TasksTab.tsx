@@ -30,6 +30,8 @@ import { NewTaskDialog } from "./NewTaskDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { TaskDetailsModal } from "./details/TaskDetailsModal";
 import { TasksTopBar } from "./TasksTopBar";
+import { LoadingState } from "../ui/LoadingState";
+import { errorMessage } from "../../lib/feedback";
 import { WorkloadPanel } from "./WorkloadPanel";
 
 interface Props {
@@ -172,18 +174,18 @@ export function TasksTab({ projectId, initialTaskId = null, onOpenTaskChange, on
         onAction: () => {
           void actions.updateTask(saved, { dueDate: before })
             .then(() => showToast({ message: "Due date restored." }))
-            .catch((err) => actions.showError(err instanceof Error ? err.message : "Could not restore the due date."));
+            .catch((err) => actions.showError(errorMessage(err, "Could not restore the due date. Try again.")));
         },
       });
     } catch (err) {
       // A version conflict has already been explained by the action.
       if (!(err instanceof TaskApiError && err.isConflict)) {
-        actions.showError(err instanceof Error ? err.message : "Could not change the due date.");
+        actions.showError(errorMessage(err, "Could not change the due date. Try again."));
       }
     }
   }
 
-  if (query.isLoading) return <p className="py-6 text-sm text-slate-700">Loading tasks…</p>;
+  if (query.isLoading) return <LoadingState label="Loading tasks…" className="py-6" />;
   if (query.isError || !board) {
     return (
       <div className="py-6" role="alert">

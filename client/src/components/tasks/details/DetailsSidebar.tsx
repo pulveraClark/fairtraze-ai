@@ -13,6 +13,7 @@ import { lockReason } from "../../../lib/tasks/permissionText";
 import { AlertTriangleIcon, LockIcon } from "../icons";
 import { HeadingPicker } from "./HeadingPicker";
 import { SuggestedAssignee } from "./SuggestedAssignee";
+import { BusyLabel } from "../../ui/BusyLabel";
 
 const FIELD = `min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 ${FOCUS_LIGHT}`;
 
@@ -47,10 +48,12 @@ interface Props {
   save: (input: UpdateTaskInput) => Promise<void>;
   changeStatus: (status: TaskStatus) => Promise<void>;
   onDelete: () => Promise<void>;
+  /** True while the delete request is running. */
+  deleting?: boolean;
 }
 
 /** The light-gray right column: status, assignee, priority, due date and delete. The rest lives in "More details". */
-export function DetailsSidebar({ board, task, warning, save, changeStatus, onDelete }: Props) {
+export function DetailsSidebar({ board, task, warning, save, changeStatus, onDelete, deleting = false }: Props) {
   const perms = task.permissions;
   const viewer = board.viewer;
   const assigneeRef = useRef<HTMLSelectElement>(null);
@@ -164,11 +167,12 @@ export function DetailsSidebar({ board, task, warning, save, changeStatus, onDel
               <button
                 type="button"
                 onClick={() => void onDelete()}
-                className="inline-flex min-h-8 items-center rounded-lg bg-red-800 px-3 text-sm font-semibold text-white hover:bg-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
+                disabled={deleting}
+                className="inline-flex disabled:opacity-60 min-h-8 items-center rounded-lg bg-red-800 px-3 text-sm font-semibold text-white hover:bg-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
               >
-                Delete
+                <BusyLabel busy={deleting} idle="Delete" busyText="Deleting…" />
               </button>
-              <button type="button" onClick={() => setConfirmDelete(false)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
+              <button type="button" disabled={deleting} onClick={() => setConfirmDelete(false)} className={BUTTON_SECONDARY_COMPACT}>Cancel</button>
             </div>
           </div>
         )}

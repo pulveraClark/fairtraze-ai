@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { TASK_LIMITS, type BoardTask, type TaskAttachmentMeta, type TaskDetails } from "@shared/taskTypes";
 import { useAuth } from "../../../context/AuthContext";
 import { taskApi } from "../../../lib/tasks/api";
+import { errorMessage } from "../../../lib/feedback";
 import { isAcceptedBriefImage, isAcceptedBriefPdf, prepareBriefImage } from "../../../lib/briefImage";
 import { BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../../ui/styles";
+import { BusyLabel } from "../../ui/BusyLabel";
 import { CloseIcon, PlusIcon } from "../icons";
 
 interface Props {
@@ -109,7 +111,7 @@ export function AttachmentsSection({ task, attachments, storage, lockedReason, o
       const saved = await onUpload(body, file.name);
       if (saved) setMessage("");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not add that file.");
+      setMessage(errorMessage(err, "Could not add that file. Try again."));
     } finally {
       setBusy(false);
     }
@@ -142,7 +144,7 @@ export function AttachmentsSection({ task, attachments, storage, lockedReason, o
           />
           <button type="button" disabled={full || busy} onClick={() => inputRef.current?.click()} className={BUTTON_SECONDARY_COMPACT}>
             <PlusIcon className="mr-1 h-4 w-4" />
-            {busy ? "Adding…" : "Add attachment"}
+            <BusyLabel busy={busy} idle="Add attachment" busyText="Adding…" />
           </button>
           <span className="ml-2 text-xs text-slate-700">
             {full ? "This task has 5 attachments." : "JPG, PNG or WebP up to 1 MB, or a PDF up to 5 MB."}
