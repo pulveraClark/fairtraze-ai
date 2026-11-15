@@ -7,7 +7,7 @@ import { documentHasPreFixEvents, getAuthorshipFixAt } from "../lib/authorshipFi
 import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
 import { loadGroupShared } from "../lib/groupAccess.js";
-import { computeAuthorshipMap } from "../collab/authorshipMap.js";
+import { getAuthorshipMapCached } from "../lib/authorshipMapCache.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
 import { extractHeadings } from "../lib/documentHeadings.js";
@@ -615,7 +615,8 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
     return;
   }
 
-  const map = await computeAuthorshipMap(doc.id);
+  // Memoised per document and latest event id; never older than the newest event (lib/authorshipMapCache.ts).
+  const map = await getAuthorshipMapCached(doc.id);
   res.json({
     ...map,
     docsDataApproximate: await documentHasPreFixEvents(doc.id),
