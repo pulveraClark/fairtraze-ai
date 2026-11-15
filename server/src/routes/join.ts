@@ -789,7 +789,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       myContribution,
       ...(team ? { team } : {}),
       // The leader reads the same team-level AI explanation as the instructor (without the Gini sentence).
-      ...(team ? { narrative: studentNarrative(stored.narrative), narrativeOutdated: isNarrativeOutdated({ ...stored, report: teamReport }) } : {}),
+      ...(team ? { narrative: studentNarrative(stored.narrative, team.map((m) => ({ name: m.name, flags: m.flags }))), narrativeOutdated: isNarrativeOutdated({ ...stored, report: teamReport }) } : {}),
     },
   });
 });

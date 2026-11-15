@@ -53,13 +53,70 @@ export function isEvennessSentence(sentence: string): boolean {
   return EVENNESS_PATTERNS.some((re) => re.test(sentence));
 }
 
+// ── Names, percentages and flag words (student and leader text) ───────────────────────────────
+// A sentence that names a person and quotes their share ("Ana, with a contribution share of 12.5%, ...") used to be
+// dropped whole because of the decimal, leaving the next "They made 2 commits..." with no one to refer to. Now the
+// share clause is cut out and the sentence stays; a sentence that still holds a percentage is dropped; a sentence
+// that starts with a pronoun is kept only when the sentence before it in the same paragraph was kept.
+const PCT = String.raw`\d+(?:\.\d+)?\s*%`;
+const SHARE_CLAUSES: RegExp[] = [
+  // ", with a contribution share of 12.5%," / "has an overall share of about 12.5%"
+  new RegExp(String.raw`,?\s*(?:with|has|had|holding|at)?\s*(?:an?|the)?\s*(?:overall\s+|total\s+|combined\s+)?(?:contribution\s+)?share\s+of\s+(?:about\s+|around\s+|roughly\s+)?${PCT},?`, "gi"),
+  // "(12.5%)" / "(about 12.5%)"
+  new RegExp(String.raw`\s*\(\s*(?:about\s+|around\s+|roughly\s+)?${PCT}\s*\)`, "gi"),
+];
+const PRONOUN_START = /^(?:they|he|she|their|his|her|it|its|this member|these members)\b/i;
+
+export function stripShareClauses(sentence: string): string {
+  let out = sentence;
+  for (const re of SHARE_CLAUSES) out = out.replace(re, " ");
+  return out.replace(/\s{2,}/g, " ").replace(/\s+([,.;!?])/g, "$1").trim();
+}
+
+/** "free-rider" and "inactive" read as "low contribution" for students and leaders; "overload" is unchanged. */
+export function studentFlagWords(text: string): string {
+  return text
+    .replace(/\bas\s+an?\s+(?:free[\s-]?rider|inactive\s+member)\b/gi, "for low contribution")
+    .replace(/\ban?\s+(?:free[\s-]?rider|inactive\s+member)\b/gi, "low contribution")
+    .replace(/\bfree[\s-]?riders?\b/gi, "low contribution")
+    .replace(/\binactive\b/gi, "low contribution");
+}
+
+const FLAG_PHRASE: Record<string, string> = {
+  "free-rider": "low contribution",
+  inactive: "low contribution",
+  overload: "overload",
+  "deadline-driven": "deadline-driven work",
+};
+
 /** Null when no clean sentence is left, so the card hides the AI block instead of showing an empty one. */
-export function studentNarrative(text: string | null | undefined): string | null {
+export function studentNarrative(text: string | null | undefined, people: Array<{ name: string; flags: string[] }> = []): string | null {
   if (!text || !text.trim()) return null;
-  const drop = (s: string) => isTeamMeasureSentence(s) || isEvennessSentence(s);
-  const kept = text
-    .split(/\n{2,}/)
-    .map((para) => para.split(/(?<=[.!?])\s+/).filter((s) => s.trim() !== "" && !drop(s)).join(" ").trim())
-    .filter((para) => para.length > 0);
-  return kept.length > 0 ? kept.join("\n\n") : null;
+  const paragraphs = text.split(/\n{2,}/).map((para) => {
+    const out: string[] = [];
+    let prevKept = false;
+    for (const raw of para.split(/(?<=[.!?])\s+/)) {
+      const s = raw.trim();
+      if (s === "") continue;
+      let keep: boolean = !isEvennessSentence(s) && !(PRONOUN_START.test(s) && !prevKept);
+      let clean = s;
+      if (keep) {
+        clean = stripShareClauses(s);
+        if (new RegExp(PCT).test(clean) || isTeamMeasureSentence(clean)) keep = false;
+      }
+      prevKept = keep;
+      if (keep) out.push(studentFlagWords(clean));
+    }
+    return out.join(" ").trim();
+  }).filter((para) => para.length > 0);
+  if (paragraphs.length === 0) return null;
+  // Every flagged person is named: if the text lost the sentence that named them, say it again in plain words.
+  const body = paragraphs.join("\n\n");
+  const lost = people.filter((p) => p.flags.length > 0 && !body.includes(p.name));
+  if (lost.length === 0) return body;
+  const extra = lost.map((p) => {
+    const phrases = [...new Set(p.flags.map((f) => FLAG_PHRASE[f] ?? f))];
+    return `${p.name} was flagged for ${phrases.join(" and ")}.`;
+  });
+  return `${body}\n\n${extra.join(" ")}`;
 }
