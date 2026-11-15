@@ -60,3 +60,49 @@ describe("DeletionRequests (R7)", () => {
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("DeletionRequests feedback", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const pending = {
+    pendingCount: 1, recent: [],
+    pending: [{ id: 1, status: "PENDING", reason: null, createdAt: "2026-10-01T00:00:00Z", reviewedAt: null, user: { id: 3, name: "Pat Lee", email: "p@x.t", systemRole: "STUDENT" } }],
+  };
+
+  it("the confirm dialog stays open with 'Anonymizing…' until the server answers", async () => {
+    let release!: () => void;
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => {
+      if (init?.method === "POST") { await new Promise<void>((r) => { release = r; }); return { ok: true, json: async () => ({}) }; }
+      return { ok: true, json: async () => pending };
+    }));
+    const onToast = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <DeletionRequests onToast={onToast} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Approve deletion for Pat Lee" }));
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Anonymize account" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByRole("button", { name: /Anonymizing/ })).toBeDisabled();
+    expect(onToast).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => expect(onToast).toHaveBeenCalledWith("success", "Account anonymized."));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  });
+
+  it("Reject shows 'Rejecting…' on its button, and a network failure gives the calm sentence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => {
+      if (init?.method === "POST") throw new TypeError("Failed to fetch");
+      return { ok: true, json: async () => pending };
+    }));
+    const onToast = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <DeletionRequests onToast={onToast} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Reject deletion for Pat Lee" }));
+    await waitFor(() => expect(onToast).toHaveBeenCalledWith("error", expect.stringMatching(/Could not reach the server/)));
+    expect(onToast).not.toHaveBeenCalledWith("success", expect.anything());
+  });
+});

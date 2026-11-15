@@ -1,4 +1,7 @@
 import { AppFooter } from "../components/AppFooter";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { LoadingState } from "../components/ui/LoadingState";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -122,7 +125,7 @@ export function AdminPage() {
       URL.revokeObjectURL(url);
       showToast("success", "Exported the current list.");
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
     } finally {
       setExporting(false);
     }
@@ -193,6 +196,14 @@ export function AdminPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Accounts with a change in flight (role, status, unlock): their controls are disabled and show a busy label.
+  const [rowPending, setRowPending] = useState<Record<number, "role" | "status" | "unlock">>({});
+  const markRows = (ids: number[], kind: "role" | "status" | "unlock" | null) =>
+    setRowPending((prev) => {
+      const next = { ...prev };
+      for (const id of ids) { if (kind) next[id] = kind; else delete next[id]; }
+      return next;
+    });
   useEffect(() => { setSelected(new Set()); }, [view]);
   const canSelect = (u: UserRecord) => u.id !== selfId && !u.deletedAt && u.active;
   const selectable = displayedUsers.filter(canSelect);
@@ -214,7 +225,7 @@ export function AdminPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
       return json.updated ?? [];
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
       return null;
     }
   }
@@ -232,7 +243,9 @@ export function AdminPage() {
       actionLabel: "Undo",
       durationMs:  UNDO_WINDOW_MS,
       onAction:    () => {
+        markRows(updated, "status");
         void bulkSetActive(updated, true).then((back) => {
+          markRows(updated, null);
           if (back) showToast("success", `${back.length} ${back.length === 1 ? "user is" : "users are"} active again.`);
         });
       },
@@ -253,7 +266,7 @@ export function AdminPage() {
   }
 
   async function performRoleChange(u: UserRecord, newRole: string) {
-    setRoleChange(null);
+    markRows([u.id], "role");
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/role`, {
         method:  "PATCH",
@@ -267,7 +280,10 @@ export function AdminPage() {
       });
       showToast("success", `${u.name} is now ${ROLE_LABEL[json.systemRole]}.`);
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      markRows([u.id], null);
+      setRoleChange(null);
     }
   }
 
@@ -277,6 +293,7 @@ export function AdminPage() {
    */
   async function setActive(u: UserRecord, active: boolean, isUndo = false) {
     if (u.id === selfId) { showToast("error", "You cannot deactivate your own account."); return; }
+    markRows([u.id], "status");
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/status`, {
         method:  "PATCH",
@@ -300,11 +317,14 @@ export function AdminPage() {
         });
       }
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      markRows([u.id], null);
     }
   }
 
   async function unlockUser(u: UserRecord) {
+    markRows([u.id], "unlock");
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/unlock`, {
         method:  "POST",
@@ -317,7 +337,9 @@ export function AdminPage() {
       });
       showToast("success", `${u.name}'s account unlocked.`);
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      markRows([u.id], null);
     }
   }
 
@@ -336,7 +358,7 @@ export function AdminPage() {
       showToast("success", json.message ?? `${u.name} deleted.`);
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -380,7 +402,7 @@ export function AdminPage() {
       setDeptName(""); setDeptCode(""); setShowDeptForm(false);
       await departmentsQuery.refetch();
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
     } finally {
       setDeptSubmitting(false);
     }
@@ -524,6 +546,8 @@ export function AdminPage() {
             <ConfirmDialog
               title={`Change ${roleChange.user.name}'s role?`}
               confirmLabel="Change role"
+              busyLabel="Changing…"
+              busy={rowPending[roleChange.user.id] === "role"}
               onConfirm={() => void performRoleChange(roleChange.user, roleChange.newRole)}
               onCancel={() => setRoleChange(null)}
             >
@@ -569,9 +593,8 @@ export function AdminPage() {
 
           {/* Loading */}
           {usersLoading && (
-            <div className="flex items-center justify-center gap-2 py-14 text-slate-600 text-sm">
-              <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
-              Loading…
+            <div className="flex justify-center py-14">
+              <LoadingState label="Loading users…" />
             </div>
           )}
 
@@ -757,7 +780,8 @@ export function AdminPage() {
                               <select
                                 value={u.systemRole}
                                 onChange={(e) => changeRole(u, e.target.value)}
-                                className="text-xs rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
+                                disabled={!!rowPending[u.id]}
+                                className="text-xs disabled:opacity-60 rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
                                 title="Change role"
                               >
                                 <option value="ADMIN">Admin</option>
@@ -768,24 +792,30 @@ export function AdminPage() {
                               {/* Activate / Deactivate */}
                               <button
                                 onClick={() => void setActive(u, !u.active)}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                disabled={!!rowPending[u.id]}
+                                className={`text-xs disabled:opacity-60 px-2.5 py-1 rounded-lg border font-medium transition-colors ${
                                   u.active
                                     ? "border-slate-200 text-slate-700 hover:border-red-200 hover:text-red-700 hover:bg-red-50"
                                     : "border-slate-200 text-slate-700 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50"
                                 }`}
                                 title={u.active ? "Deactivate account" : "Activate account"}
                               >
-                                {u.active ? "Deactivate" : "Activate"}
+                                <BusyLabel
+                                  busy={rowPending[u.id] === "status"}
+                                  idle={u.active ? "Deactivate" : "Activate"}
+                                  busyText={u.active ? "Deactivating…" : "Activating…"}
+                                />
                               </button>
 
                               {/* Unlock */}
                               {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
                                 <button
                                   onClick={() => { void unlockUser(u); }}
-                                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:border-amber-200 hover:text-amber-800 hover:bg-amber-50 font-medium transition-colors"
+                                  disabled={!!rowPending[u.id]}
+                                  className="text-xs disabled:opacity-60 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:border-amber-200 hover:text-amber-800 hover:bg-amber-50 font-medium transition-colors"
                                   title="Clear login lockout now"
                                 >
-                                  Unlock
+                                  <BusyLabel busy={rowPending[u.id] === "unlock"} idle="Unlock" busyText="Unlocking…" />
                                 </button>
                               )}
 
@@ -916,7 +946,7 @@ export function AdminPage() {
                 </form>
               )}
 
-              {departmentsLoading && <p className="text-xs text-slate-600">Loading…</p>}
+              {departmentsLoading && <LoadingState label="Loading departments…" />}
               {!departmentsLoading && departmentsError && <p className="text-xs text-red-600">{departmentsError}</p>}
               {!departmentsLoading && !departmentsError && departments.length === 0 && (
                 <p className="text-xs text-slate-600">No departments yet.</p>

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { errorMessage } from "../lib/feedback";
 import { BusyLabel } from "./ui/BusyLabel";
 import { LoadingState } from "./ui/LoadingState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,7 +66,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
     onSuccess: (_data, { decision }) => {
       onToast?.("success", decision === "approve" ? "Instructor approved." : "Instructor request rejected.");
     },
-    onError: (err: Error) => onToast?.("error", err.message),
+    onError: (err: unknown) => onToast?.("error", errorMessage(err, "Could not save this decision. Try again.")),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 

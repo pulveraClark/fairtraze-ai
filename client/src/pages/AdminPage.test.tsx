@@ -365,3 +365,47 @@ describe("AdminPage empty state", () => {
     expect(screen.getByText("No users yet.")).toBeInTheDocument();
   });
 });
+
+describe("AdminPage busy states and calm errors", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("role change keeps the dialog open with 'Changing…' until the server answers, then confirms", async () => {
+    let release!: () => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((r) => { release = () => r({ ok: true, json: async () => ({ ...users[1], systemRole: "INSTRUCTOR" }) }); })));
+    renderPage();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getAllByTitle("Change role").at(-1)!, "INSTRUCTOR");
+    await user.click(screen.getByRole("button", { name: "Change role" }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Changing/ })).toBeDisabled();
+    expect(screen.getAllByTitle("Change role").at(-1)).toBeDisabled(); // the row is locked meanwhile
+    expect(screen.queryByText(/is now/)).not.toBeInTheDocument();
+    await act(async () => { release(); });
+    expect(await screen.findByText("Pat Lee is now Instructor.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("deactivate disables the row and says 'Deactivating…' while it runs", async () => {
+    let release!: () => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((r) => { release = () => r({ ok: true, json: async () => ({ ...users[1], active: false }) }); })));
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getAllByTitle("Deactivate account").at(-1)!);
+    const row = screen.getByText("Pat Lee").closest("tr")!;
+    expect(within(row).getByRole("button", { name: /Deactivating/ })).toBeDisabled();
+    await act(async () => { release(); });
+    expect(await screen.findByText("Pat Lee deactivated.")).toBeInTheDocument();
+  });
+
+  it("a network failure gives the shared calm sentence, not 'Network error.'", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(screen.getAllByTitle("Deactivate account").at(-1)!);
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't reach the server");
+    expect(screen.queryByText("Network error.")).not.toBeInTheDocument();
+    // the row is usable again
+    const row = screen.getByText("Pat Lee").closest("tr")!;
+    await waitFor(() => expect(within(row).getByRole("button", { name: "Deactivate" })).toBeEnabled());
+  });
+});

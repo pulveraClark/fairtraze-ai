@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { BusyLabel } from "./ui/BusyLabel";
+import { LoadingState } from "./ui/LoadingState";
+import { errorMessage } from "../lib/feedback";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, StatusPill } from "./ui";
@@ -58,7 +61,7 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
     onSuccess: (_data, { decision }) => {
       onToast?.("success", decision === "approve" ? "Account anonymized." : "Deletion request rejected.");
     },
-    onError: (err: Error) => onToast?.("error", err.message),
+    onError: (err: unknown) => onToast?.("error", errorMessage(err, "Could not save this decision. Try again.")),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 
@@ -78,6 +81,7 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
   const data = query.data;
   const pendingCount = data?.pendingCount ?? 0;
   const busyId = review.isPending ? review.variables?.id : undefined;
+  const busyDecision = review.isPending ? review.variables?.decision : undefined;
 
   // Nothing waiting and nothing reviewed yet: hide the whole section until it has content.
   if (data && data.pending.length === 0 && (data.recent?.length ?? 0) === 0) return null;
@@ -98,7 +102,7 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
         contributions as "Former member". A group leader or an instructor who owns classes must hand those over first.
       </p>
 
-      {query.isLoading && <p className="text-sm text-slate-700">Loading requests…</p>}
+      {query.isLoading && <LoadingState label="Loading requests…" />}
 
       {query.isError && (
         <div className={`${CARD} p-4`}>
@@ -126,7 +130,7 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
                   className={BUTTON_PRIMARY}
                   aria-label={`Approve deletion for ${r.user.name}`}
                 >
-                  Approve
+                  <BusyLabel busy={busyId === r.id && busyDecision === "approve"} idle="Approve" busyText="Approving…" />
                 </button>
                 <button
                   type="button"
@@ -135,7 +139,7 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
                   className={BUTTON_SECONDARY}
                   aria-label={`Reject deletion for ${r.user.name}`}
                 >
-                  Reject
+                  <BusyLabel busy={busyId === r.id && busyDecision === "reject"} idle="Reject" busyText="Rejecting…" />
                 </button>
               </div>
             </li>
@@ -161,8 +165,10 @@ export function DeletionRequests({ onToast }: { onToast?: (type: "success" | "er
         <ConfirmDialog
           title={`Anonymize ${approving.user.name}'s account?`}
           confirmLabel="Anonymize account"
+          busyLabel="Anonymizing…"
+          busy={review.isPending}
           onCancel={() => setApproving(null)}
-          onConfirm={() => { review.mutate({ id: approving.id, decision: "approve" }); setApproving(null); }}
+          onConfirm={() => review.mutate({ id: approving.id, decision: "approve" }, { onSettled: () => setApproving(null) })}
         >
           Their profile, photo and sign-in are removed. Their contributions stay as "Former member" so teammates'
           reports are unchanged. This cannot be undone.

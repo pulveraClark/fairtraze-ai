@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { LoadingState } from "./ui/LoadingState";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui/styles";
@@ -441,7 +442,7 @@ function WhereToGoNext() {
   if (loading) {
     return (
       <Section title="Where to go next">
-        <p className="text-sm text-slate-600">Loading…</p>
+        <LoadingState label="Loading…" />
       </Section>
     );
   }
