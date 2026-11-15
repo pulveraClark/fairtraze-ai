@@ -58,18 +58,6 @@ const workload = {
   unassigned: { open: 2, overdue: 1 },
 };
 
-// "From the project instructions" suggestions (leader only). The mock mirrors the server: a task created with a
-// requirementKey removes that item from the next board payload; a member's board has none.
-const SUGGESTIONS = [
-  { key: "k1", text: "Has a login page that lets students sign in with their university email address" },
-  { key: "k2", text: "Has a survey" },
-  { key: "k3", text: "Exports the results to a PDF file" },
-  { key: "k4", text: "Shows a progress chart for each team member" },
-  { key: "k5", text: "Sends an email reminder before the deadline" },
-  { key: "k6", text: "Has a help page" },
-  { key: "k7", text: "Works on a phone" },
-];
-
 const browser = await chromium.launch();
 let failures = 0;
 const check = (ok, what) => { console.log(`${ok ? "PASS" : "FAIL"}  ${what}`); if (!ok) failures++; };
@@ -134,9 +122,8 @@ try {
     const page = await ctx.newPage();
     const errors = [];
     let mode = "leader"; // leader | member | instructor
-    const used = new Set();
     const liveBoard = () => {
-      if (mode === "leader") return { ...board, suggestions: SUGGESTIONS.filter((x) => !used.has(x.key)) };
+      if (mode === "leader") return board;
       if (mode === "member") return { ...board, viewer: { ...board.viewer, userId: 2, isLeader: false, canManageBoard: false } };
       return { ...board, viewer: { ...board.viewer, userId: 99, isLeader: false, isMember: false, readOnly: true, canCreate: false, canManageBoard: false } };
     };
@@ -149,7 +136,6 @@ try {
       if (url.pathname === "/api/auth/me") return json({ id: 1, email: "l@x.com", name: "Leader Lee", systemRole: "STUDENT" });
       if (url.pathname === "/api/groups/7/tasks" && route.request().method() === "POST") {
         const body = route.request().postDataJSON();
-        if (body.requirementKey) used.add(body.requirementKey);
         return json(task(50, { title: body.title, description: body.description ?? null }), 201);
       }
       if (url.pathname === "/api/groups/7/tasks") return json(liveBoard());
@@ -176,7 +162,7 @@ try {
     }
     await page.getByRole("radio", { name: "Board" }).click();
 
-    // ── New task: Title combobox ("From the project instructions") ────────────────────────────────
+    // ── New task: Title is a plain text box (no suggestion list) ──────────────────────────────────
     const waitBoard = () => page.getByRole("button", { name: /Write the introduction/ }).first().waitFor();
     const openNewTask = async () => {
       await page.getByRole("button", { name: "New task" }).click();
@@ -184,120 +170,30 @@ try {
       await d.waitFor();
       return d;
     };
-    const insideViewport = (b) => b.x >= -0.5 && b.x + b.width <= width + 0.5 && b.y >= -0.5 && b.y + b.height <= height + 0.5;
     const hasRing = (e) => { const s = getComputedStyle(e); return (s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0) || (!!s.boxShadow && s.boxShadow !== "none"); };
-    const listboxes = () => page.getByRole("listbox").count();
-    const dialogs = () => page.getByRole("dialog", { name: "New task" }).count();
     const tb = page.locator("#nt-title");
-    const chevron = page.getByRole("button", { name: "Show project instructions" });
 
-    let nd = await openNewTask();
-    check((await tb.getAttribute("role")) === "combobox", "title: is a combobox for the leader");
-    check(await tb.evaluate((e) => document.activeElement === e), "title: autofocused");
-    check((await tb.getAttribute("aria-expanded")) === "false" && (await listboxes()) === 0, "title: list is closed on the dialog's first focus");
-    check(await chevron.isVisible(), "title: chevron is visible");
-
-    await tb.click();
-    check((await listboxes()) === 1, "opens on click");
-    await page.keyboard.press("Escape");
-    check((await listboxes()) === 0 && (await dialogs()) === 1, "first Esc closes only the list");
-    await chevron.click();
-    check((await listboxes()) === 1, "opens on the chevron");
-    await chevron.click();
-    check((await listboxes()) === 0, "chevron closes it again");
-    await tb.focus();
-    check((await listboxes()) === 0, "focus alone does not open it");
-    await page.keyboard.press("ArrowDown");
-    check((await listboxes()) === 1, "opens on ArrowDown");
-    await page.keyboard.press("Escape");
-    await page.keyboard.type("s");
-    check((await listboxes()) === 1, "opens on typing");
-    await tb.fill("");
-    await page.keyboard.press("Escape");
-
-    // Geometry with the full list (7 items; about 5 rows show, the rest scroll inside).
-    await tb.click();
-    const lb = page.getByRole("listbox");
-    await lb.waitFor();
-    const lbox = await lb.boundingBox();
-    check(insideViewport(lbox), `list inside the viewport (${Math.round(lbox.x)},${Math.round(lbox.y)} ${Math.round(lbox.width)}x${Math.round(lbox.height)} in ${width}x${height})`);
-    const clip = await page.evaluate(() => {
-      const list = document.querySelector("[role=listbox]");
-      const l = list.getBoundingClientRect();
-      const bad = [];
-      for (let el = list.parentElement; el && el !== document.body; el = el.parentElement) {
-        const s = getComputedStyle(el);
-        if (/(auto|scroll|hidden|clip)/.test(s.overflowX + s.overflowY)) {
-          const r = el.getBoundingClientRect();
-          if (l.bottom > r.bottom + 0.5 || l.right > r.right + 0.5 || l.left < r.left - 0.5 || l.top < r.top - 0.5) bad.push(el.getAttribute("role") || el.tagName.toLowerCase());
-        }
-      }
-      return bad;
-    });
-    check(clip.length === 0, `list not clipped by the dialog's scroll area ${clip.join(",")}`);
-    const o2 = await page.evaluate(pageOverflow);
-    check(o2.sw <= o2.cw, `new task: no sideways page scroll (${o2.sw} <= ${o2.cw})`);
-    check(await page.getByRole("dialog", { name: "New task" }).evaluate((d) => d.scrollWidth <= d.clientWidth + 1), "new task: dialog has no sideways scroll");
-    const rows = await page.getByRole("listbox").getByRole("option").evaluateAll((els) => els.map((e) => ({ h: e.getBoundingClientRect().height, fs: parseFloat(getComputedStyle(e).fontSize) })));
-    check(rows.length === SUGGESTIONS.length && rows.every((r) => r.h >= 43.5), `rows are at least 44px (min ${Math.round(Math.min(...rows.map((r) => r.h)))}px of ${rows.length})`);
-    check(rows.every((r) => r.fs >= 14), `row text is at least 14px (${Math.min(...rows.map((r) => r.fs))}px)`);
-    check(lbox.height <= 5 * 44 + 1, `list shows at most about 5 rows (${Math.round(lbox.height)}px)`);
-    check(await lb.evaluate((e) => e.scrollHeight > e.clientHeight), "list scrolls inside when longer than 5 rows");
-    check(await tb.evaluate(hasRing), "title field shows a focus ring");
-    check(await chevron.evaluate((e) => { e.focus(); const st = getComputedStyle(e); return (st.outlineStyle !== "none" && parseFloat(st.outlineWidth) > 0) || (!!st.boxShadow && st.boxShadow !== "none"); }), "chevron shows a focus ring when focused");
-    if (shots) await page.screenshot({ path: path.join(shots, `${name}-newtask-list.png`) });
-    await tb.focus();
-
-    // Filter, pick, and what the pick fills in.
-    await tb.fill("");
-    await page.keyboard.type("survey");
-    check((await page.getByRole("listbox").getByRole("option").count()) === 1, "filters as you type");
-    await page.keyboard.type(" zzz");
-    check((await listboxes()) === 0 && (await tb.inputValue()) === "survey zzz", "no match closes the list and keeps the typed title");
-    await tb.fill("");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
-    check((await tb.inputValue()) === SUGGESTIONS[1].text, `Enter picks: title = requirement text ("${await tb.inputValue()}")`);
-    const desc = await page.locator("#nt-desc").inputValue();
-    check(desc === "From the project instructions.", `description = "From the project instructions." (got "${desc}")`);
-    check((await listboxes()) === 0, "list closes after picking");
-
-    // Esc keeps the typed text; a second Esc closes the dialog.
-    await tb.fill("");
-    await page.keyboard.type("Ha");
-    check((await listboxes()) === 1, "list is open before Esc");
-    await page.keyboard.press("Escape");
-    check((await listboxes()) === 0 && (await tb.inputValue()) === "Ha" && (await dialogs()) === 1, "Esc closes the list and keeps the typed text");
-    await page.keyboard.press("Escape");
-    await page.getByRole("dialog", { name: "New task" }).waitFor({ state: "detached" });
-    check(true, "second Esc closes the dialog");
-
-    // Create from a suggestion, reopen: that item is gone from the list.
-    nd = await openNewTask();
-    await tb.click();
-    await page.getByRole("listbox").getByRole("option", { name: SUGGESTIONS[2].text }).click();
-    await page.getByRole("button", { name: "Create task" }).click();
-    await nd.waitFor({ state: "detached" });
-    await page.waitForTimeout(300);
-    await openNewTask();
-    await tb.click();
-    const texts = await page.getByRole("listbox").getByRole("option").allTextContents();
-    check(!texts.includes(SUGGESTIONS[2].text) && texts.length === SUGGESTIONS.length - 1, `an item that already has a task is not in the list (${texts.length} left of ${SUGGESTIONS.length})`);
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-
-    // A member sees a plain text box. An instructor cannot create tasks at all (view only), so has no Title field.
-    mode = "member";
-    await page.reload();
-    await waitBoard();
-    await openNewTask();
-    check((await tb.getAttribute("role")) === null && (await chevron.count()) === 0, "member: plain text box, no chevron");
-    await tb.click();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.type("x");
-    check((await listboxes()) === 0, "member: no list opens");
-    await page.keyboard.press("Escape");
+    for (const who of ["leader", "member"]) {
+      mode = who;
+      await page.reload();
+      await waitBoard();
+      await openNewTask();
+      check((await tb.getAttribute("role")) === null && (await page.getByRole("combobox").count()) === 0, `${who}: title is a plain text box`);
+      check(await tb.evaluate((e) => document.activeElement === e), `${who}: title is focused when the form opens`);
+      check((await tb.getAttribute("maxlength")) === "200", `${who}: title allows 200 characters`);
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.type("x");
+      check((await page.getByRole("listbox").count()) === 0, `${who}: no list opens`);
+      check(await tb.evaluate(hasRing), `${who}: title field shows a focus ring`);
+      const o2 = await page.evaluate(pageOverflow);
+      check(o2.sw <= o2.cw, `${who}: new task: no sideways page scroll (${o2.sw} <= ${o2.cw})`);
+      check(await page.getByRole("dialog", { name: "New task" }).evaluate((d) => d.scrollWidth <= d.clientWidth + 1), `${who}: new task dialog has no sideways scroll`);
+      if (shots && who === "leader") await page.screenshot({ path: path.join(shots, `${name}-newtask.png`) });
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog", { name: "New task" }).waitFor({ state: "detached" });
+      check(true, `${who}: Esc closes the dialog`);
+    }
+    // An instructor cannot create tasks at all (view only), so has no Title field.
     mode = "instructor";
     await page.reload();
     await waitBoard();
@@ -306,7 +202,7 @@ try {
     await page.reload();
     await waitBoard();
 
-    // Another dialog's Esc still closes it (the useFocusTrap change only yields to an open combobox).
+    // Another dialog's Esc closes it.
     await page.getByRole("button", { name: "Workload" }).click();
     await page.getByRole("dialog", { name: "Workload" }).waitFor();
     await page.keyboard.press("Escape");

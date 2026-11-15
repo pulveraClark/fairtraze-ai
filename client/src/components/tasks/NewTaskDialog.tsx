@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../Toast";
-import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, type BoardResponse, type TaskPriority } from "@shared/taskTypes";
+import { TASK_LIMITS, TASK_PRIORITIES, TASK_PRIORITY_LABELS, type BoardResponse, type TaskPriority } from "@shared/taskTypes";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "../ui/styles";
 import type { TaskActions } from "../../hooks/useTaskActions";
-import { TitleCombobox } from "./TitleCombobox";
 
 const SLOW_AFTER_MS = 15_000;
-
-// No "item N": the order of AI-listed requirements is not guaranteed to match the instructions text.
-const FROM_INSTRUCTIONS = "From the project instructions.";
 
 interface Props {
   board: BoardResponse;
@@ -46,7 +42,6 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
   const [priority, setPriority] = useState<TaskPriority>("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [assignee, setAssignee] = useState("");
-  const [requirementKey, setRequirementKey] = useState<string | undefined>();
   const [error, setError] = useState("");
 
   async function submit(e: React.FormEvent) {
@@ -67,7 +62,6 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
         description: description.trim() || null,
         priority,
         dueDate: dueDate || null,
-        ...(requirementKey ? { requirementKey } : {}),
         ...(board.viewer.isLeader && assignee ? { assignedToUserId: Number(assignee) } : {}),
       });
       if (slowTimer.current) clearTimeout(slowTimer.current);
@@ -92,19 +86,7 @@ export function NewTaskDialog({ board, actions, onClose, onCreated }: Props) {
         <form onSubmit={submit} aria-busy={busy} className="mt-3 space-y-3">
           <div>
             <label htmlFor="nt-title" className="mb-1 block text-sm font-medium text-slate-900">Title</label>
-            <TitleCombobox
-              id="nt-title"
-              value={title}
-              maxLength={200}
-              autoFocus
-              onChange={setTitle}
-              suggestions={board.viewer.isLeader ? board.suggestions ?? [] : []}
-              onPick={(s) => {
-                setTitle(s.text.slice(0, 200));
-                setDescription(FROM_INSTRUCTIONS);
-                setRequirementKey(s.key);
-              }}
-            />
+            <input id="nt-title" value={title} maxLength={TASK_LIMITS.title} autoFocus autoComplete="off" onChange={(e) => setTitle(e.target.value)} className={FIELD} />
           </div>
           <div>
             <label htmlFor="nt-desc" className="mb-1 block text-sm font-medium text-slate-900">Description (optional)</label>

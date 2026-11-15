@@ -25,6 +25,34 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+describe("NewTaskDialog: Title field", () => {
+  beforeEach(() => resetFixtureIds());
+
+  it("is a plain, focused text box (no combobox or list), limited to the server's 200 characters", () => {
+    setup(vi.fn());
+    const title = screen.getByLabelText("Title");
+    expect(title).toHaveFocus();
+    expect(title).toHaveAttribute("maxlength", "200");
+    // (Priority and Assignee are native selects, which also have the combobox role, so check the Title itself.)
+    expect(title.tagName).toBe("INPUT");
+    expect(title).not.toHaveAttribute("role");
+    expect(title).not.toHaveAttribute("aria-expanded");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("Enter submits the trimmed title", async () => {
+    const createTask = vi.fn().mockResolvedValue(mkTask({ id: 4 }));
+    const { onCreated } = setup(createTask);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Title"), "  Write the intro  {Enter}");
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask.mock.calls[0][0]).toMatchObject({ title: "Write the intro" });
+    expect(createTask.mock.calls[0][0]).not.toHaveProperty("requirementKey");
+    await screen.findByText(/created\./);
+    expect(onCreated).toHaveBeenCalledWith(4);
+  });
+});
+
 describe("NewTaskDialog: creating state", () => {
   beforeEach(() => resetFixtureIds());
   afterEach(() => vi.useRealTimers());
