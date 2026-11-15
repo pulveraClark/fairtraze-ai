@@ -52,13 +52,14 @@ describe("EarlyDataTag", () => {
 });
 
 describe("muted flags and health keep their words", () => {
-  it("StatusPill flag and health: same label, grey tone, when muted", () => {
+  it("StatusPill flag and health: same label and hue, softer (dashed) variant, when muted", () => {
     const { rerender } = render(<StatusPill kind="flag" value="free-rider" muted />);
     const pill = screen.getByText("Free-rider");
-    expect(pill.className).toContain("bg-slate-100");
+    expect(pill.className).toContain("bg-red-50");
+    expect(pill.className).toContain("border-dashed");
     expect(pill.className).not.toContain("bg-red-100");
     rerender(<StatusPill kind="health" value="High Risk" muted />);
-    expect(screen.getByText("High risk").className).toContain("bg-slate-100");
+    expect(screen.getByText("High risk").className).toContain("bg-red-50");
     rerender(<StatusPill kind="flag" value="free-rider" />);
     expect(screen.getByText("Free-rider").className).toContain("bg-red-100");
   });

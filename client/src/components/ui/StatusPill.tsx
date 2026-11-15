@@ -17,12 +17,29 @@ export const PILL_TONES: Record<PillTone, { cls: string; fg: string; bg: string 
   neutral: { cls: "bg-slate-100 text-slate-800 border-slate-300",       fg: "#1e293b", bg: "#f1f5f9" },
 };
 
+/**
+ * "Early data" (muted) variant: the SAME hue as the full tone, only softer (lighter fill, dashed border), so a flag
+ * or health level keeps its identity and just reads less like an alarm. Instructor screens only; students keep
+ * their own FlagTag styles. Text is still at least 4.5:1 (checked in ui.test.tsx from the hex values).
+ */
+export const PILL_TONES_SOFT: Partial<Record<PillTone, { cls: string; fg: string; bg: string }>> = {
+  green:  { cls: "bg-emerald-50 text-emerald-900 border-emerald-300 border-dashed", fg: "#064e3b", bg: "#ecfdf5" },
+  amber:  { cls: "bg-amber-50 text-amber-900 border-amber-300 border-dashed",       fg: "#78350f", bg: "#fffbeb" },
+  red:    { cls: "bg-red-50 text-red-900 border-red-300 border-dashed",             fg: "#7f1d1d", bg: "#fef2f2" },
+  yellow: { cls: "bg-yellow-50 text-yellow-900 border-yellow-300 border-dashed",    fg: "#713f12", bg: "#fefce8" },
+};
+
+/** Classes for a tone; `soft` picks the early-data variant when the tone has one. */
+export function toneClasses(tone: PillTone, soft = false): string {
+  return (soft ? PILL_TONES_SOFT[tone]?.cls : undefined) ?? PILL_TONES[tone].cls;
+}
+
 export const HEALTH_LABEL: Record<TeamHealth, string> = {
   Healthy: "Healthy",
   "Moderate Risk": "Moderate risk",
   "High Risk": "High risk",
 };
-const HEALTH_TONE: Record<TeamHealth, PillTone> = { Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" };
+export const HEALTH_TONE: Record<TeamHealth, PillTone> = { Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" };
 
 export const FLAG_LABEL: Record<Flag, string> = {
   inactive: "Inactive",
@@ -30,7 +47,9 @@ export const FLAG_LABEL: Record<Flag, string> = {
   overload: "Overload",
   "deadline-driven": "Deadline-driven",
 };
-const FLAG_TONE: Record<Flag, PillTone> = { inactive: "red", "free-rider": "red", overload: "orange", "deadline-driven": "yellow" };
+// One colour per flag for every instructor surface (StatusPill and FlagTag both read this): Overload amber, Free-rider and
+// Inactive red, Deadline-driven yellow. Meaning is always also carried by the label text and an icon.
+export const FLAG_TONE: Record<Flag, PillTone> = { inactive: "red", "free-rider": "red", overload: "amber", "deadline-driven": "yellow" };
 
 type Props =
   | { kind: "health"; value: TeamHealth; className?: string; muted?: boolean }
@@ -63,10 +82,10 @@ export function StatusPill(props: Props) {
     label = props.label;
     icon = "dot";
   }
-  // "Early data": same words and icon, grey instead of the alert colour. Display only.
-  if ((props.kind === "health" || props.kind === "flag") && props.muted) tone = "neutral";
+  // "Early data": same words, icon and hue, in the softer variant. Display only.
+  const soft = (props.kind === "health" || props.kind === "flag") && !!props.muted;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-normal ${PILL_TONES[tone].cls} ${props.className ?? ""}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-normal ${toneClasses(tone, soft)} ${props.className ?? ""}`}>
       <Icon kind={icon} />
       {label}
     </span>

@@ -1,9 +1,10 @@
 import { shortMemberNames } from "../lib/names";
 import { presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { NoActivityPill } from "./NoActivityPill";
-import type { ProjectSummaryItem, TeamHealth } from "@shared/types";
+import type { ProjectSummaryItem } from "@shared/types";
 import { ContributionMiniBar } from "./ContributionMiniBar";
 import { FlagTag } from "./FlagTag";
+import { StatusPill } from "./ui/StatusPill";
 import { useRouter } from "../router";
 import type { GroupTaskSummary } from "@shared/taskTypes";
 import { TaskCountLine } from "./TaskCountLine";
@@ -11,12 +12,6 @@ import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
 import { REPO_CHANGED_NOTICE, REPO_NOT_LINKED_MESSAGE, REPO_NOT_LINKED_PILL, repoNotLinked } from "../lib/repoNotice";
 import { AnalyzedAgo } from "./AnalyzedAgo";
-
-const HEALTH_BADGE: Record<TeamHealth, string> = {
-  Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
-  "Moderate Risk": "bg-amber-100 text-amber-800 border border-amber-300",
-  "High Risk":     "bg-red-100 text-red-800 border border-red-300",
-};
 
 interface Props {
   item: ProjectSummaryItem;
@@ -144,11 +139,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           <NoActivityPill className="shrink-0" />
         ) : (
           item.teamHealth && (
-            <span
-              className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${HEALTH_BADGE[item.teamHealth]}`}
-            >
-              {item.teamHealth}
-            </span>
+            <StatusPill kind="health" value={item.teamHealth} className="shrink-0" />
           )
         )}
       </div>

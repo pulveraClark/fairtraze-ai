@@ -83,7 +83,7 @@ describe("GroupSummaryCard with no recorded activity", () => {
       flagsPresent: ["inactive"],
     });
     expect(screen.queryByText("Not enough activity yet")).not.toBeInTheDocument();
-    expect(screen.getByText("Moderate Risk")).toBeInTheDocument();
+    expect(screen.getByText("Moderate risk")).toBeInTheDocument();
     expect(screen.getByText(/inactive/i)).toBeInTheDocument();
   });
 });

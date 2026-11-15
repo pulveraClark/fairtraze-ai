@@ -82,7 +82,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
   if (data && data.pending.length === 0 && (data.recent?.length ?? 0) === 0) return null;
 
   return (
-    <section ref={sectionRef} id="instructor-approvals" aria-labelledby="instructor-approvals-title" className="scroll-mt-4 rounded-lg border border-slate-200 p-4 sm:col-span-1 lg:col-span-2">
+    <section ref={sectionRef} id="instructor-approvals" aria-labelledby="instructor-approvals-title" className={`scroll-mt-4 rounded-lg border p-4 sm:col-span-1 lg:col-span-2 ${pendingCount > 0 ? "border-amber-300 border-l-4 border-l-amber-500 bg-amber-50" : "border-slate-200"}`}>
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h3 id="instructor-approvals-title" className="text-lg font-semibold text-slate-900">Instructor approvals</h3>
         <span
