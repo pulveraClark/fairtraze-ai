@@ -304,32 +304,52 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     res.status(400).json({ error: "Invalid group id" });
     return;
   }
-  const project = await loadGroupShared(id.data);
+  // Stage 1. Everything that depends only on the group id is started together. Results are used only after the
+  // 404, 403 and "switched off" answers below, in the same order as before, so a refused caller gets nothing but
+  // the refusal. The extra reads are skipped when the server switch is off.
+  const switchOn = aiReviewEnabled();
+  const [project, assignment, latestReport, review, briefRow] = await Promise.all([
+    loadGroupShared(id.data),
+    // The assignment (and so the attachments) is resolved from this group; no id comes from the client. It also
+    // carries the class switch, so no separate class read is needed.
+    switchOn
+      ? prisma.assignment.findFirst({
+          where: { projects: { some: { id: id.data } } },
+          select: { id: true, description: true, classSection: { select: { aiReviewEnabled: true } } },
+        })
+      : null,
+    switchOn
+      ? prisma.report.findFirst({ where: { projectId: id.data }, orderBy: [...LATEST_REPORT_ORDER], select: { id: true, generatedAt: true } })
+      : null,
+    switchOn
+      ? prisma.aiReportReview.findFirst({
+          where: { kind: "MEMBER_SUMMARIES", report: { projectId: id.data } },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        })
+      : null,
+    switchOn
+      ? prisma.aiReportReview.findFirst({
+          where: { kind: "BRIEF_COMPARISON", report: { projectId: id.data } },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        })
+      : null,
+  ]);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
   }
-  const me =project.groupMemberships.find((m) => m.userId === req.user!.sub);
+  const me = project.groupMemberships.find((m) => m.userId === req.user!.sub);
   const instructor = isInstructorOf(req, project);
   if (!me && !instructor) {
     res.status(403).json({ error: "You do not have access to this group." });
     return;
   }
-  if (!aiReviewEnabled() || !(await classSwitchOn(project))) {
+  if (!switchOn || !assignment?.classSection.aiReviewEnabled) {
     res.json({ enabled: false });
     return;
   }
 
   const viewer: AiViewer = instructor ? "instructor" : me!.role === "LEADER" ? "leader" : "member";
-  const latestReport = await prisma.report.findFirst({
-    where: { projectId: project.id },
-    orderBy: [...LATEST_REPORT_ORDER],
-    select: { id: true, generatedAt: true },
-  });
-  const review = await prisma.aiReportReview.findFirst({
-    where: { kind: "MEMBER_SUMMARIES", report: { projectId: project.id } },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  });
 
   const repo = repoRefOf(project.repoUrl);
   const base = {
@@ -345,31 +365,36 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
   let brief: { briefCheck?: AiBriefView; briefFailed?: boolean; hasInstructions?: boolean } = {};
   let briefAttempt: AiLastAttempt | undefined;
   let briefStored: { createdAt: Date } | null = null;
+  let basedOn: { generatedAt: Date } | null = null;
   {
-    // The assignment (and so the attachments) is resolved from this group; no id comes from the client.
-    const [assignment, briefRow] = await Promise.all([
-      prisma.assignment.findFirst({ where: { projects: { some: { id: project.id } } }, select: { id: true, description: true } }),
-      prisma.aiReportReview.findFirst({
-        where: { kind: "BRIEF_COMPARISON", report: { projectId: project.id } },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      }),
-    ]);
     briefAttempt = (briefRow?.content as { lastAttempt?: AiLastAttempt } | null)?.lastAttempt;
     briefStored = briefRow;
     const text = assignment?.description ?? "";
-    const attachments = assignment ? (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [] : [];
-    // "Worked on by" names: instructor and leader only. A plain member gets no author information at all.
-    const who = viewer === "member" ? undefined : await contributorLookup(project, (briefRow?.content as AiBriefContent | null)?.requirements ?? []);
+    // Stage 2. Attachments and the instructor's confirmed marks (a leader's claim never counts; the marks are
+    // checked for staleness below, once the attachment names are known).
+    const [attachmentMap, markRows] = await Promise.all([
+      assignment ? attachmentMetaFor([assignment.id]) : null,
+      viewer !== "instructor" && briefRow
+        ? prisma.requirementMark.findMany({
+            where: { projectId: project.id, role: "INSTRUCTOR", status: "INSTRUCTOR_CONFIRMED" },
+            select: { requirementKey: true, sourceQuote: true, sourceFile: true },
+          })
+        : [],
+    ]);
+    const attachments = assignment ? attachmentMap?.get(assignment.id) ?? [] : [];
+    // Stage 3. "Worked on by" names (instructor and leader only; a plain member gets no author information at all)
+    // and the date of the report the review was based on.
+    const [who, basedOnRow] = await Promise.all([
+      viewer === "member" ? undefined : contributorLookup(project, (briefRow?.content as AiBriefContent | null)?.requirements ?? []),
+      review ? prisma.report.findUnique({ where: { id: review.reportId }, select: { generatedAt: true } }) : null,
+    ]);
+    basedOn = basedOnRow;
     // Requirements the owning instructor confirmed (current marks only; a leader's claim never counts).
     const confirmed = new Set<string>();
     if (viewer !== "instructor" && briefRow) {
       const reqKeys = new Set(requirementKeys(((briefRow.content as AiBriefContent | null)?.requirements ?? []) as never).filter((k): k is string => !!k));
       const current = { description: text, attachmentNames: attachments.map((a) => (a as { filename?: string }).filename ?? "") };
-      const marks = await prisma.requirementMark.findMany({
-        where: { projectId: project.id, role: "INSTRUCTOR", status: "INSTRUCTOR_CONFIRMED" },
-        select: { requirementKey: true, sourceQuote: true, sourceFile: true },
-      });
-      for (const m of marks) if (reqKeys.has(m.requirementKey) && !isMarkStale(m, current)) confirmed.add(m.requirementKey);
+      for (const m of markRows) if (reqKeys.has(m.requirementKey) && !isMarkStale(m, current)) confirmed.add(m.requirementKey);
     }
     const view = shapeBriefForViewer(
       briefRow, viewer, req.user!.sub, { brief: text, attachments, latestReportId: latestReport?.id ?? null }, repo, who, confirmed,
@@ -402,7 +427,6 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
 
   const people = new Map(project.groupMemberships.map((m) => [m.userId, { name: m.user.name, githubUsername: m.user.githubUsername ?? null }]));
   const shaped = shapeSummariesForViewer(review.content as unknown as AiMemberSummariesContent, viewer, req.user!.sub, people, repo);
-  const basedOn = await prisma.report.findUnique({ where: { id: review.reportId }, select: { generatedAt: true } });
   sendReview(res, viewer, {
     ...base,
     generatedAt: review.createdAt.toISOString(),
