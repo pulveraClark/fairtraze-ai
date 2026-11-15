@@ -45,10 +45,10 @@ describe("settle delay follows the server's save debounce", () => {
   it("is longer than the debounce", () => {
     expect(SAVE_SETTLE_MS).toBeGreaterThan(COLLAB_PERSIST_DEBOUNCE_MS);
   });
-  it("shared value equals the debounce in server/src/collab/persistence.ts", () => {
+  it("server/src/collab/persistence.ts takes its debounce from the shared constant (no number of its own)", () => {
     const src = readFileSync(resolve(__dirname, "../../../server/src/collab/persistence.ts"), "utf8");
-    const m = src.match(/const DEBOUNCE_MS = (\d+);/);
-    expect(m, "persistence.ts no longer has a numeric DEBOUNCE_MS; update this test").not.toBeNull();
-    expect(Number(m![1])).toBe(COLLAB_PERSIST_DEBOUNCE_MS);
+    expect(src).toMatch(/import \{ COLLAB_PERSIST_DEBOUNCE_MS \} from "@shared\/collabVersion\.js";/);
+    expect(src).toMatch(/const DEBOUNCE_MS = COLLAB_PERSIST_DEBOUNCE_MS;/);
+    expect(src).not.toMatch(/const DEBOUNCE_MS = \d/);
   });
 });

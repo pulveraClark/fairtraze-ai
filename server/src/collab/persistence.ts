@@ -5,6 +5,7 @@ import type { prosemirrorJSONToYXmlFragment as ProsemirrorJSONToYXmlFragmentType
 import { prisma } from "../lib/prisma.js";
 import { Y } from "./yjsCjs.js";
 import { attachAuthorshipTracking } from "./authorshipCapture.js";
+import { COLLAB_PERSIST_DEBOUNCE_MS } from "@shared/collabVersion.js";
 
 // prosemirror-model and @tiptap/y-tiptap are loaded via the same CJS `require` trick as `Y`
 // (see yjsCjs.ts) — only used here for the one-time legacy-content migration below.
@@ -40,7 +41,7 @@ export const legacySchema = new Schema({
   },
 });
 
-const DEBOUNCE_MS = 3000;
+const DEBOUNCE_MS = COLLAB_PERSIST_DEBOUNCE_MS; // shared with the client's save indicator
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // Tracks, per room, whether bindState's own restore (Document.findUnique + Y.applyUpdate below)

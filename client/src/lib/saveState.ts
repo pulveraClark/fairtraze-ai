@@ -5,9 +5,8 @@ export type ProviderStatus = "connecting" | "connected" | "disconnected";
 
 /**
  * How long after the last local edit before "All changes saved" may show. The collab server saves to the
- * database after the last change (`DEBOUNCE_MS` in server/src/collab/persistence.ts, mirrored by
- * COLLAB_PERSIST_DEBOUNCE_MS in shared/src/collabVersion.ts and checked against it in saveState.test.ts),
- * so we wait that long plus a margin. There is no per-update acknowledgement from the server, so this is the
+ * database after the last change (server/src/collab/persistence.ts reads COLLAB_PERSIST_DEBOUNCE_MS from
+ * shared/src/collabVersion.ts, the same constant used here), so we wait that long plus a margin. There is no per-update acknowledgement from the server, so this is the
  * honest bound we can offer.
  */
 export const SAVE_SETTLE_MS = COLLAB_PERSIST_DEBOUNCE_MS + 500;

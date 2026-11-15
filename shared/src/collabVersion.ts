@@ -18,6 +18,6 @@ export const COLLAB_VERSION_CLOSE_CODE = 4409;
  * How long the collab server waits after the last change before it saves the document to the database
  * (the debounced save in server/src/collab/persistence.ts, `DEBOUNCE_MS`). The client's "All changes saved"
  * indicator waits at least this long after a local edit (client/src/lib/saveState.ts). Timing only; not part
- * of the document schema. client/src/lib/saveState.test.ts fails if this stops matching persistence.ts.
+ * of the document schema. persistence.ts imports this constant; client/src/lib/saveState.test.ts checks that.
  */
 export const COLLAB_PERSIST_DEBOUNCE_MS = 3000;
