@@ -4,13 +4,14 @@ import type { TaskDetails } from "@shared/taskTypes";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
 import { groupKeys } from "./useGroupQueries";
-import { POLL_10S } from "./pollingOptions";
+import { TASK_POLL_BASE_MS, TASK_POLL_MAX_MS } from "./pollingOptions";
+import { useAdaptivePolling } from "./adaptivePolling";
 import { taskApi } from "../lib/tasks/api";
 import { errorMessage } from "../lib/feedback";
 
 /**
  * Everything the details window shows beyond the board payload (subtasks, attachments, comments,
- * history, watchers), polled every 10 s while the window is open. Each mutation refreshes the
+ * history, watchers), polled every 10 s (up to 30 s when quiet) while the window is open. Each mutation refreshes the
  * details and the board (the card shows subtask progress) and reports a failure in plain words.
  */
 export function useTaskDetails(projectId: number, taskId: number) {
@@ -21,12 +22,13 @@ export function useTaskDetails(projectId: number, taskId: number) {
   const [inFlight, setInFlight] = useState(0);
   const key = groupKeys.taskDetails(uid, projectId, taskId);
 
+  const polling = useAdaptivePolling(key, TASK_POLL_BASE_MS, TASK_POLL_MAX_MS);
   const query = useQuery({
     queryKey: key,
     queryFn: () => taskApi.details(token, projectId, taskId),
     enabled: !!token && uid !== null,
     retry: false,
-    ...POLL_10S,
+    ...polling,
   });
 
   const refresh = useCallback(async () => {

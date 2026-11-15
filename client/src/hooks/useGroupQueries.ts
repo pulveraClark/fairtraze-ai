@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import type { BoardResponse, BoardTask } from "@shared/taskTypes";
-import { POLL_10S } from "./pollingOptions";
+import { TASK_POLL_BASE_MS, TASK_POLL_MAX_MS } from "./pollingOptions";
+import { useAdaptivePolling } from "./adaptivePolling";
 import type { GroupSetup } from "../lib/groupSetup";
 import { mergePending } from "../lib/tasks/pendingMoves";
 import type { EvidenceReportDto } from "@shared/evidenceReport";
@@ -108,13 +109,15 @@ export function useStudentGroupQuery<T>(projectId: number) {
 export function useTaskBoardQuery(projectId: number) {
   const { token, user } = useAuth();
   const uid = user?.id ?? null;
+  const queryKey = groupKeys.tasks(uid, projectId);
+  const polling = useAdaptivePolling(queryKey, TASK_POLL_BASE_MS, TASK_POLL_MAX_MS);
   return useQuery({
-    queryKey: groupKeys.tasks(uid, projectId),
+    queryKey,
     // A poll never puts a card back while its move is still being saved.
     queryFn:  async () => mergePending(uid, projectId, await getJson<BoardResponse>(`/api/groups/${projectId}/tasks`, token, "Could not load tasks.")),
     enabled:  !!token && uid !== null,
     retry: false,
-    ...POLL_10S,
+    ...polling,
   });
 }
 

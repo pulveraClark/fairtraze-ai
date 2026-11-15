@@ -52,12 +52,28 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
     if (!token) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // A hidden tab makes no request: the next poll is skipped and made at once when the tab is visible
+    // again. The time limit below counts wall time, so waiting hidden can only end the wait sooner.
+    let skippedWhileHidden = false;
+    const onVisible = () => {
+      if (skippedWhileHidden && document.visibilityState === "visible") {
+        skippedWhileHidden = false;
+        void tick();
+      }
+    };
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        if (document.visibilityState === "hidden") skippedWhileHidden = true;
+        else void tick();
+      }, AI_POLL_MS);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     const tick = async () => {
       const body = await load();
       if (cancelled || !body?.running) return;
       startedAt.current ??= Date.now();
       if (Date.now() - startedAt.current < AI_POLL_MAX_MS) {
-        timer = setTimeout(tick, AI_POLL_MS);
+        scheduleNext();
       } else {
         // Limit reached: nothing stays hidden. Show the latest result and stop waiting.
         held.current = false;
@@ -70,6 +86,7 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [load, nonce, token]);
 

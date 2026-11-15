@@ -15,7 +15,11 @@ function pollEvery(ms: number) {
   } as const;
 }
 
-// The Tasks board: others' moves should show up within ~10 s. The board GET answers 304 when nothing changed.
+// The Tasks board and the task details window: others' changes show up within ~10 s while things are
+// moving. The GET answers 304 when nothing changed, and after 3 unchanged polls the interval doubles
+// (10 s -> 20 s -> 30 s), see adaptivePolling.ts. Focus, the user's own write or a changed response go back to 10 s.
+export const TASK_POLL_BASE_MS = 10_000;
+export const TASK_POLL_MAX_MS = 30_000;
 export const POLL_10S = pollEvery(10_000);
 export const POLL_30S = pollEvery(30_000);
 export const POLL_60S = pollEvery(60_000);

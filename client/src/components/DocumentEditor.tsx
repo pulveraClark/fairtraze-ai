@@ -43,6 +43,7 @@ import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion";
 import { PAGE_SIZES, MARGIN_PRESET_LABELS, resolvePageGeometry } from "@shared/pageSizes";
 import { DEFAULT_PAGE_SETUP, applyPageSetup, mergePageSetup, pageSetupPatchBody, parsePageSetup, samePageSetup } from "../lib/pageSetup";
 import type { PageSetup, PageSetupChange } from "../lib/pageSetup";
+import { startVisiblePoll } from "../lib/visiblePoll";
 import { PageBreak } from "../lib/pageBreak";
 import { PageSetupDialog } from "./PageSetupDialog";
 import { PdfProgressPanel } from "./PdfProgressPanel";
@@ -514,12 +515,11 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       }
     };
     void pull();
-    const timer = setInterval(pull, 15000);
-    window.addEventListener("focus", pull);
+    // Paused while the tab is hidden; one pull when it comes back or the window gets focus.
+    const stopPolling = startVisiblePoll(() => void pull(), 15000);
     return () => {
       cancelled = true;
-      clearInterval(timer);
-      window.removeEventListener("focus", pull);
+      stopPolling();
     };
   }, [groupId, token]);
 
