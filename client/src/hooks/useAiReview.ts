@@ -13,19 +13,34 @@ export interface UseAiReview {
 /**
  * Reads the stored AI review of a group and, while a review is running, re-reads it every 5 s for up
  * to 5 minutes. Never blocks the page: any failure just leaves `data` as it was.
+ *
+ * After `start()` (the instructor's Generate) the member findings and the instructions check are saved at
+ * different moments. Until the run finishes, `data` keeps the last finished result (with `running: true`), so
+ * both parts change at the same moment. After the 5-minute limit the latest result is shown anyway. A page that
+ * never calls `start()` (students) reads and shows every poll as before.
  */
 export function useAiReview(projectId: number, token: string | null): UseAiReview {
   const [data, setData] = useState<AiReviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const startedAt = useRef<number | null>(null);
+  const shown = useRef<AiReviewResponse | null>(null); // what `data` currently holds
+  const settled = useRef<AiReviewResponse | null>(null); // last finished result, kept while a started run is held back
+  const held = useRef(false);
 
   const load = useCallback(async (): Promise<AiReviewResponse | null> => {
     try {
       const res = await fetch(`/api/groups/${projectId}/ai-review`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return null;
       const body = (await res.json()) as AiReviewResponse;
-      setData(body);
+      if (held.current && body.running && settled.current) {
+        shown.current = { ...settled.current, running: true };
+      } else {
+        if (!body.running) held.current = false;
+        settled.current = body;
+        shown.current = body;
+      }
+      setData(shown.current);
       return body;
     } catch {
       return null;
@@ -40,7 +55,15 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
       const body = await load();
       if (cancelled || !body?.running) return;
       startedAt.current ??= Date.now();
-      if (Date.now() - startedAt.current < AI_POLL_MAX_MS) timer = setTimeout(tick, AI_POLL_MS);
+      if (Date.now() - startedAt.current < AI_POLL_MAX_MS) {
+        timer = setTimeout(tick, AI_POLL_MS);
+      } else {
+        // Limit reached: nothing stays hidden. Show the latest result and stop waiting.
+        held.current = false;
+        settled.current = null;
+        shown.current = { ...body, running: false };
+        setData(shown.current);
+      }
     };
     void tick();
     return () => {
@@ -54,6 +77,9 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
     setData(null);
     setError(null);
     startedAt.current = null;
+    shown.current = null;
+    settled.current = null;
+    held.current = false;
   }, [projectId]);
 
   const start = useCallback(async (): Promise<boolean> => {
@@ -67,7 +93,10 @@ export function useAiReview(projectId: number, token: string | null): UseAiRevie
 return false;
         }
         startedAt.current = Date.now();
-        setData((d) => (d ? { ...d, running: true } : d));
+        held.current = true;
+        settled.current = shown.current;
+        shown.current = shown.current ? { ...shown.current, running: true } : shown.current;
+        setData(shown.current);
         setNonce((n) => n + 1);
         return true;
       }

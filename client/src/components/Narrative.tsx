@@ -198,7 +198,8 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
       </div>
 
       {/* Work-summary status: one calm line each, only when there is something to say */}
-      {summaryState === "running" ? (
+      {summaryState === "running" && !generating ? (
+        // Page opened while a run was going. (A run started here shows the one block further down.)
         // Not a live region: the one in Member contributions announces the change.
         <div className="mb-3 min-h-24">
           <p className="flex items-center gap-2 text-sm leading-normal text-slate-700">
@@ -209,7 +210,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           <SkeletonLines className="mt-3" />
         </div>
       ) : (
-        summaryState && WORK_SUMMARY_STATUS_TEXT[summaryState] && (
+        summaryState && summaryState !== "running" && WORK_SUMMARY_STATUS_TEXT[summaryState] && (
           <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>
         )
       )}
@@ -261,12 +262,8 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
             <Spinner className="text-indigo-700" />
             <span>Generating AI findings…</span>
           </p>
-          {summaryState !== "running" && (
-            <>
-              <p className="mt-1 text-xs leading-normal text-slate-700">{slow ? AI_SLOW_TEXT : AI_WRITING_HINT}</p>
-              <SkeletonLines className="mt-3" />
-            </>
-          )}
+          <p className="mt-1 text-xs leading-normal text-slate-700">{slow ? AI_SLOW_TEXT : AI_WRITING_HINT}</p>
+          <SkeletonLines className="mt-3" />
         </div>
       )}
 

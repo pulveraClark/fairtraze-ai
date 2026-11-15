@@ -42,13 +42,37 @@ export function useGenerateAiReport(
   const [narrativeSince, setNarrativeSince] = useState<string | null>(null);
   const reviewOn = !!review?.data?.enabled && !!review.data.canGenerate && !!review.data.hasReport;
 
+  // The explanation is held back until the member findings and the instructions check are finished, so all three
+  // appear together. `waiting` holds what the explanation request returned; it is applied (and the loading state
+  // ends) when the review stops running. The review hook releases after 5 minutes, so nothing stays hidden.
+  type Held = { narrative: string | null; since: string | null; warning: string | null };
+  const [waiting, setWaiting] = useState<Held | null>(null);
+  const reviewRunning = !!review?.data?.running;
+  const apply = useCallback((h: Held) => {
+    if (h.narrative) {
+      onNarrativeGenerated(h.narrative);
+      setNarrativeSince(h.since);
+      setWarning(h.warning);
+    }
+    setGenerating(false);
+  }, [onNarrativeGenerated]);
+
+  useEffect(() => {
+    if (waiting && !reviewRunning) {
+      const h = waiting;
+      setWaiting(null);
+      apply(h);
+    }
+  }, [waiting, reviewRunning, apply]);
+
   const generate = useCallback(async (regenerate = false) => {
     setGenerating(true);
     setError(null);
     setWarning(null);
     setNarrativeSince(null);
-    // The review runs in the background; it never delays or blocks the explanation.
-    if (reviewOn) void review!.start();
+    // Start the review first; the explanation is requested in parallel and then waits for it.
+    const started = reviewOn ? review!.start() : Promise.resolve(false);
+    let held: Held = { narrative: null, since: null, warning: null };
     try {
       const url = `/api/projects/${projectId}/narrative${regenerate ? "?regenerate=true" : ""}`;
       const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
@@ -57,18 +81,20 @@ export function useGenerateAiReport(
         // The daily limit is worded here, on the viewer's clock; every other message comes from the server.
         setError(data.code === "AI_QUOTA_DAILY" ? quotaResetLine(data.retryAt) : (data.error ?? "Could not generate AI findings."));
       } else if (data.narrative) {
-        onNarrativeGenerated(data.narrative);
-        setNarrativeSince(data.upToDate?.since ?? null);
         // The saved text is shown, but a new one could not be written: say why and what to do (server wording;
         // the daily limit is worded on the viewer's clock).
-        if (data.warning) setWarning(data.code === "AI_QUOTA_DAILY" ? quotaResetLine(data.retryAt) : data.warning);
+        held = {
+          narrative: data.narrative,
+          since: data.upToDate?.since ?? null,
+          warning: data.warning ? (data.code === "AI_QUOTA_DAILY" ? quotaResetLine(data.retryAt) : data.warning) : null,
+        };
       }
     } catch {
       setError(NETWORK_ERROR_TEXT);
-    } finally {
-      setGenerating(false);
     }
-  }, [projectId, token, reviewOn, review, onNarrativeGenerated]);
+    if (await started) setWaiting(held); // the effect applies it when the review has finished
+    else apply(held);
+  }, [projectId, token, reviewOn, review, apply]);
 
   const busy = generating || !!review?.data?.running;
   const slow = useSlowAfter(busy, AI_SLOW_MS);

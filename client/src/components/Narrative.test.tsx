@@ -212,3 +212,29 @@ describe("AI findings summary", () => {
     expect(screen.queryByText(/Select a member above/)).toBeNull();
   });
 });
+
+describe("Narrative: one loading block for the whole Generate run", () => {
+  const gen = (over: Partial<import("../hooks/useGenerateAiReport").AiReportGenerator>): import("../hooks/useGenerateAiReport").AiReportGenerator => ({
+    reviewOn: true, generating: true, error: null, warning: null, generate: async () => {}, upToDate: null, busy: true, slow: false, announcement: "writing", ...over,
+  });
+  const running = { data: { enabled: true, running: true, canGenerate: true, hasReport: true, summaries: [] }, error: null, start: async () => true } as never;
+
+  it("shows a single 'Generating AI findings…' with the hint, not a second 'Writing AI findings…' block", () => {
+    render(<Narrative narrative="Old text." projectId={1} onNarrativeGenerated={() => {}} review={running} generator={gen({})} />);
+    expect(screen.getAllByText("Generating AI findings…")).toHaveLength(1);
+    expect(screen.queryByText("Writing AI findings…")).toBeNull();
+    expect(screen.getByText("This can take up to a minute.")).toBeTruthy();
+    expect(screen.queryByText("Old text.")).toBeNull(); // held until the whole run is finished
+  });
+
+  it("after the slow limit the same block says it is taking longer than usual", () => {
+    render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} review={running} generator={gen({ slow: true })} />);
+    expect(screen.getByText("This is taking longer than usual. You can try again.")).toBeTruthy();
+  });
+
+  it("a page opened while a run is going shows the one 'Writing AI findings…' block", () => {
+    render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} review={running} generator={gen({ generating: false })} />);
+    expect(screen.getByText("Writing AI findings…")).toBeTruthy();
+    expect(screen.queryByText("Generating AI findings…")).toBeNull();
+  });
+});
