@@ -167,7 +167,7 @@ function DisputeModal({
   onSubmitted: (d: DisputeRecord) => void;
 }) {
   const [reason,   setReason]   = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const { busy: submitting, run } = useAction();
   const [error,    setError]    = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -176,22 +176,21 @@ function DisputeModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!reason.trim()) { setError("Please describe the context for your instructor."); return; }
-    setSubmitting(true);
     setError("");
-    try {
+    await run(async () => {
       const res  = await fetch("/api/disputes", {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ projectId, reason: reason.trim() }),
       });
-      const json = await res.json() as DisputeRecord & { error?: string };
-      if (!res.ok) { setError(json.error ?? "Could not send your note."); return; }
-      onSubmitted(json);
-    } catch {
-      setError("Network error — could not submit.");
-    } finally {
-      setSubmitting(false);
-    }
+      await ensureOk(res, "Could not send your note. Try again.");
+      return (await res.json()) as DisputeRecord;
+    }, {
+      success: "Note sent.",
+      error: "Could not send your note. Try again.",
+      onError: setError,
+      onSuccess: (record) => onSubmitted(record),
+    });
   }
 
   return (
@@ -228,7 +227,7 @@ function DisputeModal({
               disabled={submitting || !reason.trim()}
               className="inline-flex min-h-10 items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "Sending…" : "Send note"}
+              <BusyLabel busy={submitting} idle="Send note" busyText="Sending…" />
             </button>
           </div>
         </form>

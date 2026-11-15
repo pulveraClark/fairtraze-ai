@@ -18,6 +18,13 @@ export interface ActionOptions<T> {
   onSuccess?: (value: T) => void;
 }
 
+/** A fetch Response, or anything shaped like one (a boolean `ok` and a `json()`): a non-ok one is a failure. */
+function isResponseLike(value: unknown): value is Response {
+  return typeof value === "object" && value !== null
+    && typeof (value as { ok?: unknown }).ok === "boolean"
+    && typeof (value as { json?: unknown }).json === "function";
+}
+
 export type ActionResult<T> =
   | { ok: true; value: T }
   | { ok: false; skipped?: boolean; message?: string };
@@ -40,7 +47,7 @@ export function useAction() {
       const outcome = await guard.run(async (): Promise<ActionResult<T>> => {
         try {
           const value = await fn();
-          if (typeof Response !== "undefined" && value instanceof Response) await ensureOk(value, options.error);
+          if (isResponseLike(value)) await ensureOk(value, options.error);
           return { ok: true, value };
         } catch (err) {
           const message = errorMessage(err, options.error);

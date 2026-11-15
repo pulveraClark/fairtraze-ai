@@ -23,7 +23,7 @@ vi.mock("../hooks/useGroupQueries", () => ({
   useStudentGroupQuery: () => ({ data: state.data, isLoading: false, error: null }),
 }));
 const toast = vi.fn();
-vi.mock("../components/Toast", () => ({ useToast: () => ({ showSuccessToast: toast, showToast: vi.fn() }) }));
+vi.mock("../components/Toast", () => ({ useToast: () => ({ showSuccessToast: toast, showToast: vi.fn(), showError: vi.fn() }) }));
 vi.mock("../hooks/useInvalidateOnAlertCount", () => ({ useInvalidateOnAlertCount: () => undefined }));
 vi.mock("../components/tasks/TasksTab", () => ({ TasksTab: () => <div>tasks-board</div> }));
 vi.mock("../components/DocumentGate", () => ({ DocumentGate: () => <div>docs-editor</div> }));
@@ -57,6 +57,11 @@ function renderPage() {
       <RouterProvider><StudentGroupPage projectId={1} /></RouterProvider>
     </QueryClientProvider>,
   );
+}
+
+function cleanupModal() {
+  const cancel = screen.queryByRole("button", { name: /^cancel$/i });
+  if (cancel) fireEvent.click(cancel);
 }
 
 describe("StudentGroupPage", () => {
@@ -93,6 +98,29 @@ describe("StudentGroupPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
     expect(screen.getByRole("heading", { name: "Add a note" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send note" })).toBeTruthy();
+  });
+
+  it("sending a note says 'Note sent.' only after the server accepted it, and a refusal shows its message", async () => {
+    window.history.pushState({}, "", REPORT);
+    state.data = flagged();
+    toast.mockClear();
+    const record = { id: 5, status: "OPEN", reason: "Worked offline.", createdAt: "2026-11-01T00:00:00Z" };
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => record })));
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
+    await userEvent.type(screen.getByPlaceholderText(/offline/i), "Worked offline.");
+    await userEvent.click(screen.getByRole("button", { name: "Send note" }));
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith("Note sent."));
+
+    toast.mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ error: "You already sent a note for this report." }) })));
+    cleanupModal();
+    fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
+    await userEvent.type(screen.getByPlaceholderText(/offline/i), "Again.");
+    await userEvent.click(screen.getByRole("button", { name: "Send note" }));
+    expect(await screen.findByText("You already sent a note for this report.")).toBeTruthy();
+    expect(toast).not.toHaveBeenCalledWith("Note sent.");
+    vi.unstubAllGlobals();
   });
 
   it("an unopened note reads 'Note status: Sent' and 'Your note is open…'", () => {

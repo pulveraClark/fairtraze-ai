@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { ToastProvider } from "../components/Toast";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ProjectCard } from "./StudentClassPage";
 
@@ -12,7 +13,7 @@ const asgn = (over: object = {}, group: object = {}) => ({
 
 function renderCard(a: ReturnType<typeof asgn>) {
   const onNavigate = vi.fn(); const onManage = vi.fn();
-  render(<ProjectCard asgn={a as never} token="t" onNavigate={onNavigate} onManage={onManage} onChanged={vi.fn()} />);
+  render(<ToastProvider><ProjectCard asgn={a as never} token="t" onNavigate={onNavigate} onManage={onManage} onChanged={vi.fn()} /></ToastProvider>);
   return { onNavigate, onManage };
 }
 
@@ -51,7 +52,7 @@ describe("ProjectCard last analyzed", () => {
   it("shows 'Last analyzed 5 hours ago' under the health pill, and nothing when there is no report", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
-    const { container } = render(<ProjectCard asgn={asgn({}, { report: { evenness: "even", generatedAt: "2026-10-20T07:00:00Z" } }) as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={vi.fn()} />);
+    const { container } = render(<ToastProvider><ProjectCard asgn={asgn({}, { report: { evenness: "even", generatedAt: "2026-10-20T07:00:00Z" } }) as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={vi.fn()} /></ToastProvider>);
     expect(screen.getByText("Last analyzed 5 hours ago")).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/Gini|index|band/i);
   });
@@ -72,7 +73,7 @@ describe("ProjectCard double submits", () => {
     vi.stubGlobal("fetch", fetchMock);
     const onChanged = vi.fn();
     const a = asgn({ myGroup: null, groups: [{ id: 5, groupName: "Group 5", memberCount: 1, leaderName: "Ana", isFull: false }] });
-    render(<ProjectCard asgn={a as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={onChanged} />);
+    render(<ToastProvider><ProjectCard asgn={a as never} token="t" onNavigate={vi.fn()} onManage={vi.fn()} onChanged={onChanged} /></ToastProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: /Request to join a group/ }));
     fireEvent.click(screen.getByRole("radio"));

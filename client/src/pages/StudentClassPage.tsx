@@ -14,7 +14,10 @@ import { ApiError, classKeys, groupKeys, useClassProjectsQuery } from "../hooks/
 import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
 import { GroupManageModal } from "../components/GroupManageModal";
-import { useSubmitGuard } from "../hooks/useSubmitGuard";
+import { useAction } from "../hooks/useAction";
+import { useToast } from "../components/Toast";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { ensureOk, errorMessage } from "../lib/feedback";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HEALTH_BADGE: Record<string, string> = {
@@ -129,7 +132,7 @@ export function ProjectCard({
   const [showBrief, setShowBrief]   = useState(false);
   const [groupName, setGroupName]   = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const { submitting, run }   = useSubmitGuard();
+  const { busy: submitting, run } = useAction();
   const [error, setError]           = useState("");
 
   const isPending   = asgn.myRequest?.status === "PENDING";
@@ -139,46 +142,47 @@ export function ProjectCard({
 
   async function handleCreate() {
     if (!groupName.trim()) { setError("Enter a group name."); return; }
-    await run(async () => {
-      setError("");
-      const res = await fetch("/api/join/create-group", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim() }),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not create group."); return; }
-      onChanged();
+    setError("");
+    await run(() => fetch("/api/join/create-group", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim() }),
+    }), {
+      success: "Group created.",
+      error: "Could not create the group. Try again.",
+      onError: setError,
+      onSuccess: () => onChanged(),
     });
   }
 
   async function handleRequest() {
     if (!selectedId) { setError("Select a group to request."); return; }
-    await run(async () => {
-      setError("");
-      const res = await fetch(`/api/groups/${selectedId}/request`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({}),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not send request."); return; }
-      onChanged();
+    setError("");
+    // No toast: the card turns into "Request sent ✓, waiting for ... to approve".
+    await run(() => fetch(`/api/groups/${selectedId}/request`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({}),
+    }), {
+      success: null,
+      error: "Could not send the request. Try again.",
+      onError: setError,
+      onSuccess: () => onChanged(),
     });
   }
 
   async function handleCancelRequest() {
     if (!asgn.myRequest) return;
     const requestId = asgn.myRequest.id;
-    await run(async () => {
-      setError("");
-      const res = await fetch(`/api/groups/requests/${requestId}/cancel`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not cancel request."); return; }
-      onChanged();
+    setError("");
+    await run(() => fetch(`/api/groups/requests/${requestId}/cancel`, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }), {
+      success: "Request cancelled.",
+      error: "Could not cancel the request. Try again.",
+      onError: setError,
+      onSuccess: () => onChanged(),
     });
   }
 
@@ -306,7 +310,7 @@ export function ProjectCard({
                   disabled={submitting}
                   className="mt-2 text-xs font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
                 >
-                  {submitting ? "Cancelling…" : "Cancel request"}
+                  <BusyLabel busy={submitting} idle="Cancel request" busyText="Cancelling…" />
                 </button>
               </div>
             </div>
@@ -370,7 +374,7 @@ export function ProjectCard({
                     disabled={submitting}
                     className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Creating…" : "Create Group"}
+                    <BusyLabel busy={submitting} idle="Create Group" busyText="Creating…" />
                   </button>
                   <button
                     onClick={() => { setMode("idle"); setError(""); setGroupName(""); }}
@@ -436,7 +440,7 @@ export function ProjectCard({
                     disabled={submitting || !selectedId}
                     className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Sending…" : "Send Request"}
+                    <BusyLabel busy={submitting} idle="Send Request" busyText="Sending…" />
                   </button>
                   <button
                     onClick={() => { setMode("idle"); setError(""); setSelectedId(null); }}
@@ -476,6 +480,7 @@ export function StudentClassPage({ classId }: Props) {
     : classQuery.error instanceof ApiError ? classQuery.error.message : "Network error — is the server running?";
   const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const { showSuccessToast } = useToast();
   const [leaveLoading, setLeaveLoading]     = useState(false);
   const [leaveError, setLeaveError]         = useState("");
 
@@ -493,11 +498,11 @@ export function StudentClassPage({ classId }: Props) {
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setLeaveError(data.error ?? "Could not leave class."); return; }
+      await ensureOk(res, "Could not leave the class. Try again.");
       navigate("/student");
-    } catch {
-      setLeaveError("Network error — could not leave class.");
+      showSuccessToast("You left the class."); // the toast provider sits above the routes, so it survives this
+    } catch (err) {
+      setLeaveError(errorMessage(err, "Could not leave the class. Try again."));
     } finally {
       setLeaveLoading(false);
     }
@@ -544,7 +549,7 @@ export function StudentClassPage({ classId }: Props) {
                   disabled={leaveLoading}
                   className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
                 >
-                  {leaveLoading ? "Leaving…" : "Leave class"}
+                  <BusyLabel busy={leaveLoading} idle="Leave class" busyText="Leaving…" />
                 </button>
               </div>
             </div>

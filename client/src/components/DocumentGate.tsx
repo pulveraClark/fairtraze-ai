@@ -1,4 +1,6 @@
 import { CHANGE_TEMPLATE_HINT } from "../lib/docActionHints";
+import { BusyLabel } from "./ui/BusyLabel";
+import { LoadingState } from "./ui/LoadingState";
 import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { useEffect, useState } from "react";
@@ -121,8 +123,8 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
 
   if (exists === null) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-600">
-        Loading…
+      <div className="flex justify-center rounded-xl border border-slate-200 bg-white p-8">
+        <LoadingState label="Loading document…" />
       </div>
     );
   }
@@ -143,7 +145,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate, title, scro
               title={CHANGE_TEMPLATE_HINT}
               className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}
             >
-              {resetting ? "Changing template…" : "Change template"}
+              <BusyLabel busy={resetting} idle="Change template" busyText="Changing template…" />
             </button>
           </div>
         )}

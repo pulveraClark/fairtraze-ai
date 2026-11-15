@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "./Toast";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { STILL_CONNECTING_MS } from "../lib/useCollabSync";
@@ -53,7 +54,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("DocumentEditor first sync", () => {
   it("keeps a member read-only until the first sync completes, then lets them type", async () => {
-    render(<DocumentEditor groupId={1} editable />);
+    render(<ToastProvider><DocumentEditor groupId={1} editable /></ToastProvider>);
     await waitFor(() => expect(isEditable()).toBe("false"));
     expect(screen.getAllByText("Connecting to the shared document…").length).toBeGreaterThan(0);
     act(() => created[0].finishSync());
@@ -70,7 +71,7 @@ describe("DocumentEditor first sync", () => {
       await rosterGate;
       return { ok: true, status: 200, json: async () => ({ members: [{ userId: 1 }] }) };
     }));
-    render(<DocumentEditor groupId={1} editable />);
+    render(<ToastProvider><DocumentEditor groupId={1} editable /></ToastProvider>);
     act(() => created[0].finishSync()); // connected and synced first...
     await waitFor(() => expect(isEditable()).toBe("true"));
     await act(async () => { releaseRoster(); await new Promise((r) => setTimeout(r, 50)); }); // ...then the roster arrives
@@ -78,7 +79,7 @@ describe("DocumentEditor first sync", () => {
   });
 
   it("never makes a read-only viewer editable, even after the sync completes", async () => {
-    render(<DocumentEditor groupId={1} editable={false} />);
+    render(<ToastProvider><DocumentEditor groupId={1} editable={false} /></ToastProvider>);
     await waitFor(() => expect(isEditable()).toBe("false"));
     act(() => created[0].finishSync());
     await waitFor(() => expect(screen.queryByText("Connecting to the shared document…")).not.toBeInTheDocument());
@@ -88,7 +89,7 @@ describe("DocumentEditor first sync", () => {
   it("says it is still connecting when the document never syncs, and Retry reconnects", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      render(<DocumentEditor groupId={1} editable />);
+      render(<ToastProvider><DocumentEditor groupId={1} editable /></ToastProvider>);
       expect(isEditable()).toBe("false");
       await act(async () => { vi.advanceTimersByTime(STILL_CONNECTING_MS + 1); });
       expect(screen.getByText("Still connecting. Check your internet, or reload")).toBeInTheDocument();

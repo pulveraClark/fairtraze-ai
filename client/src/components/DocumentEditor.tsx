@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useToast } from "./Toast";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
@@ -641,6 +642,7 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
   // when nothing changed (that would re-decorate the page for nothing).
   const commentsRef = useRef<CommentRecord[]>(comments);
   commentsRef.current = comments;
+  const { showError } = useToast();
   const commentBusyRef = useRef(0);
   const showCommentsRef = useRef(false);
   showCommentsRef.current = showComments;
@@ -692,10 +694,14 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
   }, [showComments]);
 
   // Wraps this session's own comment requests so the poll stays out of their way.
-  const withCommentBusy = async (run: () => Promise<void>) => {
+  const withCommentBusy = async (run: () => Promise<void>, failText = "Could not save your comment. Try again.") => {
     commentBusyRef.current += 1;
     try {
       await run();
+    } catch {
+      // A comment that did not reach the server used to vanish without a word. Say so (no success toast:
+      // the comment appearing in the list is the confirmation).
+      showError(failText);
     } finally {
       commentBusyRef.current -= 1;
     }
@@ -749,8 +755,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
         const created = (await res.json()) as CommentRecord;
         setComments((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
         setPendingSelection(null);
+      } else {
+        throw new Error("rejected");
       }
-    });
+    }, "Could not post your comment. Try again.");
   };
 
   const handleReply = async (parentId: number, text: string) => {
@@ -768,8 +776,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       if (res.ok) {
         const created = (await res.json()) as CommentRecord;
         setComments((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
+      } else {
+        throw new Error("rejected");
       }
-    });
+    }, "Could not post your reply. Try again.");
   };
 
   const handleResolveToggle = async (commentId: number, resolved: boolean) => {
@@ -783,8 +793,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       if (res.ok) {
         const updated = (await res.json()) as CommentRecord;
         setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+      } else {
+        throw new Error("rejected");
       }
-    });
+    }, "Could not update the comment. Try again.");
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -796,8 +808,10 @@ export function DocumentEditor({ groupId, editable, awaitInitialNodeCount, title
       });
       if (res.ok) {
         setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+      } else {
+        throw new Error("rejected");
       }
-    });
+    }, "Could not delete the comment. Try again.");
   };
 
   const handleSelectThread = (commentId: number) => {

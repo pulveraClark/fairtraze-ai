@@ -12,7 +12,10 @@ import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../hooks/useStudent
 import type { EnrolledClass } from "../hooks/useStudentClassesQuery";
 import { QrScanner } from "../components/QrScanner";
 import { extractJoinCode } from "../lib/joinCodeFromQr";
-import { useSubmitGuard } from "../hooks/useSubmitGuard";
+import { useAction } from "../hooks/useAction";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { LoadingState } from "../components/ui/LoadingState";
+import { ensureOk } from "../lib/feedback";
 
 
 const HEALTH_BADGE: Record<string, string> = {
@@ -32,7 +35,7 @@ function JoinClassModal({
   onJoined: () => void;
 }) {
   const [joinCode, setJoinCode] = useState("");
-  const { submitting: loading, run } = useSubmitGuard();
+  const { busy: loading, run } = useAction();
   const [error, setError]       = useState("");
   const [done, setDone]         = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -53,18 +56,25 @@ function JoinClassModal({
 
   async function handleEnroll() {
     if (!joinCode.trim()) { setError("Please enter a join code."); return; }
+    setError("");
+    // No toast: the "Enrollment successful" panel is the confirmation.
     await run(async () => {
-      setError("");
-      const res  = await fetch("/api/join/class", {
+      const res = await fetch("/api/join/class", {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ joinCode: joinCode.trim() }),
       });
-      const data = await res.json() as { error?: string; subjectCode?: string; subjectName?: string };
-      if (!res.ok) { setError(data.error ?? "Could not enroll."); return; }
-      setEnrolled({ subjectCode: data.subjectCode!, subjectName: data.subjectName! });
-      onJoined();
-      setDone(true);
+      await ensureOk(res, "Could not join the class. Check the code and try again.");
+      return (await res.json()) as { subjectCode?: string; subjectName?: string };
+    }, {
+      success: null,
+      error: "Could not join the class. Check the code and try again.",
+      onError: setError,
+      onSuccess: (data) => {
+        setEnrolled({ subjectCode: data.subjectCode!, subjectName: data.subjectName! });
+        onJoined();
+        setDone(true);
+      },
     });
   }
 
@@ -133,7 +143,7 @@ function JoinClassModal({
                   disabled={loading || !joinCode.trim()}
                   className="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                 >
-                  {loading ? "Enrolling…" : "Enroll →"}
+                  <BusyLabel busy={loading} idle="Enroll →" busyText="Enrolling…" />
                 </button>
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
@@ -338,8 +348,8 @@ export function StudentPage() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8 space-y-8">
 
         {loading && (
-          <div className="flex items-center justify-center py-16 text-sm text-slate-600">
-            Loading your classes…
+          <div className="flex justify-center py-16">
+            <LoadingState label="Loading your classes…" />
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BusyLabel } from "../components/ui/BusyLabel";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
 import { roleHome } from "../lib/roleHome";
@@ -185,7 +186,7 @@ export function JoinPage() {
           {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => void handleJoin()} disabled={enrolling} className={BUTTON_PRIMARY}>
-              {enrolling ? "Joining…" : "Join"}
+              <BusyLabel busy={enrolling} idle="Join" busyText="Joining…" />
             </button>
             <button type="button" onClick={() => navigate("/student")} disabled={enrolling} className={BUTTON_SECONDARY}>Not now</button>
           </div>
