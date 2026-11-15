@@ -576,7 +576,7 @@ export function LandingPage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          PRINCIPLE BANNER — "The math scores. The AI explains."
+          PRINCIPLE BANNER
       ══════════════════════════════════════════════════════ */}
       <section className="py-16 sm:py-24 px-6 sm:px-8 bg-indigo-600 relative overflow-hidden">
         {/* Subtle decorative circles */}
@@ -584,17 +584,17 @@ export function LandingPage() {
         <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-white/5 pointer-events-none" />
 
         <div className="relative max-w-3xl mx-auto text-center">
-          <p className="text-indigo-300 text-xs font-bold uppercase tracking-[0.2em] mb-4">Core Principle</p>
+          <p className="text-white text-xs font-bold uppercase tracking-[0.2em] mb-4">Core Principle</p>
           <h2
             className="font-display font-extrabold text-white leading-tight mb-5"
             style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}
           >
-            The math scores.<br />The AI explains.
+            The math scores.<br />The AI explains and reviews.<br />The instructor decides.
           </h2>
-          <p className="text-indigo-200 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto mb-8">
-            All contribution scores, flags, and the Gini coefficient are computed deterministically in code —
-            no AI guesswork involved. Gemini writes the plain-language narrative only after the numbers are
-            finalized. Outputs support instructor judgment; they never assign grades.
+          <p className="text-indigo-50 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto mb-8">
+            All contribution scores, flags and the Gini coefficient are computed in code. The AI only
+            explains the finished numbers and points out gaps in the team's work, and it cannot change
+            any of them. Outputs support instructor judgment; they never assign grades.
           </p>
           {!dashboardPath && (
             <motion.button
@@ -630,7 +630,7 @@ export function LandingPage() {
           </button>
 
           <p className="text-xs text-slate-600 text-center max-w-sm leading-relaxed">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
+            Outputs are evidence to support instructor judgment. They are not grades or final assessments. The instructor decides.
           </p>
 
           <div className="flex items-center gap-5 shrink-0">
