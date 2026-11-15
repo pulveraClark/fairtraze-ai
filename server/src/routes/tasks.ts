@@ -7,7 +7,7 @@ import {
   type TaskActivityType, type TaskStatus,
 } from "@shared/taskTypes.js";
 import { prisma } from "../lib/prisma.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, authenticateToken, checkAccountLive } from "../middleware/auth.js";
 import { loadGroup, type LoadedGroup } from "../lib/groupAccess.js";
 import { notify } from "../lib/notify.js";
 import {
@@ -50,12 +50,16 @@ export interface Ctx { project: LoadedGroup; actor: TaskActor; groupId: number }
 export async function openGroup(req: Request, res: Response, opts: { write?: boolean } = {}): Promise<Ctx | null> {
   const id = idParam.safeParse(req.params.id);
   if (!id.success) { res.status(400).json({ error: "Invalid group id" }); return null; }
-  const project = await loadGroup(id.data);
+  return checkGroupAccess(req, res, id.data, await loadGroup(id.data), opts);
+}
+
+/** The checks after the group is loaded (404, 403 and the view-only rule). Sends the error response itself. */
+function checkGroupAccess(req: Request, res: Response, groupId: number, project: LoadedGroup | null, opts: { write?: boolean } = {}): Ctx | null {
   if (!project) { res.status(404).json({ error: "Group not found." }); return null; }
   const actor = resolveTaskActor(req.user!, project);
   if (!canViewBoard(actor)) { res.status(403).json({ error: "You do not have access to this group." }); return null; }
   if (opts.write && !actor.isMember) { res.status(403).json({ error: VIEW_ONLY }); return null; }
-  return { project, actor, groupId: id.data };
+  return { project, actor, groupId };
 }
 
 export function leaderOnly(res: Response, actor: TaskActor, message: string): boolean {
@@ -127,8 +131,20 @@ async function checkMilestoneId(projectId: number, milestoneId: number): Promise
 
 // GET /api/groups/:id/tasks — the whole board in one payload. Express adds a weak ETag to the JSON
 // body, so a poll when nothing changed is a 304 with no body. The body holds no clock values.
-tasksRouter.get("/api/groups/:id/tasks", requireAuth, async (req: Request, res: Response) => {
-  const ctx = await openGroup(req, res);
+//
+// The poll that runs every 10 s: instead of requireAuth (account check, THEN group load) the account check and the group
+// load run together. The responses and their order are the same: no/invalid/expired token 401, dead account 401
+// ACCOUNT_UNAVAILABLE (even for a bad id), then 400, 404, 403. Every write route still uses requireAuth.
+tasksRouter.get("/api/groups/:id/tasks", authenticateToken, async (req: Request, res: Response) => {
+  if (!req.user) { res.status(401).json({ error: "Authentication required" }); return; }
+  const id = idParam.safeParse(req.params.id);
+  const [live, loaded] = await Promise.all([
+    checkAccountLive(req.user.sub),
+    id.success ? loadGroup(id.data) : Promise.resolve(null),
+  ]);
+  if (!live) { res.status(401).json({ error: "Account no longer available", code: "ACCOUNT_UNAVAILABLE" }); return; }
+  if (!id.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+  const ctx = checkGroupAccess(req, res, id.data, loaded);
   if (!ctx) return;
   const board = await loadBoard(ctx.project, ctx.actor);
   res.set("Cache-Control", "private, no-cache");

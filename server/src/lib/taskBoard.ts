@@ -102,6 +102,27 @@ export async function commitCountsFor(taskIds: number[]): Promise<Map<number, nu
   return map;
 }
 
+/** Done/total subtasks per task id for a whole group (one grouped query, no id list needed). */
+export async function subtaskCountsForProject(projectId: number): Promise<Map<number, { done: number; total: number }>> {
+  const map = new Map<number, { done: number; total: number }>();
+  const groups = await prisma.taskSubtask.groupBy({ by: ["taskId", "done"], where: { task: { projectId } }, _count: { _all: true } });
+  for (const g of groups) {
+    const cur = map.get(g.taskId) ?? { done: 0, total: 0 };
+    cur.total += g._count._all;
+    if (g.done) cur.done += g._count._all;
+    map.set(g.taskId, cur);
+  }
+  return map;
+}
+
+/** Linked commits per task id for a whole group (one grouped query). */
+export async function commitCountsForProject(projectId: number): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  const groups = await prisma.taskCommitLink.groupBy({ by: ["taskId"], where: { task: { projectId } }, _count: { _all: true } });
+  for (const g of groups) map.set(g.taskId, g._count._all);
+  return map;
+}
+
 /** serializeTask for one row, filling in its subtask progress and linked-commit count. */
 export async function serializeTaskWithCounts(task: TaskRow, ctx: { project: LoadedGroup; actor: TaskActor }): Promise<BoardTask> {
   const [subtasks, commits] = await Promise.all([subtaskCountsFor([task.id]), commitCountsFor([task.id])]);
@@ -113,7 +134,10 @@ export async function loadTaskRow(taskId: number): Promise<TaskRow | null> {
 }
 
 export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise<BoardResponse> {
-  const [rows, milestones, labels, aliases] = await Promise.all([
+  // One batch: none of these needs the task rows, so the counts are read by project instead of by id list.
+  // The leader-only reads (brief suggestions, assignee hints with their 60 s cache) join the same batch.
+  const leaderReads = actor.isLeader && actor.isMember;
+  const [rows, milestones, labels, aliases, counts, commits, suggestions, assigneeHints] = await Promise.all([
     prisma.task.findMany({
       where: { projectId: project.id },
       include: { labelLinks: true },
@@ -122,15 +146,11 @@ export async function loadBoard(project: LoadedGroup, actor: TaskActor): Promise
     prisma.taskMilestone.findMany({ where: { projectId: project.id }, orderBy: [{ position: "asc" }, { id: "asc" }] }),
     prisma.taskLabel.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" } }),
     prisma.taskKeyAlias.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" }, select: { key: true } }),
-  ]);
-
-  const ids = rows.map((t) => t.id);
-  // Leader only (members never receive the brief check). Two small indexed reads, and only for the leader.
-  const [counts, commits, suggestions, assigneeHints] = await Promise.all([
-    subtaskCountsFor(ids),
-    commitCountsFor(ids),
-    actor.isLeader && actor.isMember ? openSuggestions(project.id) : Promise.resolve([]),
-    actor.isLeader && actor.isMember ? assigneeHintsFor(project) : Promise.resolve(null),
+    subtaskCountsForProject(project.id),
+    commitCountsForProject(project.id),
+    // Leader only (members never receive the brief check).
+    leaderReads ? openSuggestions(project.id) : Promise.resolve([]),
+    leaderReads ? assigneeHintsFor(project) : Promise.resolve(null),
   ]);
   const tasks = rows.map((t) => serializeTask(t, { project, actor, subtasks: counts.get(t.id), commitCount: commits.get(t.id) }));
   const boardMilestones: BoardMilestone[] = milestones.map((m) => {
