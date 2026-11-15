@@ -44,7 +44,7 @@ function AnimatedPercent({ value }: { value: number }) {
 }
 
 // ── Typewriter effect for the AI narrative text (loops while on-screen) ───────
-function TypewriterNarrative({ text, onDone }: { text: string; onDone?: () => void }) {
+function TypewriterNarrative({ text, onDone, onRestart }: { text: string; onDone?: () => void; onRestart?: () => void }) {
   const ref = useRef<HTMLParagraphElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-40px" });
   const shouldReduceMotion = useReducedMotion();
@@ -53,6 +53,8 @@ function TypewriterNarrative({ text, onDone }: { text: string; onDone?: () => vo
   // Keep the latest callback in a ref so it never restarts the typing effect.
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  const onRestartRef = useRef(onRestart);
+  onRestartRef.current = onRestart;
 
   useEffect(() => {
     if (shouldReduceMotion) {
@@ -70,6 +72,7 @@ function TypewriterNarrative({ text, onDone }: { text: string; onDone?: () => vo
       let charIndex = 0;
       setDisplayLength(0);
       setIsTyping(true);
+      onRestartRef.current?.();
       typeInterval = setInterval(() => {
         charIndex += 1;
         setDisplayLength(charIndex);
@@ -194,11 +197,11 @@ function ProductPreview() {
                   </div>
                   <p className="text-xs font-bold text-indigo-700">AI explains and reviews</p>
                 </div>
-                <TypewriterNarrative text={AI_NARRATIVE_TEXT} onDone={() => setTypingDone(true)} />
+                <TypewriterNarrative text={AI_NARRATIVE_TEXT} onDone={() => setTypingDone(true)} onRestart={() => setTypingDone(false)} />
                 <div
                   aria-hidden={!typingDone}
                   className={`mt-4 rounded-lg bg-white border border-indigo-100 p-3 ${
-                    shouldReduceMotion ? "" : "transition-opacity duration-300"
+                    shouldReduceMotion ? "" : typingDone ? "transition-opacity duration-300" : "duration-0"
                   } ${typingDone ? "opacity-100 visible" : "opacity-0 invisible"}`}
                 >
                   <p className="text-xs font-bold text-slate-800 mb-1">Requirements check</p>
