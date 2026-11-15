@@ -1,4 +1,5 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { ProjectCardHeader } from "../components/ProjectCardHeader";
 import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
 import { classCrumb } from "../lib/classLabel";
@@ -796,37 +797,14 @@ export function ClassPage({ classId }: Props) {
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/class/${classId}/assignment/${a.id}`); }}
                       className="group cursor-pointer w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
-                      {/* Colored band */}
-                      <div className="relative px-4 py-3 flex flex-col gap-2" style={{ background: accent }}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            <span className="text-xs font-bold text-white/90 bg-white/20 border border-white/30 rounded px-1.5 py-0.5 uppercase tracking-wide">
-                              {a.sourceType}
-                            </span>
-                            {atRisk > 0 && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-xs font-semibold whitespace-nowrap">
-                                ⚠ {groupsNeedAttention(atRisk)}
-                              </span>
-                            )}
-                            {!isAdmin && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
-                                title="Delete project"
-                                className="ft-hit rounded text-white/50 hover:text-white hover:bg-red-500/40 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-white font-semibold text-sm leading-snug">{a.title}</p>
+                      {/* Colored band (same layout for every source type) */}
+                      <div className="relative px-4 py-3" style={{ background: accent }}>
+                        <ProjectCardHeader
+                          sourceType={a.sourceType}
+                          title={a.title}
+                          attentionLabel={atRisk > 0 ? groupsNeedAttention(atRisk) : null}
+                          onDelete={isAdmin ? undefined : (e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
+                        />
                       </div>
 
                       {/* Card body */}
