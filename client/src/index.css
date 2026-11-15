@@ -601,3 +601,29 @@ body {
     min-height: 2.5rem;
   }
 }
+
+/* ── Cursors ───────────────────────────────────────────────────────────────────
+   Tailwind v4's preflight no longer gives buttons a pointer, so one base rule covers everything that can be
+   clicked, instead of a cursor-pointer on every component. It sits in @layer base, so any explicit utility
+   (cursor-progress, cursor-grab, cursor-default...) still wins. :where() keeps the specificity at zero.
+   The document writing area (.ft-doc-content) keeps the text cursor and its own handle rules above. */
+@layer base {
+  :where(
+      button, summary, select, label[for], a[href],
+      [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="link"], [role="switch"],
+      input[type="checkbox"], input[type="radio"], input[type="range"], input[type="file"], input[type="submit"]
+    ):not(.ft-doc-content *) {
+    cursor: pointer;
+  }
+  :where(:disabled, [aria-disabled="true"]):not(.ft-doc-content *) {
+    cursor: not-allowed;
+  }
+  /* dnd-kit marks draggable task cards and calendar chips with these attributes. */
+  :where([aria-roledescription="sortable"], [aria-roledescription="draggable"]):not(:disabled, [aria-disabled="true"]) {
+    cursor: grab;
+  }
+  :where([aria-roledescription="sortable"], [aria-roledescription="draggable"]):not(:disabled, [aria-disabled="true"]):active,
+  :where([aria-roledescription="sortable"], [aria-roledescription="draggable"])[aria-pressed="true"] {
+    cursor: grabbing;
+  }
+}
