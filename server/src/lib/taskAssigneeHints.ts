@@ -21,8 +21,30 @@ export function scoredMemberFor(
   return reportMembers.find((r) => "userId" in r && r.userId === member.userId);
 }
 
+// The board is polled every 10 s and rebuilt in full each time, so the leader's hints are kept for 60 s per group.
+// Key = project id + member ids (a joined or removed member refreshes it at once). No invalidation from analysis:
+// a new report reaches the suggestion within a minute, which is fine for a hint the leader confirms anyway.
+export const ASSIGNEE_HINTS_TTL_MS = 60_000;
+const MAX_CACHED_GROUPS = 500;
+const cache = new Map<string, { at: number; hints: AssigneeHint[] }>();
+
+/** Tests only: forget every cached group. */
+export function clearAssigneeHintsCache(): void {
+  cache.clear();
+}
+
 /** One entry per group member; `share` is null (and `overloaded` false) when there is no saved report or no share. */
-export async function assigneeHintsFor(project: LoadedGroup): Promise<AssigneeHint[]> {
+export async function assigneeHintsFor(project: LoadedGroup, now: number = Date.now()): Promise<AssigneeHint[]> {
+  const key = `${project.id}:${project.groupMemberships.map((m) => m.userId).sort((a, b) => a - b).join(",")}`;
+  const hit = cache.get(key);
+  if (hit && now - hit.at < ASSIGNEE_HINTS_TTL_MS) return hit.hints;
+  const hints = await computeHints(project);
+  if (cache.size >= MAX_CACHED_GROUPS) cache.clear();
+  cache.set(key, { at: now, hints });
+  return hints;
+}
+
+async function computeHints(project: LoadedGroup): Promise<AssigneeHint[]> {
   const latest = await prisma.report.findFirst({
     where: { projectId: project.id },
     orderBy: [...LATEST_REPORT_ORDER],

@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
+import { ASSIGNEE_HINTS_TTL_MS, assigneeHintsFor, clearAssigneeHintsCache } from "../src/lib/taskAssigneeHints.js";
+import { loadGroup } from "../src/lib/groupAccess.js";
 import {
   createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership,
 } from "./factories.js";
@@ -10,6 +12,8 @@ import {
 // Confirming a suggestion is an ordinary assign: it changes no report, share, flag, Gini or team health.
 
 const app = createApp();
+
+beforeEach(() => clearAssigneeHintsCache());
 
 async function setup(withReport = true) {
   const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
@@ -87,5 +91,51 @@ describe("confirming a suggestion changes no score", () => {
     expect(after[0]!.content).toBe(s.content);
     expect(after[0]!.gini).toBe(0.41);
     expect(after[0]!.teamHealth).toBe("High Risk");
+  });
+});
+
+describe("assigneeHints cache (60 s per group)", () => {
+  it("two polls inside 60 s read the report once; after 60 s it reads again", async () => {
+    const s = await setup();
+    const spy = vi.spyOn(prisma.report, "findFirst");
+    try {
+      const a = await board(s.project.id, s.leader);
+      const b = await board(s.project.id, s.leader);
+      expect(b.body.assigneeHints).toEqual(a.body.assigneeHints);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      const project = (await loadGroup(s.project.id))!;
+      await assigneeHintsFor(project, Date.now() + ASSIGNEE_HINTS_TTL_MS + 1);
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a member change refreshes it at once", async () => {
+    const s = await setup();
+    const spy = vi.spyOn(prisma.report, "findFirst");
+    try {
+      await board(s.project.id, s.leader);
+      const { user: newcomer } = await createUser({ systemRole: "STUDENT" });
+      await createMembership(newcomer.id, s.project.id);
+      const res = await board(s.project.id, s.leader);
+      expect(res.body.assigneeHints).toHaveLength(4);
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("members and the instructor never trigger the read", async () => {
+    const s = await setup();
+    const spy = vi.spyOn(prisma.report, "findFirst");
+    try {
+      await board(s.project.id, s.aldren);
+      await board(s.project.id, s.instructor);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
