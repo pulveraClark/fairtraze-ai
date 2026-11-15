@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { notify } from "../lib/notify.js";
 import { loadGroup, isInstructorOf } from "./groups.js";
+import { loadGroupShared } from "../lib/groupAccess.js";
 import { isMemberOf } from "./documents.js";
 
 // Comments are pure metadata about a document — never document content itself. Every route here
@@ -56,7 +57,7 @@ commentsRouter.get("/api/groups/:id/document/comments", requireAuth, async (req:
 
   // The document id is read alongside the group (read-only, id only); the 404 and 403 checks still decide first.
   const [project, document] = await Promise.all([
-    loadGroup(projectId),
+    loadGroupShared(projectId),
     prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
   ]);
   if (!project) {

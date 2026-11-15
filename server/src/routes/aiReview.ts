@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { studentSafeText } from "../lib/studentNarrative.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
-import { loadGroup, isInstructorOf, type LoadedGroup } from "../lib/groupAccess.js";
+import { loadGroup, loadGroupShared, isInstructorOf, type LoadedGroup } from "../lib/groupAccess.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 import { aiReviewEnabled } from "../lib/geminiClient.js";
 import { isReviewRunning, lastUpToDate, recordUpToDate, startReview } from "../lib/aiReview/reviewLock.js";
@@ -304,12 +304,12 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
     res.status(400).json({ error: "Invalid group id" });
     return;
   }
-  const project = await loadGroup(id.data);
+  const project = await loadGroupShared(id.data);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
   }
-  const me = project.groupMemberships.find((m) => m.userId === req.user!.sub);
+  const me =project.groupMemberships.find((m) => m.userId === req.user!.sub);
   const instructor = isInstructorOf(req, project);
   if (!me && !instructor) {
     res.status(403).json({ error: "You do not have access to this group." });

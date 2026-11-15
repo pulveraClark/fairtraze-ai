@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { documentHasPreFixEvents, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
+import { loadGroupShared } from "../lib/groupAccess.js";
 import { computeAuthorshipMap } from "../collab/authorshipMap.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
@@ -380,7 +381,7 @@ documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: 
 
   // The document id is read alongside the group (read-only, id only); the 404 and 403 checks still decide first.
   const [project, doc] = await Promise.all([
-    loadGroup(projectId),
+    loadGroupShared(projectId),
     prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
   ]);
   if (!project) {
@@ -591,7 +592,7 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
 
   // The document id is read alongside the group (read-only, id only); the checks below still decide first.
   const [project, doc] = await Promise.all([
-    loadGroup(projectId),
+    loadGroupShared(projectId),
     prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
   ]);
   if (!project) {

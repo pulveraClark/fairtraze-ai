@@ -1,5 +1,6 @@
 import type { Request } from "express";
 import { prisma } from "./prisma.js";
+import { singleFlight, deepFreeze } from "./singleFlight.js";
 
 // ── Shared group loader + access helpers ──────────────────────────────────────
 // Extracted from routes/groups.ts so the tasks routes (and documents.ts) share one definition.
@@ -28,6 +29,16 @@ export async function loadGroup(projectId: number) {
 }
 
 export type LoadedGroup = NonNullable<Awaited<ReturnType<typeof loadGroup>>>;
+
+/**
+ * loadGroup for read-only GET routes only. Simultaneous calls for the same group share one query; nothing is kept
+ * once it settles, and the result is frozen. The caller still runs its own membership and role check on it.
+ * Never use this on a route that writes, and never in collab: a call started before a write must not serve a
+ * request that comes after it.
+ */
+export function loadGroupShared(projectId: number): Promise<LoadedGroup | null> {
+  return singleFlight(`group:${projectId}`, async () => deepFreeze(await loadGroup(projectId)));
+}
 
 /** True only for the instructor (or admin) who OWNS the class. A group with no assignment has no owner. */
 export function isInstructorOf(req: Request, project: LoadedGroup): boolean {
