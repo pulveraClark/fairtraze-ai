@@ -91,9 +91,13 @@ function TypewriterNarrative({ text, onDone }: { text: string; onDone?: () => vo
   }, [isInView, shouldReduceMotion, text]);
 
   return (
-    <p ref={ref} className="text-xs text-indigo-950/80 leading-relaxed font-medium">
-      {text.slice(0, displayLength)}
-      {isTyping && <span className="inline-block animate-pulse">|</span>}
+    <p ref={ref} className="relative text-xs text-indigo-950/80 leading-relaxed font-medium">
+      {/* Invisible full text reserves the finished height; same <p> text classes, so lines wrap identically */}
+      <span aria-hidden="true" className="invisible block">{text}</span>
+      <span className="absolute inset-0">
+        {text.slice(0, displayLength)}
+        {isTyping && <span className="inline-block animate-pulse">|</span>}
+      </span>
     </p>
   );
 }
