@@ -167,3 +167,13 @@ export async function attachmentMetaFor(assignmentIds: number[]): Promise<Map<nu
   }
   return out;
 }
+
+/** The brief's attachment metadata (never the bytes) for the assignment a group belongs to, resolved by relation in one query. */
+export async function attachmentMetaForGroup(projectId: number): Promise<AttachmentMeta[]> {
+  const rows = await prisma.projectAttachment.findMany({
+    where: { assignment: { projects: { some: { id: projectId } } } },
+    orderBy: [{ order: "asc" }, { id: "asc" }],
+    select: { id: true, kind: true, mime: true, filename: true, size: true, order: true },
+  });
+  return rows;
+}

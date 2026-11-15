@@ -33,3 +33,16 @@ export async function docsDataApproximateFor(projectId: number, sourceType: stri
   const doc = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } });
   return documentHasPreFixEvents(doc?.id);
 }
+
+/**
+ * One query: does this group's document have edit events from before the authorship fix? Same answer as
+ * docsDataApproximateFor for EDITOR/COMBINED groups (the caller applies the source-type gate), without reading
+ * the document row first.
+ */
+export async function groupHasPreFixEvents(projectId: number): Promise<boolean> {
+  const found = await prisma.editEvent.findFirst({
+    where: { document: { groupId: projectId }, timestamp: { lt: getAuthorshipFixAt() } },
+    select: { id: true },
+  });
+  return found !== null;
+}

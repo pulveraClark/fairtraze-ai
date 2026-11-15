@@ -1,13 +1,13 @@
 import { studentNarrative } from "../lib/studentNarrative.js";
 import { evennessOf } from "../lib/studentEvenness.js";
 import { isNarrativeOutdated } from "../lib/narrativeBasis.js";
-import { attachmentMetaFor } from "../lib/briefAttachments.js";
+import { attachmentMetaFor, attachmentMetaForGroup } from "../lib/briefAttachments.js";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
 import { reportDataConfidence } from "../lib/reportConfidence.js";
-import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
+import { groupHasPreFixEvents, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify } from "../lib/notify.js";
@@ -608,16 +608,12 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   const userId    = req.user!.sub;
   const projectId = idResult.data;
 
-  const membership = await prisma.groupMembership.findUnique({
-    where: { userId_projectId: { userId, projectId } },
-  });
-  if (!membership) {
-    res.status(403).json({ error: "You are not a member of this group." });
-    return;
-  }
-
-  const isLeader = membership.role === "LEADER";
-  const [project, user, latestSuggestion, pendingJoinRequests, pendingRoleRequests] = await Promise.all([
+  // Stage 1: everything that needs only the ids, read together. The membership and project checks keep their
+  // old order (403, then 404); a non-member simply discards the other reads.
+  const [membership, project, user, latestSuggestion, attachments, hasPreFixEvents] = await Promise.all([
+    prisma.groupMembership.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+    }),
     prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -630,11 +626,15 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       where:   { userId, projectId },
       orderBy: { createdAt: "desc" },
     }),
-    // Leader only: how many requests wait for them (the badge on "Manage Group"). Counts only; read-only.
-    // RoleSuggestion is the one table behind both "change my role" and "add a role" requests.
-    isLeader ? prisma.groupJoinRequest.count({ where: { projectId, status: "PENDING" } }) : Promise.resolve(0),
-    isLeader ? prisma.roleSuggestion.count({ where: { projectId, status: "PENDING" } }) : Promise.resolve(0),
+    attachmentMetaForGroup(projectId),
+    groupHasPreFixEvents(projectId),
   ]);
+
+  if (!membership) {
+    res.status(403).json({ error: "You are not a member of this group." });
+    return;
+  }
+  const isLeader = membership.role === "LEADER";
 
   if (!project?.assignment) {
     res.status(404).json({ error: "Project not found." });
@@ -643,6 +643,23 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
 
   const cs   = project.assignment.classSection;
   const asgn = project.assignment;
+  const sourceType = asgn.sourceType;
+
+  const latestReport = project.reports[0] ?? null;
+  const stored = latestReport?.content
+    ? JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean; narrativeBasis?: string }
+    : null;
+  const teamReport = stored?.report ?? null;
+
+  // Stage 2 (leader only): the badge counts on "Manage Group" and the team view, read together. Counts only;
+  // RoleSuggestion is the one table behind both "change my role" and "add a role" requests. A member runs none of it.
+  const [pendingJoinRequests, pendingRoleRequests, team] = isLeader
+    ? await Promise.all([
+        prisma.groupJoinRequest.count({ where: { projectId, status: "PENDING" } }),
+        prisma.roleSuggestion.count({ where: { projectId, status: "PENDING" } }),
+        teamReport ? buildLeaderTeamView(projectId, teamReport.members, sourceType) : Promise.resolve(undefined),
+      ])
+    : [0, 0, undefined];
 
   const base = {
     classSection: {
@@ -655,7 +672,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       deadline:   asgn.deadline?.toISOString() ?? null,
       sourceType: asgn.sourceType,
       description: asgn.description,
-      attachments: (await attachmentMetaFor([asgn.id])).get(asgn.id) ?? [],
+      attachments,
     },
     // Present only for the group's leader (members never receive it).
     ...(isLeader ? { pendingCounts: { joinRequests: pendingJoinRequests, roleRequests: pendingRoleRequests } } : {}),
@@ -677,22 +694,12 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     },
   };
 
-  const docsDataApproximate = await docsDataApproximateFor(projectId, asgn.sourceType);
+  const docsDataApproximate = (sourceType === "EDITOR" || sourceType === "COMBINED") && hasPreFixEvents;
 
-  const latestReport = project.reports[0] ?? null;
-  if (!latestReport?.content) {
+  if (!latestReport || !stored || !teamReport) {
     res.json({ ...base, hasReport: false, report: null });
     return;
   }
-
-  const stored = JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean; narrativeBasis?: string };
-  if (!stored.report) {
-    res.json({ ...base, hasReport: false, report: null });
-    return;
-  }
-
-  const teamReport = stored.report;
-  const sourceType = asgn.sourceType;
 
   // GITHUB has no userId anywhere in its scoring pipeline (Member/RawMemberStats/ScoredMember
   // are keyed only by githubUsername), so it stays matched that way. EDITOR and COMBINED members
@@ -765,9 +772,6 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   // name, userId, or githubUsername is included. The group LEADER (decided here, server-side, from
   // GroupMembership.role) additionally receives `team`, a whitelisted per-member view used to
   // distribute work fairly. Never includes disputes, instructor notes, emails or raw stats.
-  const team = membership.role === "LEADER"
-    ? await buildLeaderTeamView(projectId, teamReport.members, sourceType)
-    : undefined;
 
   res.json({
     ...base,
