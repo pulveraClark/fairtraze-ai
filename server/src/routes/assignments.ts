@@ -7,6 +7,8 @@ import { assertOwnsClass, assertOwnsAssignment } from "../lib/ownership.js";
 import { generateUniqueJoinCode } from "../lib/joinCode.js";
 import { BRIEF_DESCRIPTION_MAX, attachmentMetaFor } from "../lib/briefAttachments.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
+import { notifyProjectChanged } from "../lib/projectChangeNotice.js";
+import type { ChangeKind } from "../lib/projectChangeText.js";
 
 export const assignmentsRouter = Router();
 
@@ -117,6 +119,14 @@ assignmentsRouter.patch("/api/assignments/:id", ...requireRole("INSTRUCTOR"), as
     }
   }
 
+  // What this save actually changes (the form may resend unchanged values). Only real differences
+  // notify the group's members.
+  const changed: ChangeKind[] = [];
+  if (description !== undefined && normalizeDescription(description) !== normalizeDescription(assignment.description)) changed.push("text");
+  if (deadline !== undefined && new Date(deadline).getTime() !== assignment.deadline?.getTime()) changed.push("deadline");
+  if (title !== undefined && title !== assignment.title) changed.push("name");
+  if (maxGroupSize !== undefined && maxGroupSize !== assignment.maxGroupSize) changed.push("groupSize");
+
   const updated = await prisma.assignment.update({
     where: { id: assignment.id },
     data: {
@@ -125,6 +135,11 @@ assignmentsRouter.patch("/api/assignments/:id", ...requireRole("INSTRUCTOR"), as
       ...(maxGroupSize !== undefined ? { maxGroupSize } : {}),
       ...(description !== undefined ? { description: normalizeDescription(description) } : {}),
     },
+  });
+  await notifyProjectChanged(assignment.id, changed, {
+    title: updated.title,
+    deadline: updated.deadline,
+    maxGroupSize: updated.maxGroupSize,
   });
   res.json(updated);
 });

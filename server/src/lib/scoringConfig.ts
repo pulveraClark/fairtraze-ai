@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ProjectScoringConfig, DocumentScoringWeights } from "@shared/types.js";
 import { DOCUMENT_DEFAULT_WEIGHTS, DEFAULT_BLEND_WEIGHTS, weightsAreValid } from "@shared/weights.js";
 import { DEFAULT_DOCS_IMAGE_LIMIT, resolveDocsImageLimit } from "@shared/imageCredit.js";
+import { notifyProjectChanged } from "./projectChangeNotice.js";
 
 // Scoring settings live on Assignment (the "project" in the UI) and apply to every group in it.
 // The legacy same-named columns on Project are no longer read.
@@ -168,5 +169,7 @@ export async function saveAssignmentScoringConfig(
       data:  { scoringConfigChangedAt: new Date() },
     }),
   ]);
+  // Generic notice to the groups' members; it carries no numbers and nothing here reads it back.
+  await notifyProjectChanged(assignment.id, ["scoring"]);
   return next;
 }

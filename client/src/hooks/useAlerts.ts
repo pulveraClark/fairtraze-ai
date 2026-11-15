@@ -30,7 +30,8 @@ export type AlertType =
   | "TASK_STATUS_CHANGED"
   | "TASK_IN_REVIEW"
   | "TASK_DUE_SOON"
-  | "TASK_OVERDUE";
+  | "TASK_OVERDUE"
+  | "PROJECT_UPDATED";
 
 export interface AlertItem {
   id: number;
@@ -95,6 +96,7 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   TASK_IN_REVIEW:          { label: "In Review", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
   TASK_DUE_SOON:           { label: "Due Soon", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", light: "text-amber-700 bg-amber-50 border-amber-200" },
   TASK_OVERDUE:            { label: "Overdue", color: "text-red-400 bg-red-500/10 border-red-500/30", light: "text-red-700 bg-red-50 border-red-200" },
+  PROJECT_UPDATED:         { label: "Project update", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
 };
 
 const FALLBACK_META: AlertTypeMeta = {

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertOwnsAssignment } from "../lib/ownership.js";
+import { notifyProjectChanged } from "../lib/projectChangeNotice.js";
 import {
   BRIEF_MAX_IMAGES, BRIEF_MAX_PDFS, BRIEF_IMAGE_MAX_BYTES, BRIEF_PDF_MAX_BYTES,
   sniffBriefMime, kindForMime, sanitizeFilename, canViewBrief, attachmentMetaFor,
@@ -83,6 +84,7 @@ briefsRouter.post("/api/assignments/:id/attachments", ...requireRole("INSTRUCTOR
     res.status(409).json({ error: "A project can have only one PDF. Remove the existing one first." });
     return;
   }
+  await notifyProjectChanged(assignment.id, ["files"]);
   res.status(201).json(result);
 });
 
@@ -131,6 +133,7 @@ briefsRouter.delete("/api/assignments/:id/attachments/:attId", ...requireRole("I
     res.status(404).json({ error: "Attachment not found" });
     return;
   }
+  await notifyProjectChanged(assignment.id, ["files"]);
   res.json({ ok: true });
 });
 
