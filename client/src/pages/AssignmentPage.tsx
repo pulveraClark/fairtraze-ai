@@ -1,4 +1,5 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { useToast } from "../components/Toast";
 import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -96,6 +97,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const taskSummary = useAssignmentTaskSummary(assignmentId);
   const { navigate } = useRouter();
   const { token, user } = useAuth();
+  const { showSuccessToast } = useToast();
   const queryClient = useQueryClient();
   const isAdmin = user?.systemRole === "ADMIN";
 
@@ -184,6 +186,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         const body = (await analyzeRes.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
         const name = item?.groupName ?? `Project ${projectId}`;
         setBulkNotice(`${name}: ${analysisBodyText(body)}`);
+      } else {
+        showSuccessToast("Analysis updated.");
       }
       // Re-fetch just the summary after re-analysis
       if (assignment) {
@@ -265,6 +269,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     }
     setBulkFailures(failures);
     setBulkFailureReason(firstReason);
+    const analyzedCount = ids.length - failures.length;
+    if (analyzedCount > 0) showSuccessToast(`${analyzedCount} ${analyzedCount === 1 ? "group" : "groups"} analyzed.`);
     setBulkRunning(false);
     bulkLock.current = false;
     setBulkProgress(null);

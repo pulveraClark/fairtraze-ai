@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { InstructorDashboardPage } from "./InstructorDashboardPage";
+import { ToastProvider } from "../components/Toast";
 import * as AuthContextModule from "../context/AuthContext";
 
 vi.mock("../context/AuthContext", async () => {
@@ -29,7 +30,7 @@ describe("InstructorDashboardPage", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <RouterProvider><InstructorDashboardPage /></RouterProvider>
+        <RouterProvider><ToastProvider><InstructorDashboardPage /></ToastProvider></RouterProvider>
       </QueryClientProvider>
     );
     await screen.findByRole("main");

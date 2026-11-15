@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useToast } from "./Toast";
 import { FOCUS_LIGHT } from "./ui";
 import { InfoTip } from "./ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
@@ -15,6 +16,7 @@ export function AiReviewSwitch({
   token: string | null;
   onChanged: (next: boolean) => void;
 }) {
+  const { showSuccessToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +32,7 @@ export function AiReviewSwitch({
         body: JSON.stringify({ enabled: next }),
       });
       if (!res.ok) throw new Error("rejected");
+      showSuccessToast(next ? "AI findings turned on." : "AI findings turned off.");
     } catch {
       onChanged(!next);
       setError("Could not save this setting. It was not changed.");

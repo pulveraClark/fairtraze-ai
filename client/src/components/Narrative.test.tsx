@@ -8,6 +8,7 @@ import { StatTile } from "./ui/StatTile";
 
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t" }) }));
 import { Narrative } from "./Narrative";
+import { ToastProvider } from "./Toast";
 
 describe("Narrative", () => {
   it("has no button of its own; with nothing generated it points to Member contributions", () => {
@@ -80,8 +81,10 @@ const renderCard = (requirements: R[] | null, extra: Partial<React.ComponentProp
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ marks }) })));
   const data: AiReviewResponse = { ...base, ...(requirements ? { briefCheck: mkCheck(requirements) } : {}) };
   return render(
-    <Narrative narrative="Explained. The Gini coefficient is 0.122." projectId={1} onNarrativeGenerated={() => {}}
-      review={{ data, error: null, start: vi.fn() }} teamHealth="Healthy" {...extra} />,
+    <ToastProvider>
+      <Narrative narrative="Explained. The Gini coefficient is 0.122." projectId={1} onNarrativeGenerated={() => {}}
+        review={{ data, error: null, start: vi.fn() }} teamHealth="Healthy" {...extra} />
+    </ToastProvider>,
   );
 };
 const mixed = () => [...found(7), req("No README", "NOT_FOUND"), req("Has charts", "NOT_FOUND", { unverified: true })];
@@ -146,7 +149,7 @@ describe("AI findings summary", () => {
     URL.createObjectURL = vi.fn(() => "blob:x");
     URL.revokeObjectURL = vi.fn();
     const data: AiReviewResponse = { ...base, briefCheck: mkCheck([req("From the file", "NOT_FOUND", { sourceFile: "brief.pdf" })]) };
-    render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} instructionsAssignmentId={9} instructionsHref="/c/1/a/9" review={{ data, error: null, start: vi.fn() }} />);
+    render(<ToastProvider><Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} instructionsAssignmentId={9} instructionsHref="/c/1/a/9" review={{ data, error: null, start: vi.fn() }} /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Open file (new tab)" }));
     await vi.waitFor(() => expect(openTab).toHaveBeenCalledWith("blob:x", "_blank", "noopener,noreferrer"));
     expect(urls.some((u) => u.includes("/api/assignments/9/attachments/5"))).toBe(true);

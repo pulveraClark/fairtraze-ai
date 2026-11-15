@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import { useToast } from "./Toast";
+import { BusyLabel } from "./ui/BusyLabel";
+import { LoadingState } from "./ui/LoadingState";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import { API_BASE_URL } from "../lib/apiBase";
 import { BriefEditor } from "./BriefEditor";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, FOCUS_LIGHT } from "./ui/styles";
@@ -61,6 +65,7 @@ export function UploadFailurePanel({
 export function EditAssignmentModal({
   assignmentId, token, onClose, onSaved,
 }: { assignmentId: number; token: string | null; onClose: () => void; onSaved: () => void }) {
+  const { showSuccessToast } = useToast();
   const [loaded, setLoaded] = useState<AssignmentDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -123,11 +128,12 @@ export function EditAssignmentModal({
       }
       const { failed: bad } = await syncBrief(assignmentId, draft, token ?? "");
       onSaved();
+      showSuccessToast("Project saved.");
       if (bad.length === 0) { onClose(); return; }
       await rebuildDraftAfterPartial(bad);
       setFailed(bad);
     } catch {
-      setError("Network error — is the server running?");
+      setError(NETWORK_ERROR_TEXT);
     } finally {
       setSaving(false);
     }
@@ -177,7 +183,7 @@ export function EditAssignmentModal({
         ) : loadError ? (
           <p role="alert" className="px-6 py-5 text-sm text-red-700">{loadError}</p>
         ) : !loaded ? (
-          <p className="px-6 py-5 text-sm text-slate-600">Loading…</p>
+          <LoadingState label="Loading project…" className="px-6 py-5" />
         ) : (
           <form onSubmit={(e) => void handleSave(e)}>
             <div className="space-y-4 px-6 py-5">
@@ -209,7 +215,7 @@ export function EditAssignmentModal({
             <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
               <button type="button" className={BUTTON_SECONDARY} onClick={onClose}>Cancel</button>
               <button type="submit" className={BUTTON_PRIMARY} disabled={saving || !title.trim() || !deadline}>
-                {saving ? "Saving…" : "Save changes"}
+                <BusyLabel busy={saving} idle="Save changes" busyText="Saving…" />
               </button>
             </div>
           </form>

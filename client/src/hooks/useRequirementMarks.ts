@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "../components/Toast";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import type { RequirementMark } from "../lib/requirementMarks";
 
 export interface MarksApi {
@@ -20,6 +22,7 @@ export interface MarksApi {
  * a failed action sets `error` and returns false. No polling (a mark is read when the card opens and after each action).
  */
 export function useRequirementMarks(projectId: number, token: string | null, role: "instructor" | "leader"): MarksApi {
+  const { showSuccessToast } = useToast();
   const [marks, setMarks] = useState<RequirementMark[]>([]);
   const [error, setError] = useState<string | null>(null);
   const base = `/api/groups/${projectId}/requirement-marks`;
@@ -51,7 +54,7 @@ export function useRequirementMarks(projectId: number, token: string | null, rol
       }
       return { ok: true, body };
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR_TEXT);
       return { ok: false, body: {} };
     }
   }
@@ -81,21 +84,25 @@ export function useRequirementMarks(projectId: number, token: string | null, rol
         }
       }
       await load();
+      showSuccessToast("Claim sent.");
       return true;
     },
     async confirm(requirementKey, note) {
-      const r = await send(`${base}/confirm`, json({ requirementKey, note }), "Could not save this.");
+      const r = await send(`${base}/confirm`, json({ requirementKey, note }), "Could not save this. Try again.");
       await load();
+      if (r.ok) showSuccessToast("Marked as covered.");
       return r.ok;
     },
     async decline(markId) {
-      const r = await send(`${base}/${markId}/decline`, { method: "PATCH" }, "Could not save this.");
+      const r = await send(`${base}/${markId}/decline`, { method: "PATCH" }, "Could not save this. Try again.");
       await load();
+      if (r.ok) showSuccessToast("Claim declined.");
       return r.ok;
     },
     async remove(markId) {
-      const r = await send(`${base}/${markId}`, { method: "DELETE" }, "Could not undo this.");
+      const r = await send(`${base}/${markId}`, { method: "DELETE" }, "Could not undo this. Try again.");
       await load();
+      if (r.ok) showSuccessToast("Mark removed.");
       return r.ok;
     },
     async loadImage(url) {

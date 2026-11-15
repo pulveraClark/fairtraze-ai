@@ -3,12 +3,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { AiReviewSwitch } from "./AiReviewSwitch";
+import { ToastProvider } from "./Toast";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
 function Harness({ initial = true }: { initial?: boolean }) {
   const [on, setOn] = useState(initial);
-  return <AiReviewSwitch classId={3} enabled={on} token="t" onChanged={setOn} />;
+  return <ToastProvider><AiReviewSwitch classId={3} enabled={on} token="t" onChanged={setOn} /></ToastProvider>;
 }
 
 describe("AiReviewSwitch", () => {

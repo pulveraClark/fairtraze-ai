@@ -1,4 +1,6 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { useToast } from "../components/Toast";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import { ProjectCardHeader } from "../components/ProjectCardHeader";
 import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
@@ -106,6 +108,7 @@ function CreateAssignmentModal({
   /** Opens the edit form for the just-created project (used when attachment uploads fail). */
   onEditCreated: (assignmentId: number) => void;
 }) {
+  const { showSuccessToast } = useToast();
   const [title, setTitle]           = useState("");
   const [deadline, setDeadline]     = useState("");
   const [deadlineErr, setDeadlineErr] = useState<string | null>(null);
@@ -167,12 +170,13 @@ function CreateAssignmentModal({
         setFailedUploads(failed);
         setCreatedCode("ok");
         onCreated();
+        showSuccessToast("Project created.");
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Failed to create project");
       }
     } catch {
-      setError("Network error — is the server running?");
+      setError(NETWORK_ERROR_TEXT);
     } finally {
       setSubmitting(false);
     }
@@ -483,6 +487,7 @@ export function ClassPage({ classId }: Props) {
   const accent = classAccent(classId).color;
   const { navigate }        = useRouter();
   const { token, user }     = useAuth();
+  const { showSuccessToast } = useToast();
   const isAdmin             = user?.systemRole === "ADMIN";
   const dashboardUrl        = isAdmin ? "/admin" : "/dashboard";
 
@@ -549,13 +554,14 @@ export function ClassPage({ classId }: Props) {
       });
       if (res.ok) {
         setDeleteTarget(null);
+        showSuccessToast("Project deleted.");
         await Promise.all([fetchData(), summaryQuery.refetch()]);
       } else {
         const data = (await res.json()) as { error?: string };
         setDeleteError(data.error ?? "Failed to delete project");
       }
     } catch {
-      setDeleteError("Network error — is the server running?");
+      setDeleteError(NETWORK_ERROR_TEXT);
     } finally {
       setDeleting(false);
     }

@@ -1,4 +1,5 @@
 import { shortMemberNames } from "../lib/names";
+import { BusyLabel } from "./ui/BusyLabel";
 import { presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { NoActivityPill } from "./NoActivityPill";
 import type { ProjectSummaryItem } from "@shared/types";
@@ -185,7 +186,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
               disabled={analyzing}
               className="shrink-0 min-h-9 px-3 text-xs font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
             >
-              {analyzing ? "Analyzing…" : "Re-analyze"}
+              <BusyLabel busy={analyzing} idle="Re-analyze" busyText="Analyzing…" />
             </button>
           )}
         </div>
@@ -255,7 +256,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
               className={BUTTON_SECONDARY_COMPACT}
               title={noRepo ? REPO_NOT_LINKED_MESSAGE : "Run the analysis again for this group"}
             >
-              {analyzing ? "Analyzing…" : "Re-analyze"}
+              <BusyLabel busy={analyzing} idle="Re-analyze" busyText="Analyzing…" />
             </button>
           )}
         </div>

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { DocSectionProvider } from "../hooks/useDocSectionLink";
 import { BriefCheckCard, CheckHeaderActions, NOT_CONFIRMED_WHY, CHECK_WORK_LINE, quoted, truncateQuote } from "./BriefCheckCard";
 import { Narrative } from "./Narrative";
+import { ToastProvider } from "./Toast";
 import type { MarksApi } from "../hooks/useRequirementMarks";
 import type { RequirementMark } from "../lib/requirementMarks";
 import { briefStatusLine, type AiBriefCheck, type AiReviewResponse } from "../lib/aiReview";
@@ -456,9 +457,9 @@ const base: AiReviewResponse = { enabled: true, running: false, canGenerate: tru
 describe("project instructions check placement", () => {
   it("instructor: the check sits in the AI findings card; a failed run gets one calm line", () => {
     const start = vi.fn();
-    const { rerender } = render(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} />);
+    const { rerender } = render(<ToastProvider><Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} /></ToastProvider>);
     expect(screen.getByRole("button", { name: /^2 covered requirements, with proof/ })).toBeTruthy();
-    rerender(<Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefFailed: true }, error: null, start }} />);
+    rerender(<ToastProvider><Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefFailed: true }, error: null, start }} /></ToastProvider>);
     expect(screen.queryByRole("button", { name: /Project instructions check/ })).toBeNull();
     expect(screen.getByText("The project instructions check could not run. Try again later.")).toBeTruthy();
     expect(briefStatusLine({ ...base, briefFailed: true, running: true })).toBeNull();
@@ -467,7 +468,7 @@ describe("project instructions check placement", () => {
   describe("no instructions added yet (instructor only)", () => {
     const start = vi.fn();
     const renderWith = (data: AiReviewResponse, href?: string) =>
-      render(<Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} instructionsHref={href} review={{ data, error: null, start }} />);
+      render(<ToastProvider><Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} instructionsHref={href} review={{ data, error: null, start }} /></ToastProvider>);
 
     it("shows one quiet line with a link to add them when the server says there are none", () => {
       renderWith({ ...base, hasInstructions: false }, "/class/1/assignment/2");

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { BusyLabel } from "./ui/BusyLabel";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import type { ProjectScoringConfig } from "@shared/types";
 import { useToast } from "./Toast";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
@@ -135,9 +137,9 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
         return;
       }
       onSaved(data.config!);
-      showSuccessToast("Scoring settings saved.");
+      showSuccessToast("Settings saved.");
     } catch {
-      setSaveError("Network error — could not reach the server.");
+      setSaveError(NETWORK_ERROR_TEXT);
     } finally {
       setSaving(false);
     }
@@ -372,7 +374,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
               disabled={!canSave || saving}
               className={BUTTON_PRIMARY_COMPACT}
             >
-              {saving ? "Saving…" : "Save settings"}
+              <BusyLabel busy={saving} idle="Save settings" busyText="Saving…" />
             </button>
           </div>
         </div>

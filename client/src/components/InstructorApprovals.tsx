@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { BusyLabel } from "./ui/BusyLabel";
+import { LoadingState } from "./ui/LoadingState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, StatusPill } from "./ui";
@@ -77,6 +79,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
   const data = query.data;
   const pendingCount = data?.pendingCount ?? 0;
   const busyId = review.isPending ? review.variables?.id : undefined;
+  const busyDecision = review.isPending ? review.variables?.decision : undefined;
 
   // Nothing waiting and nothing reviewed yet: hide the whole section until it has content.
   if (data && data.pending.length === 0 && (data.recent?.length ?? 0) === 0) return null;
@@ -96,7 +99,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
         New instructor sign-ups can log in but cannot use instructor features until you approve them.
       </p>
 
-      {query.isLoading && <p className="text-sm text-slate-700">Loading approvals…</p>}
+      {query.isLoading && <LoadingState label="Loading approvals…" />}
 
       {query.isError && (
         <div className={`${CARD} p-4`}>
@@ -123,7 +126,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
                   className={BUTTON_PRIMARY}
                   aria-label={`Approve ${p.name}`}
                 >
-                  Approve
+                  <BusyLabel busy={busyId === p.id && busyDecision === "approve"} idle="Approve" busyText="Approving…" />
                 </button>
                 <button
                   type="button"
@@ -132,7 +135,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
                   className={BUTTON_SECONDARY}
                   aria-label={`Reject ${p.name}`}
                 >
-                  Reject
+                  <BusyLabel busy={busyId === p.id && busyDecision === "reject"} idle="Reject" busyText="Rejecting…" />
                 </button>
               </div>
             </li>
@@ -161,7 +164,7 @@ export function InstructorApprovals({ onToast }: { onToast?: (type: "success" | 
                     className={BUTTON_SECONDARY}
                     aria-label={`Approve ${r.name}`}
                   >
-                    Approve instead
+                    <BusyLabel busy={busyId === r.id && busyDecision === "approve"} idle="Approve instead" busyText="Approving…" />
                   </button>
                 )}
               </li>

@@ -1,4 +1,5 @@
 import { groupsNeedAttention } from "../lib/attentionLabel";
+import { useToast } from "../components/Toast";
 import { NoActivityHeaderPill } from "../components/NoActivityRollup";
 import { AppFooter } from "../components/AppFooter";
 import { ClassCodeLabel } from "../components/ClassCodeLabel";
@@ -100,6 +101,7 @@ function CreateClassModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { showSuccessToast } = useToast();
   const [subjectCode, setSubjectCode] = useState("");
   const [subjectName, setSubjectName] = useState("");
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
@@ -161,12 +163,13 @@ function CreateClassModal({
         const data = (await res.json()) as { joinCode?: string };
         setCreatedCode(data.joinCode ?? null);
         onCreated();
+        showSuccessToast("Class created.");
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Failed to create class section");
       }
     } catch {
-      setError("Network error — is the server running?");
+      setError(NETWORK_ERROR_TEXT);
     } finally {
       setSubmitting(false);
     }
@@ -478,6 +481,7 @@ function ConfirmDialog({
 export function InstructorDashboardPage() {
   const { navigate }    = useRouter();
   const { token }       = useAuth();
+  const { showSuccessToast } = useToast();
 
   const [sortMode, setSortMode]       = useState<SortMode>("risk");
   const [filterMode, setFilterMode]   = useState<FilterMode>("all");
@@ -516,6 +520,7 @@ export function InstructorDashboardPage() {
       });
       if (res.ok) {
         setDeleteTarget(null);
+        showSuccessToast("Class deleted.");
         await queryClient.invalidateQueries({ queryKey: ["classes-list"] });
         await queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
       } else {
@@ -523,7 +528,7 @@ export function InstructorDashboardPage() {
         setDeleteError(data.error ?? "Failed to delete class section");
       }
     } catch {
-      setDeleteError("Network error — is the server running?");
+      setDeleteError(NETWORK_ERROR_TEXT);
     } finally {
       setDeleting(false);
     }
@@ -544,6 +549,8 @@ export function InstructorDashboardPage() {
         const body = (await res.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
         const name = summary.find((s) => s.projectId === projectId)?.groupName ?? `Project ${projectId}`;
         setAnalyzeNotice(`${name}: ${analysisBodyText(body)}`);
+      } else {
+        showSuccessToast("Analysis updated.");
       }
       await summaryQuery.refetch();
     } catch {
