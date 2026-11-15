@@ -616,7 +616,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
     return;
   }
 
-  const [project, user, latestSuggestion] = await Promise.all([
+  const isLeader = membership.role === "LEADER";
+  const [project, user, latestSuggestion, pendingJoinRequests, pendingRoleRequests] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -629,6 +630,10 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       where:   { userId, projectId },
       orderBy: { createdAt: "desc" },
     }),
+    // Leader only: how many requests wait for them (the badge on "Manage Group"). Counts only; read-only.
+    // RoleSuggestion is the one table behind both "change my role" and "add a role" requests.
+    isLeader ? prisma.groupJoinRequest.count({ where: { projectId, status: "PENDING" } }) : Promise.resolve(0),
+    isLeader ? prisma.roleSuggestion.count({ where: { projectId, status: "PENDING" } }) : Promise.resolve(0),
   ]);
 
   if (!project?.assignment) {
@@ -652,6 +657,8 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       description: asgn.description,
       attachments: (await attachmentMetaFor([asgn.id])).get(asgn.id) ?? [],
     },
+    // Present only for the group's leader (members never receive it).
+    ...(isLeader ? { pendingCounts: { joinRequests: pendingJoinRequests, roleRequests: pendingRoleRequests } } : {}),
     project: {
       id: project.id,
       groupName: project.groupName || `Group ${project.id}`,

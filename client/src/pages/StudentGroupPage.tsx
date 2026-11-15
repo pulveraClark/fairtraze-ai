@@ -24,6 +24,7 @@ import { DocumentGate } from "../components/DocumentGate";
 import { DocumentHistoryPanel } from "../components/DocumentHistoryPanel";
 import { GroupManageModal } from "../components/GroupManageModal";
 import { SaveStatus } from "../components/SaveStatus";
+import { manageGroupLabel, pendingTotal, type PendingCounts } from "../lib/manageGroupLabel";
 import type { SaveState } from "../lib/saveState";
 import { TasksTab } from "../components/tasks/TasksTab";
 import { LinkedHeadingNotice } from "../components/tasks/details/LinkedHeadingNotice";
@@ -69,6 +70,8 @@ interface GroupDetail {
   assignment:   { id: number; title: string; deadline: string | null; sourceType: string; description: string | null; attachments: BriefAttachment[]; };
   project:      { id: number; groupName: string; repoUrl: string | null; };
   membership:   { role: "LEADER" | "MEMBER"; functionalRoles: string[]; joinedAt: string; roleSuggestion: RoleSuggestionData | null; };
+  /** Leader only (server-enforced): requests waiting in Manage Group. */
+  pendingCounts?: PendingCounts;
   hasReport:    boolean;
   docsDataApproximate?: boolean;
   rulesOutdated?: boolean;
@@ -252,6 +255,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   useInvalidateOnAlertCount([groupKeys.all(uid), disputeKeys.mine(uid)]);
 
   const data    = groupQuery.data ?? null;
+  // Leader only: the server sends the counts to the leader and to nobody else.
+  const pendingRequests = data?.membership.role === "LEADER" ? pendingTotal(data.pendingCounts) : 0;
 
   // Students never start an analysis. Reports are refreshed by the scheduled run (and by the
   // instructor); this page only reads the latest one, so there is never an "updating" state here.
@@ -652,12 +657,18 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <EvidenceReportButton projectId={project.id} hasReport={hasReport} />
             <button
               onClick={() => setShowManageModal(true)}
+              aria-label={manageGroupLabel(pendingRequests)}
               className="inline-flex min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
               </svg>
               Manage Group
+              {pendingRequests > 0 && (
+                <span aria-hidden="true" className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-xs font-bold leading-none text-white">
+                  {pendingRequests}
+                </span>
+              )}
             </button>
             {report?.noActivity ? (
               <NoActivityPill />

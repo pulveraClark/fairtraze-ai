@@ -53,24 +53,29 @@ describe("GroupManageModal leader change wording (I33)", () => {
   });
 });
 
-describe("GroupManageModal empty sections (R7)", () => {
+describe("GroupManageModal request sections", () => {
   beforeEach(() => { q.requests = []; q.suggestions = []; });
 
-  it("hides pending join requests and role suggestions when there are none", () => {
+  it("always shows both headings; empty ones say so and show no count badge", () => {
     renderModal();
-    expect(screen.getByText("Ben Lim")).toBeTruthy();
-    expect(screen.queryByText("Pending Join Requests")).toBeNull();
-    expect(screen.queryByText("Pending Role Suggestions")).toBeNull();
-    expect(screen.queryByText(/No pending/)).toBeNull();
+    expect(screen.getByRole("heading", { name: "Join requests" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Role requests" })).toBeTruthy();
+    expect(screen.getByText("No join requests waiting.")).toBeTruthy();
+    expect(screen.getByText("No role requests waiting.")).toBeTruthy();
+    expect(screen.queryByText("Pending")).toBeNull();
   });
 
-  it("shows each section once it has content", () => {
+  it("shows counts and marks each waiting item with the word Pending", () => {
     q.requests = [{ id: 1, student: { id: 5, name: "Cy Tan", email: "c@x.t", githubUsername: null }, status: "PENDING", createdAt: "" }];
-    q.suggestions = [{ id: 2, user: { id: 2, name: "Ben Lim", email: "b@x.t" }, suggestedRoles: ["DOCUMENTATION"], status: "PENDING", createdAt: "" }];
+    q.suggestions = [
+      { id: 2, user: { id: 2, name: "Ben Lim", email: "b@x.t" }, suggestedRoles: ["DOCUMENTATION"], status: "PENDING", createdAt: "" },
+      { id: 3, user: { id: 2, name: "Ben Lim", email: "b@x.t" }, suggestedRoles: ["DEVELOPER", "DOCUMENTATION"], status: "PENDING", createdAt: "" },
+    ];
     renderModal();
-    expect(screen.getByText("Pending Join Requests")).toBeTruthy();
     expect(screen.getByText("Cy Tan")).toBeTruthy();
-    expect(screen.getByText("Pending Role Suggestions")).toBeTruthy();
+    expect(screen.getAllByText("Pending")).toHaveLength(3);
+    expect(screen.queryByText("No join requests waiting.")).toBeNull();
+    expect(screen.queryByText("No role requests waiting.")).toBeNull();
   });
 });
 

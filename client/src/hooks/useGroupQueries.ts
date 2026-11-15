@@ -77,6 +77,9 @@ export function useEvidenceReportQuery(projectId: number) {
   });
 }
 
+/** How often the leader's group page re-reads, for the pending-requests badge. */
+export const LEADER_GROUP_POLL_MS = 60_000;
+
 /** GET /api/student/group/:id — reads the stored report only (never recomputes). */
 export function useStudentGroupQuery<T>(projectId: number) {
   const { token, user } = useAuth();
@@ -86,7 +89,12 @@ export function useStudentGroupQuery<T>(projectId: number) {
     queryFn:  () => getJson<T>(`/api/student/group/${projectId}`, token, "Could not load group."),
     enabled:  !!token && uid !== null,
     staleTime: 0,               // always show the latest analysis: a focus or remount refetches
-    refetchOnWindowFocus: true, // no interval: covers renames, role sets, joins/leaves with no alert
+    refetchOnWindowFocus: true, // covers renames, role sets, joins/leaves with no alert
+    // The leader's "Manage Group" badge counts pending requests, so the leader's copy is re-read every minute.
+    // Not for members (no polling), and react-query pauses it while the tab is hidden (refetchIntervalInBackground
+    // stays false); a returning tab refetches on focus.
+    refetchInterval: (query) => ((query.state.data as { membership?: { role?: string } } | undefined)?.membership?.role === "LEADER" ? LEADER_GROUP_POLL_MS : false),
+    refetchIntervalInBackground: false,
     retry: false,
   });
 }

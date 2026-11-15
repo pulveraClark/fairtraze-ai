@@ -587,10 +587,10 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         </div>
 
         {/* ── Pending Join Requests — only visible to leader / instructor ──── */}
-        {canManage && (requests.length > 0 || !!requestsErr) && (
+        {canManage && (
           <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
-              <h3 className="text-xs font-semibold text-slate-700">Pending Join Requests</h3>
+              <h3 className="text-xs font-semibold text-slate-700">Join requests</h3>
               {requests.length > 0 && (
                 <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-xs font-bold px-1 leading-none">
                   {requests.length}
@@ -609,16 +609,20 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
             {requestsErr ? (
               <p className="text-xs text-red-500">{requestsErr}</p>
+            ) : requests.length === 0 ? (
+              <p className="text-xs text-slate-600">No join requests waiting.</p>
             ) : (
               <ul className="space-y-2">
                 {requests.map((r) => (
                   <li
                     key={r.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-amber-100 bg-amber-50"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-amber-200 border-l-4 border-l-amber-500 bg-amber-50"
                   >
                     <Initials name={r.student.name} leader={false} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{r.student.name}</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {r.student.name} <span className="ml-1 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">Pending</span>
+                      </p>
                       {r.student.githubUsername && (
                         <p className="text-xs text-slate-600 font-mono">@{r.student.githubUsername}</p>
                       )}
@@ -647,10 +651,10 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         )}
 
         {/* ── Pending Role Suggestions — visible to leader / instructor ────── */}
-        {canManage && (roleSuggestions.length > 0 || !!roleSuggestionsErr) && (
+        {canManage && (
           <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
-              <h3 className="text-xs font-semibold text-slate-700">Pending Role Suggestions</h3>
+              <h3 className="text-xs font-semibold text-slate-700">Role requests</h3>
               {roleSuggestions.length > 0 && (
                 <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-teal-600 text-white text-xs font-bold px-1 leading-none">
                   {roleSuggestions.length}
@@ -660,17 +664,21 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
             {roleSuggestionsErr ? (
               <p className="text-xs text-red-500">{roleSuggestionsErr}</p>
+            ) : roleSuggestions.length === 0 ? (
+              <p className="text-xs text-slate-600">No role requests waiting.</p>
             ) : (
               <ul className="space-y-2">
                 {roleSuggestions.map((s) => (
                   <li
                     key={s.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-teal-100 bg-teal-50"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-teal-200 border-l-4 border-l-teal-600 bg-teal-50"
                   >
                     <Initials name={s.user.name} leader={false} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{s.user.name}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {s.user.name} <span className="ml-1 rounded-full border border-teal-300 bg-teal-100 px-1.5 py-0.5 text-xs font-semibold text-teal-900">Pending</span>
+                      </p>
+                      <p className="text-xs text-slate-600 mt-0.5">
                         Suggests:{" "}
                         {s.suggestedRoles.map((r) => ROLE_META[r]?.label ?? r).join(" + ")}
                       </p>

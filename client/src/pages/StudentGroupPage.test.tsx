@@ -552,3 +552,34 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect("In the 0.4 band").toMatch(MEASURE);
   });
 });
+
+describe("StudentGroupPage: Manage Group badge", () => {
+  const leader = { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null };
+
+  it("the leader sees the total of join and role requests, in the button's name", () => {
+    state.data = groupFixture({ membership: leader, pendingCounts: { joinRequests: 2, roleRequests: 1 } });
+    renderPage();
+    const btn = screen.getByRole("button", { name: "Manage Group, 3 pending requests" });
+    expect(btn).toHaveTextContent("3");
+  });
+
+  it("one request reads as singular", () => {
+    state.data = groupFixture({ membership: leader, pendingCounts: { joinRequests: 0, roleRequests: 1 } });
+    renderPage();
+    expect(screen.getByRole("button", { name: "Manage Group, 1 pending request" })).toBeTruthy();
+  });
+
+  it("zero = no number and the plain name", () => {
+    state.data = groupFixture({ membership: leader, pendingCounts: { joinRequests: 0, roleRequests: 0 } });
+    renderPage();
+    const btn = screen.getByRole("button", { name: "Manage Group" });
+    expect(btn.textContent).toBe("Manage Group");
+  });
+
+  it("a plain member shows no number even if a count were present", () => {
+    state.data = groupFixture({ pendingCounts: { joinRequests: 4, roleRequests: 4 } });
+    renderPage();
+    const btn = screen.getByRole("button", { name: "Manage Group" });
+    expect(btn.textContent).toBe("Manage Group");
+  });
+});
