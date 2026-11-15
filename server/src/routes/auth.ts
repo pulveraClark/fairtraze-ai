@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { addTimingMs } from "../lib/queryCounter.js";
 import type { SystemRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
@@ -189,7 +190,9 @@ authRouter.post("/api/auth/login", async (req, res) => {
     return;
   }
 
+  const bcryptStart = process.hrtime.bigint();
   const valid = await bcrypt.compare(password, user.passwordHash);
+  addTimingMs("bcrypt", Number(process.hrtime.bigint() - bcryptStart) / 1e6); // a number for the timing line only
   if (!valid) {
     const failedLoginAttempts = user.failedLoginAttempts + 1;
     const locked = failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;

@@ -28,6 +28,7 @@ import { avatarRouter, avatarBodyErrors } from "./routes/avatar.js";
 import { briefsRouter, briefBodyErrors, BRIEF_RAW_LIMIT, BRIEF_RAW_TYPES } from "./routes/briefs.js";
 import { requirementMarksRouter, markBodyErrors, MARK_IMAGE_TYPES, MARK_RAW_LIMIT } from "./routes/requirementMarks.js";
 import { authenticateToken } from "./middleware/auth.js";
+import { requestTiming } from "./middleware/requestTiming.js";
 import {
   corsOptions,
   helmetMiddleware,
@@ -53,6 +54,9 @@ import { SERVER_ERROR_TEXT } from "@shared/failureMessages.js";
 // real server entrypoint can share one app definition.
 export function createApp() {
   const app = express();
+
+  // First, so the duration covers everything. One line per request, route pattern only (see requestTiming.ts).
+  app.use(requestTiming());
 
   // Behind Render's proxy req.ip is the proxy unless told otherwise; see trustProxyHops (security.ts).
   const proxyHops = trustProxyHops();
