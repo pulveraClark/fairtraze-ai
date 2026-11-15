@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { isRulesOutdated } from "@shared/scoringRules.js";
 import { reportDataConfidence } from "../lib/reportConfidence.js";
-import { docsDataApproximateFor, getAuthorshipFixAt } from "../lib/authorshipFix.js";
+import { documentHasPreFixEvents, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { computeDocsOneGo } from "../lib/docsOneGoHint.js";
 import { requireRole } from "../middleware/auth.js";
 import { ASSIGNMENT_CONFIG_SELECT, assignmentScoringConfig, configsEqual, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
@@ -166,16 +166,29 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   }
   const projectId = idResult.data;
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: {
-      assignment: { select: { id: true, sourceType: true, deadline: true, createdAt: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
-      groupMemberships: {
-        include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
-        orderBy: { joinedAt: "asc" },
+  // Stage 1: everything that needs only the project id, read together. The checks below keep their old order
+  // (404, 403, 404, 500); a missing or foreign project just discards the extra reads.
+  const [project, latestReport, tasks, document] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        assignment: { select: { id: true, sourceType: true, deadline: true, createdAt: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
+        groupMemberships: {
+          include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
+          orderBy: { joinedAt: "asc" },
+        },
       },
-    },
-  });
+    }),
+    prisma.report.findFirst({
+      where: { projectId },
+      orderBy: [...LATEST_REPORT_ORDER],
+    }),
+    prisma.task.findMany({
+      where:  { projectId },
+      select: { assignedToUserId: true, done: true },
+    }),
+    prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
+  ]);
   if (!project) {
     res.status(404).json({ error: "Project not found" });
     return;
@@ -187,10 +200,6 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     return;
   }
 
-  const latestReport = await prisma.report.findFirst({
-    where: { projectId },
-    orderBy: [...LATEST_REPORT_ORDER],
-  });
   if (!latestReport) {
     res.status(404).json({ error: "No report found — analyze this project first." });
     return;
@@ -219,10 +228,6 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   // Build memberRoles — context-only; never affects scores, flags, Gini, or team health.
   // Mismatch note: Developer assigned but member has 0 commits in the stored report.
   const reportMembers = stored.report.members;
-  const tasks = await prisma.task.findMany({
-    where:  { projectId },
-    select: { assignedToUserId: true, done: true },
-  });
   const memberRoles: MemberRoleInfo[] = project.groupMemberships.map((m) => {
     const functionalRoles = JSON.parse(m.functionalRoles) as FunctionalRole[];
     const isLeader = m.role === "LEADER";
@@ -240,16 +245,17 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     return { userId: m.user.id, githubUsername: github ?? "", functionalRoles, isLeader, mismatchNotes, taskSummary, avatarUpdatedAt: m.user.avatarUpdatedAt ? m.user.avatarUpdatedAt.toISOString() : null };
   });
 
-  const docsDataApproximate = await docsDataApproximateFor(projectId, project.assignment?.sourceType);
-  // Instructor-only pointer to the document history; read time, not stored, display only.
-  const sourceForHint = project.assignment?.sourceType;
-  const docsOneGo = sourceForHint === "EDITOR" || sourceForHint === "COMBINED"
-    ? await computeDocsOneGo(
-        (await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }))?.id,
-        reportMembers,
-        latestReport.generatedAt,
-      ).catch(() => [])
-    : [];
+  // Stage 2: the reads that needed the report (its id and time) or the document id, run together.
+  const sourceType = project.assignment?.sourceType;
+  const docsSource = sourceType === "EDITOR" || sourceType === "COMBINED";
+  const [docsDataApproximate, docsOneGo, evidenceRow, repoChangedSet] = await Promise.all([
+    docsSource ? documentHasPreFixEvents(document?.id) : Promise.resolve(false),
+    // Instructor-only pointer to the document history; read time, not stored, display only.
+    docsSource ? computeDocsOneGo(document?.id, reportMembers, latestReport.generatedAt).catch(() => []) : Promise.resolve([]),
+    // Read-only: the printed instructor export shows the Report ID only if one already exists for this analysis.
+    prisma.reportEvidenceId.findUnique({ where: { reportId: latestReport.id }, select: { code: true } }),
+    projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]])),
+  ]);
   const response: StoredReportResponse = {
     projectId,
     assignmentId: project.assignment?.id ?? null,
@@ -258,8 +264,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     analyzedAt: latestReport.generatedAt.toISOString(),
     report: stored.report,
     narrative: stored.narrative ?? null,
-    // Read-only: the printed instructor export shows the Report ID only if one already exists for this analysis.
-    evidenceReportId: (await prisma.reportEvidenceId.findUnique({ where: { reportId: latestReport.id }, select: { code: true } }))?.code ?? null,
+    evidenceReportId: evidenceRow?.code ?? null,
     unmatchedGitHubLogins: stored.unmatchedLogins ?? [],
     sourceType: project.assignment?.sourceType ?? null,
     scoringConfig:          stored.scoringConfig ?? null,
@@ -274,7 +279,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     trigger: stored.trigger ?? null,
     autoUpdateFailed: autoUpdateFailed(project, project.assignment, latestReport.generatedAt),
     narrativeOutdated: isNarrativeOutdated(stored),
-    repoChanged: (await projectsWithRepoChangedSince(new Map([[projectId, latestReport.generatedAt]]))).has(projectId),
+    repoChanged: repoChangedSet.has(projectId),
     docsDataFixedAt: getAuthorshipFixAt().toISOString(),
     deadline: project.assignment?.deadline?.toISOString() ?? null,
     docsOneGo,
