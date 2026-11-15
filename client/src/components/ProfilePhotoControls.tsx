@@ -1,4 +1,7 @@
 import { useRef, useState } from "react";
+import { useToast } from "./Toast";
+import { BusyLabel } from "./ui/BusyLabel";
+import { errorMessage } from "../lib/feedback";
 import { Avatar, clearAvatarCache } from "./Avatar";
 import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../lib/apiBase";
@@ -17,7 +20,8 @@ const BTN = "inline-flex min-h-9 items-center rounded-lg border border-slate-300
 export function ProfilePhotoControls({ userId, name, avatarUpdatedAt, onChanged }: Props) {
   const { token, refreshUser } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const { showSuccessToast } = useToast();
+  const [busy, setBusy] = useState<"upload" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function send(method: "PUT" | "DELETE", body?: Blob) {
@@ -31,6 +35,7 @@ export function ProfilePhotoControls({ userId, name, avatarUpdatedAt, onChanged 
     clearAvatarCache();
     onChanged(data.avatarUpdatedAt ?? null);
     await refreshUser();
+    showSuccessToast(method === "PUT" ? "Photo updated." : "Photo removed.");
   }
 
   async function handleFile(file: File | undefined) {
@@ -38,26 +43,26 @@ export function ProfilePhotoControls({ userId, name, avatarUpdatedAt, onChanged 
     setError(null);
     const problem = isAcceptedAvatarSource(file);
     if (problem) { setError(problem); return; }
-    setBusy(true);
+    setBusy("upload");
     try {
       await send("PUT", await prepareAvatar(file));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update your photo.");
+      setError(errorMessage(e, "Could not update your photo. Try again."));
     } finally {
-      setBusy(false);
+      setBusy(null);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
 
   async function handleRemove() {
     setError(null);
-    setBusy(true);
+    setBusy("remove");
     try {
       await send("DELETE");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not remove your photo.");
+      setError(errorMessage(e, "Could not remove your photo. Try again."));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -81,12 +86,12 @@ export function ProfilePhotoControls({ userId, name, avatarUpdatedAt, onChanged 
             aria-label="Choose a profile photo"
             onChange={(e) => void handleFile(e.target.files?.[0])}
           />
-          <button type="button" className={BTN} disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? "Saving…" : avatarUpdatedAt ? "Change photo" : "Upload photo"}
+          <button type="button" className={BTN} disabled={busy !== null} onClick={() => inputRef.current?.click()}>
+            <BusyLabel busy={busy === "upload"} idle={avatarUpdatedAt ? "Change photo" : "Upload photo"} busyText="Saving…" />
           </button>
           {avatarUpdatedAt && (
-            <button type="button" className={BTN} disabled={busy} onClick={() => void handleRemove()}>
-              Remove photo
+            <button type="button" className={BTN} disabled={busy !== null} onClick={() => void handleRemove()}>
+              <BusyLabel busy={busy === "remove"} idle="Remove photo" busyText="Removing…" />
             </button>
           )}
         </div>

@@ -1,4 +1,8 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { useToast } from "../components/Toast";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { LoadingState } from "../components/ui/LoadingState";
+import { errorMessage } from "../lib/feedback";
 import { AppFooter } from "../components/AppFooter";
 import { useAuth } from "../context/AuthContext";
 import { Avatar } from "../components/Avatar";
@@ -32,17 +36,6 @@ const inputClass =
 
 const readonlyClass =
   "w-full rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-500 cursor-not-allowed select-none";
-
-function SuccessBanner({ msg }: { msg: string }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3.5 py-2.5">
-      <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-      </svg>
-      <p className="text-xs text-emerald-700 font-medium">{msg}</p>
-    </div>
-  );
-}
 
 function ErrorBanner({ msg }: { msg: string }) {
   return (
@@ -100,7 +93,7 @@ function EditProfileModal({
       if (!res.ok) throw new Error(data.error ?? "Update failed");
       onSaved({ name: data.name, githubUsername: data.githubUsername ?? null });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setError(errorMessage(err, "Could not save your changes. Try again."));
     } finally {
       setSaving(false);
     }
@@ -126,8 +119,9 @@ function EditProfileModal({
             {error && <ErrorBanner msg={error} />}
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Full name</label>
+              <label htmlFor="settings-name" className="block text-xs font-medium text-slate-600 mb-1.5">Full name</label>
               <input
+                id="settings-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -161,7 +155,7 @@ function EditProfileModal({
             </button>
             <button type="submit" disabled={saving || !name.trim()}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-50">
-              {saving ? "Saving…" : "Save changes"}
+              <BusyLabel busy={saving} idle="Save changes" busyText="Saving…" />
             </button>
           </div>
         </form>
@@ -206,7 +200,7 @@ function ChangePasswordModal({
       if (!res.ok) throw new Error(data.error ?? "Password update failed");
       onClose(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password update failed");
+      setError(errorMessage(err, "Could not change your password. Try again."));
     } finally {
       setSaving(false);
     }
@@ -232,8 +226,9 @@ function ChangePasswordModal({
             {error && <ErrorBanner msg={error} />}
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Current password</label>
+              <label htmlFor="settings-current-password" className="block text-xs font-medium text-slate-600 mb-1.5">Current password</label>
               <input
+                id="settings-current-password"
                 type="password"
                 value={currentPw}
                 onChange={(e) => setCurrentPw(e.target.value)}
@@ -246,8 +241,9 @@ function ChangePasswordModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">New password</label>
+              <label htmlFor="settings-new-password" className="block text-xs font-medium text-slate-600 mb-1.5">New password</label>
               <input
+                id="settings-new-password"
                 type="password"
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
@@ -259,8 +255,9 @@ function ChangePasswordModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Confirm new password</label>
+              <label htmlFor="settings-confirm-password" className="block text-xs font-medium text-slate-600 mb-1.5">Confirm new password</label>
               <input
+                id="settings-confirm-password"
                 type="password"
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
@@ -279,7 +276,7 @@ function ChangePasswordModal({
             </button>
             <button type="submit" disabled={saving || !currentPw || !newPw || !confirmPw}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-50">
-              {saving ? "Updating…" : "Update password"}
+              <BusyLabel busy={saving} idle="Update password" busyText="Updating…" />
             </button>
           </div>
         </form>
@@ -299,8 +296,7 @@ export function SettingsPage() {
   const openGithubEdit = new URLSearchParams(window.location.search).get("edit") === "github";
   const [showEditModal, setShowEditModal] = useState(openGithubEdit);
   const [showPwModal,   setShowPwModal]   = useState(false);
-  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-  const [pwSuccess,      setPwSuccess]      = useState<string | null>(null);
+  const { showSuccessToast } = useToast();
 
   useEffect(() => {
     if (!token) return;
@@ -317,17 +313,13 @@ export function SettingsPage() {
   async function handleProfileSaved(updated: Partial<FullProfile>) {
     setProfile((p) => p ? { ...p, ...updated } : p);
     setShowEditModal(false);
-    setProfileSuccess("Profile updated.");
+    showSuccessToast("Profile saved.");
     await refreshUser();
-    setTimeout(() => setProfileSuccess(null), 4000);
   }
 
   function handlePwModalClose(success?: boolean) {
     setShowPwModal(false);
-    if (success) {
-      setPwSuccess("Password updated successfully.");
-      setTimeout(() => setPwSuccess(null), 4000);
-    }
+    if (success) showSuccessToast("Password changed.");
   }
 
   const isStudent = profile?.systemRole === "STUDENT";
@@ -364,9 +356,8 @@ export function SettingsPage() {
         {fetchErr && <ErrorBanner msg={fetchErr} />}
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
-            <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            Loading profile…
+          <div className="flex justify-center py-16">
+            <LoadingState label="Loading profile…" />
           </div>
         )}
 
@@ -404,7 +395,7 @@ export function SettingsPage() {
               </p>
             </div>
             <button
-              onClick={() => { setShowEditModal(true); setProfileSuccess(null); }}
+              onClick={() => { setShowEditModal(true); }}
               disabled={!profile}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-indigo-700 hover:border-indigo-300 text-xs font-semibold transition-colors disabled:opacity-40"
             >
@@ -424,11 +415,6 @@ export function SettingsPage() {
             />
           )}
 
-          {profileSuccess && (
-            <div className="mt-4">
-              <SuccessBanner msg={profileSuccess} />
-            </div>
-          )}
 
           {profile && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -456,7 +442,7 @@ export function SettingsPage() {
               <p className="text-xs text-slate-600 mt-0.5">Change your login password.</p>
             </div>
             <button
-              onClick={() => { setShowPwModal(true); setPwSuccess(null); }}
+              onClick={() => { setShowPwModal(true); }}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-indigo-700 hover:border-indigo-300 text-xs font-semibold transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -465,11 +451,6 @@ export function SettingsPage() {
               Change password
             </button>
           </div>
-          {pwSuccess && (
-            <div className="mt-4">
-              <SuccessBanner msg={pwSuccess} />
-            </div>
-          )}
         </div>
 
         {/* ── Privacy and data (RA 10173) ──────────────────────────────────── */}

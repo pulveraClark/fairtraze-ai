@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "./Toast";
+import { BusyLabel } from "./ui/BusyLabel";
+import { errorMessage } from "../lib/feedback";
 import { useAuth } from "../context/AuthContext";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from "./ui";
 
@@ -19,6 +22,8 @@ export function PrivacySettingsCard() {
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"download" | "request" | "cancel" | null>(null);
+  const { showSuccessToast } = useToast();
+  // Only failures are kept on the card; a success is confirmed by a toast.
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -55,9 +60,9 @@ export function PrivacySettingsCard() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setMessage({ kind: "ok", text: "Your data was downloaded." });
+      showSuccessToast("Your data file is ready.");
     } catch {
-      setMessage({ kind: "error", text: "Could not download your data. Please try again." });
+      setMessage({ kind: "error", text: "Could not prepare your data file. Try again." });
     } finally {
       setBusy(null);
     }
@@ -77,9 +82,9 @@ export function PrivacySettingsCard() {
       setRequest(data.request ? { ...data.request, reviewNote: null } : null);
       setConfirming(false);
       setReason("");
-      setMessage({ kind: "ok", text: "Your deletion request was sent to an administrator." });
+      showSuccessToast("Deletion request sent.");
     } catch (err) {
-      setMessage({ kind: "error", text: err instanceof Error ? err.message : "Could not send your request." });
+      setMessage({ kind: "error", text: errorMessage(err, "Could not send your request. Try again.") });
     } finally {
       setBusy(null);
     }
@@ -92,9 +97,9 @@ export function PrivacySettingsCard() {
       const res = await fetch("/api/privacy/deletion-request", { method: "DELETE", headers: auth });
       if (!res.ok) throw new Error();
       setRequest(null);
-      setMessage({ kind: "ok", text: "Your deletion request was withdrawn." });
+      showSuccessToast("Deletion request withdrawn.");
     } catch {
-      setMessage({ kind: "error", text: "Could not withdraw the request. Please try again." });
+      setMessage({ kind: "error", text: "Could not withdraw the request. Try again." });
     } finally {
       setBusy(null);
     }
@@ -128,7 +133,7 @@ export function PrivacySettingsCard() {
             activity, your own AI findings, tasks, notes you filed and notifications. It never includes other members' data. (The printed group evidence report is a separate page; it lists every member's share and flags.)
           </p>
           <button type="button" onClick={() => void download()} disabled={busy !== null} className={`${BUTTON_SECONDARY} mt-2`}>
-            {busy === "download" ? "Preparing…" : "Download my data"}
+            <BusyLabel busy={busy === "download"} idle="Download my data" busyText="Preparing…" />
           </button>
         </div>
 
@@ -145,7 +150,7 @@ export function PrivacySettingsCard() {
                 Pending review
               </span>
               <button type="button" onClick={() => void cancelRequest()} disabled={busy !== null} className={BUTTON_SECONDARY}>
-                {busy === "cancel" ? "Withdrawing…" : "Withdraw request"}
+                <BusyLabel busy={busy === "cancel"} idle="Withdraw request" busyText="Withdrawing…" />
               </button>
             </div>
           ) : (
@@ -197,7 +202,7 @@ export function PrivacySettingsCard() {
                 Keep my account
               </button>
               <button type="button" onClick={() => void submitRequest()} disabled={busy !== null} className={BUTTON_PRIMARY}>
-                {busy === "request" ? "Sending…" : "Send deletion request"}
+                <BusyLabel busy={busy === "request"} idle="Send deletion request" busyText="Sending…" />
               </button>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { errorMessage } from "../lib/feedback";
 import { PRIVACY_CHANGE_SUMMARY, PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
@@ -31,7 +32,7 @@ export function ConsentGatePage() {
       }
       await refreshUser();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save your consent. Please try again.");
+      setError(errorMessage(err, "Could not save your choice. Try again."));
     } finally {
       setSaving(false);
     }

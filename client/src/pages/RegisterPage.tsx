@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { BusyLabel } from "../components/ui/BusyLabel";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import logoUrl from "../assets/logo_transparent.png";
@@ -359,12 +360,7 @@ export function RegisterPage() {
               disabled={submitting || !name || !email || !role || !password || !confirmPassword || !privacyAccepted}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
             >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Creating account…
-                </span>
-              ) : "Create account"}
+              <BusyLabel busy={submitting} idle="Create account" busyText="Creating account…" />
             </button>
 
           </form>

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ToastProvider } from "../components/Toast";
 import { render, screen, waitFor } from "@testing-library/react";
 import { RouterProvider } from "../router";
 import { SettingsPage } from "./SettingsPage";
@@ -18,7 +19,7 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../components/ProfilePhotoControls", () => ({ ProfilePhotoControls: () => null }));
 
 function renderPage() {
-  return render(<RouterProvider><SettingsPage /></RouterProvider>);
+  return render(<RouterProvider><ToastProvider><SettingsPage /></ToastProvider></RouterProvider>);
 }
 
 describe("SettingsPage", () => {

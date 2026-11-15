@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { useToast } from "../components/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { POLL_30S } from "./pollingOptions";
@@ -162,6 +163,8 @@ export function unreadCountQueryOptions(token: string | null, userId: number | n
  * count-only endpoint; the full list is fetched only while the dropdown is open.
  * The sidebar bell, the mobile menu badge and useInvalidateOnAlertCount share one count query (same key → one request).
  */
+const ALERTS_ERROR_TEXT = "Could not update your notifications. Try again.";
+
 export function useAlerts(options: { listEnabled?: boolean } = {}): UseAlertsReturn {
   const { listEnabled = false } = options;
   const { token, user } = useAuth();
@@ -193,26 +196,39 @@ export function useAlerts(options: { listEnabled?: boolean } = {}): UseAlertsRet
     prevCount.current = countQuery.data;
   }, [countQuery.data, listEnabled, queryClient]);
 
+  const { showError } = useToast();
+
   const markRead = useCallback(
     async (id: number) => {
       if (!token) return;
-      await fetch(`/api/alerts/${id}/read`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Success is silent on purpose (the unread count drops); a failure is not.
+      try {
+        const res = await fetch(`/api/alerts/${id}/read`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("rejected");
+      } catch {
+        showError(ALERTS_ERROR_TEXT);
+      }
       void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
     },
-    [token, queryClient]
+    [token, queryClient, showError]
   );
 
   const markAllRead = useCallback(async () => {
     if (!token) return;
-    await fetch("/api/alerts/read-all", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      const res = await fetch("/api/alerts/read-all", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("rejected");
+    } catch {
+      showError(ALERTS_ERROR_TEXT);
+    }
     void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
-  }, [token, queryClient]);
+  }, [token, queryClient, showError]);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });

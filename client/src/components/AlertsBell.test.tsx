@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { AlertsBell } from "./AlertsBell";
+import { ToastProvider } from "./Toast";
 import { alertLink, alertMeta } from "../hooks/useAlerts";
 import * as AuthContextModule from "../context/AuthContext";
 
@@ -30,7 +31,7 @@ function renderBell() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <RouterProvider><AlertsBell /></RouterProvider>
+      <RouterProvider><ToastProvider><AlertsBell /></ToastProvider></RouterProvider>
     </QueryClientProvider>
   );
 }
@@ -90,6 +91,33 @@ describe("AlertsBell for non-instructor roles", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/student/group/3"));
     expect(window.location.search).toBe("?manage=1");
     expect(fetch).toHaveBeenCalledWith("/api/alerts/7/read", expect.objectContaining({ method: "POST" }));
+  });
+});
+
+describe("AlertsBell feedback", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
+  const stub = (readOk: boolean) => vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "POST") return { ok: readOk, json: async () => ({}) };
+    return { ok: true, json: async () => (url === "/api/alerts/unread-count" ? { unreadCount: 1 } : { alerts: [studentAlert], unreadCount: 1 }) };
+  }));
+
+  it("marking all read is silent when it works", async () => {
+    signInAs("STUDENT");
+    stub(true);
+    renderBell();
+    await userEvent.click(await screen.findByRole("button", { name: /1 unread/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /mark all/i }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/alerts/read-all", expect.objectContaining({ method: "POST" })));
+    expect(document.querySelector("[data-toast-region]")?.children).toHaveLength(0);
+  });
+
+  it("marking all read says so when it fails, instead of staying silent", async () => {
+    signInAs("STUDENT");
+    stub(false);
+    renderBell();
+    await userEvent.click(await screen.findByRole("button", { name: /1 unread/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /mark all/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not update your notifications. Try again.");
   });
 });
 

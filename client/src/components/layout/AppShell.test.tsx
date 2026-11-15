@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../../router";
 import { AppShell } from "./AppShell";
+import { ToastProvider } from "../Toast";
 import * as AuthContextModule from "../../context/AuthContext";
 
 vi.mock("../../context/AuthContext", async () => {
@@ -37,7 +38,7 @@ function renderShell() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <RouterProvider><AppShell><main>page body</main></AppShell></RouterProvider>
+      <RouterProvider><ToastProvider><AppShell><main>page body</main></AppShell></ToastProvider></RouterProvider>
     </QueryClientProvider>
   );
 }
