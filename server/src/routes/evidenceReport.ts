@@ -13,7 +13,7 @@ export const evidenceReportRouter = Router();
 // GET /api/groups/:id/evidence-report
 // The one-page Contribution Evidence Report for a group: every member's recorded share and flags
 // from the LATEST stored analysis, plus the Report ID of that analysis (made once, then reused).
-// Members of the group and the instructor who OWNS the class may read it. Admins are not included:
+// The group's LEADER and the instructor who OWNS the class may read it (plain members may not). Admins are not included:
 // they manage accounts, never class content. Nothing is recomputed, and the DTO has no Gini,
 // bands, team health, thresholds, AI text, usernames, emails or commit/line counts.
 evidenceReportRouter.get(
@@ -33,7 +33,7 @@ evidenceReportRouter.get(
       select: {
         id: true,
         assignment: { select: { classSection: { select: { instructorId: true } } } },
-        groupMemberships: { where: { userId }, select: { id: true } },
+        groupMemberships: { where: { userId }, select: { role: true } },
       },
     });
     if (!project) {
@@ -41,11 +41,13 @@ evidenceReportRouter.get(
       return;
     }
 
-    const isMember = project.groupMemberships.length > 0;
+    // Only the group's LEADER and the owning instructor. A plain member, a leader of another
+    // group, another instructor and an admin all get the same 403.
+    const isLeader = project.groupMemberships.some((m) => m.role === "LEADER");
     const isOwner = req.user!.role === "INSTRUCTOR"
       && project.assignment?.classSection.instructorId === userId;
-    if (!isMember && !isOwner) {
-      res.status(403).json({ error: "You do not have access to this report." });
+    if (!isLeader && !isOwner) {
+      res.status(403).json({ error: "Only the group leader or your instructor can open this report." });
       return;
     }
 

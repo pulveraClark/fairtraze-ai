@@ -20,10 +20,10 @@ describe("GET /api/projects/:id/report - evidenceReportId", () => {
     expect(await prisma.reportEvidenceId.count({ where: { reportId: report.id } })).toBe(0);
   });
 
-  it("carries the existing ID of the latest analysis once a member has opened the evidence report", async () => {
-    const { project, instructor, member } = await setup("GITHUB");
+  it("carries the existing ID of the latest analysis once the leader has opened the evidence report", async () => {
+    const { project, instructor, leader } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const code = (await request(app).get(`/api/groups/${project.id}/evidence-report`).set("Authorization", authHeaderFor(member))).body.reportId;
+    const code = (await request(app).get(`/api/groups/${project.id}/evidence-report`).set("Authorization", authHeaderFor(leader))).body.reportId;
 
     const res = await request(app).get(`/api/projects/${project.id}/report`).set("Authorization", authHeaderFor(instructor));
     expect(res.body.evidenceReportId).toBe(code);

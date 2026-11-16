@@ -32,10 +32,10 @@ describe("GET /api/groups/:id/evidence-report", () => {
     expect((await get(pB.id, instructor)).body.className).toBe("SYSARCH");
   });
 
-  it("a plain member reads their own group's report, including teammates' shares and real flag names", async () => {
-    const { project, member } = await setup("GITHUB");
+  it("the group leader reads the report, including teammates' shares and real flag names", async () => {
+    const { project, leader } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const res = await get(project.id, member);
+    const res = await get(project.id, leader);
     expect(res.status).toBe(200);
     expect(res.body.groupName).toBe("Group Evidence");
     expect(res.body.leaderName).toBe("Lena Leader");
@@ -47,6 +47,17 @@ describe("GET /api/groups/:id/evidence-report", () => {
     ]);
     expect(res.body.weights).toBeNull();
     expect(res.body.reportId).toMatch(REPORT_ID_PATTERN);
+  });
+
+  it("a plain member and the leader of another group get 403", async () => {
+    const { project, member } = await setup("GITHUB");
+    await saveReport(project.id, "GITHUB");
+    const denied = await get(project.id, member);
+    expect(denied.status).toBe(403);
+    expect(denied.body.error).toBe("Only the group leader or your instructor can open this report.");
+
+    const other = await setup("GITHUB");
+    expect((await get(project.id, other.leader)).status).toBe(403);
   });
 
   it("the owning instructor can read it; a non-member student, another instructor, an admin and a visitor cannot", async () => {
@@ -68,16 +79,16 @@ describe("GET /api/groups/:id/evidence-report", () => {
   });
 
   it("answers 404 NO_ANALYSIS when the group has not been analyzed", async () => {
-    const { project, member } = await setup("GITHUB");
-    const res = await get(project.id, member);
+    const { project, leader } = await setup("GITHUB");
+    const res = await get(project.id, leader);
     expect(res.status).toBe(404);
     expect(res.body.code).toBe("NO_ANALYSIS");
   });
 
   it("returns only whitelisted fields: no Gini, bands, team health, thresholds, AI text, usernames, emails, counts or ids", async () => {
-    const { project, member } = await setup("COMBINED");
+    const { project, leader } = await setup("COMBINED");
     await saveReport(project.id, "COMBINED");
-    const res = await get(project.id, member);
+    const res = await get(project.id, leader);
     expect(res.status).toBe(200);
     expect(Object.keys(res.body).sort()).toEqual(ALLOWED_TOP);
     for (const m of res.body.members) expect(Object.keys(m).sort()).toEqual(ALLOWED_MEMBER);
@@ -94,20 +105,20 @@ describe("GET /api/groups/:id/evidence-report", () => {
   it("shows the columns that apply: GitHub only, Documents only, or both with the stored blend", async () => {
     const gh = await setup("GITHUB");
     await saveReport(gh.project.id, "GITHUB");
-    const a = (await get(gh.project.id, gh.member)).body;
+    const a = (await get(gh.project.id, gh.leader)).body;
     expect(a.members[0].githubPct).toBe(60);
     expect(a.members[0].docsPct).toBeNull();
 
     const ed = await setup("EDITOR");
     await saveReport(ed.project.id, "EDITOR");
-    const b = (await get(ed.project.id, ed.member)).body;
+    const b = (await get(ed.project.id, ed.leader)).body;
     expect(b.members[0].githubPct).toBeNull();
     expect(b.members[0].docsPct).toBe(60);
     expect(b.repoUrl).toBeNull();
 
     const co = await setup("COMBINED");
     await saveReport(co.project.id, "COMBINED");
-    const c = (await get(co.project.id, co.member)).body;
+    const c = (await get(co.project.id, co.leader)).body;
     expect(c.members[0]).toMatchObject({ githubPct: 70, docsPct: 50, combinedPct: 60 });
     // The blend that produced the numbers (stored with the report: 40/60), not the live default.
     expect(c.weights).toEqual({ githubPct: 40, docsPct: 60 });
@@ -126,10 +137,10 @@ describe("Report ID", () => {
   });
 
   it("is made once per analysis, reused for everyone who opens it, and new after a new analysis", async () => {
-    const { project, member, leader, instructor } = await setup("GITHUB");
+    const { project, leader, instructor } = await setup("GITHUB");
     const first = await saveReport(project.id, "GITHUB");
-    const a = (await get(project.id, member)).body.reportId;
-    const b = (await get(project.id, member)).body.reportId;
+    const a = (await get(project.id, leader)).body.reportId;
+    const b = (await get(project.id, leader)).body.reportId;
     const c = (await get(project.id, leader)).body.reportId;
     const d = (await get(project.id, instructor)).body.reportId;
     expect(new Set([a, b, c, d]).size).toBe(1);
@@ -139,25 +150,25 @@ describe("Report ID", () => {
     expect(row?.projectId).toBe(project.id);
 
     await saveReport(project.id, "GITHUB");
-    const e = (await get(project.id, member)).body.reportId;
+    const e = (await get(project.id, leader)).body.reportId;
     expect(e).not.toBe(a);
     expect(await prisma.reportEvidenceId.count({ where: { projectId: project.id } })).toBe(2);
   });
 
   it("concurrent first opens end up with one ID", async () => {
-    const { project, member, leader } = await setup("GITHUB");
+    const { project, leader, instructor } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const results = await Promise.all([get(project.id, member), get(project.id, leader), get(project.id, member)]);
+    const results = await Promise.all([get(project.id, instructor), get(project.id, leader), get(project.id, leader)]);
     expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
     expect(new Set(results.map((r) => r.body.reportId)).size).toBe(1);
   });
 
   it("IDs of different analyses are all different", async () => {
-    const { project, member } = await setup("GITHUB");
+    const { project, leader } = await setup("GITHUB");
     const ids = new Set<string>();
     for (let i = 0; i < 6; i++) {
       await saveReport(project.id, "GITHUB");
-      ids.add((await get(project.id, member)).body.reportId);
+      ids.add((await get(project.id, leader)).body.reportId);
     }
     expect(ids.size).toBe(6);
   });

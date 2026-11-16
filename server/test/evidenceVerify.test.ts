@@ -15,9 +15,9 @@ const verify = (user: U, code: unknown) =>
 
 describe("POST /api/evidence-reports/verify", () => {
   it("the owning instructor sees the printout's numbers and 'latest' for the newest analysis, with no Gini or bands", async () => {
-    const { project, member, instructor } = await setup("COMBINED");
+    const { project, leader, instructor } = await setup("COMBINED");
     await saveReport(project.id, "COMBINED");
-    const code = await idOf(project.id, member);
+    const code = await idOf(project.id, leader);
 
     const res = await verify(instructor, code);
     expect(res.status).toBe(200);
@@ -34,25 +34,25 @@ describe("POST /api/evidence-reports/verify", () => {
     }
 
     // The numbers equal what the student's printout shows for that same analysis.
-    const printout = await request(app).get(`/api/groups/${project.id}/evidence-report`).set("Authorization", authHeaderFor(member));
+    const printout = await request(app).get(`/api/groups/${project.id}/evidence-report`).set("Authorization", authHeaderFor(leader));
     expect(res.body.members).toEqual(printout.body.members);
   });
 
   it("accepts the code typed in lower case or without dashes", async () => {
-    const { project, member, instructor } = await setup("GITHUB");
+    const { project, leader, instructor } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const code = await idOf(project.id, member);
+    const code = await idOf(project.id, leader);
     expect((await verify(instructor, code.toLowerCase())).status).toBe(200);
     expect((await verify(instructor, `  ${code.replace(/-/g, " ")} `)).status).toBe(200);
   });
 
   it("after a re-analysis the old ID still works and says 'older'; the new ID says 'latest'", async () => {
-    const { project, member, instructor } = await setup("GITHUB");
+    const { project, leader, instructor } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const oldCode = await idOf(project.id, member);
+    const oldCode = await idOf(project.id, leader);
     await saveReport(project.id, "GITHUB");
     await saveReport(project.id, "GITHUB");
-    const newCode = await idOf(project.id, member);
+    const newCode = await idOf(project.id, leader);
 
     const old = await verify(instructor, oldCode);
     expect(old.status).toBe(200);
@@ -61,9 +61,9 @@ describe("POST /api/evidence-reports/verify", () => {
   });
 
   it("an unknown code, a malformed code and another instructor's code all give the same 404 'Report ID not found.'", async () => {
-    const { project, member } = await setup("GITHUB");
+    const { project, leader } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const code = await idOf(project.id, member);
+    const code = await idOf(project.id, leader);
     const { user: other } = await createUser({ systemRole: "INSTRUCTOR" });
 
     const unknown = await verify(other, generateReportId());
@@ -77,9 +77,9 @@ describe("POST /api/evidence-reports/verify", () => {
   });
 
   it("students, admins and visitors cannot verify", async () => {
-    const { project, member, instructor } = await setup("GITHUB");
+    const { project, member, leader, instructor } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
-    const code = await idOf(project.id, member);
+    const code = await idOf(project.id, leader);
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
     expect((await verify(member, code)).status).toBe(403);
     expect((await verify(admin, code)).status).toBe(403);
