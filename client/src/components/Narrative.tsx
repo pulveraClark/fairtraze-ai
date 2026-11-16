@@ -15,7 +15,7 @@ import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
 import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
 import { useRequirementMarks } from "../hooks/useRequirementMarks";
-import { coveredProofTitle, groupTitle, healthSentence, instructionsSummary, lookGroups, needsLookCountText, needsLookTitle } from "../lib/aiSummary";
+import { coveredProofTitle, groupTitle, healthSentence, instructionsSummary, lookGroups, needsLookCountText } from "../lib/aiSummary";
 import { RefreshFailedNote } from "./RefreshFailedNote";
 import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
@@ -123,28 +123,27 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, onNee
     <>
       {unavailable && <p className="mt-3 text-sm font-medium leading-normal text-slate-900">Instructions check unavailable. Last good result kept.</p>}
       {summary.look.length > 0 && (
-        <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
-          <p className="text-xs font-semibold text-amber-950">{needsLookTitle(summary.needCheck, summary.total)}</p>
-          <div className="mt-2 space-y-3">
+        <section aria-label="Needs a look" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="space-y-3">
             {groups.map((g) => {
               const title = groupTitle(g.kind, g.items.length, summary.total);
               return (
                 <section key={g.kind} aria-label={title}>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0">
-                    <h3 className="text-xs font-semibold text-amber-950">{title}</h3>
+                  <div className="flex items-center justify-between gap-x-3">
+                    <h3 className="min-w-0 text-xs font-semibold text-amber-950">{title}</h3>
                     <ViewInstructionsLink instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} label={title} />
                   </div>
                   <ul className="space-y-2">
                     {g.items.map((i) => (
-                      <li key={i.req.key ?? i.text} className="min-w-0">
-                        <div className="min-w-0"><RequirementTextLink r={i.req} access={access} /></div>
+                      <li key={i.req.key ?? i.text} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <div className="min-w-0 flex-1 basis-56"><RequirementTextLink r={i.req} access={access} /></div>
+                        <RequirementActions r={i.req} access={access} marks={marks} keyMarks={i.req.key ? keyMarks.get(i.req.key) : undefined} textIsLink rowLayout />
                         {!i.req.sourceQuote && i.req.sourceFile && (
-                          <p className="mt-1 text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">From attached file: {i.req.sourceFile}</p>
+                          <p className="basis-full text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">From attached file: {i.req.sourceFile}</p>
                         )}
                         {i.req.key && staleKeys.has(i.req.key) && (
-                          <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>
+                          <p className="basis-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>
                         )}
-                        <RequirementActions r={i.req} access={access} marks={marks} keyMarks={i.req.key ? keyMarks.get(i.req.key) : undefined} textIsLink />
                       </li>
                     ))}
                   </ul>
@@ -152,7 +151,7 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, onNee
               );
             })}
           </div>
-        </div>
+        </section>
       )}
       <div className="mt-3 space-y-2">
         {failedNote}

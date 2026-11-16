@@ -273,10 +273,12 @@ function WorkedOnBy({ line, inline = false }: { line: WorkedOn; inline?: boolean
  * marks, "Mark as covered" (instructor) / "We have this" (leader) or the mark's own box. Shared by the rows of the
  * check and by the items of the "Needs a look" box, so both behave the same.
  */
-export function RequirementActions({ r, access, marks, keyMarks, compact = false, textIsLink = false }: {
+export function RequirementActions({ r, access, marks, keyMarks, compact = false, textIsLink = false, rowLayout = false }: {
   r: Req; access: InstructionsAccess; marks?: MarksApi; keyMarks?: KeyMarks; compact?: boolean;
   /** The requirement text is already the link to the instructions (see RequirementTextLink), so no separate "See in the instructions". */
   textIsLink?: boolean;
+  /** Put "Mark as covered" on the right of the row (see RequirementMarkPanel). */
+  rowLayout?: boolean;
 }) {
   const covered = kindOf(r) === "COVERED";
   const showSee = !textIsLink && !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
@@ -293,6 +295,7 @@ export function RequirementActions({ r, access, marks, keyMarks, compact = false
         canCheck={marks.role === "instructor" && isMarkable(r)}
         lead={lead}
         compact={compact}
+        rowLayout={rowLayout}
       />
     );
   }

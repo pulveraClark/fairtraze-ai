@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AiBriefCheck, AiReviewResponse } from "../lib/aiReview";
 import type { RequirementMark } from "../lib/requirementMarks";
@@ -92,7 +92,7 @@ const mixed = () => [...found(7), req("No README", "NOT_FOUND"), req("Has charts
 describe("AI findings summary", () => {
   it("'Needs a look (2 of 9)' lists the open items, not covered before check, and there is no 'Instructions: k of M' line", async () => {
     renderCard(mixed());
-    expect(await screen.findByText("Needs a look (2 of 9)")).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Needs a look" })).toBeTruthy();
     expect(screen.queryByText(/^Instructions:/)).toBeNull();
     const items = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(2);
@@ -108,7 +108,7 @@ describe("AI findings summary", () => {
 
   it("each item in the box has 'Mark as covered' (instructor action), and the item is not repeated inside the check", async () => {
     renderCard([...found(2), req("No README", "NOT_FOUND")]);
-    await screen.findByText("Needs a look (1 of 3)");
+    await screen.findByRole("region", { name: "Needs a look" });
     expect(screen.getAllByRole("button", { name: "Mark as covered" })).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "2 covered requirements, with proof" }));
     expect(screen.getAllByText("No README")).toHaveLength(1);
@@ -131,11 +131,32 @@ describe("AI findings summary", () => {
 
   it("order: the explanation, then 'Needs a look', then the covered requirements", async () => {
     renderCard(mixed());
-    const needs = await screen.findByText("Needs a look (2 of 9)");
+    const needs = await screen.findByRole("region", { name: "Needs a look" });
     const narrative = screen.getByText(/Explained\./);
     const covered = screen.getByRole("button", { name: "7 covered requirements, with proof" });
     expect(narrative.compareDocumentPosition(needs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(needs.compareDocumentPosition(covered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("no outer title line: the box is named for screen readers only, and the group headings are the only headings", async () => {
+    const { container } = renderCard(mixed());
+    const box = await screen.findByRole("region", { name: "Needs a look" });
+    expect(container.textContent).not.toMatch(/Needs a look \(/);
+    expect(box.getAttribute("aria-label")).toBe("Needs a look");
+    expect(box.textContent).not.toContain("Needs a look");
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Not covered yet (1 of 9)", "Needs your check (1 of 9)"]);
+  });
+
+  it("each row has the text on the left and 'Mark as covered' on its right in the same row; the group link shares the heading line", async () => {
+    renderCard(mixed(), { instructionsHref: "/class/1/assignment/2" });
+    const box = await screen.findByRole("region", { name: "Needs a look" });
+    const row = within(box).getAllByRole("listitem")[0];
+    expect(row.className).toContain("flex");
+    const mark = within(row).getByRole("button", { name: "Mark as covered" });
+    expect(row.textContent!.indexOf("No README")).toBeLessThan(row.textContent!.indexOf("Mark as covered"));
+    expect(mark.closest("li")).toBe(row);
+    const heading = within(box).getByRole("heading", { level: 3, name: "Not covered yet (1 of 9)" });
+    expect(within(heading.parentElement!).getByRole("link", { name: /View the instructions/ })).toBeTruthy();
   });
 
   it("the header says how many need a look, and hides the count at 0", async () => {
@@ -165,7 +186,7 @@ describe("AI findings summary", () => {
 
   it("the covered check's header keeps 'View the instructions' and an (i) on its right, even when collapsed", async () => {
     renderCard(mixed(), { instructionsHref: "/class/1/assignment/2" });
-    await screen.findByText("Needs a look (2 of 9)");
+    await screen.findByRole("region", { name: "Needs a look" });
     expect(screen.getByRole("link", { name: "View the instructions (new tab)" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "About the project instructions check" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "7 covered requirements, with proof" }).getAttribute("aria-expanded")).toBe("false");
@@ -196,7 +217,7 @@ describe("AI findings summary", () => {
     renderCard(found(9));
     expect(await screen.findByRole("button", { name: "9 covered requirements, with proof" })).toBeTruthy();
     expect(screen.queryByText(/^Instructions:/)).toBeNull();
-    expect(screen.queryByText(/Needs a look/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Needs a look" })).toBeNull();
   });
 
   it("an instructor-confirmed mark counts as covered; a waiting or declined claim does not", async () => {
@@ -207,7 +228,7 @@ describe("AI findings summary", () => {
       mark("Declined one", "LEADER", "LEADER_CLAIM_DECLINED"),
       mark("Stale one", "INSTRUCTOR", "INSTRUCTOR_CONFIRMED", true),
     ]);
-    expect(await screen.findByText("Needs a look (3 of 11)")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 3, name: "Not covered yet (3 of 11)" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "8 covered requirements, with proof" })).toBeTruthy();
     const items = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items.join("|")).not.toContain("Confirmed one");
@@ -219,14 +240,14 @@ describe("AI findings summary", () => {
 
   it("an item in the box whose older mark went stale still says 'check again'", async () => {
     renderCard([...found(2), req("Old one", "NOT_FOUND")], {}, [mark("Old one", "INSTRUCTOR", "INSTRUCTOR_CONFIRMED", true)]);
-    await screen.findByText("Needs a look (1 of 3)");
+    await screen.findByRole("region", { name: "Needs a look" });
     expect(screen.getByText("Instructions changed since your mark. Check again.")).toBeTruthy();
   });
 
   it("hides the block when the project has no check", () => {
     renderCard(null);
     expect(screen.queryByText(/^Instructions:/)).toBeNull();
-    expect(screen.queryByText(/Needs a look/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Needs a look" })).toBeNull();
   });
 
   it("health sentence shows without an AI narrative (the pill lives in the summary bar)", () => {

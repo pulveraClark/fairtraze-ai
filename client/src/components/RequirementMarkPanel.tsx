@@ -190,14 +190,17 @@ const Box = ({ children, label }: { children: React.ReactNode; label: string }) 
  * `canClaim` (leader) and `canCheck` (instructor, "I checked: covered"): both come from the shared `isMarkable`,
  * so a row the AI did not confirm; one it marked covered gets neither.
  */
-export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, canCheck, lead, compact = false }: {
+export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, canCheck, lead, compact = false, rowLayout = false }: {
   requirementKey: string; marks: KeyMarks | undefined; api: MarksApi; canClaim: boolean; canCheck: boolean;
   /** A smaller (32px) "We have this" button, for the student card where it must not read as the main action. Same action. */
   compact?: boolean;
   /** The row's "See in the instructions" / "Open file" link: it sits on the action line, before "Mark as covered". */
   lead?: React.ReactNode;
+  /** The instructor's "Mark as covered" sits on the right of a flex row next to the requirement text; anything bigger takes the full width. */
+  rowLayout?: boolean;
 }) {
   const [form, setForm] = useState(false);
+  const wide = (node: React.ReactNode) => (rowLayout ? <div className="min-w-0 basis-full">{node}</div> : node);
   const leaderMark = marks?.leader;
   const instructorMark = marks?.instructor;
   const leadLine = lead ? <div className="mt-1 flex flex-wrap items-center gap-x-2">{lead}</div> : null;
@@ -205,20 +208,20 @@ export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, can
 
   if (instructorMark) {
     const mine = instructorMark.markedByYou;
-    return withLead(
+    return wide(withLead(
       <Box label="Confirmed by the instructor">
         <p className="text-sm font-semibold text-emerald-900"><span aria-hidden="true">✓ </span>Confirmed by the instructor</p>
         <Who mark={instructorMark} />
         <NoteAndPicture mark={instructorMark} api={api} />
         {(mine || api.role === "instructor") && <button type="button" onClick={() => void api.remove(instructorMark.id)} className={BTN_PLAIN}>Undo</button>}
       </Box>
-    );
+    ));
   }
 
   if (api.role === "instructor") {
     if (leaderMark) {
       const declined = leaderMark.status === "LEADER_CLAIM_DECLINED";
-      return withLead(
+      return wide(withLead(
         <Box label="The leader says this is covered">
           <p className="text-sm font-semibold text-slate-900">{declined ? "You have not accepted this yet. The leader can send more proof." : INSTRUCTOR_WAITING}</p>
           <Who mark={leaderMark} />
@@ -230,13 +233,13 @@ export function RequirementMarkPanel({ requirementKey, marks, api, canClaim, can
             <button type="button" onClick={() => void api.remove(leaderMark.id)} className={BTN_PLAIN}>Remove this mark</button>
           </div>
         </Box>
-      );
+      ));
     }
-    if (!canCheck) return leadLine;
-    return form ? withLead(
+    if (!canCheck) return rowLayout ? (leadLine ? wide(leadLine) : null) : leadLine;
+    return form ? wide(withLead(
       <Box label="Mark as covered"><InstructorCheckForm requirementKey={requirementKey} api={api} onDone={() => setForm(false)} /></Box>
-    ) : (
-      <div className="mt-1 flex flex-wrap items-center gap-x-2">
+    )) : (
+      <div className={rowLayout ? "flex basis-full flex-wrap items-center gap-x-2 sm:ml-auto sm:basis-auto" : "mt-1 flex flex-wrap items-center gap-x-2"}>
         {lead}
         {lead && <span aria-hidden="true" className="text-slate-700">·</span>}
         <button type="button" onClick={() => setForm(true)} className={LINK_CLS}>Mark as covered</button>
