@@ -658,7 +658,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                 Instructions
               </button>
             )}
-            <EvidenceReportButton projectId={project.id} hasReport={hasReport} />
+            {isLeader && <EvidenceReportButton projectId={project.id} hasReport={hasReport} />}
             <button
               onClick={() => setShowManageModal(true)}
               aria-label={manageGroupLabel(pendingRequests)}

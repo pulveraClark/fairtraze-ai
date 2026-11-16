@@ -28,7 +28,7 @@ export function EvidenceReportPage({ projectId }: { projectId: number }) {
   const status = error instanceof ApiError ? error.status : null;
   const message =
     status === 404 ? "No analysis yet."
-    : status === 403 ? "You do not have access to this report."
+    : status === 403 ? "Only the group leader or your instructor can open this report."
     : error ? "Could not load the evidence report. Try again in a moment."
     : null;
 

@@ -75,7 +75,13 @@ describe("StudentGroupPage", () => {
 
   const flagged = () => groupFixture({ report: { ...(groupFixture().report as object), myContribution: { ...(groupFixture().report.myContribution as object), flags: ["inactive"] } } });
 
-  it("Print evidence report is enabled when the group has an analysis", () => {
+  it("a plain member sees no Print evidence report button", () => {
+    renderPage();
+    expect(screen.queryByRole("button", { name: "Print evidence report" })).toBeNull();
+  });
+
+  it("Print evidence report is enabled for the leader when the group has an analysis", () => {
+    state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null } });
     renderPage();
     const button = screen.getByRole("button", { name: "Print evidence report" }) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
@@ -83,7 +89,7 @@ describe("StudentGroupPage", () => {
   });
 
   it("Print evidence report is disabled with the visible message \"No analysis yet.\" before the first analysis", () => {
-    state.data = groupFixture({ hasReport: false, report: null });
+    state.data = groupFixture({ hasReport: false, report: null, membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null } });
     renderPage();
     const button = screen.getByRole("button", { name: "Print evidence report" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
