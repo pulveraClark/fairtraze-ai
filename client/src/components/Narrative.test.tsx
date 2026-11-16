@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AiBriefCheck, AiReviewResponse } from "../lib/aiReview";
 import type { RequirementMark } from "../lib/requirementMarks";
@@ -97,9 +97,10 @@ describe("AI findings summary", () => {
     const items = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(2);
     expect(items[0]).toContain("No README");
-    expect(items[0]).toContain("Not covered yet");
     expect(items[1]).toContain("Has charts");
-    expect(items[1]).toContain("Needs your check");
+    // One label per status, the not-covered group first.
+    const groups = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(groups).toEqual(["Not covered yet (1 of 9)", "Needs your check (1 of 9)"]);
     expect(screen.queryByText(/more$/)).toBeNull();
     // k + N = M: 7 covered, 2 to look at, 9 in all.
     expect(screen.getByRole("button", { name: "7 covered requirements, with proof" })).toBeTruthy();
@@ -115,19 +116,54 @@ describe("AI findings summary", () => {
     expect(screen.getAllByRole("listitem").map((li) => li.textContent).join("|")).toContain("Found 0");
   });
 
-  it("shows at most 2 and a '+N more' that lists the rest in place", async () => {
-    renderCard([...found(2), req("A", "NOT_FOUND"), req("B", "NOT_FOUND"), req("C", "NOT_FOUND", { unverified: true }), req("D", "PARTLY_FOUND")]);
-    expect(await screen.findAllByRole("listitem")).toHaveLength(2);
+  it("shows every open item in three groups (not covered, partly covered, needs your check), each with one 'View the instructions'", async () => {
+    renderCard([...found(2), req("A", "NOT_FOUND"), req("B", "NOT_FOUND"), req("C", "NOT_FOUND", { unverified: true }), req("D", "PARTLY_FOUND")], { instructionsHref: "/class/1/assignment/2" });
+    expect(await screen.findAllByRole("listitem")).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: /more$|Show fewer/ })).toBeNull();
+    const groups = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(groups).toEqual(["Not covered yet (2 of 6)", "Partly covered (1 of 6)", "Needs your check (1 of 6)"]);
+    for (const g of groups) {
+      expect(screen.getByRole("link", { name: `View the instructions, ${g} (new tab)` })).toBeTruthy();
+    }
     const row = screen.getByRole("button", { name: "2 covered requirements, with proof" });
     expect(row.getAttribute("aria-expanded")).toBe("false");
-    await userEvent.click(screen.getByRole("button", { name: "+2 more" }));
-    expect(screen.getAllByRole("listitem")).toHaveLength(4);
-    expect(row.getAttribute("aria-expanded")).toBe("false");
-    await userEvent.click(screen.getByRole("button", { name: "Show fewer" }));
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("the check's header keeps 'View the instructions' and an (i) on its right, even when collapsed", async () => {
+  it("order: the explanation, then 'Needs a look', then the covered requirements", async () => {
+    renderCard(mixed());
+    const needs = await screen.findByText("Needs a look (2 of 9)");
+    const narrative = screen.getByText(/Explained\./);
+    const covered = screen.getByRole("button", { name: "7 covered requirements, with proof" });
+    expect(narrative.compareDocumentPosition(needs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(needs.compareDocumentPosition(covered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("the header says how many need a look, and hides the count at 0", async () => {
+    renderCard(mixed());
+    expect(await screen.findByText("2 need a look")).toBeTruthy();
+    cleanup();
+    renderCard([...found(2), req("Only one", "NOT_FOUND")]);
+    expect(await screen.findByText("1 needs a look")).toBeTruthy();
+    cleanup();
+    renderCard(found(3));
+    await screen.findByRole("button", { name: "3 covered requirements, with proof" });
+    expect(screen.queryByText(/need(s)? a look/)).toBeNull();
+  });
+
+  it("a requirement's text opens the instructions at its own sentence and ends with a '›'", async () => {
+    const onView = vi.fn();
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ marks: [] }) })));
+    const data: AiReviewResponse = { ...base, briefCheck: mkCheck([req("Has a login page", "NOT_FOUND", { sourceQuote: "Build a login page." })]) };
+    render(<ToastProvider><Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} instructionsAssignmentId={9} instructionsHref="/c/1/a/9" review={{ data, error: null, start: vi.fn() }} /></ToastProvider>);
+    const link = await screen.findByRole("button", { name: /Has a login page/ });
+    expect(link.textContent).toContain("›");
+    expect(screen.queryByRole("button", { name: "See in the instructions" })).toBeNull();
+    expect(onView).not.toHaveBeenCalled();
+    await userEvent.click(link);
+    expect(await screen.findByRole("dialog")).toBeTruthy(); // the instructions window opens
+  });
+
+  it("the covered check's header keeps 'View the instructions' and an (i) on its right, even when collapsed", async () => {
     renderCard(mixed(), { instructionsHref: "/class/1/assignment/2" });
     await screen.findByText("Needs a look (2 of 9)");
     expect(screen.getByRole("link", { name: "View the instructions (new tab)" })).toBeTruthy();

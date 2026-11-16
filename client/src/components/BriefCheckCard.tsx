@@ -75,6 +75,25 @@ function SeeInInstructions({ quote, access, label = "See in the instructions" }:
   return null;
 }
 
+/** True when the requirement text can open the instructions at its own sentence. */
+export const textOpensInstructions = (r: Req, access: InstructionsAccess) =>
+  hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
+
+/** A requirement's text as the link to its own spot in the instructions, with a small "›". Plain text when there is nothing to open. */
+export function RequirementTextLink({ r, access }: { r: Req; access: InstructionsAccess }) {
+  const cls = `rounded text-left text-sm leading-normal text-slate-900 no-underline hover:underline focus-visible:underline [overflow-wrap:anywhere] ${FOCUS_LIGHT}`;
+  const content = (<>{r.text}<span aria-hidden="true" className="ml-1 text-blue-800">›</span></>);
+  if (!textOpensInstructions(r, access)) return <span className="text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{r.text}</span>;
+  if (access.onViewInstructions) {
+    return <button type="button" onClick={() => access.onViewInstructions!(r.sourceQuote)} className={cls}>{content}</button>;
+  }
+  return (
+    <a href={`${access.instructionsHref}${r.sourceQuote ? highlightHash(r.sourceQuote) : ""}`} target="_blank" rel="noopener noreferrer" aria-label={`${r.text} (new tab)`} className={cls}>
+      {content}
+    </a>
+  );
+}
+
 /** "Open file": opens the attached PDF or image itself in a new tab. Nothing is rendered when the role cannot open it. */
 function OpenFile({ file, access }: { file: string; access: InstructionsAccess }) {
   const [busy, setBusy] = useState(false);
@@ -254,9 +273,13 @@ function WorkedOnBy({ line, inline = false }: { line: WorkedOn; inline?: boolean
  * marks, "Mark as covered" (instructor) / "We have this" (leader) or the mark's own box. Shared by the rows of the
  * check and by the items of the "Needs a look" box, so both behave the same.
  */
-export function RequirementActions({ r, access, marks, keyMarks, compact = false }: { r: Req; access: InstructionsAccess; marks?: MarksApi; keyMarks?: KeyMarks; compact?: boolean }) {
+export function RequirementActions({ r, access, marks, keyMarks, compact = false, textIsLink = false }: {
+  r: Req; access: InstructionsAccess; marks?: MarksApi; keyMarks?: KeyMarks; compact?: boolean;
+  /** The requirement text is already the link to the instructions (see RequirementTextLink), so no separate "See in the instructions". */
+  textIsLink?: boolean;
+}) {
   const covered = kindOf(r) === "COVERED";
-  const showSee = !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
+  const showSee = !textIsLink && !covered && hasSource(r) && !fromFileOnly(r) && !!(access.onViewInstructions || access.instructionsHref);
   const showOpen = !covered && fromFileOnly(r) && !!access.openFile;
   const lead = showSee ? <SeeInInstructions quote={r.sourceQuote} access={access} />
     : showOpen ? <OpenFile file={r.sourceFile!} access={access} /> : null;
@@ -502,6 +525,18 @@ export function BriefCheckCard({
       </div>
     </Shell>
   );
+}
+
+/** One "View the instructions" link for a group header. Nothing when the instructions cannot be opened. */
+export function ViewInstructionsLink({ instructionsHref, onViewInstructions, label }: {
+  instructionsHref?: string; onViewInstructions?: (quote?: string) => void; label?: string;
+}) {
+  const name = label ? `View the instructions, ${label}` : undefined;
+  if (onViewInstructions) return <button type="button" onClick={() => onViewInstructions()} aria-label={name} className={LINK_CLS}>View the instructions</button>;
+  if (instructionsHref) {
+    return <a href={instructionsHref} target="_blank" rel="noopener noreferrer" aria-label={`${name ?? "View the instructions"} (new tab)`} className={LINK_CLS}>View the instructions</a>;
+  }
+  return null;
 }
 
 /** Right side of the check's header in the instructor's summary card: "View the instructions" and the (i) tip (opens on tap). */

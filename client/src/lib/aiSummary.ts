@@ -58,3 +58,20 @@ export function instructionsSummary(requirements: Req[], marks: RequirementMark[
 export const needsLookTitle = (n: number, total: number) => `Needs a look (${n} of ${total})`;
 /** "6 covered requirements, with proof". */
 export const coveredProofTitle = (k: number) => `${k} covered requirement${k === 1 ? "" : "s"}, with proof`;
+
+export const LOOK_GROUP_TITLE: Record<LookItem["kind"], string> = {
+  NOT_COVERED: "Not covered yet",
+  PARTLY: "Partly covered",
+  CHECK: "Needs your check",
+};
+/** Group order in the "Needs a look" box. */
+const GROUP_ORDER: LookItem["kind"][] = ["NOT_COVERED", "PARTLY", "CHECK"];
+
+/** The open items split into one group per status, in display order; empty groups are left out. */
+export function lookGroups(look: LookItem[]): Array<{ kind: LookItem["kind"]; items: LookItem[] }> {
+  return GROUP_ORDER.map((kind) => ({ kind, items: look.filter((i) => i.kind === kind) })).filter((g) => g.items.length > 0);
+}
+/** "Not covered yet (2 of 14)". */
+export const groupTitle = (kind: LookItem["kind"], n: number, total: number) => `${LOOK_GROUP_TITLE[kind]} (${n} of ${total})`;
+/** Header count: "2 need a look" ("1 needs a look"). */
+export const needsLookCountText = (n: number) => `${n} ${n === 1 ? "needs" : "need"} a look`;

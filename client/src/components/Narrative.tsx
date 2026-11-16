@@ -1,5 +1,5 @@
 import { aiFooterLine } from "../lib/aiFooter";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { TeamHealth } from "@shared/types";
 import ReactMarkdown from "react-markdown";
 import { BUTTON_SECONDARY, CARD } from "./ui/styles";
@@ -9,14 +9,13 @@ import { TIPS, helpLink } from "../lib/helpText";
 import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
 import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
 import { SparkleIcon } from "./ui/AiBadge";
-import { BriefCheckCard, CheckHeaderActions, RequirementActions, type InstructionsAccess } from "./BriefCheckCard";
+import { BriefCheckCard, CheckHeaderActions, RequirementActions, RequirementTextLink, ViewInstructionsLink, type InstructionsAccess } from "./BriefCheckCard";
 import { STALE_ROW_NOTE, marksByKey, staleMarks } from "../lib/requirementMarks";
 import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
 import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
 import { useRequirementMarks } from "../hooks/useRequirementMarks";
-import { coveredProofTitle, healthSentence, instructionsSummary, needsLookTitle } from "../lib/aiSummary";
-import { PILL, pillLabel } from "../lib/instructionsCheck";
+import { coveredProofTitle, groupTitle, healthSentence, instructionsSummary, lookGroups, needsLookCountText, needsLookTitle } from "../lib/aiSummary";
 import { RefreshFailedNote } from "./RefreshFailedNote";
 import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
 import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
@@ -72,8 +71,10 @@ function Disclosure({ title, open, onToggle, buttonRef, actions, children }: {
 type CardProps = Parameters<typeof BriefCheckCard>[0];
 
 /** Instructions line, "Needs a look" and the check row. Reads the instructor's marks once and shares them. */
-function InstructionsSection({ projectId, assignmentId, check, failedNote, ...card }: {
+function InstructionsSection({ projectId, assignmentId, check, failedNote, onNeedCount, ...card }: {
   projectId: number;
+  /** Tells the card header how many items need a look (null when the section is not shown). */
+  onNeedCount?: (n: number | null) => void;
   /** The assignment whose attachments "Open file" opens (instructor route, read when the link is clicked). */
   assignmentId?: number; check: AiBriefCheck; failedNote: React.ReactNode;
 } & Omit<CardProps, "check" | "marks" | "instructor" | "embedded" | "onOpenFile">) {
@@ -93,8 +94,12 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, ...ca
       }
     : undefined;
   const [open, setOpen] = useState(false);
-  const [showAllLook, setShowAllLook] = useState(false);
   const summary = instructionsSummary(check.requirements, marks.marks);
+  const needCount = check.nothingRead ? 0 : summary.look.length;
+  useEffect(() => {
+    onNeedCount?.(needCount);
+    return () => onNeedCount?.(null);
+  }, [needCount, onNeedCount]);
   const unavailable = !!failedNote;
   const actions = <CheckHeaderActions sources={check.sources} instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} />;
   if (check.nothingRead) {
@@ -113,44 +118,40 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, ...ca
   // An older mark whose sentence changed, on a requirement that is still in the check: the row says "check again".
   const liveKeys = new Set(check.requirements.map((r) => r.key).filter(Boolean));
   const staleKeys = new Set(staleMarks(marks.marks).filter((m) => liveKeys.has(m.requirementKey)).map((m) => m.requirementKey));
-  const shown = showAllLook ? summary.look : summary.look.slice(0, 2);
-  const more = summary.look.length - 2;
+  const groups = lookGroups(summary.look);
   return (
     <>
       {unavailable && <p className="mt-3 text-sm font-medium leading-normal text-slate-900">Instructions check unavailable. Last good result kept.</p>}
       {summary.look.length > 0 && (
         <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
           <p className="text-xs font-semibold text-amber-950">{needsLookTitle(summary.needCheck, summary.total)}</p>
-          <ul className="mt-1.5 space-y-2">
-            {shown.map((i) => (
-              <li key={i.req.key ?? i.text} className="min-w-0">
-                <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${PILL[i.kind].cls}`}>
-                    <span aria-hidden="true">{PILL[i.kind].icon}</span>
-                    {pillLabel(i.kind, true)}
-                  </span>
-                  <span className="min-w-0 flex-1 basis-48 text-sm leading-normal text-slate-900 [overflow-wrap:anywhere]">{i.text}</span>
-                </div>
-                {!i.req.sourceQuote && i.req.sourceFile && (
-                  <p className="mt-1 text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">From attached file: {i.req.sourceFile}</p>
-                )}
-                {i.req.key && staleKeys.has(i.req.key) && (
-                  <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>
-                )}
-                <RequirementActions r={i.req} access={access} marks={marks} keyMarks={i.req.key ? keyMarks.get(i.req.key) : undefined} />
-              </li>
-            ))}
-          </ul>
-          {more > 0 && (
-            <button
-              type="button"
-              aria-expanded={showAllLook}
-              onClick={() => setShowAllLook((v) => !v)}
-              className={`mt-1 inline-flex min-h-10 items-center text-sm font-medium text-blue-800 underline underline-offset-2 ${FOCUS_LIGHT}`}
-            >
-              {showAllLook ? "Show fewer" : `+${more} more`}
-            </button>
-          )}
+          <div className="mt-2 space-y-3">
+            {groups.map((g) => {
+              const title = groupTitle(g.kind, g.items.length, summary.total);
+              return (
+                <section key={g.kind} aria-label={title}>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0">
+                    <h3 className="text-xs font-semibold text-amber-950">{title}</h3>
+                    <ViewInstructionsLink instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} label={title} />
+                  </div>
+                  <ul className="space-y-2">
+                    {g.items.map((i) => (
+                      <li key={i.req.key ?? i.text} className="min-w-0">
+                        <div className="min-w-0"><RequirementTextLink r={i.req} access={access} /></div>
+                        {!i.req.sourceQuote && i.req.sourceFile && (
+                          <p className="mt-1 text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">From attached file: {i.req.sourceFile}</p>
+                        )}
+                        {i.req.key && staleKeys.has(i.req.key) && (
+                          <p className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>
+                        )}
+                        <RequirementActions r={i.req} access={access} marks={marks} keyMarks={i.req.key ? keyMarks.get(i.req.key) : undefined} textIsLink />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         </div>
       )}
       <div className="mt-3 space-y-2">
@@ -168,6 +169,7 @@ function InstructionsSection({ projectId, assignmentId, check, failedNote, ...ca
 export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref, instructionsAssignmentId, teamHealth }: Props) {
   // The sentence to mark in the instructions window; null while it is closed.
   const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
+  const [needCount, setNeedCount] = useState<number | null>(null);
   const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
   const { generating, error, warning, generate, busy, slow, upToDate } = generator ?? own;
   const anyError = error ?? review?.error ?? null;
@@ -190,6 +192,9 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
         <h2 id="narrative-title" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold text-slate-900">
           <span className="text-indigo-800"><SparkleIcon /></span>
           AI findings
+          {needCount !== null && needCount > 0 && (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-950">{needsLookCountText(needCount)}</span>
+          )}
         </h2>
         <p className="flex min-w-0 flex-wrap items-center gap-1 text-sm leading-normal text-slate-700">
           Scores computed by formula · explained by AI
@@ -267,28 +272,6 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
         </div>
       )}
 
-      {/* Instructions line, Needs a look and the check row */}
-      {briefCheck && !generating && (
-        <InstructionsSection
-          projectId={projectId}
-          assignmentId={instructionsAssignmentId}
-          check={briefCheck}
-          failedNote={
-            review?.data?.refreshFailed?.brief ? (
-              <RefreshFailedNote
-                note={review.data.refreshFailed.brief}
-                onTryAgain={review.data.canGenerate ? () => void generate(!!narrative) : undefined}
-                busy={busy && !slow}
-              />
-            ) : null
-          }
-          repoUrl={repoUrl}
-          sourceType={sourceType}
-          instructionsHref={instructionsHref}
-          onViewInstructions={instructionsAssignmentId ? (quote) => setViewing({ quote }) : undefined}
-        />
-      )}
-
       {/* The AI explanation, inline. The note about changed results sits above it. */}
       {narrative && !generating && (
         <div className="mt-3 space-y-3">
@@ -307,6 +290,29 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
           {aiFooterLine(when)}
         </p>
       )}
+      {/* Needs a look and the covered check row, after the explanation */}
+      {briefCheck && !generating && (
+        <InstructionsSection
+          projectId={projectId}
+          assignmentId={instructionsAssignmentId}
+          check={briefCheck}
+          failedNote={
+            review?.data?.refreshFailed?.brief ? (
+              <RefreshFailedNote
+                note={review.data.refreshFailed.brief}
+                onTryAgain={review.data.canGenerate ? () => void generate(!!narrative) : undefined}
+                busy={busy && !slow}
+              />
+            ) : null
+          }
+          repoUrl={repoUrl}
+          sourceType={sourceType}
+          instructionsHref={instructionsHref}
+          onNeedCount={setNeedCount}
+          onViewInstructions={instructionsAssignmentId ? (quote) => setViewing({ quote }) : undefined}
+        />
+      )}
+
       {viewing && instructionsAssignmentId && (
         <InstructorInstructionsModal
           assignmentId={instructionsAssignmentId}
