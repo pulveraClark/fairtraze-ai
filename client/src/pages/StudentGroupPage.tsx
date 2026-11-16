@@ -53,7 +53,7 @@ import { deriveSetupProgress, setupCardVisible, setupGateVisible } from "../lib/
 import { nextStepText } from "../lib/nextStep";
 import { LeaderTeamCard, type LeaderTeamMember } from "../components/LeaderTeamCard";
 import { StudentTeamCheck, hasStudentCheck } from "../components/StudentTeamCheck";
-import { CollapsedWorkSummary } from "../components/report/CollapsedWorkSummary";
+import { OpenWorkSummary } from "../components/report/OpenWorkSummary";
 import { summaryFor } from "../lib/aiReview";
 import { AiBadge } from "../components/ui/AiBadge";
 import { RefreshFailedNote } from "../components/RefreshFailedNote";
@@ -934,6 +934,9 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                           {briefCheck && ai.data?.enabled && ai.data.refreshFailed?.brief && (
                             <RefreshFailedNote note={ai.data.refreshFailed.brief} />
                           )}
+                          {mine && ai.data && (
+                            <OpenWorkSummary label="What you worked on" summary={mine} data={ai.data} sourceType={sourceType} />
+                          )}
                           {showCheck && briefCheck && (
                             <StudentTeamCheck
                               projectId={projectId}
@@ -944,9 +947,6 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
                                 ? (quote) => { setBriefHighlight(quote ?? null); setShowBrief(true); }
                                 : undefined}
                             />
-                          )}
-                          {mine && ai.data && (
-                            <CollapsedWorkSummary label="What you worked on" summary={mine} data={ai.data} sourceType={sourceType} />
                           )}
                           {(showNarrative || showCheck || !!mine) && <p className="text-xs leading-normal text-slate-700">{AI_CARD_NOTE}</p>}
                         </>

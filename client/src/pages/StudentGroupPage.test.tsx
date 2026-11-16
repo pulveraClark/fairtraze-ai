@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
@@ -536,8 +536,8 @@ describe("StudentGroupPage: member window and team overview", () => {
     state.data = groupFixture();
     renderPage();
     await userEvent.click(screen.getByRole("button", { name: "See your details" }));
-    expect(await screen.findByRole("dialog", { name: /Ana Cruz/ })).toBeTruthy();
-    expect(await screen.findByText("Added the login page.")).toBeTruthy();
+    const memberDialog = await screen.findByRole("dialog", { name: /Ana Cruz/ });
+    expect(await within(memberDialog).findByText("Added the login page.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Next member" })).toBeNull();
     expect(screen.queryByText("Wrote the User Guide.")).toBeNull();
   });
@@ -595,17 +595,17 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect(screen.queryByText("Added the login page.")).toBeNull(); // the leader's own row stays closed
   });
 
-  it("plain member: own summary sits closed in the Team overview, and no teammate's summary exists on the page", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...aiBody, summaries: [aiBody.summaries[0]] }) }));
+  it("plain member: own summary is always open in the Team overview, above the instructions check, and no teammate's summary exists", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...withCheck, summaries: [aiBody.summaries[0]] }) }));
     state.data = groupFixture();
     renderPage();
     const card = (await screen.findByText("Team overview")).closest("section")!;
-    const mine = await screen.findByRole("button", { name: "What you worked on" });
-    expect(card.contains(mine)).toBe(true);
-    expect(mine).toHaveAttribute("aria-expanded", "false");
-    expect(card.textContent).not.toContain("Added the login page.");
-    await userEvent.click(mine);
-    expect(card.textContent).toContain("Added the login page.");
+    const heading = await screen.findByRole("heading", { name: "What you worked on" });
+    expect(card.contains(heading)).toBe(true);
+    expect(screen.queryByRole("button", { name: "What you worked on" })).toBeNull(); // no toggle
+    expect(card.textContent).toContain("Added the login page."); // open without a click
+    const check = await screen.findByRole("button", { name: "Project instructions: 1 of 2 covered" });
+    expect(heading.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText(/Ben Lim|User Guide/)).toBeNull();
     expect(screen.queryByRole("button", { name: /What Ben/ })).toBeNull();
   });
@@ -639,7 +639,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     const overview = (await screen.findByText("Team overview")).closest("section")!;
     await userEvent.click(screen.getByRole("button", { name: "See your details" }));
     const dialog = await screen.findByRole("dialog", { name: /Ana Cruz/ });
-    await screen.findByText("Added the login page.");
+    await within(dialog).findByText("Added the login page.");
     const MEASURE = /gini|inequality|coefficient|concentration|\bband\b|team index|0\.3\d\d/i;
     expect(overview.textContent).not.toMatch(MEASURE);
     expect(dialog.textContent).not.toMatch(MEASURE);
