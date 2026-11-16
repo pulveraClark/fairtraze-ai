@@ -409,9 +409,9 @@ export function HelpPage() {
             members see only their own report on screen.
           </p>
           <p>
-            Any member can print one <strong>Contribution Evidence Report</strong> for the group from the group page
+            The group leader can print one <strong>Contribution Evidence Report</strong> for the group from the group page
             ("Print evidence report"). It is one page with every member's recorded share and flags and a Report ID your
-            instructor can use to check it. It never shows the team's health rating. It is evidence, not a grade, and your
+            instructor can use to check it. Other members do not see this button. It never shows the team's health rating. It is evidence, not a grade, and your
             instructor decides.
           </p>
         </Section>

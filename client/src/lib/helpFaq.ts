@@ -34,5 +34,5 @@ export const HELP_FAQ: HelpFaqItem[] = [
   { id: "faq-visibility", q: "Who can see my report and my writing?",
     a: "You and your instructor see your report. A leader also sees team shares. Everyone in the group can see the shared document, including who wrote which part, and its comments." },
   { id: "faq-evidence-report", q: "Can I print a report to give my instructor?",
-    a: "Yes. Any member can choose Print evidence report on the group page. It is one page with every member's recorded share and flags, and a Report ID your instructor can check. It is evidence, not a grade, and never shows the team's health rating." },
+    a: "Your group leader can, from Print evidence report on the group page. It is one page with every member's recorded share and flags and a Report ID your instructor can check. Other members do not see this button. It is evidence, not a grade." },
 ];
