@@ -3,7 +3,8 @@ import { taskCountLabel } from "../../lib/tasks/countLabel";
 import type { ReactNode } from "react";
 import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared/types";
 import { Modal, StatusPill, BUTTON_SECONDARY, FOCUS_LIGHT } from "../ui";
-import { PILL_TONES } from "../ui/StatusPill";
+import { PILL_TONES, FLAG_LABEL } from "../ui/StatusPill";
+import { flagStudentWordingTip } from "../../lib/studentDisplay";
 import { useAuthOptional } from "../../context/AuthContext";
 import { DisclosureSection, HoverTip, Note, Row, ShareBar } from "./DrawerParts";
 import {
@@ -250,6 +251,7 @@ function MemberSidebar({
                 <li key={f}>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusPill kind="flag" value={f} muted={flagsMuted} />
+                    {flagStudentWordingTip(f) && <HoverTip label={`About the student wording of ${FLAG_LABEL[f as keyof typeof FLAG_LABEL] ?? f}`}>{flagStudentWordingTip(f)}</HoverTip>}
                     {outcome === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
                     {outcome === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
                   </div>

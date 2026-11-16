@@ -36,6 +36,14 @@ describe("HelpPage", () => {
     expect(screen.getByRole("button", { name: "For instructors" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("instructor view explains the student wording of the free-rider flag; the student view does not mention it", () => {
+    const a = renderAs("INSTRUCTOR");
+    expect(screen.getByText("Students see the free-rider flag as 'Low contribution'. The rule and the numbers are the same.")).toBeInTheDocument();
+    a.unmount();
+    renderAs("STUDENT");
+    expect(screen.queryByText(/Students see the free-rider flag/)).toBeNull();
+  });
+
   it("signed in: drops its own Back button and uses the shared footer without a self-link", () => {
     renderAs("STUDENT");
     expect(screen.queryByRole("button", { name: "Back" })).toBeNull();

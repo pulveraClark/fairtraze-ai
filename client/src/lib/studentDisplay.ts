@@ -43,3 +43,17 @@ export function earlyDataFlagsNote(level: "low" | "medium" | "high" | "final" | 
 
 /** The one note under the AI parts of the leader's Team overview card. Replaces the five earlier disclaimers. */
 export const AI_CARD_NOTE = "AI findings can be wrong and are not a grade.";
+
+/**
+ * Instructor-only tooltip for a flag whose student wording differs ("free-rider" and "inactive" read as
+ * "Low contribution" to students). The wording comes from `studentFlagLabel`, never retyped. Null when students see the same word.
+ */
+export function flagStudentWordingTip(flag: string): string | null {
+  const label = studentFlagLabel(flag);
+  if (label === flag) return null;
+  return `Students see this flag as '${label}'. Same rule, softer wording for students.`;
+}
+
+/** Help page sentence for instructors, built from the same mapping. */
+export const instructorFlagWordingHelp = (): string =>
+  `Students see the free-rider flag as '${studentFlagLabel("free-rider")}'. The rule and the numbers are the same.`;

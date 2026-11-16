@@ -27,6 +27,29 @@ const doc: DocumentScoredMember = {
 
 const baseProps = { onClose: () => {}, source: "github" as const, thresholds, deadlineBasis: "activity-span" as const, memberCount: 3 };
 
+describe("MemberDrawer flag wording tip", () => {
+  it("free-rider and inactive pills get a tip that opens on keyboard focus and is described for screen readers; other flags get none", async () => {
+    const user = userEvent.setup();
+    render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["free-rider", "overload"] }} />);
+    const tipButtons = screen.getAllByRole("button", { name: /About the student wording/ });
+    expect(tipButtons).toHaveLength(1); // overload has none
+    await user.tab(); // reach it by keyboard
+    tipButtons[0].focus();
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent("Students see this flag as 'Low contribution'. Same rule, softer wording for students.");
+    expect(tipButtons[0]).toHaveAttribute("aria-describedby", tip.id);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("opens on hover too", async () => {
+    const user = userEvent.setup();
+    render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["inactive"] }} />);
+    await user.hover(screen.getByRole("button", { name: /About the student wording/ }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Low contribution");
+  });
+});
+
 describe("MemberDrawer", () => {
   beforeEach(() => { try { window.localStorage.clear(); } catch { /* ignore */ } });
 

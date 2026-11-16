@@ -3,6 +3,7 @@ import { describeNoFlags } from "../../lib/flagRules";
 import { ListRow, StatusPill, CARD } from "../ui";
 import { BUTTON_SECONDARY } from "../ui/styles";
 import { PILL_TONES } from "../ui/StatusPill";
+import { flagStudentWordingTip } from "../../lib/studentDisplay";
 import type { AiReportGenerator } from "../../hooks/useGenerateAiReport";
 import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
 import { Avatar } from "../Avatar";
@@ -152,7 +153,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                       <span className="text-sm text-slate-700 underline decoration-dotted underline-offset-2" title={noFlagsReason ?? undefined}>No flags</span>
                     ) : (
                       m.flags.map((f) => (
-                        <span key={f} className="inline-flex flex-wrap items-center gap-1">
+                        <span key={f} title={flagStudentWordingTip(f) ?? undefined} className="inline-flex flex-wrap items-center gap-1">
                           <StatusPill kind="flag" value={f} muted={mutedFlags} />
                           {outcomes?.get(f) === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
                           {outcomes?.get(f) === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
