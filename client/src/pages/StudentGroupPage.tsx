@@ -32,6 +32,7 @@ import { useDocHeadingFocus } from "../hooks/useDocHeadingFocus";
 import { DocSectionProvider, useDocSectionNav } from "../hooks/useDocSectionLink";
 import { FlagTag } from "../components/FlagTag";
 import { BriefModal } from "../components/BriefCard";
+import { RoleModal, canSuggestRole } from "../components/RoleModal";
 import { InfoTip } from "../components/ui/InfoTip";
 import { TIPS, helpLink } from "../lib/helpText";
 import { studentHealthLabel, evennessLine, earlyDataFlagsNote, AI_CARD_NOTE } from "../lib/studentDisplay";
@@ -326,6 +327,8 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
   const suggestAction = useAction();
   const suggestBusy = suggestAction.busy;
   const [suggestErr, setSuggestErr]       = useState("");
+  const [roleOpen, setRoleOpen]           = useState(false);
+  const roleButtonRef = useRef<HTMLButtonElement | null>(null);
   // Seed the draft once per group so a background refetch never overwrites what the user is picking.
   const draftSeededFor = useRef<number | null>(null);
   useEffect(() => {
@@ -640,6 +643,41 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               {editingGroupName && groupNameErr && (
                 <p className="text-xs text-red-600 mt-1">{groupNameErr}</p>
               )}
+              <p className="text-sm text-slate-600 mt-0.5" data-testid="your-role-line">
+                Your role:{" "}
+                <span className="font-medium text-slate-800">
+                  {myRoles.length === 0
+                    ? "No role assigned yet"
+                    : myRoles.map((r) => FUNCTIONAL_ROLE_META[r]?.label ?? r).join(" + ")}
+                </span>
+                {mySuggestion?.status === "PENDING" && (
+                  <span className="text-slate-600">
+                    {" "}(suggested: {mySuggestion.suggestedRoles.map((r) => FUNCTIONAL_ROLE_META[r]?.label ?? r).join(" + ")}, waiting for your leader)
+                  </span>
+                )}
+                {!canSuggestRole(membership.role, sourceType, mySuggestion) && (
+                  <span className="ml-1 inline-flex align-middle">
+                    <InfoTip label="About roles" helpHref={helpLink("roles")}>
+                      {membership.role === "LEADER" ? TIPS.rolesLeader : TIPS.roles}
+                    </InfoTip>
+                  </span>
+                )}
+                {canSuggestRole(membership.role, sourceType, mySuggestion) && (
+                  <>
+                    {" · "}
+                    <button
+                      ref={roleButtonRef}
+                      type="button"
+                      onClick={() => setRoleOpen(true)}
+                      aria-haspopup="dialog"
+                      aria-label="Change your role"
+                      className="rounded text-indigo-700 font-medium hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    >
+                      Change
+                    </button>
+                  </>
+                )}
+              </p>
               <p className="text-sm text-slate-600 mt-0.5">
                 {classSection.subjectName}
                 {assignment.deadline && (
@@ -759,121 +797,20 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
         {effectiveTab === "report" && (
           <div className="space-y-6">
 
-            {/* Your Role */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Your Role</h3>
-
-              {/* Current applied role (always shown, read-only) */}
-              <div className="mb-3">
-                <div className="text-xs text-slate-600 mb-1.5 flex items-center gap-1">
-                  {membership.role === "LEADER" ? "Your assigned role" : "Role assigned by your leader"}
-                  <InfoTip label="About roles" helpHref={helpLink("roles")}>
-                    {membership.role === "LEADER" ? TIPS.rolesLeader : TIPS.roles}
-                  </InfoTip>
-                </div>
-                <div className="flex items-center flex-wrap gap-2">
-                  {myRoles.length === 0 ? (
-                    <span className="text-xs text-slate-600 italic">No role assigned yet</span>
-                  ) : (
-                    myRoles.map((role) => {
-                      const meta = FUNCTIONAL_ROLE_META[role];
-                      if (!meta) return null;
-                      return (
-                        <span key={role} className={`min-h-10 text-xs px-2.5 py-1 rounded-lg border font-medium ${meta.activeClass}`}>
-                          ✓ {meta.label}
-                        </span>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Member: suggestion flow — only meaningful when the assignment has more than one valid role to choose from */}
-              {membership.role === "MEMBER" && (sourceType === "COMBINED" || mySuggestion?.status === "PENDING") && (
-                <div className="border-t border-slate-100 mt-3 pt-3">
-                  {suggestErr && <p className="text-xs text-red-600 mb-2">{suggestErr}</p>}
-
-                  {mySuggestion?.status === "PENDING" ? (
-                    /* Pending — awaiting leader action */
-                    <div className="flex items-start gap-2">
-                      <span className="shrink-0 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-0.5">
-                        PENDING
-                      </span>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        Your suggestion (
-                        <span className="font-medium">
-                          {mySuggestion.suggestedRoles
-                            .map((r) => FUNCTIONAL_ROLE_META[r]?.label ?? r)
-                            .join(" + ")}
-                        </span>
-                        ) is awaiting your leader's approval.
-                      </p>
-                    </div>
-                  ) : (
-                    /* Suggest / re-suggest flow */
-                    <>
-                      {mySuggestion?.status === "ACCEPTED" && (
-                        <p className="text-xs text-emerald-600 mb-2">✓ Your last suggestion was accepted.</p>
-                      )}
-                      {mySuggestion?.status === "DECLINED" && (
-                        <p className="text-xs text-red-600 mb-2">Your last suggestion was declined. You can suggest again.</p>
-                      )}
-
-                      <p className="text-xs text-slate-500 mb-2">
-                        Suggest a role to your leader for approval:
-                      </p>
-
-                      {/* Toggle chips — local draft, not applied until submitted */}
-                      <div className="flex items-center flex-wrap gap-2 mb-3">
-                        {(Object.keys(FUNCTIONAL_ROLE_META) as string[])
-                          .filter((role) => {
-                            if (sourceType === "GITHUB") return role === "DEVELOPER";
-                            if (sourceType === "EDITOR") return role === "DOCUMENTATION";
-                            return true;
-                          })
-                          .map((role) => {
-                            const selected = suggestDraft.includes(role);
-                            const meta     = FUNCTIONAL_ROLE_META[role]!;
-                            const next     = selected
-                              ? suggestDraft.filter((r) => r !== role)
-                              : [...suggestDraft, role];
-                            return (
-                              <button
-                                key={role}
-                                disabled={suggestBusy}
-                                onClick={() => setSuggestDraft(next)}
-                                className={`min-h-10 text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors disabled:opacity-50 ${
-                                  selected ? meta.activeClass : meta.inactiveClass
-                                }`}
-                              >
-                                {selected ? `✓ ${meta.label}` : meta.label}
-                              </button>
-                            );
-                          })}
-                      </div>
-
-                      <button
-                        onClick={() => void handleSuggestRole()}
-                        disabled={
-                          suggestBusy ||
-                          suggestDraft.length === 0 ||
-                          JSON.stringify([...suggestDraft].sort()) === JSON.stringify([...myRoles].sort())
-                        }
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {suggestBusy ? (
-                          <>
-                            <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-white animate-spin" />
-                            Submitting…
-                          </>
-                        ) : "Submit suggestion →"}
-                      </button>
-
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            <RoleModal
+              open={roleOpen}
+              onClose={() => setRoleOpen(false)}
+              restoreFocusTo={roleButtonRef.current}
+              roleMeta={FUNCTIONAL_ROLE_META}
+              sourceType={sourceType}
+              myRoles={myRoles}
+              suggestion={mySuggestion}
+              draft={suggestDraft}
+              onDraftChange={setSuggestDraft}
+              busy={suggestBusy}
+              error={suggestErr}
+              onSubmit={() => void handleSuggestRole()}
+            />
 
             {/* Not analyzed yet */}
             {!hasReport && (
