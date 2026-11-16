@@ -102,12 +102,12 @@ describe("EvidenceSheet", () => {
     expect(within(rows[1]).getByText("None").style.paddingRight).toBe("0.14in");
   });
 
-  it("shows real flag names or None, and Combined in bold", () => {
+  it("shows student-safe flag labels or None, and Combined in bold", () => {
     render(<EvidenceSheet dto={dto()} />);
     const rows = within(screen.getAllByRole("table")[2]).getAllByRole("row"); // [0] is the header; tables 0 and 1 are the info columns
     expect(within(rows[1]).getByText("None")).toBeTruthy();
     expect(within(rows[2]).getByText("overload")).toBeTruthy();
-    expect(within(rows[3]).getByText("free-rider, deadline-driven")).toBeTruthy();
+    expect(within(rows[3]).getByText("Low contribution, deadline-driven")).toBeTruthy();
     expect(within(rows[1]).getByText("35.0%").style.fontWeight).toBe("700");
   });
 
@@ -188,6 +188,12 @@ describe("EvidenceSheet", () => {
     const lastCell = within(rows[rows.length - 1]).getByText("Cai Tan");
     expect(lastCell.style.borderBottom).toContain("1.5px");
     expect(lastCell.style.borderLeft).toBe("");
+  });
+
+  it("the leader/student sheet never prints the word free-rider or inactive", () => {
+    const { container } = render(<EvidenceSheet dto={dto({ members: [{ name: "Z", githubPct: 1, docsPct: 1, combinedPct: 1, flags: ["inactive", "free-rider"] }] })} />);
+    expect(container.textContent).not.toMatch(/free-rider|inactive/i);
+    expect(screen.getAllByText("Low contribution").length).toBe(1);
   });
 
   it("states the contribution status from the flags only", () => {

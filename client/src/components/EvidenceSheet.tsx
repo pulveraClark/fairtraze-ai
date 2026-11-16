@@ -3,6 +3,7 @@ import { EVIDENCE_UNIVERSITY_NAME, type EvidenceReportDto } from "@shared/eviden
 import { contributionStatus } from "@shared/contributionStatus";
 import { flagsText, manilaDate, pctText, repoShort, sourcesText, tableNote } from "../lib/evidenceText";
 import { giniBands } from "../lib/giniBands";
+import { studentFlagLabels } from "../lib/studentDisplay";
 import { pageLabel, sheetDensity, type BulkPosition } from "../lib/evidenceLayout";
 import type { TeamHealth } from "@shared/types";
 
@@ -36,7 +37,7 @@ function InfoColumn({ rows }: { rows: Array<{ label: string; value: ReactNode; b
   );
 }
 
-/** Only the instructor copy passes this. The student sheet must never receive it. */
+/** Only the instructor copy passes this. The student/leader sheet must never receive it, and it is the one that shows student-safe flag labels ("Low contribution"). */
 export interface InstructorCopy {
   gini: number;
   teamHealth: TeamHealth;
@@ -136,7 +137,7 @@ export function EvidenceSheet({ dto, instructor }: { dto: EvidenceReportDto; ins
                 {showGithub && <td style={{ ...numCell, ...edge }}>{m.githubPct === null ? "—" : pctText(m.githubPct)}</td>}
                 {showDocs && <td style={{ ...numCell, ...edge }}>{m.docsPct === null ? "—" : pctText(m.docsPct)}</td>}
                 <td style={{ ...numCell, ...edge, fontWeight: 700 }}>{pctText(m.combinedPct)}</td>
-                <td style={{ ...cell, ...edge }}>{flagsText(m.flags)}</td>
+                <td style={{ ...cell, ...edge }}>{flagsText(instructor ? m.flags : studentFlagLabels(m.flags))}</td>
               </tr>
             );
           })}
