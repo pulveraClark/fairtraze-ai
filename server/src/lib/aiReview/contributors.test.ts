@@ -100,17 +100,21 @@ describe("shapeBriefForViewer contributors", () => {
   const current = { brief: "Build a planner.", latestReportId: 1 };
   const who = lookup({ headingAuthors: () => [1] });
 
-  it("the instructor and the leader get contributors", () => {
-    for (const viewer of ["instructor", "leader"] as const) {
-      const view = shapeBriefForViewer(row, viewer, 1, current, null, who)!;
-      expect(view.requirements.map((r) => r.contributors)).toEqual([["Aldren B."], ["Zed Z."], []]);
-    }
+  it("the leader gets contributors", () => {
+    const view = shapeBriefForViewer(row, "leader", 1, current, null, who)!;
+    expect(view.requirements.map((r) => r.contributors)).toEqual([["Aldren B."], ["Zed Z."], []]);
   });
 
-  it("a plain member gets no brief check and so no contributor data", () => {
+  it("the instructor gets no contributors", () => {
+    const view = shapeBriefForViewer(row, "instructor", 1, current, null, who)!;
+    expect(view.requirements.every((r) => r.contributors === undefined)).toBe(true);
+  });
+
+  it("a plain member gets no contributor data", () => {
     const view = shapeBriefForViewer(row, "member", 1, current, null, who);
-    expect(view).toBeNull();
+    expect(view).not.toBeNull();
     expect(JSON.stringify(view)).not.toContain("Aldren");
+    expect(JSON.stringify(view)).not.toContain("contributors");
   });
 
   it("without a lookup there is no contributors field at all", () => {
