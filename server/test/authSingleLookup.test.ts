@@ -121,6 +121,6 @@ describe("auth middleware: Prisma operations per request (q= in the timing log)"
   it("a student GET /api/student/classes (one lookup in requireAuth, none extra)", async () => {
     const { user } = await createUser({ systemRole: "STUDENT" });
     const q = await opsFor(() => request(app).get("/api/student/classes").set("Authorization", authHeaderFor(user)));
-    expect(q).toBe(2); // requireAuth lookup + the route query
+    expect(q).toBe(3); // requireAuth lookup + class tree + latest-reports query
   });
 });
