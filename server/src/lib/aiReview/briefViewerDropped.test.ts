@@ -17,7 +17,7 @@ describe("droppedCount is for the instructor only", () => {
 
   it("the leader's response has no droppedCount anywhere", () => {
     const view = shapeBriefForViewer(row(content), "leader", 1, current)!;
-    expect(view.sources).toMatchObject({ writtenBrief: true, filesRead: 0 });
+    expect(view.sources).toBeUndefined();
     expect(JSON.stringify(view)).not.toContain("droppedCount");
   });
 
@@ -28,7 +28,10 @@ describe("droppedCount is for the instructor only", () => {
     expect(JSON.stringify(view)).not.toContain("droppedCount");
   });
 
-  it("a member gets no brief check at all", () => {
-    expect(shapeBriefForViewer(row(content), "member", 1, current)).toBeNull();
+  it("a member gets the check without sources or droppedCount", () => {
+    const view = shapeBriefForViewer(row(content), "member", 1, current);
+    expect(view).not.toBeNull();
+    expect(view!.sources).toBeUndefined();
+    expect(JSON.stringify(view)).not.toContain("droppedCount");
   });
 });
