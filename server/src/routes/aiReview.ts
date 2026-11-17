@@ -107,7 +107,7 @@ export interface AiBriefView {
     sourceQuote?: string;
     sourceFile?: string;
     sourcePage?: number;
-    // Instructor and leader only: "First L." names of the members who wrote the proof shown, sorted by name.
+    // Group leader only: "First L." names of the members who wrote the proof shown, sorted by name.
     contributors?: string[];
   }>;
   // True when no requirement was found (all Not found). The page shows one calm line.
@@ -382,7 +382,7 @@ aiReviewRouter.get("/api/groups/:id/ai-review", requireAuth, async (req, res) =>
         : [],
     ]);
     const attachments = assignment ? attachmentMap?.get(assignment.id) ?? [] : [];
-    // Stage 3. "Worked on by" names (instructor and leader only; a plain member gets no author information at all)
+    // Stage 3. "Worked on by" names (leader only; a plain member gets no author information at all)
     // and the date of the report the review was based on.
     const [who, basedOnRow] = await Promise.all([
       viewer === "member" ? undefined : contributorLookup(project, (briefRow?.content as AiBriefContent | null)?.requirements ?? []),
