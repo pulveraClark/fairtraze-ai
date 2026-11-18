@@ -30,9 +30,12 @@ describe("StatusPill", () => {
         <StatusPill kind="status" label="Open dispute" tone="violet" />
       </>
     );
-    for (const t of ["Healthy", "Moderate risk", "High risk", "Inactive", "Free-rider", "Overload", "Deadline-driven", "Open dispute"]) {
+    for (const t of ["Healthy", "Moderate risk", "High risk", "Overload", "Deadline-driven", "Open dispute"]) {
       expect(screen.getByText(t)).toBeInTheDocument();
     }
+    // free-rider and inactive share one name, so two pills read it
+    expect(screen.getAllByText("Low contribution")).toHaveLength(2);
+    expect(screen.queryByText(/free-rider|inactive/i)).toBeNull();
     // Icons are decorative; the text is the signal.
     container.querySelectorAll("svg").forEach((s) => expect(s).toHaveAttribute("aria-hidden", "true"));
   });

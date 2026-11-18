@@ -1,10 +1,11 @@
 // Display wording for student-facing screens. Display mapping only. The team-health label and the Gini
 // value are never sent to a student: the server sends one plain evenness word (even / a-bit-uneven /
 // very-uneven) and this file turns it into a sentence. Instructors keep the original terms.
+import { isLowContributionFlag, LOW_CONTRIBUTION_LABEL } from "./flagLabel";
 
-/** "free-rider" and "inactive" read as "Low contribution" to students; other flags keep their names. */
+/** "free-rider" and "inactive" read as "Low contribution" (the word every role sees); other flags keep their names here. */
 export function studentFlagLabel(flag: string): string {
-  return flag === "free-rider" || flag === "inactive" ? "Low contribution" : flag;
+  return isLowContributionFlag(flag) ? LOW_CONTRIBUTION_LABEL : flag;
 }
 
 /** Student-facing labels for a list of flags, without repeats (both of the two above map to one label). */

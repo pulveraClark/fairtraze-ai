@@ -1,6 +1,6 @@
 import type { Flag } from "@shared/types";
 import { studentFlagLabel } from "../lib/studentDisplay";
-import { FLAG_TONE, toneClasses } from "./ui/StatusPill";
+import { FLAG_LABEL, FLAG_TONE, toneClasses } from "./ui/StatusPill";
 
 // Instructor colours come from the same table StatusPill uses (FLAG_TONE), so a flag looks the same in the
 // list rows, the member window, tables and the disputes page. Stronger visual weight (bold border, icon)
@@ -58,7 +58,7 @@ export function FlagTag({ flag, className = "", view = "instructor", muted = fal
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border-2 ${style} ${className}`}
     >
       <FlagIcon flag={flag} />
-      {view === "instructor" ? flag : studentFlagLabel(flag)}
+      {view === "instructor" ? FLAG_LABEL[flag] ?? flag : studentFlagLabel(flag)}
     </span>
   );
 }

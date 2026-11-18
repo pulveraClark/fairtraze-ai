@@ -1,4 +1,5 @@
 import type { Flag, TeamHealth } from "@shared/types";
+import { flagLabel } from "../../lib/flagLabel";
 
 // Each tone is a foreground/background pair with a contrast ratio of at least 4.5:1 (checked in
 // StatusPill.test.tsx from the hex values below, which are the palette values behind the class
@@ -42,13 +43,13 @@ export const HEALTH_LABEL: Record<TeamHealth, string> = {
 export const HEALTH_TONE: Record<TeamHealth, PillTone> = { Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" };
 
 export const FLAG_LABEL: Record<Flag, string> = {
-  inactive: "Inactive",
-  "free-rider": "Free-rider",
-  overload: "Overload",
-  "deadline-driven": "Deadline-driven",
+  inactive: flagLabel("inactive"),
+  "free-rider": flagLabel("free-rider"),
+  overload: flagLabel("overload"),
+  "deadline-driven": flagLabel("deadline-driven"),
 };
-// One colour per flag for every instructor surface (StatusPill and FlagTag both read this): Overload amber, Free-rider and
-// Inactive red, Deadline-driven yellow. Meaning is always also carried by the label text and an icon.
+// One colour per flag for every instructor surface (StatusPill and FlagTag both read this): Overload amber, Low contribution
+// (free-rider and inactive) red, Deadline-driven yellow. Meaning is always also carried by the label text and an icon.
 export const FLAG_TONE: Record<Flag, PillTone> = { inactive: "red", "free-rider": "red", overload: "amber", "deadline-driven": "yellow" };
 
 type Props =

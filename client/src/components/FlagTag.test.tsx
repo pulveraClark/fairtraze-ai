@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { Flag } from "@shared/types";
 import { FlagTag } from "./FlagTag";
+import { flagLabel } from "../lib/flagLabel";
 import { FLAG_TONE, HEALTH_TONE, PILL_TONES, PILL_TONES_SOFT, StatusPill, toneClasses } from "./ui/StatusPill";
 
 function luminance(hex: string): number {
@@ -21,7 +22,7 @@ const tag = (flag: Flag, props: Partial<Parameters<typeof FlagTag>[0]> = {}) => 
 };
 
 describe("instructor flag colours (one table for FlagTag and StatusPill)", () => {
-  it("Overload amber, Free-rider and Inactive red, Deadline-driven yellow", () => {
+  it("Overload amber, Low contribution (free-rider and inactive) red, Deadline-driven yellow", () => {
     expect(FLAG_TONE).toEqual({ inactive: "red", "free-rider": "red", overload: "amber", "deadline-driven": "yellow" });
   });
 
@@ -41,7 +42,16 @@ describe("instructor flag colours (one table for FlagTag and StatusPill)", () =>
     for (const flag of FLAGS) {
       const t = tag(flag);
       expect(t.querySelector("svg")).not.toBeNull();
-      expect(t).toHaveTextContent(flag);
+      expect(t).toHaveTextContent(flagLabel(flag));
+    }
+  });
+
+  it("instructors read 'Low contribution' for free-rider and inactive, never the old words", () => {
+    for (const flag of ["free-rider", "inactive"] as Flag[]) {
+      const t = tag(flag);
+      expect(t.textContent).toBe("Low contribution");
+      const { container } = render(<StatusPill kind="flag" value={flag} />);
+      expect(container.textContent).toBe("Low contribution");
     }
   });
 });
