@@ -294,4 +294,10 @@ describe("Narrative: one loading block for the whole Generate run", () => {
     expect(screen.getByText("Writing AI findings…")).toBeTruthy();
     expect(screen.queryByText("Generating AI findings…")).toBeNull();
   });
+
+  it("shows old stored flag names as Low contribution wording (display only, instructor view)", () => {
+    render(<Narrative narrative="Ben is a free-rider. A free-rider flag means a member's total work contribution was very low." projectId={1} onNarrativeGenerated={() => {}} />);
+    expect(screen.getByText(/Ben is a low-contribution member\. A low-contribution flag means a member's total work contribution was very low\./)).toBeTruthy();
+    expect(screen.queryByText(/free-rider/i)).toBeNull();
+  });
 });

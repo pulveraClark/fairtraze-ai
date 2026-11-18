@@ -22,6 +22,7 @@ import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
 import type { AiBriefCheck } from "../lib/aiReview";
 import type { UseAiReview } from "../hooks/useAiReview";
 import { useGenerateAiReport, type AiReportGenerator } from "../hooks/useGenerateAiReport";
+import { flagWordsForInstructor } from "@shared/flagWording";
 
 interface Props {
   narrative: string | null;
@@ -280,7 +281,7 @@ export function Narrative({ narrative, outdated = false, projectId, onNarrativeG
             </p>
           )}
           <div className="text-sm leading-relaxed text-slate-800 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-200">
-            <ReactMarkdown>{narrative}</ReactMarkdown>
+            <ReactMarkdown>{flagWordsForInstructor(narrative)}</ReactMarkdown>
           </div>
         </div>
       )}

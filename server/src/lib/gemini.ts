@@ -7,6 +7,7 @@ import { NARRATIVE_PLAIN_ENGLISH_EXTRA, PLAIN_ENGLISH_RULES } from "./plainEngli
 import { parseQuotaError, retryWaitMs } from "./aiQuota.js";
 import { AiReviewError, reserveProviderCall } from "./geminiClient.js";
 import { noteDailyQuotaHit } from "./aiReview/limiter.js";
+import { flagNameForPrompt, flagWordsForInstructor } from "@shared/flagWording.js";
 
 function isCombinedMember(m: AnyScoredMember): m is CombinedScoredMember {
   return "githubContributionShare" in m;
@@ -35,7 +36,7 @@ Your sole job is to translate pre-computed statistics into plain language. The n
 FLAGS ARE THE SINGLE SOURCE OF TRUTH
 • Every member's "Flags:" line is authoritative. It contains the complete, final list of participation flags the system assigned.
 • If "Flags:" says "none" → the member has NO flags. Do NOT mention any flag for them, do not imply concern about their numbers, and do not suggest a flag should have fired.
-• If "Flags:" lists one or more flags → mention ONLY those exact flags (e.g. "overload", "free-rider", "inactive", "deadline-driven"). Do NOT add, remove, or rename flags.
+• If "Flags:" lists one or more flags → mention ONLY those exact flags (e.g. "overload", "low contribution", "deadline-driven"). Do NOT add, remove, or rename flags. "low contribution" is the one name for a member with no recorded activity and for a member whose share is low; use that name and never "free-rider" or "inactive".
 • NEVER look at the numbers and decide independently whether a member should be flagged. The system already made that determination. Your job is only to describe what "Flags:" says.
 
 NO THRESHOLDS, NO MATH
@@ -92,7 +93,7 @@ export function formatPrompt(
   const equalShare = (100 / teamReport.memberCount).toFixed(1);
   const memberLines = teamReport.members
     .map((m) => {
-      const flagsText = m.flags.length > 0 ? m.flags.join(", ") : "none";
+      const flagsText = m.flags.length > 0 ? [...new Set(m.flags.map(flagNameForPrompt))].join(", ") : "none";
       const shareLine = `  Contribution share: ${(m.contributionShare * 100).toFixed(1)}% (equal share for this team: ${equalShare}%)`;
 
       if (isCombinedMember(m)) {
@@ -176,6 +177,12 @@ export function narrativeInputHash(
     .slice(0, 32);
 }
 
+// Safety net before the text is stored: the model is told to say "low contribution", and any old flag name that
+// slips through is reworded (wording only; numbers and names are untouched). Students and leaders get their own pass later.
+function finishNarrative(text: string, entries: Parameters<typeof restoreNames>[1]): string {
+  return flagWordsForInstructor(restoreNames(text, entries));
+}
+
 export async function generateFairnessNarrative(
   realProjectName: string,
   realTeamReport: TeamReport<AnyScoredMember>,
@@ -184,7 +191,7 @@ export async function generateFairnessNarrative(
   const { entries, teamReport, projectName, briefDescription } = prepareForModel(realProjectName, realTeamReport, realBriefDescription);
 
   try {
-    return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries);
+    return finishNarrative(await callOnce(projectName, teamReport, briefDescription), entries);
   } catch (err: unknown) {
     if ((err as { status?: number } | null)?.status !== 429) throw err;
     // A per-day quota cannot succeed on retry; a per-minute limit is retried once, after a capped wait.
@@ -197,7 +204,7 @@ export async function generateFairnessNarrative(
     console.warn(`[Gemini] Rate-limited. Retrying in ${delayMs / 1000}s…`);
     await new Promise((r) => setTimeout(r, delayMs));
     try {
-      return restoreNames(await callOnce(projectName, teamReport, briefDescription), entries); // single retry, then propagate
+      return finishNarrative(await callOnce(projectName, teamReport, briefDescription), entries); // single retry, then propagate
     } catch (err2) {
       if ((err2 as { status?: number } | null)?.status !== 429) throw err2;
       const again = parseQuotaError(err2);

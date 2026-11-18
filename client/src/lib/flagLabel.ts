@@ -1,14 +1,9 @@
 // The one place that decides how a flag is NAMED for a reader. Every role (student, leader, instructor, print,
 // help, overview) sees "Low contribution" for both the "free-rider" and the "inactive" flag. The keys stay
 // "free-rider" / "inactive" in code, scoring and stored data; this is display wording only.
-// The server twin is server/src/lib/flagWording.ts (a test keeps the two constants equal).
-
-export const LOW_CONTRIBUTION_LABEL = "Low contribution";
-
-/** True for the two flags that read "Low contribution". */
-export function isLowContributionFlag(flag: string): boolean {
-  return flag === "free-rider" || flag === "inactive";
-}
+// The constant and the key test live in shared/src/flagWording.ts, so the server (AI prompt) reads the very same ones.
+import { isLowContributionFlag, LOW_CONTRIBUTION_LABEL } from "@shared/flagWording";
+export { isLowContributionFlag, LOW_CONTRIBUTION_LABEL };
 
 const OTHER_LABEL: Record<string, string> = {
   overload: "Overload",

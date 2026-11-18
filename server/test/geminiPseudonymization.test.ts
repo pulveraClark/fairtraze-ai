@@ -94,9 +94,20 @@ describe("Gemini data minimization", () => {
     expect(sent).toContain("Contribution share: 30.0%");
     expect(sent).toContain("Contribution share: 10.0%");
     expect(sent).toContain("Flags: overload");
-    expect(sent).toContain("Flags: free-rider");
+    expect(sent).toContain("Flags: low contribution");
+    const flagLines = sent.split("\n").filter((l) => l.startsWith("  Flags:")).join("\n");
+    expect(flagLines).not.toMatch(/free-rider|inactive/);
     expect(sent).toContain("Gini coefficient: 0.310");
     expect(sent).toContain("Team health: Moderate Risk");
+  });
+
+  it("the generation safety net rewords an old flag name in the returned text; numbers and names are untouched", async () => {
+    generateContent.mockResolvedValue({ text: "Member C is a free-rider with 10.0% of the work. A free-rider flag means a low share." });
+    const members = [githubMember(0, ["overload"]), githubMember(1), githubMember(2, ["free-rider"])];
+    const text = await generateFairnessNarrative("Group 1", report(members));
+    expect(text).not.toMatch(/free-rider/i);
+    expect(text).toContain("a low-contribution member with 10.0% of the work");
+    expect(text).toContain("A low-contribution flag means a low share.");
   });
 
   it("does not double-substitute when a real name looks like a pseudonym", async () => {
