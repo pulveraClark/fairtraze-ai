@@ -3,7 +3,7 @@ import { describeNoFlags } from "../../lib/flagRules";
 import { ListRow, StatusPill, CARD } from "../ui";
 import { BUTTON_SECONDARY } from "../ui/styles";
 import { PILL_TONES } from "../ui/StatusPill";
-import { flagStudentWordingTip } from "../../lib/studentDisplay";
+import { dedupeFlagsByLabel, flagLabels, flagReason } from "../../lib/flagLabel";
 import type { AiReportGenerator } from "../../hooks/useGenerateAiReport";
 import { formatPct, roleInfoOf, ROLE_LABEL } from "../../lib/memberView";
 import { Avatar } from "../Avatar";
@@ -123,7 +123,7 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
               <ListRow
                 opensDialog
                 onClick={(el) => onOpen(m, el)}
-                ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? m.flags.join(", ") : (noFlagsReason ?? "no flags")}. Open details`}
+                ariaLabel={`${m.studentName}, ${formatPct(m.contributionShare)} share, ${m.flags.length ? flagLabels(m.flags).join(", ") : (noFlagsReason ?? "no flags")}. Open details`}
               >
                 <span className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 sm:grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1.4fr)_4rem_12rem]">
                   <Avatar
@@ -152,13 +152,19 @@ export function MemberContributionList({ members, memberRoles, disputedMembers, 
                       // same reason is read out in the row's label. The details window shows it as a keyboard/touch tip.
                       <span className="text-sm text-slate-700 underline decoration-dotted underline-offset-2" title={noFlagsReason ?? undefined}>No flags</span>
                     ) : (
-                      m.flags.map((f) => (
-                        <span key={f} title={flagStudentWordingTip(f) ?? undefined} className="inline-flex flex-wrap items-center gap-1">
-                          <StatusPill kind="flag" value={f} muted={mutedFlags} />
-                          {outcomes?.get(f) === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
-                          {outcomes?.get(f) === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
-                        </span>
-                      ))
+                      dedupeFlagsByLabel(m.flags).map((f) => {
+                        const reason = flagReason(f, n, thresholds);
+                        return (
+                          <span key={f} className="inline-flex flex-col items-start gap-0.5 sm:items-end">
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                              <StatusPill kind="flag" value={f} muted={mutedFlags} />
+                              {outcomes?.get(f) === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
+                              {outcomes?.get(f) === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
+                            </span>
+                            {reason && <span className="text-xs leading-normal text-slate-700 sm:text-right">{reason}</span>}
+                          </span>
+                        );
+                      })
                     )}
                     {disputed && <StatusPill kind="status" tone="violet" label="Open dispute" />}
                   </span>

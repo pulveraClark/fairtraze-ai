@@ -27,26 +27,26 @@ const doc: DocumentScoredMember = {
 
 const baseProps = { onClose: () => {}, source: "github" as const, thresholds, deadlineBasis: "activity-span" as const, memberCount: 3 };
 
-describe("MemberDrawer flag wording tip", () => {
-  it("free-rider and inactive pills get a tip that opens on keyboard focus and is described for screen readers; other flags get none", async () => {
-    const user = userEvent.setup();
+describe("Low contribution reason line", () => {
+  it("MemberDrawer: one Low contribution pill with the reason as visible text, no tooltip button", () => {
     render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["free-rider", "overload"] }} />);
-    const tipButtons = screen.getAllByRole("button", { name: /About the student wording/ });
-    expect(tipButtons).toHaveLength(1); // overload has none
-    await user.tab(); // reach it by keyboard
-    tipButtons[0].focus();
-    const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent("Students see this flag as 'Low contribution'. Same rule, softer wording for students.");
-    expect(tipButtons[0]).toHaveAttribute("aria-describedby", tip.id);
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.getByText("Low contribution")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /student wording/i })).toBeNull();
+    expect(screen.getAllByTestId("flag-reason").map((e) => e.textContent)).toEqual(["Below half of an equal share (16.7% for 3 members)"]);
   });
 
-  it("opens on hover too", async () => {
-    const user = userEvent.setup();
-    render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["inactive"] }} />);
-    await user.hover(screen.getByRole("button", { name: /About the student wording/ }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Low contribution");
+  it("MemberDrawer: inactive reads No recorded activity; both keys collapse to one pill", () => {
+    render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["inactive", "free-rider"] }} />);
+    expect(screen.getAllByText("Low contribution")).toHaveLength(1);
+    expect(screen.getByTestId("flag-reason")).toHaveTextContent("No recorded activity");
+  });
+
+  it("MemberContributionList: the row shows the pill and the reason under it", () => {
+    render(<MemberContributionList members={[{ ...gh, flags: ["free-rider"] }, { ...gh, studentName: "Member B", flags: ["inactive"] }]} onOpen={vi.fn()} thresholds={thresholds} />);
+    expect(screen.getAllByText("Low contribution")).toHaveLength(2);
+    expect(screen.getByText("Below half of an equal share (25% for 2 members)")).toBeInTheDocument();
+    expect(screen.getByText("No recorded activity")).toBeInTheDocument();
+    expect(screen.queryByText(/free-rider|inactive/i)).toBeNull();
   });
 });
 

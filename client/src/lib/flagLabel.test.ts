@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flagLabel, flagLabels, isLowContributionFlag, LOW_CONTRIBUTION_LABEL } from "./flagLabel";
+import { dedupeFlagsByLabel, flagLabel, flagLabels, flagReason, isLowContributionFlag, LOW_CONTRIBUTION_LABEL } from "./flagLabel";
 import { studentFlagLabel } from "./studentDisplay";
 import { FLAG_LABEL } from "../components/ui/StatusPill";
 
@@ -19,6 +19,19 @@ describe("flagLabel (one name for every reader)", () => {
 
   it("does not repeat a label when both keys are present", () => {
     expect(flagLabels(["inactive", "free-rider", "overload"])).toEqual(["Low contribution", "Overload"]);
+  });
+
+  it("flagReason: inactive, default threshold, custom threshold, singular member, no threshold", () => {
+    expect(flagReason("inactive", 4, null)).toBe("No recorded activity");
+    expect(flagReason("free-rider", 4, { freeRider: 0.5 })).toBe("Below half of an equal share (12.5% for 4 members)");
+    expect(flagReason("free-rider", 5, { freeRider: 0.9 })).toBe("Below 90% of an equal share (18% for 5 members)");
+    expect(flagReason("free-rider", 1, { freeRider: 0.5 })).toBe("Below half of an equal share (50% for 1 member)");
+    expect(flagReason("free-rider", 4, null)).toBeNull();
+    expect(flagReason("overload", 4, { freeRider: 0.5 })).toBeNull();
+  });
+
+  it("dedupeFlagsByLabel keeps one pill, preferring inactive", () => {
+    expect(dedupeFlagsByLabel(["free-rider", "inactive", "overload"])).toEqual(["inactive", "overload"]);
   });
 
   it("student and instructor wording agree for the low-contribution flags", () => {

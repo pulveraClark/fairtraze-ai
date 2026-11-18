@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { roleHome } from "../lib/roleHome";
 import { CARD, FOCUS_LIGHT } from "../components/ui";
 import { AppFooter } from "../components/AppFooter";
-import { studentHealthLabel, instructorFlagWordingHelp } from "../lib/studentDisplay";
+import { studentHealthLabel } from "../lib/studentDisplay";
 import {
   DEFAULT_WEIGHTS, FREE_RIDER_THRESHOLD, OVERLOAD_THRESHOLD, DEADLINE_DRIVEN_THRESHOLD,
   HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD,
@@ -331,7 +331,6 @@ export function HelpPage() {
                 ["overload", <>Contribution share above {OVERLOAD_THRESHOLD}× the equal share.</>],
                 ["deadline-driven", <>Not inactive, and more than {pct(DEADLINE_DRIVEN_THRESHOLD)} of the member's recorded activity falls in the last third of the window. The window runs from the group's first recorded activity to the assignment deadline when one is set (activity after the deadline still counts), otherwise to the group's last recorded activity. The report states which basis was used.</>],
               ]} />
-              <p>{instructorFlagWordingHelp()}</p>
               <p id="gini" className="scroll-mt-4">
                 Team health comes from the Gini coefficient of the members' shares (0 is perfectly equal, 1 is one
                 person holding everything): <strong>Healthy</strong> below {HEALTHY_GINI_THRESHOLD}, <strong>Moderate risk</strong> from{" "}

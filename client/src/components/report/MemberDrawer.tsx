@@ -3,8 +3,8 @@ import { taskCountLabel } from "../../lib/tasks/countLabel";
 import type { ReactNode } from "react";
 import type { AnyScoredMember, MemberRoleInfo, ScoringThresholds } from "@shared/types";
 import { Modal, StatusPill, BUTTON_SECONDARY, FOCUS_LIGHT } from "../ui";
-import { PILL_TONES, FLAG_LABEL } from "../ui/StatusPill";
-import { flagStudentWordingTip } from "../../lib/studentDisplay";
+import { PILL_TONES } from "../ui/StatusPill";
+import { dedupeFlagsByLabel, flagReason } from "../../lib/flagLabel";
 import { useAuthOptional } from "../../context/AuthContext";
 import { DisclosureSection, HoverTip, Note, Row, ShareBar } from "./DrawerParts";
 import {
@@ -244,17 +244,18 @@ function MemberSidebar({
           <NoFlags className="text-sm text-slate-800" reason={describeNoFlags(member.contributionShare, memberCount, thresholds)} />
         ) : (
           <ul className="space-y-3">
-            {member.flags.map((f) => {
+            {dedupeFlagsByLabel(member.flags).map((f) => {
               const rule = describeFlagRule(f, thresholds, source, deadlineBasis);
+              const reason = flagReason(f, memberCount, thresholds);
               const outcome = flagOutcomes?.get(f);
               return (
                 <li key={f}>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusPill kind="flag" value={f} muted={flagsMuted} />
-                    {flagStudentWordingTip(f) && <HoverTip label={`About the student wording of ${FLAG_LABEL[f as keyof typeof FLAG_LABEL] ?? f}`}>{flagStudentWordingTip(f)}</HoverTip>}
                     {outcome === "RESOLVED" && <StatusPill kind="status" tone="green" label="Reviewed: accepted" />}
                     {outcome === "DISMISSED" && <StatusPill kind="status" tone="neutral" label="Reviewed: upheld" />}
                   </div>
+                  {reason && <p className="mt-1 text-sm leading-normal text-slate-800" data-testid="flag-reason">{reason}</p>}
                   {rule && (
                     <p className="mt-1 text-sm leading-normal text-slate-700">
                       <span className="font-semibold">How this flag is defined: </span>{rule}
