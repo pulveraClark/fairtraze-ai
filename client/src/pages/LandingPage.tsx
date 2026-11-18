@@ -159,16 +159,20 @@ function ProductPreview() {
               <div>
                 <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
                 <div className="space-y-3">
-                  {PREVIEW_MEMBERS.map(({ name, pct, flag }) => (
+                  {PREVIEW_MEMBERS.map(({ name, pct, flag }) => {
+                    const low = !!flag && flagLabel(flag) === "Low contribution";
+                    return (
                     <div key={name}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-xs text-slate-700 flex-1 whitespace-nowrap font-semibold">{name}</span>
                         <span className="text-xs font-bold text-slate-800 w-9 text-right shrink-0 tabular-nums">
                           <AnimatedPercent value={pct} />
                         </span>
-                        <span className="w-24 shrink-0 flex">
+                        <span className="w-32 shrink-0 flex justify-end">
                           {flag && (
-                            <span className={`text-xs px-2 py-0.5 rounded-md font-bold uppercase tracking-wide whitespace-nowrap ${
+                            <span className={`py-0.5 rounded-md font-bold uppercase whitespace-nowrap ${
+                              low ? "text-[11px] px-1.5 tracking-normal" : "text-xs px-2 tracking-wide"
+                            } ${
                               flag === "free-rider"
                                 ? "bg-red-50 text-red-600 border border-red-200"
                                 : "bg-amber-50 text-amber-600 border border-amber-200"
@@ -182,13 +186,14 @@ function ProductPreview() {
                         <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
             {/* Right: AI narrative panel */}
-            <div className="w-full sm:w-60 shrink-0">
+            <div className="w-full sm:w-52 shrink-0">
               <div className="h-full rounded-xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100/60 p-5 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 rounded-md bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-600/20">
