@@ -5,6 +5,7 @@ import { useRouter } from "../../router";
 import { useAlerts } from "../../hooks/useAlerts";
 import { useInvalidateOnAlertCount } from "../../hooks/useInvalidateOnAlertCount";
 import { useMyDisputesQuery } from "../../hooks/useGroupQueries";
+import { useOpenDisputeCount } from "../../hooks/useOpenDisputeCount";
 import { useClassesListQuery, useProjectsSummaryQuery } from "../../hooks/useSharedQueries";
 import { STUDENT_CLASSES_KEY, useStudentClassesQuery } from "../../hooks/useStudentClassesQuery";
 import { usePopover } from "../../hooks/usePopover";
@@ -65,24 +66,50 @@ function SidebarLink({ href, className, active, ariaLabel, title, onNavigate, ch
 
 /** Top-level item: icon + label, or icon + tooltip in the collapsed rail. */
 function NavLinkItem({
-  item, active, collapsed, onNavigate, badge,
-}: { item: NavItemDef; active: boolean; collapsed: boolean; onNavigate?: () => void; badge?: ReactNode }) {
+  item, active, collapsed, onNavigate, badge, count = 0,
+}: { item: NavItemDef; active: boolean; collapsed: boolean; onNavigate?: () => void; badge?: ReactNode; count?: number }) {
+  // `count` (open items): red pill like Notifications; on the icon corner in the rail. The pill is
+  // aria-hidden because the link's aria-label already says "<label>, N open".
+  const countText = count > 99 ? "99+" : String(count);
+  const countLabel = count > 0 ? `${item.label}, ${count} open` : undefined;
   return (
     <div className="group relative">
       <SidebarLink
         href={item.href}
         active={active}
-        ariaLabel={collapsed ? item.label : undefined}
+        ariaLabel={countLabel ?? (collapsed ? item.label : undefined)}
         onNavigate={onNavigate}
         className={navItemClass(active, collapsed)}
       >
-        <NavIcon name={item.icon} />
+        <span className="relative flex shrink-0">
+          <NavIcon name={item.icon} />
+          {collapsed && count > 0 && (
+            <span aria-hidden="true" className="absolute -right-2 -top-2 min-w-[1.25rem] rounded-full bg-red-500 px-1 py-0.5 text-center text-xs font-bold leading-none text-white ring-2 ring-[#020617]">
+              {countText}
+            </span>
+          )}
+        </span>
         {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
         {!collapsed && badge}
+        {!collapsed && count > 0 && (
+          <span aria-hidden="true" className="min-w-[1.5rem] shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-center text-xs font-bold leading-none text-white">
+            {countText}
+          </span>
+        )}
       </SidebarLink>
-      {collapsed && <span aria-hidden="true" className={RAIL_TOOLTIP}>{item.label}</span>}
+      {collapsed && (
+        <span aria-hidden="true" className={RAIL_TOOLTIP}>
+          {item.label}{count > 0 ? ` (${count} open)` : ""}
+        </span>
+      )}
     </div>
   );
+}
+
+/** Instructor "Disputes" item with the open-disputes count. Students' "Your notes" never uses it. */
+function DisputesNavItem({ item, active, collapsed, onNavigate }: { item: NavItemDef; active: boolean; collapsed: boolean; onNavigate?: () => void }) {
+  const count = useOpenDisputeCount();
+  return <NavLinkItem item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} count={count} />;
 }
 
 /** "Verify report": a button that opens a dialog (not a route). */
@@ -443,6 +470,8 @@ export function SidebarContent({ collapsed, mobile = false, onNavigate, onToggle
                   mobile
                     ? <NotificationsLink item={item} active={active} onNavigate={onNavigate} />
                     : <AlertsBell collapsed={collapsed} />
+                ) : item.key === "disputes" && role === "INSTRUCTOR" ? (
+                  <DisputesNavItem item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />
                 ) : (
                   <NavLinkItem item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />
                 )}

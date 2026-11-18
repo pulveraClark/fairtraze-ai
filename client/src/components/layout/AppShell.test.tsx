@@ -43,7 +43,10 @@ function renderShell() {
   );
 }
 
+let mockOpenDisputes = 0;
+
 beforeEach(() => {
+  mockOpenDisputes = 0;
   window.localStorage.clear();
   vi.stubGlobal(
     "fetch",
@@ -51,6 +54,7 @@ beforeEach(() => {
       ok: true,
       json: async () => {
         if (url === "/api/alerts/unread-count") return { unreadCount: 3 };
+        if (url === "/api/disputes/open-count") return { openCount: mockOpenDisputes };
         if (url === "/api/classes") return { classes: classList };
         if (url === "/api/projects/summary") return { summary };
         if (url === "/api/student/classes") return { classes: [] };
@@ -166,6 +170,48 @@ describe("AppShell sidebar: Verify report", () => {
       expect(screen.queryByRole("button", { name: "Verify report" })).toBeNull();
       unmount();
     }
+  });
+});
+
+describe("AppShell sidebar: open disputes badge", () => {
+  it("shows the count on Disputes with one accessible name, expanded and collapsed", async () => {
+    mockOpenDisputes = 4;
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    const link = await within(nav).findByRole("link", { name: "Disputes, 4 open" });
+    expect(Array.from(link.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "4")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const rail = await within(nav).findByRole("link", { name: "Disputes, 4 open" });
+    expect(Array.from(rail.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "4")).toBe(true);
+  });
+
+  it("is hidden at 0 and reads 99+ above 99", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    const first = renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    expect(await within(nav).findByRole("link", { name: "Disputes" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: /open$/ })).toBeNull();
+    first.unmount();
+
+    mockOpenDisputes = 120;
+    renderShell();
+    const link = await screen.findByRole("link", { name: "Disputes, 120 open" });
+    expect(link.textContent).toContain("99+");
+  });
+
+  it("students never see it and never request the count", async () => {
+    mockOpenDisputes = 5;
+    signInAs("STUDENT");
+    window.history.pushState({}, "", "/student");
+    renderShell();
+    await screen.findAllByRole("navigation", { name: "Main" });
+    expect(screen.queryByRole("link", { name: /open$/ })).toBeNull();
+    expect(fetch).not.toHaveBeenCalledWith("/api/disputes/open-count", expect.anything());
   });
 });
 

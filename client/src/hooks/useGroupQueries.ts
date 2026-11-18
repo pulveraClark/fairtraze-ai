@@ -29,6 +29,7 @@ export const groupKeys = {
 export const disputeKeys = {
   all:  (uid: number | null) => ["disputes", uid] as const,
   mine: (uid: number | null) => ["disputes", uid, "mine"] as const,
+  open: (uid: number | null) => ["disputes", uid, "open-count"] as const,
   list: (uid: number | null, filters: object) => ["disputes", uid, "list", filters] as const,
 };
 export const classKeys = {

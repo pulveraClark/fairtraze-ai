@@ -150,6 +150,16 @@ disputesRouter.get("/api/disputes/mine", ...requireRole("STUDENT"), async (req, 
   res.json({ disputes });
 });
 
+// ── GET /api/disputes/open-count ──────────────────────────────────────────────
+// Sidebar badge: only the number of OPEN disputes in the instructor's own classes.
+disputesRouter.get("/api/disputes/open-count", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const instructorId = req.user!.sub;
+  const openCount = await prisma.dispute.count({
+    where: { project: { assignment: { classSection: { instructorId } } }, status: "OPEN" },
+  });
+  res.json({ openCount });
+});
+
 // ── GET /api/disputes ─────────────────────────────────────────────────────────
 // Instructor sees disputes for groups in their classes, paginated.
 // Query params: page, pageSize, status (open|all, default open), classSectionId.
