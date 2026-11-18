@@ -1,6 +1,7 @@
 // Wording and formatting for the Contribution Evidence Report. Plain functions so the page and its
 // tests share one definition. Display only: no number here is computed from raw activity.
 import type { EvidenceReportDto } from "@shared/evidenceReport";
+import { flagLabels } from "./flagLabel";
 
 export const GITHUB_LABEL = "GitHub";
 export const EDITOR_LABEL = "FAIRTRAZE Collaborative Editor";
@@ -19,8 +20,9 @@ export function pctText(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+/** Flags as printed: the one reader-facing name per flag ("Low contribution"), never the stored keys. */
 export function flagsText(flags: readonly string[]): string {
-  return flags.length ? flags.join(", ") : "None";
+  return flags.length ? flagLabels(flags).join(", ") : "None";
 }
 
 /** "Combined = 50% GitHub + 50% Documents." Only for COMBINED; the other source types have no such sentence. */

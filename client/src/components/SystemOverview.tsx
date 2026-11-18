@@ -17,6 +17,7 @@ import { IMAGE_CREDIT_CHARS, DEFAULT_DOCS_IMAGE_LIMIT } from "@shared/imageCredi
 import { LINE_TYPE_WEIGHTS } from "@shared/lineClassifier";
 import { FILE_WEIGHTS } from "@shared/fileWeights";
 import { COMMIT_IMPACT } from "@shared/commitClassifier";
+import { LOW_CONTRIBUTION_LABEL } from "../lib/flagLabel";
 
 // Every number on this page is read from the same constants the scoring engine uses
 // (shared/src), so the overview cannot drift from the real defaults.
@@ -178,10 +179,9 @@ function ScoringSection() {
   const dw = DOCUMENT_DEFAULT_WEIGHTS;
   const flags = [
     {
-      name: "Inactive",
-      desc: "No activity recorded in the project's source: no commits (GitHub), no editing sessions (Editor), or neither (Combined).",
+      name: LOW_CONTRIBUTION_LABEL,
+      desc: `No activity recorded in the project's source (no commits, no editing sessions, or neither), or a contribution share below ${num(FREE_RIDER_THRESHOLD)}× an equal split. A short reason is shown under the flag.`,
     },
-    { name: "Free-rider", desc: `Contribution share below ${num(FREE_RIDER_THRESHOLD)}× an equal split.` },
     { name: "Overload", desc: `Contribution share above ${num(OVERLOAD_THRESHOLD)}× an equal split.` },
     {
       name: "Deadline-driven",

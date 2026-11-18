@@ -55,7 +55,7 @@ export function describeFlagRule(
         : "No recorded commits and no recorded editing sessions.";
     case "free-rider":
       if (!thresholds) return null;
-      return `Contribution share is below ${thresholds.freeRider}× the equal share. Not applied to inactive members.`;
+      return `Contribution share is below ${thresholds.freeRider}× the equal share. Not applied to members with no recorded activity.`;
     case "overload":
       if (!thresholds) return null;
       return `Contribution share is above ${thresholds.overload}× the equal share.`;

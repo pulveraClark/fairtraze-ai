@@ -1,4 +1,4 @@
-/** Plain-text matching for the Help search box (no AI). Case-insensitive; "free rider" finds "free-rider". */
+/** Plain-text matching for the Help search box (no AI). Case-insensitive; "free rider" and "inactive" (the old names) find "Low contribution". */
 
 /** Lowercase, punctuation and hyphens become spaces, runs of spaces collapse. */
 export function normalize(text: string): string {

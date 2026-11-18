@@ -6,6 +6,7 @@ import { roleHome } from "../lib/roleHome";
 import { CARD, FOCUS_LIGHT } from "../components/ui";
 import { AppFooter } from "../components/AppFooter";
 import { studentHealthLabel } from "../lib/studentDisplay";
+import { LOW_CONTRIBUTION_LABEL } from "../lib/flagLabel";
 import {
   DEFAULT_WEIGHTS, FREE_RIDER_THRESHOLD, OVERLOAD_THRESHOLD, DEADLINE_DRIVEN_THRESHOLD,
   HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD,
@@ -326,10 +327,9 @@ export function HelpPage() {
           ) : (
             <>
               <Rows rows={[
-                ["inactive", <>No recorded commits (GitHub), no editing sessions (Docs), or neither (Combined).</>],
-                ["free-rider", <>Not inactive, and contribution share below {FREE_RIDER_THRESHOLD}× the equal share.</>],
-                ["overload", <>Contribution share above {OVERLOAD_THRESHOLD}× the equal share.</>],
-                ["deadline-driven", <>Not inactive, and more than {pct(DEADLINE_DRIVEN_THRESHOLD)} of the member's recorded activity falls in the last third of the window. The window runs from the group's first recorded activity to the assignment deadline when one is set (activity after the deadline still counts), otherwise to the group's last recorded activity. The report states which basis was used.</>],
+                [LOW_CONTRIBUTION_LABEL, <>Either no recorded commits (GitHub), no editing sessions (Docs), or neither (Combined), shown with the reason "No recorded activity"; or contribution share below {FREE_RIDER_THRESHOLD}× the equal share, shown with the reason "Below half of an equal share" and the numbers for this group.</>],
+                ["Overload", <>Contribution share above {OVERLOAD_THRESHOLD}× the equal share.</>],
+                ["Deadline-driven", <>With recorded activity, and more than {pct(DEADLINE_DRIVEN_THRESHOLD)} of the member's recorded activity falls in the last third of the window. The window runs from the group's first recorded activity to the assignment deadline when one is set (activity after the deadline still counts), otherwise to the group's last recorded activity. The report states which basis was used.</>],
               ]} />
               <p id="gini" className="scroll-mt-4">
                 Team health comes from the Gini coefficient of the members' shares (0 is perfectly equal, 1 is one

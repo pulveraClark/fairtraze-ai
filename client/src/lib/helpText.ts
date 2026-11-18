@@ -65,7 +65,7 @@ export const SETTINGS_TIPS = {
   provenance: "Default weights come from an expert survey of instructors (AHP). Image credit follows the same survey.",
   githubWeight: "How much a member's GitHub share counts in the combined share.",
   docsWeight: "How much a member's Docs share counts in the combined share.",
-  freeRider: "Flag a member whose share is below this fraction of an equal split.",
+  freeRider: "Flag a member as Low contribution when their share is below this fraction of an equal split.",
   overload: "Flag a member whose share is above this multiple of an equal split.",
   deadlineDriven: "Flag a member with more than this share of activity in the last third of the time.",
 } as const;

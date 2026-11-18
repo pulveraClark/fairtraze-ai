@@ -34,7 +34,7 @@ describe("VerifyReportBox", () => {
     await waitFor(() => expect(screen.getByText(/Matches the latest analysis/)).toBeTruthy());
     expect(JSON.parse(f.mock.calls[0][1].body)).toEqual({ code: "ft-7k2p-9x" });
     expect(screen.getByText("Ana Cruz")).toBeTruthy();
-    expect(screen.getByText("overload")).toBeTruthy();
+    expect(screen.getByText("Overload")).toBeTruthy();
     expect(screen.getByText(/Group 1 · Capstone · Analyzed/)).toBeTruthy();
     const text = (document.body.textContent ?? "").toLowerCase();
     for (const w of ["gini", "healthy", "high risk", "moderate risk"]) expect(text).not.toContain(w);

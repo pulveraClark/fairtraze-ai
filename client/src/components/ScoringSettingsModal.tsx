@@ -309,7 +309,7 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
 
             <div className="space-y-4">
               <ThresholdRow
-                label="Free-rider threshold"
+                label="Low contribution threshold"
                 description={SETTINGS_TIPS.freeRider}
                 value={freeRider}
                 onChange={setFreeRider}

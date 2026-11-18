@@ -40,3 +40,12 @@ describe("flagLabel (one name for every reader)", () => {
     }
   });
 });
+
+describe("printed flags use the same names", () => {
+  it("flagsText prints Low contribution once, and None when empty", async () => {
+    const { flagsText } = await import("./evidenceText");
+    expect(flagsText(["free-rider", "deadline-driven"])).toBe("Low contribution, Deadline-driven");
+    expect(flagsText(["inactive", "free-rider"])).toBe("Low contribution");
+    expect(flagsText([])).toBe("None");
+  });
+});
