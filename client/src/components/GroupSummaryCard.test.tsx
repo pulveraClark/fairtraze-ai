@@ -73,7 +73,7 @@ describe("GroupSummaryCard with no recorded activity", () => {
     renderCard(["Ana Reyes", "Ben Cruz"], { teamHealth: "Healthy", memberShares: zero(["Ana Reyes", "Ben Cruz"]), flagsPresent: ["inactive"] });
     expect(screen.getByText("Not enough activity yet")).toBeInTheDocument();
     expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
-    expect(screen.queryByText(/inactive/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/low contribution/i)).not.toBeInTheDocument();
   });
 
   it("keeps the computed health and flags as soon as anyone has activity", () => {
@@ -84,7 +84,7 @@ describe("GroupSummaryCard with no recorded activity", () => {
     });
     expect(screen.queryByText("Not enough activity yet")).not.toBeInTheDocument();
     expect(screen.getByText("Moderate risk")).toBeInTheDocument();
-    expect(screen.getByText(/inactive/i)).toBeInTheDocument();
+    expect(screen.getByText(/low contribution/i)).toBeInTheDocument();
   });
 });
 
