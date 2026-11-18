@@ -45,14 +45,14 @@ function AuthIllustration() {
       <rect x="70" y="158" width="75" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
       <text x="236" y="167" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">22%</text>
 
-      {/* Member D — free-rider, red */}
+      {/* Member D — low contribution, red */}
       <rect x="40" y="173" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
       <rect x="70" y="173" width="34" height="9" rx="2.5" fill="rgba(248,113,113,0.6)" />
       <text x="236" y="182" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">10%</text>
 
-      {/* Free-rider badge */}
-      <rect x="130" y="171" width="56" height="13" rx="3.5" fill="rgba(248,113,113,0.2)" stroke="rgba(248,113,113,0.4)" strokeWidth="1" />
-      <text x="158" y="181" fontSize="7" fill="rgba(248,113,113,0.9)" fontFamily="monospace" textAnchor="middle" fontWeight="bold">FREE RIDER</text>
+      {/* Low contribution badge */}
+      <rect x="120" y="171" width="76" height="13" rx="3.5" fill="rgba(248,113,113,0.2)" stroke="rgba(248,113,113,0.4)" strokeWidth="1" />
+      <text x="158" y="181" fontSize="7" fill="rgba(248,113,113,0.9)" fontFamily="monospace" textAnchor="middle" fontWeight="bold">LOW CONTRIBUTION</text>
     </svg>
   );
 }

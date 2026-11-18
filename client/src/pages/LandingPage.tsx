@@ -4,6 +4,7 @@ import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { UserMenu } from "../components/UserMenu";
 import logoUrl from "../assets/logo_transparent.png";
+import { flagLabel } from "../lib/flagLabel";
 
 // ── Static preview data ───────────────────────────────────────────────────────
 export const PREVIEW_MEMBERS = [
@@ -172,7 +173,7 @@ function ProductPreview() {
                                 ? "bg-red-50 text-red-600 border border-red-200"
                                 : "bg-amber-50 text-amber-600 border border-amber-200"
                             }`}>
-                              {flag}
+                              {flagLabel(flag)}
                             </span>
                           )}
                         </span>

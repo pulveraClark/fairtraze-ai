@@ -21,13 +21,15 @@ describe.each([["Login", LoginPage], ["Register", RegisterPage]] as const)("%s s
     stubWidth(false);
     const { container } = render(<RouterProvider><Page /></RouterProvider>);
     expect(container.querySelector("svg[viewBox='0 0 320 220']")).toBeNull();
-    expect(container.textContent).not.toMatch(/FREE RIDER|CONTRIBUTION SHARE/);
+    expect(container.textContent).not.toMatch(/LOW CONTRIBUTION|CONTRIBUTION SHARE/);
   });
 
   it("is rendered from lg up", () => {
     stubWidth(true);
     const { container } = render(<RouterProvider><Page /></RouterProvider>);
     expect(container.querySelector("svg[viewBox='0 0 320 220']")).not.toBeNull();
+    if (_name === "Login") expect(container.textContent).toContain("LOW CONTRIBUTION");
+    expect(container.textContent).not.toMatch(/FREE RIDER/);
   });
 
   it("does not label FairTraze Docs as coming soon (it is live) (I9)", () => {

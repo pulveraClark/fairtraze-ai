@@ -178,8 +178,8 @@ After shares are computed, each member is checked against four flag conditions:
 
 | Flag | Meaning | Default trigger |
 |---|---|---|
-| **Inactive** | Zero commits recorded | 0 commits |
-| **Free-rider** | Contribution share is very low relative to an equal split | Below 50% of what an equal share would be |
+| **Low contribution** (no recorded activity) | Zero commits recorded. Stored as the `inactive` flag; shown with the reason "No recorded activity" | 0 commits |
+| **Low contribution** (low share) | Contribution share is very low relative to an equal split. Stored as the `free-rider` flag; shown with the reason "Below half of an equal share (X% for N members)" | Below 50% of what an equal share would be |
 | **Overload** | Carrying a disproportionately large share of the work | Above 175% of what an equal share would be |
 | **Deadline-driven** | Most activity concentrated in the final third of the project timeline | More than 60% of commits in the last third |
 
