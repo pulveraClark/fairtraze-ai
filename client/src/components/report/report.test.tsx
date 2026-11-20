@@ -416,3 +416,24 @@ describe("MemberContributionList", () => {
     expect(onOpen).toHaveBeenCalledWith(gh, expect.any(HTMLElement));
   });
 });
+
+describe("DSP-06: reviewed outcome badge on the flag", () => {
+  const flagged = { ...gh, flags: ["free-rider" as const] };
+
+  it("DSP-06: an accepted dispute shows 'Reviewed: accepted' next to that flag", () => {
+    const outcomes = new Map([[flagged.studentName, new Map([["free-rider", "RESOLVED" as const]])]]);
+    render(<MemberContributionList members={[flagged]} resolvedFlagOutcomes={outcomes} onOpen={() => {}} />);
+    expect(screen.getByText("Reviewed: accepted")).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed: upheld")).toBeNull();
+  });
+
+  it("DSP-06: a dismissed dispute shows 'Reviewed: upheld', and no badge appears without an outcome", () => {
+    const outcomes = new Map([[flagged.studentName, new Map([["free-rider", "DISMISSED" as const]])]]);
+    const { unmount } = render(<MemberContributionList members={[flagged]} resolvedFlagOutcomes={outcomes} onOpen={() => {}} />);
+    expect(screen.getByText("Reviewed: upheld")).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed: accepted")).toBeNull();
+    unmount();
+    render(<MemberContributionList members={[flagged]} onOpen={() => {}} />);
+    expect(screen.queryByText(/Reviewed:/)).toBeNull();
+  });
+});

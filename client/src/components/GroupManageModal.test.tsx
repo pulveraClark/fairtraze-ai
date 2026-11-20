@@ -144,3 +144,58 @@ describe("GroupManageModal Accept all", () => {
     vi.unstubAllGlobals();
   });
 });
+
+// ── Live-site case LDR-03: change a member's role, remove a member ───────────
+describe("GroupManageModal leader actions", () => {
+  beforeEach(() => { q.requests = []; q.suggestions = []; });
+
+  const writeCalls = (m: ReturnType<typeof vi.fn>) =>
+    m.mock.calls.filter(([, i]) => ["PUT", "DELETE", "POST"].includes((i as RequestInit | undefined)?.method ?? "GET"));
+
+  it("LDR-03: the leader adds a role to a member and the change is sent to the server for that member", async () => {
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (String(url).includes("/functional-roles") ? { functionalRoles: ["DEVELOPER", "DOCUMENTATION"] } : {}),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    // Rows are in member order: Ana (leader) first, Ben second.
+    await userEvent.click(screen.getAllByRole("button", { name: "+ Documentation" })[1]);
+    await vi.waitFor(() => expect(writeCalls(fetchMock)).toHaveLength(1));
+    const [url, init] = writeCalls(fetchMock)[0];
+    expect(String(url)).toBe("/api/groups/1/members/2/functional-roles");
+    expect((init as RequestInit).method).toBe("PUT");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ functionalRoles: ["DEVELOPER", "DOCUMENTATION"] });
+    vi.unstubAllGlobals();
+  });
+
+  it("LDR-03: a member's only role cannot be removed; the message says so and nothing is sent", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    await userEvent.click(screen.getAllByRole("button", { name: "✓ Developer" })[1]);
+    expect(await screen.findByText("At least one role must be assigned.")).toBeTruthy();
+    expect(writeCalls(fetchMock)).toHaveLength(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("LDR-03: Remove asks first; Cancel keeps the member, and confirming deletes that member", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    // The leader's own row has no Remove; only the other member does.
+    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(screen.getByText(/Are you sure you want to remove/)).toBeTruthy();
+    expect(screen.getByText("Ben Lim", { selector: "strong" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(writeCalls(fetchMock)).toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Ben Lim" }));
+    await vi.waitFor(() => expect(writeCalls(fetchMock)).toHaveLength(1));
+    const [url, init] = writeCalls(fetchMock)[0];
+    expect(String(url)).toBe("/api/groups/1/members/2");
+    expect((init as RequestInit).method).toBe("DELETE");
+    vi.unstubAllGlobals();
+  });
+});
