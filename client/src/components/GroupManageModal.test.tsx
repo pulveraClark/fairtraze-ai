@@ -39,6 +39,7 @@ function renderModal(onClose: () => void = () => {}) {
 describe("GroupManageModal leader change wording (I33)", () => {
   beforeEach(() => { q.requests = []; q.suggestions = []; });
 
+  // INS-11
   it("calls it 'Change leader' everywhere and has no 'Reassign to leave'", async () => {
     renderModal();
     expect(screen.queryByText(/reassign/i)).toBeNull();
@@ -128,6 +129,7 @@ describe("GroupManageModal Accept all", () => {
     expect(screen.getByRole("button", { name: "Accept all" })).toBeTruthy();
   });
 
+  // LDR-02
   it("asks 'Accept 2 requests?' first, and only then calls the server", async () => {
     const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ accepted: 2, skipped: 0 }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

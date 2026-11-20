@@ -7,6 +7,7 @@ import { SLOW_TEXT } from "../../lib/feedback";
 afterEach(() => { vi.useRealTimers(); });
 
 describe("LoadingState", () => {
+  // UX-04
   it("is a status region with a label and adds the shared slow line after ~3 seconds", () => {
     vi.useFakeTimers();
     render(<LoadingState label="Loading classes…" className="min-h-32" />);

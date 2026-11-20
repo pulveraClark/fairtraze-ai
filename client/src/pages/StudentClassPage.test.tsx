@@ -18,6 +18,7 @@ function renderCard(a: ReturnType<typeof asgn>) {
 }
 
 describe("ProjectCard for a student already in a group (R9)", () => {
+  // STU-04
   it("shows one Open group button instead of View report / FairTraze Docs / Manage group", () => {
     const { onNavigate } = renderCard(asgn());
     expect(screen.getAllByRole("button", { name: /Open group/ })).toHaveLength(1);
@@ -98,6 +99,7 @@ describe("ProjectCard after a join request", () => {
     ...over,
   });
 
+  // STU-06
   it("says the request was sent, names the leader, and offers Cancel request", () => {
     renderCard(pending());
     expect(screen.getByText("Request sent ✓, waiting for Ana Cruz to approve")).toBeInTheDocument();

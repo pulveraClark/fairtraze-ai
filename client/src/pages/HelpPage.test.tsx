@@ -43,6 +43,7 @@ describe("HelpPage", () => {
     expect(screen.queryByRole("link", { name: "How FairTraze works" })).toBeNull();
   });
 
+  // AUTH-02
   it("logged out: keeps the standalone page with a Back button", () => {
     renderAs(null);
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();

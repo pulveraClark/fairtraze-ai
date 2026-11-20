@@ -13,6 +13,7 @@ describe("GET /api/privacy/export", () => {
     expect((await request(app).get("/api/privacy/export")).status).toBe(401);
   });
 
+  // STU-17
   it("contains the caller's own data and nothing of another member's", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const cs = await createClassSection(instructor.id);

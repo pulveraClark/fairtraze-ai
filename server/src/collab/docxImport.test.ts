@@ -3,6 +3,7 @@ import { parseDocxToChunks } from "./docxImport.js";
 import { buildTestDocx } from "../../test/docxFixtures.js";
 
 describe("parseDocxToChunks", () => {
+  // DOC-05 (partial)
   it("extracts headings distinguishable from paragraphs, in document order", async () => {
     const buffer = await buildTestDocx([
       { heading: "Introduction", level: 1 },

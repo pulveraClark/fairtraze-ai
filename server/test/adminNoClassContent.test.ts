@@ -7,6 +7,7 @@ const app = createApp();
 
 // Admins manage accounts. They never read class content: instructions, attachments, groups, boards.
 describe("admin has no access to class content", () => {
+  // ADM-07
   it("is refused on every class, assignment, group and task route; the owner is not", async () => {
     const { user: owner } = await createUser({ systemRole: "INSTRUCTOR" });
     const { user: admin } = await createUser({ systemRole: "ADMIN" });

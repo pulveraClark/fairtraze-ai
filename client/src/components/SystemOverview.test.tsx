@@ -60,6 +60,7 @@ describe("SystemOverview", () => {
     expect(t).not.toMatch(/Documentation Lead/);
   });
 
+  // AUTH-05
   it("signed-out visitors are pointed to sign in and register", () => {
     renderAs();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();

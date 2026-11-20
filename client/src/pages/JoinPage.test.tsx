@@ -32,6 +32,7 @@ describe("JoinPage (invite link)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // STU-02
   it("student not enrolled: asks first, never auto-enrols, and a double click joins once", async () => {
     let resolveJoin: (r: Response) => void = () => undefined;
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -68,6 +69,7 @@ describe("JoinPage (invite link)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // STU-03
   it("an unknown code shows the server's message", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ error: "Invalid join code. Check the code and try again." }, 404)));
     render(<JoinPage />);

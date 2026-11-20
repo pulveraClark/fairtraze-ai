@@ -139,6 +139,7 @@ describe("EvidenceSheet", () => {
     expect(screen.getByText(note)).toBeTruthy();
   });
 
+  // RPT-12
   it("has three EMPTY decision boxes, a Remarks line, the signature lines and the footer", () => {
     render(<EvidenceSheet dto={dto()} />);
     const boxes = screen.getAllByTestId("decision-box");

@@ -19,6 +19,7 @@ function Harness({ onClose }: { onClose?: () => void }) {
 }
 
 describe("Modal", () => {
+  // UX-02
   it("traps Tab, closes on Esc and returns focus to the opener", async () => {
     const user = userEvent.setup();
     render(<Harness />);

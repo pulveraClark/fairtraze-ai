@@ -106,6 +106,7 @@ describe("AdminPage former members", () => {
 describe("AdminPage role and status changes ask in a dialog", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  // ADM-02
   it("role change: ConfirmDialog, no window.confirm; Cancel sends nothing, Confirm PATCHes", async () => {
     const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], systemRole: "INSTRUCTOR" }) }));
     vi.stubGlobal("fetch", fetchFn);
@@ -124,6 +125,7 @@ describe("AdminPage role and status changes ask in a dialog", () => {
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 
+  // ADM-03
   it("deactivate: applies at once with no dialog, then offers Undo, which sets the account active again", async () => {
     const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => ({
       ok: true,
@@ -201,6 +203,7 @@ describe("AdminPage filters, sort and URL", () => {
     expect(window.location.search).toContain("section=instructor-approvals");
   });
 
+  // ADM-01
   it("column headers sort, flip direction, and expose aria-sort", async () => {
     renderPage();
     const user = userEvent.setup();

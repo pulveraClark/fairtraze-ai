@@ -32,6 +32,7 @@ beforeEach(() => vi.useRealTimers());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("useCollabVersionGuard", () => {
+  // UX-06
   it("stays quiet when the server schema version matches", async () => {
     mockVersion(COLLAB_SCHEMA_VERSION);
     const provider = fakeProvider();

@@ -144,6 +144,7 @@ describe("GET /api/student/group/:projectId: error cases keep their order and wo
     expect(res.body).toEqual({ error: "Invalid project id" });
   });
 
+  // PRV-04
   it("403 for a student who is not a member", async () => {
     const { project, outsider } = await seed("COMBINED");
     const res = await get(project.id, outsider);

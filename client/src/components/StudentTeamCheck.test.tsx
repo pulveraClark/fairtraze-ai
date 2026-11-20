@@ -31,6 +31,7 @@ describe("StudentTeamCheck (every member's instructions check)", () => {
     expect(screen.queryByText(/can be wrong|May be wrong|not a grade|Based on the analysis|Generate/i)).toBeNull();
   });
 
+  // STU-12
   it("opened, every requirement shows its plain status word", async () => {
     const user = userEvent.setup();
     render(<StudentTeamCheck projectId={1} check={check([

@@ -90,6 +90,7 @@ const renderCard = (requirements: R[] | null, extra: Partial<React.ComponentProp
 const mixed = () => [...found(7), req("No README", "NOT_FOUND"), req("Has charts", "NOT_FOUND", { unverified: true })];
 
 describe("AI findings summary", () => {
+  // RPT-07
   it("'Needs a look (2 of 9)' lists the open items, not covered before check, and there is no 'Instructions: k of M' line", async () => {
     renderCard(mixed());
     expect(await screen.findByRole("region", { name: "Needs a look" })).toBeTruthy();
@@ -256,6 +257,7 @@ describe("AI findings summary", () => {
     expect(screen.getByText("Work is shared very evenly.")).toBeTruthy();
   });
 
+  // RPT-06
   it("has no Team details row and no Gini number: the explanation text is inline", () => {
     const { container } = renderCard(found(2), { narrative: "Explained." });
     expect(screen.queryByRole("button", { name: /Team details/ })).toBeNull();

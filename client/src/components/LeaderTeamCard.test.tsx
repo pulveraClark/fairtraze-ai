@@ -12,6 +12,7 @@ const member = (o: Partial<LeaderTeamMember>): LeaderTeamMember => ({
 });
 
 describe("LeaderTeamCard", () => {
+  // LDR-01
   it("shows shares, the GitHub/Docs split for COMBINED, task counts and the fairness note (the note is a (?) tip)", async () => {
     render(<LeaderTeamCard sourceType="COMBINED" team={[member({}), member({ userId: 2, name: "Member B", contributionShare: null, githubContributionShare: null, documentContributionShare: null })]} />);
     expect(screen.getByText("Equal share: 50.0% each.")).toBeTruthy();
@@ -150,6 +151,7 @@ describe("LeaderTeamCard work summaries", () => {
   } as never;
   const team = [member({ userId: 1, name: "Ana Cruz" }), member({ userId: 2, name: "Ben Lim" })];
 
+  // LDR-04
   it("only a member the server sent a summary for gets the closed row; it opens on a press", async () => {
     render(<LeaderTeamCard sourceType="GITHUB" team={team} currentUserId={1} ai={ai} />);
     expect(screen.queryByRole("button", { name: "What you worked on" })).toBeNull();

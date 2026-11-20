@@ -99,6 +99,7 @@ describe("AppShell sidebar (instructor)", () => {
     expect(within(nav).queryByRole("link", { name: "Group Beta" })).toBeNull();
   });
 
+  // INS-12
   it("collapses to an icon rail with labelled controls and remembers the choice per user", async () => {
     signInAs("INSTRUCTOR");
     window.history.pushState({}, "", "/dashboard");
@@ -174,6 +175,7 @@ describe("AppShell sidebar: Verify report", () => {
 });
 
 describe("AppShell sidebar: open disputes badge", () => {
+  // DSP-02
   it("shows the count on Disputes with one accessible name, expanded and collapsed", async () => {
     mockOpenDisputes = 4;
     signInAs("INSTRUCTOR");

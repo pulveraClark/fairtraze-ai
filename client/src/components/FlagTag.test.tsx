@@ -22,6 +22,7 @@ const tag = (flag: Flag, props: Partial<Parameters<typeof FlagTag>[0]> = {}) => 
 };
 
 describe("instructor flag colours (one table for FlagTag and StatusPill)", () => {
+  // RPT-03
   it("Overload amber, Low contribution (free-rider and inactive) red, Deadline-driven yellow", () => {
     expect(FLAG_TONE).toEqual({ inactive: "red", "free-rider": "red", overload: "amber", "deadline-driven": "yellow" });
   });
@@ -46,6 +47,7 @@ describe("instructor flag colours (one table for FlagTag and StatusPill)", () =>
     }
   });
 
+  // RPT-02
   it("instructors read 'Low contribution' for free-rider and inactive, never the old words", () => {
     for (const flag of ["free-rider", "inactive"] as Flag[]) {
       const t = tag(flag);

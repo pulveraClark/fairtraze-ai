@@ -5,6 +5,7 @@ import { RouterProvider } from "../router";
 import { AppFooter, FOOTER_NOTE } from "./AppFooter";
 
 describe("AppFooter", () => {
+  // PRV-07
   it("shows the one 'not a grade' note and a Help link, even outside a router", () => {
     render(<AppFooter />);
     expect(screen.getByText(FOOTER_NOTE)).toBeInTheDocument();

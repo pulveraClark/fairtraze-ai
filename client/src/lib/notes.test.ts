@@ -32,6 +32,7 @@ describe("notes helpers", () => {
     expect(formatNoteDate("2026-10-19T00:30:00Z")).toBe("Oct 19, 2026");
     expect(formatNoteDate("2026-10-19T15:45:00Z")).not.toMatch(/\d:\d\d/);
   });
+  // STU-15
   it("states the instructor's decision in plain words", () => {
     expect(noteOutcomeText("RESOLVED")).toBe("Your instructor accepted your note");
     expect(noteOutcomeText("DISMISSED")).toBe("Your instructor kept the result");

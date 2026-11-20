@@ -8,6 +8,7 @@ import { HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "@shared/sc
 const base = { noActivity: false, teamHealth: "Healthy" as const, gini: 0.122, earlyMuted: false, confidence: "high" as const, flaggedCount: 0, averageGini: null };
 
 describe("TeamSummaryBar", () => {
+  // RPT-04
   it("is one row: label, health, Gini with a real (i) button, and the flagged count", () => {
     render(<TeamSummaryBar {...base} />);
     expect(screen.getByText("Team health")).toBeInTheDocument();

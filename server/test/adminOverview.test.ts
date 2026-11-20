@@ -6,6 +6,7 @@ import { createUser, authHeaderFor } from "./factories.js";
 const app = createApp();
 
 describe("GET /api/admin/overview", () => {
+  // ADM-05
   it("returns account counts only, never class, group, report or dispute figures", async () => {
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
     const res = await request(app).get("/api/admin/overview").set("Authorization", authHeaderFor(admin));

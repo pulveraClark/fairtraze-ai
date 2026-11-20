@@ -56,6 +56,7 @@ describe("Member details modal: previous/next", () => {
     expect(screen.getByText("Member 2 of 3")).toBeInTheDocument();
   });
 
+  // RPT-05
   it("steps through members in list order with the arrow buttons", async () => {
     render(<Harness />);
     await openRow("Member A");

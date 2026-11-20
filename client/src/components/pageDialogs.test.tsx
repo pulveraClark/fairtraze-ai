@@ -21,6 +21,7 @@ function makeEditor() {
 }
 
 describe("PageSetupDialog", () => {
+  // DOC-06
   it("starts from the current setup and applies only what the user chose", async () => {
     const onApply = vi.fn();
     const onClose = vi.fn();

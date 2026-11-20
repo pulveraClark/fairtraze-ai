@@ -35,6 +35,7 @@ function Harness({ suggestion = null, onSubmit = () => {} }: { suggestion?: Role
 }
 
 describe("RoleModal", () => {
+  // STU-10
   it("opens, closes on Escape and returns focus to the Change button", async () => {
     const user = userEvent.setup();
     render(<Harness />);

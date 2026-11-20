@@ -81,6 +81,7 @@ describe("AlertsBell for non-instructor roles", () => {
     expect(screen.getByText("Join Request")).toBeTruthy();
   });
 
+  // DSP-09, STU-16
   it("navigates via the stored role-correct link and marks the notification read", async () => {
     signInAs("STUDENT");
     renderBell();
@@ -101,6 +102,7 @@ describe("AlertsBell feedback", () => {
     return { ok: true, json: async () => (url === "/api/alerts/unread-count" ? { unreadCount: 1 } : { alerts: [studentAlert], unreadCount: 1 }) };
   }));
 
+  // DSP-10
   it("marking all read is silent when it works", async () => {
     signInAs("STUDENT");
     stub(true);

@@ -27,6 +27,7 @@ describe("student dashboard class card: last analyzed", () => {
 });
 
 describe("student dashboard class card (23)", () => {
+  // STU-01
   it("is headed by the subject code and the EDP code in the one shared format, and still shows the join code to copy", () => {
     render(<ClassCard cls={cls} onNavigate={() => {}} />);
     expect(document.body.textContent).toContain("IT-ELEC 2 · EDP UXA634062");

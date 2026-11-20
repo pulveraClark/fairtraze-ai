@@ -47,6 +47,7 @@ describe("InstructorApprovals", () => {
     expect(screen.queryByText("Instructor approvals")).toBeNull();
   });
 
+  // ADM-04
   it("lists pending instructors with a count and approves one", async () => {
     const fetchFn = mockFetch({
       pendingCount: 1,

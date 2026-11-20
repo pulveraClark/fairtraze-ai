@@ -29,6 +29,7 @@ describe("CommentPanel actions", () => {
     }
   });
 
+  // DOC-03
   it("Resolve shows Resolving… and ignores a second click while the request runs", async () => {
     let finish!: () => void;
     const onResolveToggle = vi.fn(() => new Promise<void>((r) => { finish = r; }));

@@ -33,6 +33,7 @@ describe("DisputesPage", () => {
     classes.list = [];
   });
 
+  // DSP-01
   it("has no 'Back to Dashboard' link; sidebar and breadcrumb cover it (R6)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ disputes: [], openCount: 0 }) })));
     render(
@@ -44,6 +45,7 @@ describe("DisputesPage", () => {
     expect(screen.queryByText(/back to dashboard/i)).toBeNull();
   });
 
+  // DSP-04
   it("opening the response window marks the note as seen, once, with no extra click", async () => {
     const open = {
       id: 5, memberName: "Ana", reason: "Offline work.", status: "OPEN", instructorResponse: null, disputedFlags: [],

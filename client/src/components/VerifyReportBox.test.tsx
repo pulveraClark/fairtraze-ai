@@ -26,6 +26,7 @@ describe("VerifyReportBox", () => {
   beforeEach(() => vi.unstubAllGlobals());
   afterEach(() => vi.unstubAllGlobals());
 
+  // RPT-13
   it("shows 'Matches the latest analysis' with the printout's numbers and no Gini or bands", async () => {
     const f = mockFetch(200, { ...base, status: "latest" });
     render(<VerifyReportBox />);
@@ -48,6 +49,7 @@ describe("VerifyReportBox", () => {
     await waitFor(() => expect(screen.getByText(/Older report\. A newer analysis exists\./)).toBeTruthy());
   });
 
+  // RPT-14
   it("says 'Report ID not found.' for a wrong code", async () => {
     mockFetch(404, { error: "Report ID not found." });
     render(<VerifyReportBox />);

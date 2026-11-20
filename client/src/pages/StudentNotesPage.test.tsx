@@ -29,6 +29,7 @@ describe("StudentNotesPage", () => {
     expect(screen.getByText(/You have not sent a note/)).toBeInTheDocument();
   });
 
+  // STU-14
   it("shows an unopened note as Sent, with no reply yet", () => {
     state.data = [note({})];
     renderPage();

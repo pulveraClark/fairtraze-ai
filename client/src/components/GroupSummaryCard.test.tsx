@@ -76,6 +76,7 @@ describe("GroupSummaryCard with no recorded activity", () => {
     expect(screen.queryByText(/low contribution/i)).not.toBeInTheDocument();
   });
 
+  // INS-10
   it("keeps the computed health and flags as soon as anyone has activity", () => {
     renderCard(["Ana Reyes", "Ben Cruz"], {
       teamHealth: "Moderate Risk",

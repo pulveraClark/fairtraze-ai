@@ -400,6 +400,7 @@ describe("MemberDrawer", () => {
 });
 
 describe("MemberContributionList", () => {
+  // RPT-01
   it("renders one 44px+ row per member with share, flag text and an equal-share marker, and opens details", async () => {
     const onOpen = vi.fn();
     render(<MemberContributionList members={[gh, { ...doc } as never]} onOpen={onOpen} />);

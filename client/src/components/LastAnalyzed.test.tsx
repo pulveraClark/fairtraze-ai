@@ -5,6 +5,7 @@ import { LastAnalyzed } from "./LastAnalyzed";
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 describe("LastAnalyzed", () => {
+  // RPT-10
   it("says when it was last analyzed and that it re-analyzes when there is new activity", () => {
     render(<LastAnalyzed analyzedAt={ago(3 * 3_600_000)} trigger="auto" />);
     expect(screen.getByText("Last analyzed 3 hours ago (automatic) · Re-analyzes when there is new activity")).toBeInTheDocument();

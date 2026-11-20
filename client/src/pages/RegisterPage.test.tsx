@@ -36,6 +36,7 @@ async function fillForm() {
 describe("RegisterPage role choice", () => {
   afterEach(() => vi.clearAllMocks());
 
+  // AUTH-10
   it("starts with no role selected and keeps Create account disabled until one is chosen", async () => {
     renderPage();
     const role = screen.getByLabelText("Role") as HTMLSelectElement;
@@ -66,6 +67,7 @@ describe("RegisterPage role choice", () => {
 describe("RegisterPage privacy consent", () => {
   afterEach(() => vi.clearAllMocks());
 
+  // AUTH-09 (partial)
   it("keeps Create account disabled until the Privacy Notice box is ticked", async () => {
     renderPage();
     await fillForm();
@@ -77,6 +79,7 @@ describe("RegisterPage privacy consent", () => {
     expect(submit).toBeEnabled();
   });
 
+  // AUTH-11 (partial)
   it("links to the public notice and sends the acceptance with the sign-up", async () => {
     register.mockResolvedValue({ emailVerificationRequired: false });
     renderPage();

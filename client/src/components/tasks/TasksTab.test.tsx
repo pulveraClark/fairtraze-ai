@@ -82,6 +82,7 @@ beforeEach(() => { resetFixtureIds(); });
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("board layout", () => {
+  // TSK-01
   it("shows the four columns with counts and the card details", async () => {
     signInAs(1);
     const today = todayManila();
@@ -180,6 +181,7 @@ describe("permissions mirrored in the UI", () => {
     expect(screen.getByText(/View only/)).toBeInTheDocument();
   });
 
+  // TSK-04
   it("status menu: Done is disabled and labelled 'leader only' for an assignee", async () => {
     signInAs(2);
     installFakeServer(mkBoard({ viewer: { userId: 2, isLeader: false, isMember: true, readOnly: false, canCreate: true, canManageBoard: false } }, [
@@ -345,6 +347,7 @@ describe("creating tasks", () => {
     expect(screen.getAllByText("No tasks here yet.")).toHaveLength(4);
   });
 
+  // TSK-02
   it("the New task dialog creates a task", async () => {
     signInAs(2);
     const server = installFakeServer(mkBoard({ viewer: { userId: 2, isLeader: false, isMember: true, readOnly: false, canCreate: true, canManageBoard: false } }, []));
@@ -373,6 +376,7 @@ describe("moving a task: optimistic, toast with Undo, conflicts", () => {
     return { server, user };
   };
 
+  // TSK-03
   it("moves via the status menu, confirms in a toast, and Undo puts it back", async () => {
     const { server, user } = await setup();
     await user.selectOptions(screen.getByLabelText("Status"), "IN_PROGRESS");

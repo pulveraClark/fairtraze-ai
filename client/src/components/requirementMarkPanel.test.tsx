@@ -147,6 +147,7 @@ describe("instructor", () => {
     expect(screen.getByText("You have not accepted this yet. The leader can send more proof.")).toBeTruthy();
   });
 
+  // RPT-08
   it("'Mark as covered' is a quiet text button that opens the same note form and confirms as before", async () => {
     const a = api("instructor");
     render(<BriefCheckCard check={check()} instructor marks={a} />);

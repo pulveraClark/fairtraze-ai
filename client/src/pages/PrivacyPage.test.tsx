@@ -11,6 +11,7 @@ vi.mock("../context/AuthContext", async () => {
 });
 
 describe("PrivacyPage", () => {
+  // PRV-06
   it("renders for a signed-out visitor with version, date, Gemini detail and the NPC route", () => {
     vi.mocked(AuthContextModule.useAuth).mockReturnValue({
       user: null, token: null, loading: false,

@@ -46,6 +46,7 @@ describe("ConsentGatePage", () => {
     expect(screen.queryByText(/What changed/)).toBeNull();
   });
 
+  // AUTH-13
   it("blocks until the box is ticked, then records the current version", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);

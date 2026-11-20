@@ -4,6 +4,7 @@ import { AnalyzeError } from "./analyzeStream";
 import { ANALYSIS_FAILURE_TEXT, REPO_UNREADABLE_FOR_MEMBERS } from "@shared/failureMessages";
 
 describe("failure wording", () => {
+  // UX-03
   it("words each analysis failure by its code, with what to do next and no blame", () => {
     for (const [code, text] of Object.entries(ANALYSIS_FAILURE_TEXT)) {
       expect(analysisErrorText(new AnalyzeError("raw server text", 500, code))).toBe(text);

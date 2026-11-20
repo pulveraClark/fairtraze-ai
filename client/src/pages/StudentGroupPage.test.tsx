@@ -75,11 +75,13 @@ describe("StudentGroupPage", () => {
 
   const flagged = () => groupFixture({ report: { ...(groupFixture().report as object), myContribution: { ...(groupFixture().report.myContribution as object), flags: ["inactive"] } } });
 
+  // LDR-06
   it("a plain member sees no Print evidence report button", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: "Print evidence report" })).toBeNull();
   });
 
+  // LDR-05
   it("Print evidence report is enabled for the leader when the group has an analysis", () => {
     state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null } });
     renderPage();
@@ -106,6 +108,7 @@ describe("StudentGroupPage", () => {
     expect(screen.getByRole("button", { name: "Send note" })).toBeTruthy();
   });
 
+  // STU-13
   it("sending a note says 'Note sent.' only after the server accepted it, and a refusal shows its message", async () => {
     window.history.pushState({}, "", REPORT);
     state.data = flagged();
@@ -315,6 +318,7 @@ describe("StudentGroupPage", () => {
     expect(screen.getByText("Score blend: 50% GitHub / 50% Docs")).toBeTruthy();
   });
 
+  // STU-09
   it("a student's own free-rider flag reads 'Low contribution' in a soft warning tone (20)", () => {
     window.history.pushState({}, "", REPORT);
     const f = groupFixture();
@@ -335,6 +339,7 @@ describe("StudentGroupPage", () => {
     expect(screen.getAllByText("Work is a bit uneven").length).toBeGreaterThan(0);
   });
 
+  // PRV-02
   it("applies to the leader too (21)", () => {
     window.history.pushState({}, "", REPORT);
     state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null } });
@@ -532,6 +537,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect(screen.queryByRole("dialog", { name: /Ana Cruz|Ben Lim/ })).toBeNull();
   });
 
+  // STU-08
   it("a member opens only their own window: no arrows, no other member's findings", async () => {
     state.data = groupFixture();
     renderPage();
@@ -595,6 +601,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     expect(screen.queryByText("Added the login page.")).toBeNull(); // the leader's own row stays closed
   });
 
+  // STU-11
   it("plain member: own summary is always open in the Team overview, above the instructions check, and no teammate's summary exists", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...withCheck, summaries: [aiBody.summaries[0]] }) }));
     state.data = groupFixture();
@@ -633,6 +640,7 @@ describe("StudentGroupPage: member window and team overview", () => {
     }
   });
 
+  // PRV-01
   it("a plain member never sees the Gini value, a band or the team index, in the Team overview or in their window", async () => {
     state.data = groupFixture();
     renderPage();

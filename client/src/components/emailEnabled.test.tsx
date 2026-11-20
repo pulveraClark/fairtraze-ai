@@ -49,6 +49,7 @@ describe("VerifyEmailBanner", () => {
 });
 
 describe("Login page 'Forgot password?'", () => {
+  // AUTH-08 (partial)
   it("is shown when email is on", async () => {
     mockAuth(null);
     mockConfig(true);

@@ -53,6 +53,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("DocumentEditor first sync", () => {
+  // DOC-01
   it("keeps a member read-only until the first sync completes, then lets them type", async () => {
     render(<ToastProvider><DocumentEditor groupId={1} editable /></ToastProvider>);
     await waitFor(() => expect(isEditable()).toBe("false"));
@@ -78,6 +79,7 @@ describe("DocumentEditor first sync", () => {
     expect(screen.queryByText("Connecting to the shared document…")).not.toBeInTheDocument();
   });
 
+  // DOC-08
   it("never makes a read-only viewer editable, even after the sync completes", async () => {
     render(<ToastProvider><DocumentEditor groupId={1} editable={false} /></ToastProvider>);
     await waitFor(() => expect(isEditable()).toBe("false"));

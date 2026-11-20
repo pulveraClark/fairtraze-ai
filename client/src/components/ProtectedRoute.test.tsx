@@ -46,6 +46,7 @@ describe("ProtectedRoute", () => {
     expect(await findByTestId("protected-content")).toBeInTheDocument();
   });
 
+  // AUTH-15
   it("redirects to /login and remembers the intended path when there is no user", async () => {
     mockUseAuth.mockReturnValue({
       user: null,
@@ -63,6 +64,7 @@ describe("ProtectedRoute", () => {
     expect(localStorage.getItem("ft_next")).toBe("/dashboard");
   });
 
+  // PRV-05
   it("redirects a STUDENT away from an INSTRUCTOR-only route to their role home", async () => {
     mockUseAuth.mockReturnValue({
       user: { id: 2, email: "s@example.com", name: "S", systemRole: "STUDENT" },

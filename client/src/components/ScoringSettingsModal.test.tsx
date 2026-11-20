@@ -46,6 +46,7 @@ describe("ScoringSettingsModal", () => {
     render(<ScoringSettingsModal assignmentId={7} currentConfig={CONFIG} sourceType={sourceType} onClose={() => {}} onSaved={() => {}} />);
   const numberInput = (i: number) => screen.getAllByRole("spinbutton")[i] as HTMLInputElement;
 
+  // INS-06
   it("shows a live total; an off total says how far, disables Save and Balance fixes it", () => {
     renderModal();
     expect(screen.getByRole("status")).toHaveTextContent("Code total: 1.00 of 1.00");
@@ -129,6 +130,7 @@ describe("ScoringSettingsModal Docs weights", () => {
     expect(at("Source")).toBeLessThan(at("Flag"));
   });
 
+  // INS-05
   it("pre-fills the defaults, labels them, and says where they come from", () => {
     renderIt("COMBINED");
     expect(num("Retained text weight").value).toBe("0.37");
@@ -261,6 +263,7 @@ describe("ScoringSettingsModal images in documents", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // INS-07
   it("sends the chosen limit with the save, and null for No limit", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ config: CONFIG }) });
     vi.stubGlobal("fetch", fetchMock);

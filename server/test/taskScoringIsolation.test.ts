@@ -100,6 +100,7 @@ const analyze = (projectId: number, instructor: Parameters<typeof authHeaderFor>
   request(app).post(`/api/projects/${projectId}/analyze`).set("Authorization", authHeaderFor(instructor));
 
 describe("analysis output is identical with and without tasks, comments, files, watchers and commit links", () => {
+  // TSK-07
   it("same scores, flags, Gini and team health; the AI prompt input is identical too", async () => {
     const { instructor, a, b, project } = await setup();
     mockedFetchRepoStats.mockImplementation(async () => ({ contributors: [contributor("member-a", 9), contributor("member-b", 3)] }));

@@ -79,6 +79,7 @@ describe("suggestAssigneeForTask (role match, no saved report: fewest open tasks
     expect(taskRoleNeeded({ docHeading: null }, ["Frontend"])).toBe("DEVELOPER");
   });
 
+  // TSK-06
   it("sends other tasks to Developers, fewest open tasks first, then by name", () => {
     const s = suggestAssigneeForTask(people, [open(10, 1), open(11, 4)], { id: 1, docHeading: null }, []);
     expect(s).toMatchObject({ userId: 2, role: "DEVELOPER", roleMatched: true, open: 0 });

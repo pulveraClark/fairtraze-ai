@@ -44,6 +44,7 @@ describe("lib/aiReview", () => {
 });
 
 describe("MemberWorkSummary (instructor drawer)", () => {
+  // RPT-09
   it("shows the summary, labels it as AI and may-be-wrong, and keeps evidence collapsed until opened", async () => {
     render(<MemberWorkSummary review={base} member={{ userId: 1 }} />);
     expect(screen.getByRole("heading", { name: /What this member worked on/ })).toBeTruthy();
@@ -245,6 +246,7 @@ function Harness({ review, narrative, onGenerated, allowed = true }: { review: U
 }
 
 describe("AI button in Member contributions", () => {
+  // RPT-11
   it("one click starts both when AI findings are on", async () => {
     const start = vi.fn().mockResolvedValue(true);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ narrative: "Text." }) }));

@@ -88,6 +88,7 @@ describe("POST /api/auth/register", () => {
 });
 
 describe("POST /api/auth/login", () => {
+  // AUTH-06
   it("returns the same generic error for an unknown email as for a wrong password", async () => {
     await createUser({ email: "known@example.com", password: "correct-password" });
 
@@ -105,6 +106,7 @@ describe("POST /api/auth/login", () => {
     expect(unknownEmailRes.body.error).toBe(wrongPasswordRes.body.error);
   });
 
+  // AUTH-07 (partial)
   it("logs in successfully with correct credentials", async () => {
     await createUser({ email: "gooduser@example.com", password: "correct-password" });
 
