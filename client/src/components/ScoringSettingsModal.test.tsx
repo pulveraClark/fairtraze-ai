@@ -4,6 +4,7 @@ import type { ProjectScoringConfig } from "@shared/types";
 import { ScoringSettingsModal } from "./ScoringSettingsModal";
 
 vi.mock("./Toast", () => ({ useToast: () => ({ showSuccessToast: vi.fn() }) }));
+vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "tok" }) }));
 
 const CONFIG: ProjectScoringConfig = {
   weights: { commits: 0.4, lines: 0.4, activeDays: 0.2 },
@@ -278,6 +279,18 @@ describe("ScoringSettingsModal images in documents", () => {
     fireEvent.click(save());
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(2));
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).docsImageLimit).toBeNull();
+  });
+
+  it("INS-07: Save sends the Authorization header and the chosen image limit", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ config: CONFIG }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const onSaved = vi.fn();
+    renderIt("EDITOR", CONFIG, onSaved);
+    fireEvent.change(select(), { target: { value: "3" } });
+    fireEvent.click(save());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer tok");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).docsImageLimit).toBe(3);
   });
 
   it("loads a saved No limit, and Reset to defaults puts the limit back to 5", () => {

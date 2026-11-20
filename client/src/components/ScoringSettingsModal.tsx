@@ -3,6 +3,7 @@ import { BusyLabel } from "./ui/BusyLabel";
 import { NETWORK_ERROR_TEXT } from "../lib/failureText";
 import type { ProjectScoringConfig } from "@shared/types";
 import { useToast } from "./Toast";
+import { useAuth } from "../context/AuthContext";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { Modal } from "./ui/Modal";
 import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT, FOCUS_LIGHT } from "./ui/styles";
@@ -36,7 +37,8 @@ function pct(v: number) {
 
 export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, onClose, onSaved }: Props) {
   const { showSuccessToast } = useToast();
-  const [commits,        setCommits]        = useState(currentConfig.weights.commits);
+  const { token } = useAuth();
+  const [commits,       setCommits]        = useState(currentConfig.weights.commits);
   const [lines,          setLines]          = useState(currentConfig.weights.lines);
   const [activeDays,     setActiveDays]     = useState(currentConfig.weights.activeDays);
   const [freeRider,      setFreeRider]      = useState(currentConfig.thresholds.freeRider);
@@ -122,9 +124,9 @@ export function ScoringSettingsModal({ assignmentId, currentConfig, sourceType, 
     try {
       const res = await fetch(`/api/assignments/${assignmentId}/scoring-config`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          weights:    { commits, lines, activeDays },
+          weights:   { commits, lines, activeDays },
           thresholds: { freeRider, overload, deadlineDriven },
           blend:      { wGitHub, wDocs },
           docsWeights: { retainedText: docsText, sessions: docsSessions, activeDays: docsDays },
