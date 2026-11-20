@@ -74,14 +74,16 @@ export function AlertsBell({ collapsed = false }: AlertsBellProps) {
         <span className="relative flex shrink-0">
           <NavIcon name="bell" />
           {collapsed && unreadCount > 0 && (
-            <span aria-hidden="true" className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-[#020617]" />
+            <span aria-hidden="true" className="absolute -right-2 -top-2 min-w-[1.25rem] rounded-full bg-red-500 px-1 py-0.5 text-center text-xs font-bold leading-none text-white ring-2 ring-[#020617]">
+              {countText}
+            </span>
           )}
         </span>
         {!collapsed && (
           <>
             <span className="flex-1 truncate">Notifications</span>
             {unreadCount > 0 && (
-              <span aria-hidden="true" className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-sm font-bold leading-none text-white">
+              <span aria-hidden="true" className="min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-xs font-bold leading-none text-white">
                 {countText}
               </span>
             )}

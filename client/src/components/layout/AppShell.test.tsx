@@ -44,16 +44,18 @@ function renderShell() {
 }
 
 let mockOpenDisputes = 0;
+let mockUnread = 3;
 
 beforeEach(() => {
   mockOpenDisputes = 0;
+  mockUnread = 3;
   window.localStorage.clear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => ({
       ok: true,
       json: async () => {
-        if (url === "/api/alerts/unread-count") return { unreadCount: 3 };
+        if (url === "/api/alerts/unread-count") return { unreadCount: mockUnread };
         if (url === "/api/disputes/open-count") return { openCount: mockOpenDisputes };
         if (url === "/api/classes") return { classes: classList };
         if (url === "/api/projects/summary") return { summary };
@@ -214,6 +216,38 @@ describe("AppShell sidebar: open disputes badge", () => {
     await screen.findAllByRole("navigation", { name: "Main" });
     expect(screen.queryByRole("link", { name: /open$/ })).toBeNull();
     expect(fetch).not.toHaveBeenCalledWith("/api/disputes/open-count", expect.anything());
+  });
+});
+
+describe("AppShell sidebar: unread notifications badge", () => {
+  // INS-12
+  it("INS-12: the Notifications count shows as a number when expanded and collapsed, hidden at 0, 99+ above 99", async () => {
+    mockUnread = 3;
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    const first = renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    const expanded = await within(nav).findByRole("button", { name: "Notifications, 3 unread" });
+    expect(Array.from(expanded.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "3")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const rail = await within(nav).findByRole("button", { name: "Notifications, 3 unread" });
+    expect(Array.from(rail.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "3")).toBe(true);
+    first.unmount();
+
+    window.localStorage.clear();
+    mockUnread = 0;
+    const second = renderShell();
+    const nav0 = screen.getAllByRole("navigation", { name: "Main" })[0];
+    const none = await within(nav0).findByRole("button", { name: "Notifications" });
+    expect(none.querySelector('[aria-hidden="true"].rounded-full')).toBeNull();
+    second.unmount();
+
+    mockUnread = 120;
+    renderShell();
+    const many = await screen.findByRole("button", { name: "Notifications, 120 unread" });
+    expect(many.textContent).toContain("99+");
   });
 });
 
