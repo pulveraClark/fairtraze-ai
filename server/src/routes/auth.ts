@@ -153,8 +153,8 @@ authRouter.post("/api/auth/register", async (req, res) => {
     const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
     // A delivery failure must not block registration — the account is already
     // created; the user can request a fresh link via resend-verification.
-    sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
-      console.error("[auth] failed to send verification email", err)
+    sendVerificationEmail(user.email, user.name, verifyLink).catch(() =>
+      console.error("[auth] failed to send verification email")
     );
   }
 
@@ -322,11 +322,11 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
     try {
       const rawToken = await issueResetToken(user.id);
       const resetLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/reset-password?token=${rawToken}`;
-      Promise.resolve(sendPasswordResetEmail(user.email, user.name, resetLink)).catch((err) =>
-        console.error("[auth] failed to send password reset email", err)
+      Promise.resolve(sendPasswordResetEmail(user.email, user.name, resetLink)).catch(() =>
+        console.error("[auth] failed to send password reset email")
       );
-    } catch (err) {
-      console.error("[auth] failed to start password reset", err);
+    } catch {
+      console.error("[auth] failed to start password reset");
     }
   }
 
@@ -441,8 +441,8 @@ authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, 
 
   const rawVerifyToken = await issueVerificationToken(user.id);
   const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
-  sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
-    console.error("[auth] failed to send verification email", err)
+  sendVerificationEmail(user.email, user.name, verifyLink).catch(() =>
+    console.error("[auth] failed to send verification email")
   );
 
   res.json({ message: "Verification email sent." });

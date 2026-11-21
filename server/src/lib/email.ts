@@ -44,11 +44,6 @@ This link expires in 30 minutes. If you didn't request this, you can safely igno
 
 export async function sendVerificationEmail(to: string, name: string, verifyLink: string): Promise<void> {
   if (!isEmailEnabled()) return;
-  // Development only: logging the raw link keeps demo accounts verifiable without a mail key.
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[email] verification link for ${to}: ${verifyLink}`);
-  }
-
   const text = `Hi ${name},
 
 Welcome to FAIR TRAZE AI! Please verify your email address (${to}) to unlock full access.
