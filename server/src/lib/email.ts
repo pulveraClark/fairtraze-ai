@@ -1,8 +1,5 @@
-import { Resend } from "resend";
 import { isEmailEnabled } from "./emailConfig.js";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "FairTraze AI <onboarding@resend.dev>";
+import { sendMail } from "./mail.js";
 
 export async function sendPasswordResetEmail(to: string, name: string, resetLink: string): Promise<void> {
   if (!isEmailEnabled()) return;
@@ -36,9 +33,9 @@ This link expires in 30 minutes. If you didn't request this, you can safely igno
     </div>
   `;
 
-  await resend.emails.send({
-    from: FROM_ADDRESS,
+  await sendMail({
     to,
+    toName: name,
     subject: "Reset your FAIR TRAZE AI password",
     text,
     html,
@@ -47,11 +44,7 @@ This link expires in 30 minutes. If you didn't request this, you can safely igno
 
 export async function sendVerificationEmail(to: string, name: string, verifyLink: string): Promise<void> {
   if (!isEmailEnabled()) return;
-  // Resend's sandbox mode (no verified sending domain) only delivers to the
-  // account owner's own verified address — the same limitation already hit
-  // with password reset. Logging the raw link here keeps other test/demo
-  // accounts verifiable in development regardless of whether delivery
-  // actually succeeded; production behavior is unaffected.
+  // Development only: logging the raw link keeps demo accounts verifiable without a mail key.
   if (process.env.NODE_ENV !== "production") {
     console.log(`[email] verification link for ${to}: ${verifyLink}`);
   }
@@ -86,9 +79,9 @@ This link expires in 24 hours. If you didn't create this account, you can safely
     </div>
   `;
 
-  await resend.emails.send({
-    from: FROM_ADDRESS,
+  await sendMail({
     to,
+    toName: name,
     subject: "Verify your FAIR TRAZE AI email",
     text,
     html,

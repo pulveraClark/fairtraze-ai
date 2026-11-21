@@ -36,7 +36,6 @@
     "mammoth": "^1.12.1",
     "node-html-parser": "^9.0.1",
     "prosemirror-model": "^1.25.10",
-    "resend": "^6.20.0",
     "ws": "^8.21.0",
     "y-websocket": "^1.5.4",
     "yjs": "^13.6.31",

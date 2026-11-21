@@ -11,8 +11,8 @@ vi.mock("../src/middleware/security.js", async () => {
   return { ...actual, authLimiter: passthrough, analysisLimiter: passthrough };
 });
 
-const resendSend = vi.fn().mockResolvedValue({});
-vi.mock("resend", () => ({ Resend: class { emails = { send: resendSend }; } }));
+const mailSend = vi.fn().mockResolvedValue(true);
+vi.mock("../src/lib/mail.js", () => ({ sendMail: mailSend, isMailConfigured: () => true }));
 
 const { createApp } = await import("../src/app.js");
 const app = createApp();
@@ -20,7 +20,7 @@ const app = createApp();
 beforeEach(() => {
   vi.mocked(sendVerificationEmail).mockClear();
   vi.mocked(sendPasswordResetEmail).mockClear();
-  resendSend.mockClear();
+  mailSend.mockClear();
 });
 afterEach(() => {
   delete process.env.EMAIL_ENABLED;
@@ -51,11 +51,11 @@ describe("EMAIL_ENABLED unset / true (current behaviour)", () => {
     expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
   });
 
-  it("the real senders call Resend", async () => {
+  it("the real senders send through lib/mail", async () => {
     const real = await vi.importActual<typeof import("../src/lib/email.js")>("../src/lib/email.js");
     await real.sendVerificationEmail("a@example.com", "A", "http://x/v");
     await real.sendPasswordResetEmail("a@example.com", "A", "http://x/r");
-    expect(resendSend).toHaveBeenCalledTimes(2);
+    expect(mailSend).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -126,10 +126,10 @@ describe("EMAIL_ENABLED=false", () => {
     }
   });
 
-  it("the real senders never call Resend", async () => {
+  it("the real senders never send through lib/mail", async () => {
     const real = await vi.importActual<typeof import("../src/lib/email.js")>("../src/lib/email.js");
     await real.sendVerificationEmail("a@example.com", "A", "http://x/v");
     await real.sendPasswordResetEmail("a@example.com", "A", "http://x/r");
-    expect(resendSend).not.toHaveBeenCalled();
+    expect(mailSend).not.toHaveBeenCalled();
   });
 });
