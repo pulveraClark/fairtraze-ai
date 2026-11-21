@@ -144,6 +144,33 @@ describe("rate limiting", () => {
       expect((await ask("nobody-here@example.com")).status).toBe(429);
       expect((await ask("someone-else@example.com")).status).toBe(200);
     });
+
+    it("forgot-password allows 10 per hour for one email across all addresses (no inbox flooding)", async () => {
+      const ask = (ip: string, email: string) =>
+        request(proxied).post("/api/auth/forgot-password").set("X-Forwarded-For", ip).send({ email });
+      for (let i = 0; i < 10; i++) expect((await ask(`10.1.0.${i + 1}`, "victim@example.com")).status).toBe(200);
+      expect((await ask("10.1.0.200", "victim@example.com")).status).toBe(429);
+      expect((await ask("10.1.0.200", "other-person@example.com")).status).toBe(200);
+    });
+
+    it("forgot-password allows 20 per hour from one address across emails", async () => {
+      const ask = (email: string) =>
+        request(proxied).post("/api/auth/forgot-password").set("X-Forwarded-For", "10.2.0.1").send({ email });
+      for (let i = 0; i < 20; i++) expect((await ask(`spread${i}@example.com`)).status).toBe(200);
+      expect((await ask("spread-new@example.com")).status).toBe(429);
+      const elsewhere = await request(proxied)
+        .post("/api/auth/forgot-password").set("X-Forwarded-For", "10.2.0.2").send({ email: "spread-new@example.com" });
+      expect(elsewhere.status).toBe(200);
+    });
+
+    it("reset-password allows 10 attempts per 15 minutes per address, then throttles", async () => {
+      const attempt = (ip: string) =>
+        request(proxied).post("/api/auth/reset-password").set("X-Forwarded-For", ip)
+          .send({ token: "not-a-real-token", newPassword: "password123" });
+      for (let i = 0; i < 10; i++) expect((await attempt("10.3.0.1")).status).toBe(400);
+      expect((await attempt("10.3.0.1")).status).toBe(429);
+      expect((await attempt("10.3.0.2")).status).toBe(400);
+    });
   });
 
   describe("trustProxyHops", () => {

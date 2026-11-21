@@ -284,6 +284,106 @@ describe("password reset flow", () => {
     });
     expect(secondAttempt.status).toBe(400);
   });
+
+  // The mocked sender receives the link, which is the only place the raw token ever appears.
+  async function lastResetToken(): Promise<string> {
+    const { sendPasswordResetEmail } = await import("../src/lib/email.js");
+    const calls = vi.mocked(sendPasswordResetEmail).mock.calls;
+    const link = calls[calls.length - 1][2];
+    return new URL(link).searchParams.get("token") as string;
+  }
+
+  it("a new request cancels the older unused link; only the newest works", async () => {
+    const { user } = await createUser({ email: "twice@example.com", password: "old-password" });
+
+    await request(app).post("/api/auth/forgot-password").send({ email: "twice@example.com" });
+    const firstToken = await lastResetToken();
+    await request(app).post("/api/auth/forgot-password").send({ email: "twice@example.com" });
+    const secondToken = await lastResetToken();
+
+    expect(firstToken).not.toBe(secondToken);
+    expect(await prisma.passwordResetToken.count({ where: { userId: user.id } })).toBe(1);
+
+    const oldLink = await request(app).post("/api/auth/reset-password").send({ token: firstToken, newPassword: "new-password123" });
+    expect(oldLink.status).toBe(400);
+    const newLink = await request(app).post("/api/auth/reset-password").send({ token: secondToken, newPassword: "new-password123" });
+    expect(newLink.status).toBe(200);
+  });
+
+  it("a used link cannot be used again", async () => {
+    const { user } = await createUser({ email: "usedonce@example.com" });
+    const { issueResetToken } = await import("../src/lib/passwordReset.js");
+    const rawToken = await issueResetToken(user.id);
+
+    const first = await request(app).post("/api/auth/reset-password").send({ token: rawToken, newPassword: "first-password1" });
+    const second = await request(app).post("/api/auth/reset-password").send({ token: rawToken, newPassword: "second-password1" });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(400);
+    const login = await request(app).post("/api/auth/login").send({ email: "usedonce@example.com", password: "first-password1" });
+    expect(login.status).toBe(200);
+  });
+
+  it("a deactivated account gets the same answer, no email and no token", async () => {
+    const { user } = await createUser({ email: "gone@example.com" });
+    await prisma.user.update({ where: { id: user.id }, data: { active: false } });
+    const { sendPasswordResetEmail } = await import("../src/lib/email.js");
+    vi.mocked(sendPasswordResetEmail).mockClear();
+
+    const res = await request(app).post("/api/auth/forgot-password").send({ email: "gone@example.com" });
+    const unknown = await request(app).post("/api/auth/forgot-password").send({ email: "never-existed@example.com" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(unknown.body);
+    expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+    expect(await prisma.passwordResetToken.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("finds the account whatever the letter case of the email", async () => {
+    await createUser({ email: "MixedCase@Example.com" });
+    const { sendPasswordResetEmail } = await import("../src/lib/email.js");
+    vi.mocked(sendPasswordResetEmail).mockClear();
+
+    await request(app).post("/api/auth/forgot-password").send({ email: "mixedcase@example.com" });
+    expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("with no BREVO_API_KEY the real sender does not throw, calls nothing and logs only a fixed line", async () => {
+    const before = { key: process.env.BREVO_API_KEY, from: process.env.MAIL_FROM };
+    delete process.env.BREVO_API_KEY;
+    delete process.env.MAIL_FROM;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const real = await vi.importActual<typeof import("../src/lib/email.js")>("../src/lib/email.js");
+      await expect(real.sendPasswordResetEmail("a@example.com", "A", "http://x/reset-password?token=SECRETTOKEN")).resolves.toBeUndefined();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith("[mail] mail not configured");
+      const logged = JSON.stringify([...warnSpy.mock.calls, ...logSpy.mock.calls]);
+      expect(logged).not.toContain("SECRETTOKEN");
+      expect(logged).not.toContain("a@example.com");
+    } finally {
+      fetchSpy.mockRestore();
+      warnSpy.mockRestore();
+      logSpy.mockRestore();
+      if (before.key !== undefined) process.env.BREVO_API_KEY = before.key;
+      if (before.from !== undefined) process.env.MAIL_FROM = before.from;
+    }
+  });
+
+  it("writes PASSWORD_RESET_REQUESTED and PASSWORD_RESET_COMPLETED rows without token or email", async () => {
+    const { user } = await createUser({ email: "audited@example.com" });
+    await request(app).post("/api/auth/forgot-password").send({ email: "audited@example.com" });
+    const token = await lastResetToken();
+    await request(app).post("/api/auth/reset-password").send({ token, newPassword: "audited-password1" });
+
+    const rows = await prisma.auditLog.findMany({
+      where: { actorId: user.id, action: { startsWith: "PASSWORD_RESET_" } },
+      orderBy: { id: "asc" },
+    });
+    expect(rows.map((r) => r.action)).toEqual(["PASSWORD_RESET_REQUESTED", "PASSWORD_RESET_COMPLETED"]);
+    expect(JSON.stringify(rows)).not.toContain(token);
+    expect(JSON.stringify(rows)).not.toContain("audited@example.com");
+  });
 });
 
 describe("email verification — grandfathering existing users", () => {
