@@ -296,6 +296,18 @@ authRouter.post("/api/auth/logout", async (req, res) => {
   res.json({ message: "Logged out successfully" });
 });
 
+// Audit rows for the reset flow: ids only, never the token, the link or the email. A failed write
+// is logged as a fixed string and never changes what the caller sees.
+async function auditReset(action: "PASSWORD_RESET_REQUESTED" | "PASSWORD_RESET_COMPLETED", user: { id: number; name: string }): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: { actorId: user.id, actorName: user.name, action, targetType: "USER", targetId: String(user.id) },
+    });
+  } catch {
+    console.error("[auth] failed to write password reset audit row");
+  }
+}
+
 const GENERIC_FORGOT_PASSWORD_MESSAGE = "If an account exists for that email, a password reset link has been sent.";
 
 // POST /api/auth/forgot-password
@@ -321,6 +333,7 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
     // whether the email is registered, and would break the UX besides.
     try {
       const rawToken = await issueResetToken(user.id);
+      await auditReset("PASSWORD_RESET_REQUESTED", user);
       const resetLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/reset-password?token=${rawToken}`;
       Promise.resolve(sendPasswordResetEmail(user.email, user.name, resetLink)).catch(() =>
         console.error("[auth] failed to send password reset email")
@@ -352,7 +365,7 @@ authRouter.post("/api/auth/reset-password", async (req, res) => {
   const passwordHash = await bcrypt.hash(newPassword, 10);
   // Resetting proves account ownership, so clear any lockout the same as a
   // successful login would.
-  await prisma.user.update({
+  const resetUser = await prisma.user.update({
     where: { id: userId },
     data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null },
   });
@@ -361,6 +374,7 @@ authRouter.post("/api/auth/reset-password", async (req, res) => {
   // prompt a normal re-login — in case the reset was triggered because
   // credentials were compromised.
   await prisma.refreshToken.deleteMany({ where: { userId } });
+  await auditReset("PASSWORD_RESET_COMPLETED", resetUser);
 
   res.json({ message: "Password reset successful. Please log in with your new password." });
 });
