@@ -88,6 +88,31 @@ const forgotPasswordLimiter = rateLimit({
   keyGenerator: (req) => `forgot:${clientIp(req)}|${submittedEmail(req)}`,
 });
 
+/** 10 reset requests per hour for one email from ANY address, so nobody can fill a person's inbox. */
+const forgotPasswordEmailLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  skip: (req) => submittedEmail(req) === "",
+  keyGenerator: (req) => `forgot-email:${submittedEmail(req)}`,
+});
+
+/** 20 reset requests per hour from one address across all emails (a class on one Wi-Fi still fits). */
+const forgotPasswordIpLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => `forgot-ip:${clientIp(req)}`,
+});
+
+/** 10 reset attempts per 15 min per address: a reset link is a long random token, this only caps guessing noise. */
+const resetPasswordLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => `reset:${clientIp(req)}`,
+});
+
 function runInOrder(handlers: RequestHandler[]): RequestHandler {
   return (req, res, next) => {
     let i = 0;
@@ -101,15 +126,17 @@ function runInOrder(handlers: RequestHandler[]): RequestHandler {
   };
 }
 const loginLimiters = runInOrder([loginIpBackstopLimiter, loginPerAccountLimiter]);
+const forgotLimiters = runInOrder([forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPasswordLimiter]);
 
 /**
- * Mounted once for /api/auth/login, /register and /forgot-password (app.ts); picks the limits for the
+ * Mounted once for /api/auth/login, /register, /forgot-password and /reset-password (app.ts); picks the limits for the
  * route that was called. One export so a test can replace it with a pass-through.
  */
 export const authLimiter: RequestHandler = (req, res, next) => {
   const path = req.originalUrl.split("?")[0];
   if (path.endsWith("/register")) return registerLimiter(req, res, next);
-  if (path.endsWith("/forgot-password")) return forgotPasswordLimiter(req, res, next);
+  if (path.endsWith("/forgot-password")) return forgotLimiters(req, res, next);
+  if (path.endsWith("/reset-password")) return resetPasswordLimiter(req, res, next);
   return loginLimiters(req, res, next);
 };
 

@@ -108,7 +108,7 @@ export function createApp() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  app.use(["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password"], authLimiter);
+  app.use(["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password"], authLimiter);
   // authenticateToken runs first here so analysisLimiter can key by instructor id
   // (req.user.sub) instead of IP — see the comment on analysisLimiter itself.
   app.use(
