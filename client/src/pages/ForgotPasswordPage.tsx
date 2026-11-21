@@ -49,22 +49,24 @@ export function ForgotPasswordPage() {
               </svg>
               <p className="text-xs text-indigo-700 leading-relaxed">
                 If an account exists for that email, we've sent a reset link. Check your inbox.
+                {" "}Check your spam folder too.
               </p>
             </div>
             <button
               onClick={() => navigate("/login")}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
             >
-              Back to login
+              Back to sign in
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="forgot-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email address
               </label>
               <input
+                id="forgot-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -95,7 +97,7 @@ export function ForgotPasswordPage() {
                 onClick={() => navigate("/login")}
                 className="text-indigo-600 hover:text-indigo-800 font-semibold transition-colors"
               >
-                Back to login
+                Back to sign in
               </button>
             </p>
           </form>

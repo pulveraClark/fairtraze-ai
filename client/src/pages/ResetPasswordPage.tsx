@@ -14,6 +14,8 @@ export function ResetPasswordPage() {
   const [error,           setError]           = useState<string | null>(null);
   const [submitting,      setSubmitting]      = useState(false);
   const [succeeded,       setSucceeded]       = useState(false);
+  const [linkProblem,     setLinkProblem]     = useState(false);
+  const [showPassword,    setShowPassword]    = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,6 +37,11 @@ export function ResetPasswordPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ token, newPassword }),
       });
+      // 400 = the link is unknown, expired or already used (the server never says which).
+      if (res.status === 400) {
+        setLinkProblem(true);
+        return;
+      }
       const data = (await res.json()) as { message?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? `Reset failed (${res.status})`);
       setSucceeded(true);
@@ -52,17 +59,17 @@ export function ResetPasswordPage() {
     </div>
   );
 
-  if (!token) {
+  if (!token || linkProblem) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
         <div className="w-full max-w-sm text-center">
           {heading}
-          <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-3 text-left mb-5">
+          <div role="alert" className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-3 text-left mb-5">
             <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-red-700 leading-relaxed">
-              This reset link is missing a token. Request a new one below.
+              {token ? "This link expired or was already used." : "This reset link is missing a token. Request a new one below."}
             </p>
           </div>
           <button
@@ -86,14 +93,14 @@ export function ResetPasswordPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-indigo-700 leading-relaxed">
-              Password reset successful. Please log in with your new password.
+              Password reset successful. Please sign in with your new password.
             </p>
           </div>
           <button
             onClick={() => navigate("/login")}
             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
           >
-            Go to login
+            Go to sign in
           </button>
         </div>
       </div>
@@ -107,11 +114,22 @@ export function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              New password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="reset-new-password" className="block text-xs font-semibold text-slate-700">
+                New password
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                {showPassword ? "Hide passwords" : "Show passwords"}
+              </button>
+            </div>
             <input
-              type="password"
+              id="reset-new-password"
+              type={showPassword ? "text" : "password"}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="••••••••"
@@ -122,11 +140,12 @@ export function ResetPasswordPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label htmlFor="reset-confirm-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
               Confirm new password
             </label>
             <input
-              type="password"
+              id="reset-confirm-password"
+              type={showPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••"
