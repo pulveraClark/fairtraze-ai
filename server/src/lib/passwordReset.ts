@@ -13,13 +13,17 @@ function hashToken(token: string): string {
 
 export async function issueResetToken(userId: number): Promise<string> {
   const rawToken = generateResetToken();
-  await prisma.passwordResetToken.create({
-    data: {
-      userId,
-      tokenHash: hashToken(rawToken),
-      expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
-    },
-  });
+  // A new request cancels every older unused link for this user, so only the latest one works.
+  await prisma.$transaction([
+    prisma.passwordResetToken.deleteMany({ where: { userId } }),
+    prisma.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash: hashToken(rawToken),
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+    }),
+  ]);
   return rawToken;
 }
 
