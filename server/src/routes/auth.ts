@@ -10,6 +10,7 @@ import { authenticateToken, isEmailVerificationRequired } from "../middleware/au
 import { recordSessionRefresh } from "../lib/lastLogin.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
+import { findUserByEmail } from "../lib/userByEmail.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
 import { isEmailEnabled, effectiveEmailVerified } from "../lib/emailConfig.js";
@@ -54,7 +55,8 @@ function clearRefreshCookie(res: Response): void {
 const SELF_REGISTRABLE_ROLES = ["INSTRUCTOR", "STUDENT"] as const;
 
 const registerSchema = z.object({
-  email:    z.string().email(),
+  // Trimmed and lowercased only when an account is created; lookups stay case-insensitive.
+  email:    z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
   name:     z.string().min(1),
   role:     z.enum(SELF_REGISTRABLE_ROLES).optional(),
@@ -107,7 +109,7 @@ authRouter.post("/api/auth/register", async (req, res) => {
     return;
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await findUserByEmail(email);
   if (existing) {
     res.status(409).json({ error: "An account with that email already exists" });
     return;
@@ -174,7 +176,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   const { email, password } = result.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await findUserByEmail(email);
   if (!user) {
     // Generic message — don't reveal whether the email exists
     res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
@@ -312,7 +314,7 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
 
   const { email } = result.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await findUserByEmail(email);
   if (user && user.active) {
     // Any failure here (token issue, a synchronous throw from the sender, or an
     // async delivery failure) must not change the response — that would leak
