@@ -37,6 +37,7 @@ describe("ResetPasswordPage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // AUTH-17
   it("checks length and match in the browser before calling the server", async () => {
     renderPage();
     await fill("short");
@@ -81,6 +82,7 @@ describe("ResetPasswordPage", () => {
     expect(window.location.pathname).toBe("/login");
   });
 
+  // AUTH-18
   it("on a 400 (expired or used link) shows the plain message and Request a new link", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: "This reset link is invalid or has expired." }) });
     renderPage("?token=old");

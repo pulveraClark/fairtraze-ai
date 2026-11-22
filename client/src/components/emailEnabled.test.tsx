@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { RouterProvider } from "../router";
 import { VerifyEmailBanner } from "./VerifyEmailBanner";
 import { EmailOnlyRoute } from "./EmailOnlyRoute";
@@ -39,6 +40,21 @@ describe("VerifyEmailBanner", () => {
     mockAuth(unverified);
     render(<VerifyEmailBanner />);
     expect(screen.getByRole("button", { name: /resend email/i })).toBeInTheDocument();
+  });
+
+  // AUTH-19
+  it("Resend email posts to the server, then shows 'Sent — check your inbox.' in place of the button", async () => {
+    mockAuth(unverified);
+    const f = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ message: "ok" }) });
+    vi.stubGlobal("fetch", f);
+    render(<VerifyEmailBanner />);
+    expect(screen.getByText(/Please verify your email address \(a@b\.c\)/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /resend email/i }));
+    expect(await screen.findByText("Sent — check your inbox.")).toBeInTheDocument();
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(f.mock.calls[0][0]).toBe("/api/auth/resend-verification");
+    expect((f.mock.calls[0][1] as RequestInit).method).toBe("POST");
+    expect(screen.queryByRole("button", { name: /resend email/i })).not.toBeInTheDocument();
   });
 
   it("shows nothing when the server has email off", () => {

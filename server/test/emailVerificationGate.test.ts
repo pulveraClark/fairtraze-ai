@@ -29,6 +29,31 @@ describe("requireVerifiedEmail soft gate", () => {
     expect(res.body.code).toBe("EMAIL_NOT_VERIFIED");
   });
 
+  // INT-034
+  it("an unverified student gets the plain message, then the SAME user creates the group after verifying", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+    const classSection = await createClassSection(instructor.id);
+    const assignment = await createAssignment(classSection.id);
+    const { user: student } = await createUser({ systemRole: "STUDENT", emailVerified: false });
+    await enroll(student.id, classSection.id);
+    const body = { assignmentId: assignment.id, groupName: "Group Verify" };
+
+    const blocked = await request(app).post("/api/join/create-group").set("Authorization", authHeaderFor(student)).send(body);
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error).toBe("Please verify your email before doing this.");
+    expect(blocked.body.code).toBe("EMAIL_NOT_VERIFIED");
+    expect(await prisma.project.count({ where: { assignmentId: assignment.id } })).toBe(0);
+
+    const { issueVerificationToken } = await import("../src/lib/emailVerification.js");
+    const rawToken = await issueVerificationToken(student.id);
+    const verified = await request(app).post("/api/auth/verify-email").send({ token: rawToken });
+    expect(verified.status).toBe(200);
+
+    const created = await request(app).post("/api/join/create-group").set("Authorization", authHeaderFor(student)).send(body);
+    expect(created.status).toBe(201);
+    expect(await prisma.project.count({ where: { assignmentId: assignment.id } })).toBe(1);
+  });
+
   it("allows a verified STUDENT past the gate to create a group", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const classSection = await createClassSection(instructor.id);

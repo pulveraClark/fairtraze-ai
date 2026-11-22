@@ -311,6 +311,29 @@ describe("password reset flow", () => {
     expect(newLink.status).toBe(200);
   });
 
+  // AUTH-16
+  // INT-033
+  // INT-038
+  it("forgot-password, then the emailed link resets the password: new password signs in, old is refused", async () => {
+    await createUser({ email: "chained@example.com", password: "old-password1" });
+
+    const forgot = await request(app).post("/api/auth/forgot-password").send({ email: "chained@example.com" });
+    expect(forgot.status).toBe(200);
+    const token = await lastResetToken();
+
+    const reset = await request(app).post("/api/auth/reset-password").send({ token, newPassword: "brand-new-pass1" });
+    expect(reset.status).toBe(200);
+
+    const withNew = await request(app).post("/api/auth/login").send({ email: "chained@example.com", password: "brand-new-pass1" });
+    expect(withNew.status).toBe(200);
+    expect(withNew.body.token).toBeTruthy();
+
+    const withOld = await request(app).post("/api/auth/login").send({ email: "chained@example.com", password: "old-password1" });
+    expect(withOld.status).toBe(401);
+    expect(withOld.body.error).toBe("Invalid email or password");
+  });
+
+  // AUTH-18
   it("a used link cannot be used again", async () => {
     const { user } = await createUser({ email: "usedonce@example.com" });
     const { issueResetToken } = await import("../src/lib/passwordReset.js");
@@ -407,6 +430,7 @@ describe("email verification — grandfathering existing users", () => {
 });
 
 describe("email verification flow", () => {
+  // AUTH-20 (server side: the link verifies the account; the page text is in VerifyEmailPage.test.tsx)
   it("verifies email with a valid token, consuming it (single-use)", async () => {
     const { user } = await createUser({ email: "toverify@example.com", emailVerified: false });
     const { issueVerificationToken } = await import("../src/lib/emailVerification.js");
