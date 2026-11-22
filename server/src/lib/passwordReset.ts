@@ -28,17 +28,17 @@ export async function issueResetToken(userId: number): Promise<string> {
 }
 
 export async function consumeResetToken(rawToken: string): Promise<number | null> {
-  const existing = await prisma.passwordResetToken.findUnique({
-    where: { tokenHash: hashToken(rawToken) },
-  });
+  // Single-use: one DELETE ... RETURNING statement, so of two simultaneous requests exactly one gets the row
+  // and the other gets nothing (a find-then-delete let the loser throw a 500). Deleted on lookup, not on a
+  // successful password update, so the token can never be replayed even if the request fails partway through.
+  const rows = await prisma.$queryRaw<{ userId: number; expiresAt: Date }[]>`
+    DELETE FROM "PasswordResetToken"
+    WHERE "tokenHash" = ${hashToken(rawToken)}
+    RETURNING "userId", "expiresAt"`;
 
-  if (!existing) return null;
+  const consumed = rows[0];
+  if (!consumed) return null;
+  if (consumed.expiresAt <= new Date()) return null;
 
-  // Single-use: delete on lookup, not on successful password update, so the
-  // token can never be replayed even if the request fails partway through.
-  await prisma.passwordResetToken.delete({ where: { id: existing.id } });
-
-  if (existing.expiresAt <= new Date()) return null;
-
-  return existing.userId;
+  return consumed.userId;
 }
