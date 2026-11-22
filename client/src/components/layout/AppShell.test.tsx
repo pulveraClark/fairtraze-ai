@@ -117,6 +117,7 @@ describe("AppShell sidebar (instructor)", () => {
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
   });
 
+  // UX-01 (drawer only: no-sideways-scroll and the Manage button are live checks in a real browser)
   it("opens the mobile drawer from the menu button and closes it with Escape, returning focus", async () => {
     signInAs("INSTRUCTOR");
     window.history.pushState({}, "", "/dashboard");
