@@ -113,6 +113,14 @@ const resetPasswordLimiter = rateLimit({
   keyGenerator: (req) => `reset:${clientIp(req)}`,
 });
 
+/** 30 link checks per 15 min per address (the page checks once per open; read-only, so looser than a reset). */
+const resetCheckLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => `reset-check:${clientIp(req)}`,
+});
+
 function runInOrder(handlers: RequestHandler[]): RequestHandler {
   return (req, res, next) => {
     let i = 0;
@@ -136,6 +144,7 @@ export const authLimiter: RequestHandler = (req, res, next) => {
   const path = req.originalUrl.split("?")[0];
   if (path.endsWith("/register")) return registerLimiter(req, res, next);
   if (path.endsWith("/forgot-password")) return forgotLimiters(req, res, next);
+  if (path.endsWith("/reset-password/check")) return resetCheckLimiter(req, res, next);
   if (path.endsWith("/reset-password")) return resetPasswordLimiter(req, res, next);
   return loginLimiters(req, res, next);
 };

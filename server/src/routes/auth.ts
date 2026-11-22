@@ -9,7 +9,7 @@ import { signToken } from "../lib/jwt.js";
 import { authenticateToken, isEmailVerificationRequired } from "../middleware/auth.js";
 import { recordSessionRefresh } from "../lib/lastLogin.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
-import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
+import { issueResetToken, consumeResetToken, peekResetToken } from "../lib/passwordReset.js";
 import { findUserByEmail } from "../lib/userByEmail.js";
 import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
@@ -344,6 +344,15 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
   }
 
   res.json({ message: GENERIC_FORGOT_PASSWORD_MESSAGE });
+});
+
+// GET /api/auth/reset-password/check?token=...
+// Read-only. The same { valid } answer for an unknown, used or expired link, so it tells a visitor nothing
+// about why. The page calls it on open so a used link shows its message at once.
+authRouter.get("/api/auth/reset-password/check", async (req, res) => {
+  const token = req.query.token;
+  const valid = typeof token === "string" && token.length > 0 && token.length <= 256 && (await peekResetToken(token));
+  res.json({ valid });
 });
 
 // POST /api/auth/reset-password

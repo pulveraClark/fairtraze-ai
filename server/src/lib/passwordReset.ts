@@ -49,3 +49,16 @@ export async function consumeResetToken(rawToken: string): Promise<number | null
 
   return consumed.userId;
 }
+
+/**
+ * Read-only: is this link still usable right now? True only if the row exists and has not expired.
+ * Never deletes or changes anything, so opening the page (or an email scanner fetching the link) cannot
+ * use the link up. The caller answers the same shape for unknown, used and expired tokens.
+ */
+export async function peekResetToken(rawToken: string): Promise<boolean> {
+  const row = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash: hashToken(rawToken) },
+    select: { expiresAt: true },
+  });
+  return !!row && row.expiresAt > new Date();
+}
