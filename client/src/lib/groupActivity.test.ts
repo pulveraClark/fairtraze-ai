@@ -64,7 +64,7 @@ describe("quietSource (Combined)", () => {
     expect(quietSource([])).toBeNull();
   });
   it("words it as requested", () => {
-    expect(quietSourceText("Docs")).toBe("No Docs activity yet. Shares only cover GitHub so far.");
-    expect(quietSourceText("GitHub")).toBe("No GitHub activity yet. Shares only cover Docs so far.");
+    expect(quietSourceText("Docs")).toBe("No Docs activity yet. Shares are based on GitHub only for now.");
+    expect(quietSourceText("GitHub")).toBe("No GitHub activity yet. Shares are based on Docs only for now.");
   });
 });

@@ -72,8 +72,8 @@ export function quietSource(members: ReadonlyArray<CombinedActivityMember>): Qui
   return githubQuiet ? "GitHub" : "Docs";
 }
 
-/** "No Docs activity yet. Shares only cover GitHub so far." */
+/** "No Docs activity yet. Shares are based on GitHub only for now." */
 export function quietSourceText(source: QuietSource): string {
   const other = source === "GitHub" ? "Docs" : "GitHub";
-  return `No ${source} activity yet. Shares only cover ${other} so far.`;
+  return `No ${source} activity yet. Shares are based on ${other} only for now.`;
 }
