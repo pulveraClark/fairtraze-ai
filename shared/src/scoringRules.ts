@@ -11,7 +11,10 @@
 //       text a teammate removed and the same member put back exactly (undo, or moved) returns to
 //       its original owners instead of being credited to the member who put it back;
 //       version 3 not yet released
-export const SCORING_RULES_VERSION = 3;
+//   4 = Combined reports: when one source (GitHub or Docs) has no activity from anyone, the active
+//       source carries the whole blend (effective weight 1, the other 0) so shares add up to 100%
+//       and flags compare a real share with 1/N; both active or both quiet keeps the blend
+export const SCORING_RULES_VERSION = 4;
 
 /** True when a stored report was scored with older rules. A missing version means version 1. */
 export function isRulesOutdated(stored: { scoringRulesVersion?: number } | null | undefined): boolean {

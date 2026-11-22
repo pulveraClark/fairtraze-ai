@@ -11,8 +11,8 @@ const read = (rel: string) => fs.readFileSync(path.resolve(here, rel), "utf8");
 const PATTERN = /oneGo|OneGo|docsOneGo/;
 
 describe("one-go hint isolation", () => {
-  it("scoring rules version is unchanged", () => {
-    expect(SCORING_RULES_VERSION).toBe(3);
+  it("scoring rules version is the current one (the hint itself never bumps it)", () => {
+    expect(SCORING_RULES_VERSION).toBe(4);
   });
 
   it.each([

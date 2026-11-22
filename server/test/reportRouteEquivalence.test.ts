@@ -68,7 +68,7 @@ async function saveGithubReport(projectId: number) {
   };
   return prisma.report.create({
     data: { projectId, gini: report.gini, teamHealth: report.teamHealth, generatedAt: GENERATED_AT,
-      content: JSON.stringify({ report, narrative: "Narrative text.", unmatchedLogins: ["ghost"], scoringRulesVersion: 3 }) },
+      content: JSON.stringify({ report, narrative: "Narrative text.", unmatchedLogins: ["ghost"], scoringRulesVersion: 4 }) },
   });
 }
 
@@ -77,7 +77,7 @@ async function saveDocsReport(projectId: number, documentId: number, users: { id
   const report = computeDocumentTeamReport(raw);
   return prisma.report.create({
     data: { projectId, gini: report.gini, teamHealth: report.teamHealth, generatedAt: GENERATED_AT,
-      content: JSON.stringify({ report, narrative: null, unmatchedLogins: [], scoringRulesVersion: 3, trigger: "auto" }) },
+      content: JSON.stringify({ report, narrative: null, unmatchedLogins: [], scoringRulesVersion: 4, trigger: "auto" }) },
   });
 }
 

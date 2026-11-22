@@ -133,7 +133,7 @@ exports[`GET /api/student/group/:projectId: full body is unchanged > COMBINED: l
     "trigger": "manual",
   },
   "rulesOutdated": false,
-  "scoringRulesVersion": 3,
+  "scoringRulesVersion": 4,
 }
 `;
 
@@ -229,7 +229,7 @@ exports[`GET /api/student/group/:projectId: full body is unchanged > COMBINED: m
     "trigger": "manual",
   },
   "rulesOutdated": false,
-  "scoringRulesVersion": 3,
+  "scoringRulesVersion": 4,
 }
 `;
 
@@ -351,7 +351,7 @@ exports[`GET /api/student/group/:projectId: full body is unchanged > GITHUB: lea
     "trigger": "manual",
   },
   "rulesOutdated": false,
-  "scoringRulesVersion": 3,
+  "scoringRulesVersion": 4,
 }
 `;
 
@@ -432,6 +432,6 @@ exports[`GET /api/student/group/:projectId: full body is unchanged > GITHUB: mem
     "trigger": "manual",
   },
   "rulesOutdated": false,
-  "scoringRulesVersion": 3,
+  "scoringRulesVersion": 4,
 }
 `;

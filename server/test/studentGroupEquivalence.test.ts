@@ -76,7 +76,7 @@ async function seed(sourceType: "GITHUB" | "COMBINED") {
       };
   await prisma.report.create({
     data: { projectId: project.id, gini: 0.4, teamHealth: "High Risk", generatedAt: GENERATED_AT,
-      content: JSON.stringify({ report, narrative: "The work is shared unevenly.", unmatchedLogins: [], scoringRulesVersion: 3, trigger: "manual" }) },
+      content: JSON.stringify({ report, narrative: "The work is shared unevenly.", unmatchedLogins: [], scoringRulesVersion: 4, trigger: "manual" }) },
   });
   if (sourceType === "COMBINED") {
     const doc = await prisma.document.create({ data: { groupId: project.id } });

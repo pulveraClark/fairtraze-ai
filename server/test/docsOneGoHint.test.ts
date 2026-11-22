@@ -36,7 +36,7 @@ async function saveReport(projectId: number, documentId: number, users: { id: nu
     data: {
       projectId, gini: report.gini, teamHealth: report.teamHealth,
       ...(generatedAt ? { generatedAt } : {}),
-      content: JSON.stringify({ report, narrative: null, unmatchedLogins: [], scoringRulesVersion: 3 }),
+      content: JSON.stringify({ report, narrative: null, unmatchedLogins: [], scoringRulesVersion: 4 }),
     },
   });
   return report;
