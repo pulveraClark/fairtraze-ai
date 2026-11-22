@@ -26,6 +26,7 @@ describe("DeletionRequests (R7)", () => {
     expect(container.querySelector("section")).toBeNull();
   });
 
+  // ADM-09
   it("shows the section when a request is waiting", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({
       pendingCount: 1, recent: [],
@@ -34,6 +35,9 @@ describe("DeletionRequests (R7)", () => {
     renderIt();
     expect(await screen.findByText("Pat Lee")).toBeTruthy();
     expect(screen.getByText("Deletion requests")).toBeTruthy();
+    expect(screen.getByLabelText("1 waiting for review")).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: "Approve deletion for Pat Lee" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reject deletion for Pat Lee" })).toBeEnabled();
   });
 
   it("Approve asks in a ConfirmDialog (not window.confirm); the decision is sent only after Anonymize account", async () => {
@@ -88,6 +92,33 @@ describe("DeletionRequests feedback", () => {
     release();
     await waitFor(() => expect(onToast).toHaveBeenCalledWith("success", "Account anonymized."));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  });
+
+  // ADM-10
+  it("Reject says 'Deletion request rejected.' and moves the request to Recently reviewed as Rejected", async () => {
+    let rejected = false;
+    const f = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "POST") { rejected = true; return { ok: true, json: async () => ({ id: 1, status: "REJECTED" }) }; }
+      return { ok: true, json: async () => (rejected
+        ? { pendingCount: 0, pending: [], recent: [{ ...pending.pending[0], status: "REJECTED", reviewedAt: "2026-11-02T00:00:00Z" }] }
+        : pending) };
+    });
+    vi.stubGlobal("fetch", f);
+    const onToast = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <DeletionRequests onToast={onToast} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Reject deletion for Pat Lee" }));
+    await waitFor(() => expect(onToast).toHaveBeenCalledWith("success", "Deletion request rejected."));
+    expect(f.mock.calls.some(([u, i]) => String(u) === "/api/admin/deletion-requests/1/reject" && i?.method === "POST")).toBe(true);
+
+    expect(await screen.findByRole("heading", { name: "Recently reviewed" })).toBeInTheDocument();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    expect(screen.getByText("Pat Lee")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject deletion for Pat Lee" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve deletion for Pat Lee" })).toBeNull();
   });
 
   it("Reject shows 'Rejecting…' on its button, and a network failure gives the calm sentence", async () => {

@@ -7,6 +7,7 @@ import { prisma } from "../src/lib/prisma.js";
 const app = createApp();
 
 describe("department management", () => {
+  // ADM-08 (API side: the department is saved and listed; the Admin screen is in client/src/pages/AdminDepartments.test.tsx)
   it("allows an ADMIN to create a department", async () => {
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
 
@@ -41,6 +42,33 @@ describe("department management", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.departments.some((d: { id: number }) => d.id === created.id)).toBe(true);
+  });
+});
+
+describe("the class form's department list", () => {
+  // ADM-08
+  // INT-035
+  it("a department the admin just created is in the list the instructor's class form reads, and can be used", async () => {
+    const { user: admin } = await createUser({ systemRole: "ADMIN" });
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+
+    const made = await request(app)
+      .post("/api/admin/departments")
+      .set("Authorization", authHeaderFor(admin))
+      .send({ name: "College of Maritime Studies", code: "CMS" });
+    expect(made.status).toBe(201);
+
+    const list = await request(app).get("/api/departments").set("Authorization", authHeaderFor(instructor));
+    expect(list.status).toBe(200);
+    const found = list.body.departments.find((d: { id: number }) => d.id === made.body.id);
+    expect(found).toMatchObject({ name: "College of Maritime Studies", code: "CMS" });
+
+    const cls = await request(app)
+      .post("/api/classes")
+      .set("Authorization", authHeaderFor(instructor))
+      .send({ subjectCode: "CC-NEW", subjectName: "New Subject", edpCode: "88888", departmentId: made.body.id });
+    expect(cls.status).toBe(201);
+    expect(cls.body.departmentId).toBe(made.body.id);
   });
 });
 

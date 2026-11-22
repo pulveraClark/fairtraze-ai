@@ -77,4 +77,19 @@ describe("PrivacySettingsCard: account deletion request", () => {
     expect(await screen.findByText("Pending review")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Request account deletion" })).toBeNull();
   });
+
+  // INT-037
+  it("a rejected request is shown back with the admin's note, and the student can ask again", async () => {
+    renderCard({ id: 1, status: "REJECTED", createdAt: "2026-11-01T00:00:00Z", reviewNote: "Hand over your group first." });
+    expect(await screen.findByText(/Your last request was not approved: Hand over your group first\. You can submit a new one\./)).toBeInTheDocument();
+    expect(screen.queryByText("Pending review")).toBeNull();
+    expect(screen.getByRole("button", { name: "Request account deletion" })).toBeEnabled();
+  });
+
+  // INT-037
+  it("a rejected request without a note reads 'not approved.' and the account can still be used", async () => {
+    renderCard({ id: 2, status: "REJECTED", createdAt: "2026-11-01T00:00:00Z", reviewNote: null });
+    expect(await screen.findByText(/Your last request was not approved\. You can submit a new one\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Request account deletion" })).toBeEnabled();
+  });
 });

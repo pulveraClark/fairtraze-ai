@@ -66,6 +66,7 @@ async function memberScores(reportId: number) {
 }
 
 describe("deletion request flow", () => {
+  // ADM-09 (API side: pendingCount)
   it("files one pending request at a time and notifies admins", async () => {
     const { admin, juan } = await seedGroup();
     const first = await request(app).post("/api/privacy/deletion-request").set("Authorization", authHeaderFor(juan)).send({ reason: "leaving" });
@@ -100,6 +101,8 @@ describe("deletion request flow", () => {
     expect((await request(app).post(`/api/admin/deletion-requests/${id}/approve`).set("Authorization", authHeaderFor(instructor))).status).toBe(403);
   });
 
+  // ADM-10 (API side: account untouched, user told)
+  // INT-037 (API side: the user gets the DELETION_REJECTED alert)
   it("rejecting leaves the account untouched and tells the user", async () => {
     const { admin, juan } = await seedGroup();
     const created = await request(app).post("/api/privacy/deletion-request").set("Authorization", authHeaderFor(juan)).send({});
