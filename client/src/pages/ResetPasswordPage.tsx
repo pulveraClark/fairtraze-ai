@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "../router";
 import logoUrl from "../assets/logo_transparent.png";
 
@@ -16,9 +16,30 @@ export function ResetPasswordPage() {
   const [succeeded,       setSucceeded]       = useState(false);
   const [linkProblem,     setLinkProblem]     = useState(false);
   const [showPassword,    setShowPassword]    = useState(false);
+  // Ask the server once, on open, whether the link still works (read-only: it does not use the link up).
+  const [checking,        setChecking]        = useState(!!token);
+  const checkStartedRef = useRef(false);   // StrictMode runs effects twice in development; send one check.
+  const submittingRef   = useRef(false);   // A second Enter or click while a reset is running is ignored.
+
+  useEffect(() => {
+    if (!token || checkStartedRef.current) return;
+    checkStartedRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/auth/reset-password/check?token=${encodeURIComponent(token)}`);
+        const data = (await res.json()) as { valid?: boolean };
+        if (res.ok && data.valid === false) setLinkProblem(true);
+      } catch {
+        // The check is a courtesy: if it fails, show the form and let the real submit decide.
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, [token]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submittingRef.current) return;
     setError(null);
 
     if (newPassword.length < 8) {
@@ -30,6 +51,7 @@ export function ResetPasswordPage() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const res = await fetch("/api/auth/reset-password", {
@@ -43,11 +65,13 @@ export function ResetPasswordPage() {
         return;
       }
       const data = (await res.json()) as { message?: string; error?: string };
+      if (res.status === 429) throw new Error("Too many attempts. Please wait a few minutes and try again.");
       if (!res.ok) throw new Error(data.error ?? `Reset failed (${res.status})`);
       setSucceeded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed. Please try again.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -58,6 +82,42 @@ export function ResetPasswordPage() {
       <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Reset your password</h1>
     </div>
   );
+
+  // Success is shown before a link problem: a 200 followed by a 400 from a double submit must not read "already used".
+  if (succeeded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-sm text-center">
+          {heading}
+          <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
+            <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-indigo-700 leading-relaxed">
+              Password reset successful. Please sign in with your new password.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/login")}
+            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
+          >
+            Go to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-sm text-center">
+          {heading}
+          <p role="status" className="text-sm text-slate-600">Checking link…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!token || linkProblem) {
     return (
@@ -77,30 +137,6 @@ export function ResetPasswordPage() {
             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
           >
             Request a new link
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (succeeded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
-        <div className="w-full max-w-sm text-center">
-          {heading}
-          <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
-            <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-xs text-indigo-700 leading-relaxed">
-              Password reset successful. Please sign in with your new password.
-            </p>
-          </div>
-          <button
-            onClick={() => navigate("/login")}
-            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
-          >
-            Go to sign in
           </button>
         </div>
       </div>

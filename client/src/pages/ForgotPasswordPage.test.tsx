@@ -55,6 +55,22 @@ describe("ForgotPasswordPage", () => {
     expect(await screen.findByText(/If an account exists for that email/)).toBeInTheDocument();
   });
 
+  it("a double Enter sends only one request (so only one email)", async () => {
+    let release: () => void = () => {};
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(() => new Promise((resolve) => {
+      release = () => resolve({ ok: true, status: 200, json: async () => ({ message: "x" }) });
+    }));
+    renderPage();
+    const input = screen.getByLabelText("Email address");
+    await userEvent.type(input, "jane@uclm.edu.ph");
+    await userEvent.type(input, "{Enter}{Enter}");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    release();
+    expect(await screen.findByText(/If an account exists for that email/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("offers 'Back to sign in' before and after sending", async () => {
     renderPage();
     expect(screen.getByRole("button", { name: "Back to sign in" })).toBeInTheDocument();

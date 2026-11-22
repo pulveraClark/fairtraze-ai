@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "../router";
 import logoUrl from "../assets/logo_transparent.png";
 
@@ -12,8 +12,13 @@ export function ForgotPasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
 
+  // A ref, not state: a second click or Enter in the same tick must not send a second email.
+  const sendingRef = useRef(false);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSubmitting(true);
     try {
       await fetch("/api/auth/forgot-password", {
@@ -24,6 +29,7 @@ export function ForgotPasswordPage() {
     } catch {
       // Network error — still show the generic message; nothing more to reveal here.
     } finally {
+      sendingRef.current = false;
       setSubmitting(false);
       setSubmitted(true);
     }
