@@ -139,6 +139,7 @@ describe("DisputesPage live-site cases", () => {
     expect(screen.getByRole("button", { name: /View group report/ })).toBeInTheDocument();
   });
 
+  // DSP-11 (Disputes list paging)
   it("DSP-11: the list pages with Prev and Next and asks the server for the next page", async () => {
     const fetchMock = renderWith((url) => {
       const page = Number(new URL(url, "http://x").searchParams.get("page") ?? 1);

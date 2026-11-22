@@ -25,6 +25,7 @@ function renderAs(role: "STUDENT" | "INSTRUCTOR" | null) {
 }
 
 describe("HelpPage", () => {
+  // UX-09
   it("opens on the student view for students and logged-out visitors, the instructor view for instructors", () => {
     const a = renderAs("STUDENT");
     expect(screen.getByRole("button", { name: "For students" })).toHaveAttribute("aria-pressed", "true");
@@ -41,6 +42,19 @@ describe("HelpPage", () => {
     expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
     expect(screen.getByRole("contentinfo")).toHaveTextContent(/do not constitute grades/);
     expect(screen.queryByRole("link", { name: "How FairTraze works" })).toBeNull();
+  });
+
+  // UX-07
+  it("the 'On this page' nav lists every section, and each link points at a section that exists", () => {
+    renderAs("STUDENT");
+    const nav = screen.getByRole("navigation", { name: "On this page" });
+    const labels = ["What it does", "How shares are calculated", "What flags mean", "The AI", "Tasks", "Linking GitHub", "Roles and leaders", "Your notes", "Privacy", "Questions"];
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((a) => a.textContent)).toEqual(labels);
+    for (const a of links) {
+      const id = a.getAttribute("href")!.slice(1);
+      expect(document.getElementById(id), `#${id}`).not.toBeNull();
+    }
   });
 
   // AUTH-02
@@ -130,6 +144,7 @@ describe("HelpPage", () => {
       expect(screen.queryByText("Do tasks count toward my score?")).toBeNull();
     });
 
+    // UX-08
     it("is case-insensitive and treats 'free rider' like 'free-rider'", async () => {
       const user = userEvent.setup();
       renderAs("INSTRUCTOR");
@@ -138,6 +153,7 @@ describe("HelpPage", () => {
       expect(visibleSections()).toContain("flags");
     });
 
+    // UX-08
     it("shows the empty message, keeps the toggle, and Esc clears", async () => {
       const user = userEvent.setup();
       renderAs("STUDENT");
