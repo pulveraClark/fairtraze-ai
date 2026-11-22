@@ -20,6 +20,7 @@ describe("GET /api/join/class/:code (invite preview)", () => {
     expect(res.status).toBe(401);
   });
 
+  // INT-007
   it("returns the class and whether the student is already enrolled, and never enrolls", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const cls = await createClassSection(instructor.id);

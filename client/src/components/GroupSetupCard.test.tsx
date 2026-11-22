@@ -88,6 +88,7 @@ describe("GroupSetupCard link field", () => {
   });
 
   // STU-07
+  // INT-013
   it("saves the tidied link and tells the page", async () => {
     const fetchMock = vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
     const onSaved = vi.fn();

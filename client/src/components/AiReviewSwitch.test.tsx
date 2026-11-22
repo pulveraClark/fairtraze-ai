@@ -14,6 +14,7 @@ function Harness({ initial = true }: { initial?: boolean }) {
 
 describe("AiReviewSwitch", () => {
   // INS-09
+  // INT-022
   it("states On or Off in words, and saves at once without a confirm step", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);

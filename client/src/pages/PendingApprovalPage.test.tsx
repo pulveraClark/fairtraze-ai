@@ -32,6 +32,7 @@ describe("PendingApprovalPage", () => {
   afterEach(() => vi.clearAllMocks());
 
   // AUTH-12
+  // INT-002
   it("tells a pending instructor the account is waiting for approval", () => {
     renderWith("PENDING");
     expect(screen.getByText(/waiting for admin approval/i)).toBeInTheDocument();

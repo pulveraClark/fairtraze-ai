@@ -46,6 +46,7 @@ describe("POST /api/evidence-reports/verify", () => {
     expect((await verify(instructor, `  ${code.replace(/-/g, " ")} `)).status).toBe(200);
   });
 
+  // INT-024
   it("after a re-analysis the old ID still works and says 'older'; the new ID says 'latest'", async () => {
     const { project, leader, instructor } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");

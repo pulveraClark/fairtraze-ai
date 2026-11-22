@@ -119,6 +119,7 @@ describe("POST /api/auth/login", () => {
     expect(res.body.token).toBeTruthy();
   });
 
+  // INT-004
   it("rejects login for a deactivated account with 403", async () => {
     await createUser({ email: "deactivated@example.com", password: "correct-password", active: false });
 

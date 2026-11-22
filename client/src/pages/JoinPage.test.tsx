@@ -33,6 +33,7 @@ describe("JoinPage (invite link)", () => {
   });
 
   // STU-02
+  // INT-007
   it("student not enrolled: asks first, never auto-enrols, and a double click joins once", async () => {
     let resolveJoin: (r: Response) => void = () => undefined;
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {

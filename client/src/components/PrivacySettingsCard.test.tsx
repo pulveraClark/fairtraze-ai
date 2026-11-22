@@ -58,6 +58,7 @@ describe("PrivacySettingsCard: account deletion request", () => {
     expect(screen.getByRole("button", { name: "Request account deletion" })).toBeInTheDocument();
   });
 
+  // INT-032
   it("STU-18: sending the request (mocked server) posts the reason and then shows Pending review with a way to withdraw", async () => {
     const fetchMock = renderCard();
     fireEvent.click(await screen.findByRole("button", { name: "Request account deletion" }));

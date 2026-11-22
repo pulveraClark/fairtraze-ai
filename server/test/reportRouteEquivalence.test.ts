@@ -113,6 +113,7 @@ async function opsFor(fn: () => Promise<unknown>): Promise<number> {
 }
 
 describe("GET /api/projects/:id/report: full body is unchanged", () => {
+  // INT-028
   it("GITHUB group", async () => {
     const { instructor, project } = await setup("GITHUB");
     await saveGithubReport(project.id);
@@ -132,6 +133,7 @@ describe("GET /api/projects/:id/report: full body is unchanged", () => {
     expect(norm(res.body)).toMatchSnapshot();
   });
 
+  // INT-015
   it("COMBINED group", async () => {
     const { instructor, project } = await seedDocs("COMBINED");
     const res = await get(project.id, instructor);

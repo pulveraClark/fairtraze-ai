@@ -76,12 +76,14 @@ describe("StudentGroupPage", () => {
   const flagged = () => groupFixture({ report: { ...(groupFixture().report as object), myContribution: { ...(groupFixture().report.myContribution as object), flags: ["inactive"] } } });
 
   // LDR-06
+  // INT-030
   it("a plain member sees no Print evidence report button", () => {
     renderPage();
     expect(screen.queryByRole("button", { name: "Print evidence report" })).toBeNull();
   });
 
   // LDR-05
+  // INT-024
   it("Print evidence report is enabled for the leader when the group has an analysis", () => {
     state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null } });
     renderPage();
@@ -109,6 +111,7 @@ describe("StudentGroupPage", () => {
   });
 
   // STU-13
+  // INT-025
   it("sending a note says 'Note sent.' only after the server accepted it, and a refusal shows its message", async () => {
     window.history.pushState({}, "", REPORT);
     state.data = flagged();
@@ -265,6 +268,7 @@ describe("StudentGroupPage", () => {
     expect(screen.getAllByText("You")).toHaveLength(1);
   });
 
+  // INT-011
   it("keeps the project instructions out of the page; an Instructions button in the header opens them (12)", () => {
     const withBrief = groupFixture();
     (withBrief.assignment as { description: string | null }).description = "Build a fair grading tool.";
@@ -319,6 +323,7 @@ describe("StudentGroupPage", () => {
   });
 
   // STU-09
+  // INT-020
   it("a student's own free-rider flag reads 'Low contribution' in a soft warning tone (20)", () => {
     window.history.pushState({}, "", REPORT);
     const f = groupFixture();
@@ -340,6 +345,7 @@ describe("StudentGroupPage", () => {
   });
 
   // PRV-02
+  // INT-028
   it("applies to the leader too (21)", () => {
     window.history.pushState({}, "", REPORT);
     state.data = groupFixture({ membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "", roleSuggestion: null } });
@@ -641,6 +647,7 @@ describe("StudentGroupPage: member window and team overview", () => {
   });
 
   // PRV-01
+  // INT-028
   it("a plain member never sees the Gini value, a band or the team index, in the Team overview or in their window", async () => {
     state.data = groupFixture();
     renderPage();

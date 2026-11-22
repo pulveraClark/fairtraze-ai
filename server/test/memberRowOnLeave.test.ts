@@ -88,6 +88,7 @@ describe("removing a member deletes their legacy Member row", () => {
     expect(await rowsOf(project.id)).toEqual(["Lead Lopez|lead-l"]);
   });
 
+  // INT-017
   it("leaves no surplus: Member rows equal memberships, and the report is marked outdated", async () => {
     const { instructor, project } = await setup();
     const ana = await addMember(project.id, "Ana Cruz", null);

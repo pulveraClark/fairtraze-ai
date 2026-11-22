@@ -27,6 +27,7 @@ describe("VerifyReportBox", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   // RPT-13
+  // INT-024
   it("shows 'Matches the latest analysis' with the printout's numbers and no Gini or bands", async () => {
     const f = mockFetch(200, { ...base, status: "latest" });
     render(<VerifyReportBox />);

@@ -421,6 +421,7 @@ describe("MemberContributionList", () => {
 describe("DSP-06: reviewed outcome badge on the flag", () => {
   const flagged = { ...gh, flags: ["free-rider" as const] };
 
+  // INT-027
   it("DSP-06: an accepted dispute shows 'Reviewed: accepted' next to that flag", () => {
     const outcomes = new Map([[flagged.studentName, new Map([["free-rider", "RESOLVED" as const]])]]);
     render(<MemberContributionList members={[flagged]} resolvedFlagOutcomes={outcomes} onOpen={() => {}} />);
@@ -428,6 +429,7 @@ describe("DSP-06: reviewed outcome badge on the flag", () => {
     expect(screen.queryByText("Reviewed: upheld")).toBeNull();
   });
 
+  // INT-027
   it("DSP-06: a dismissed dispute shows 'Reviewed: upheld', and no badge appears without an outcome", () => {
     const outcomes = new Map([[flagged.studentName, new Map([["free-rider", "DISMISSED" as const]])]]);
     const { unmount } = render(<MemberContributionList members={[flagged]} resolvedFlagOutcomes={outcomes} onOpen={() => {}} />);

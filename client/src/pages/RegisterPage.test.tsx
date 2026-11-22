@@ -68,6 +68,7 @@ describe("RegisterPage privacy consent", () => {
   afterEach(() => vi.clearAllMocks());
 
   // AUTH-09 (partial)
+  // INT-001
   it("keeps Create account disabled until the Privacy Notice box is ticked", async () => {
     renderPage();
     await fillForm();
@@ -80,6 +81,7 @@ describe("RegisterPage privacy consent", () => {
   });
 
   // AUTH-11 (partial)
+  // INT-001
   it("links to the public notice and sends the acceptance with the sign-up", async () => {
     register.mockResolvedValue({ emailVerificationRequired: false });
     renderPage();

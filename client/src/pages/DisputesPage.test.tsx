@@ -93,12 +93,14 @@ function renderWith(handler: (url: string, init?: RequestInit) => unknown) {
 }
 
 describe("DisputesPage live-site cases", () => {
+  // INT-027
   it("DSP-03: View group report on a dispute row opens that group's report", async () => {
     renderWith(() => ({ disputes: [dispute()], openCount: 1 }));
     fireEvent.click(await screen.findByRole("button", { name: /View group report/ }));
     await waitFor(() => expect(window.location.pathname).toBe("/project/3"));
   });
 
+  // INT-026
   it("DSP-05: submitting a response sends the chosen outcome and the text, then the window closes", async () => {
     showSuccessToast.mockClear();
     const fetchMock = renderWith((url) => (url.includes("/resolve") ? {} : url.includes("/seen") ? {} : { disputes: [dispute()], openCount: 1 }));

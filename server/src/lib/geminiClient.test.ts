@@ -282,6 +282,7 @@ describe("generateJson", () => {
     delete process.env.AI_DAILY_QUOTA;
   });
 
+  // INT-023
   it("after Google reports the daily limit, the next call is blocked until its reset time and never reaches the provider", async () => {
     generateContent.mockRejectedValue(
       Object.assign(new Error(quotaBody("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "3600s")), { status: 429 }),

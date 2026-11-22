@@ -42,6 +42,7 @@ function renderCard(a: unknown, onChanged = vi.fn()) {
 
 describe("creating and requesting a group", () => {
   // STU-05
+  // INT-009
   it("'Group created.' shows only after the server accepted it, with 'Creating…' while it runs", async () => {
     let release!: () => void;
     vi.stubGlobal("fetch", vi.fn(() => new Promise((r) => { release = () => r(ok({})); })));

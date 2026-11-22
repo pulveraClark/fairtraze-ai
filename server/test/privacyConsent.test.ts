@@ -9,6 +9,7 @@ const app = createApp();
 const base = { email: "c@example.com", password: "password123", name: "C" };
 
 describe("sign-up consent", () => {
+  // INT-001
   it("rejects sign-up without acceptPrivacy and creates no account", async () => {
     const res = await request(app).post("/api/auth/register").send(base);
     expect(res.status).toBe(400);
@@ -27,6 +28,7 @@ describe("sign-up consent", () => {
     expect(await prisma.user.findUnique({ where: { email: base.email } })).toBeNull();
   });
 
+  // INT-001
   it("stores the accepted version and a timestamp", async () => {
     const res = await request(app).post("/api/auth/register").send({ ...base, ...CONSENT });
     expect(res.status).toBe(201);
@@ -38,6 +40,7 @@ describe("sign-up consent", () => {
 });
 
 describe("existing users must accept the current notice", () => {
+  // INT-001
   it("/me reports consentRequired for a user who never consented, and POST /consent clears it", async () => {
     const { user } = await createUser({ systemRole: "STUDENT", consentVersion: null });
 

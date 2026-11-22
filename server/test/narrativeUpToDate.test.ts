@@ -45,6 +45,7 @@ const post = (id: number, u: unknown, regenerate = true) =>
 describe("POST /api/projects/:id/narrative", () => {
   beforeEach(() => { generateContent.mockReset(); generateContent.mockResolvedValue({ text: "Healthy team." }); });
 
+  // INT-021
   it("regenerating unchanged data makes no AI call and says since when", async () => {
     const s = await setup();
     const first = await post(s.project.id, s.instructor, false);

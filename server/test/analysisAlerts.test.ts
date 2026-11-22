@@ -22,6 +22,7 @@ async function setup() {
 }
 
 describe("one alert per analysis (R10)", () => {
+  // INT-019
   it("risky and flagged: one alert of the risk type with the combined message, linking to that group's report", async () => {
     const { instructor, project, meta } = await setup();
     await generateAlertsForProject(project.id, report("Moderate Risk", 1), meta);
@@ -47,6 +48,7 @@ describe("one alert per analysis (R10)", () => {
     expect(rows.map((r) => r.message)).toEqual(["Group 1: Moderate risk"]);
   });
 
+  // INT-019
   it("healthy with a flagged member: a MEMBER_FLAGGED alert; healthy and unflagged: none", async () => {
     const { project, meta } = await setup();
     await generateAlertsForProject(project.id, report("Healthy", 0), meta);

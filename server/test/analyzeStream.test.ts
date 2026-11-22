@@ -178,6 +178,7 @@ afterEach(() => {
 });
 
 describe("POST /api/projects/:id/analyze — progress stream", () => {
+  // INT-013
   it("GITHUB: emits github → compute → save → done, with counts only before done", async () => {
     process.env.GITHUB_TOKEN = "test-token";
     const { instructor, project } = await setupProject("GITHUB");
@@ -226,6 +227,7 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
     assertNoScoresBeforeDone(events);
   });
 
+  // INT-014
   it("EDITOR: emits docs → compute → save → done, with the seeded session/character counts", async () => {
     const { instructor, a, project } = await setupProject("EDITOR");
     await seedEditorActivity(project.id, a.id);
@@ -244,6 +246,7 @@ describe("POST /api/projects/:id/analyze — progress stream", () => {
     assertNoScoresBeforeDone(events);
   });
 
+  // INT-015
   it("COMBINED: both source rows report before compute", async () => {
     process.env.GITHUB_TOKEN = "test-token";
     const { instructor, a, project } = await setupProject("COMBINED");

@@ -10,6 +10,7 @@ const setActive = (admin: Parameters<typeof authHeaderFor>[0], id: number, activ
   request(app).patch(`/api/admin/users/${id}/status`).set("Authorization", authHeaderFor(admin)).send({ active });
 
 describe("deactivate then Undo", () => {
+  // INT-004
   it("blocks the account immediately, and Undo restores the same session and sign-in cleanly", async () => {
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
     const { user: target } = await createUser({ email: "undo-target@example.com", password: "correct-password" });
@@ -35,6 +36,7 @@ describe("deactivate then Undo", () => {
     expect((await request(app).post("/api/auth/login").send({ email: "undo-target@example.com", password: "correct-password" })).status).toBe(200);
   });
 
+  // INT-006
   it("records both steps in the audit log", async () => {
     const { user: admin } = await createUser({ systemRole: "ADMIN" });
     const { user: target } = await createUser();

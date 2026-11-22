@@ -9,6 +9,7 @@ const base = { noActivity: false, teamHealth: "Healthy" as const, gini: 0.122, e
 
 describe("TeamSummaryBar", () => {
   // RPT-04
+  // INT-028
   it("is one row: label, health, Gini with a real (i) button, and the flagged count", () => {
     render(<TeamSummaryBar {...base} />);
     expect(screen.getByText("Team health")).toBeInTheDocument();

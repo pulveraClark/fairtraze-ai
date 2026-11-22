@@ -66,6 +66,7 @@ async function waitFor<T>(fn: () => Promise<T | null | undefined | false>, timeo
 // ── Join requests ─────────────────────────────────────────────────────────────
 
 describe("join-request notifications", () => {
+  // INT-010
   it("submitting a request notifies only the leader, with only the requester's name", async () => {
     const { leader, instructor, member, classSection, project } = await setupGroup();
     const requester = await createRequester(classSection.id);
@@ -89,6 +90,7 @@ describe("join-request notifications", () => {
     expect([instructor.id, member.id, requester.id]).not.toContain(rows[0].recipientId);
   });
 
+  // INT-010
   it("accepting notifies only the requester and removes the leader's pending notification", async () => {
     const { leader, classSection, project } = await setupGroup();
     const requester = await createRequester(classSection.id);
@@ -231,6 +233,7 @@ describe("task-assignment notifications", () => {
 // ── Disputes ──────────────────────────────────────────────────────────────────
 
 describe("dispute notifications", () => {
+  // INT-025
   it("filing a dispute still creates exactly one DISPUTE_FILED alert for the instructor (legacy behaviour)", async () => {
     const { instructor, member, project } = await setupGroup();
 
@@ -250,6 +253,7 @@ describe("dispute notifications", () => {
     expect(await prisma.alert.count()).toBe(1);
   });
 
+  // INT-026
   it("responding to a dispute notifies only the student, without the response text", async () => {
     const { instructor, member, project } = await setupGroup();
     const dispute = await prisma.dispute.create({
@@ -482,6 +486,7 @@ describe("report-ready notifications", () => {
 });
 
 describe("leader-change notifications", () => {
+  // INT-012
   it("instructor reassigning notifies the new and the old leader", async () => {
     const { instructor, leader, member, project } = await setupGroup();
     const res = await request(app)
@@ -586,6 +591,7 @@ describe("role-suggestion notifications", () => {
 });
 
 describe("group-created notifications", () => {
+  // INT-009
   it("creating a group notifies the class instructor only", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const cs = await createClassSection(instructor.id);
@@ -644,6 +650,7 @@ describe("instructor-registration notifications", () => {
       ...(role ? { role } : {}),
     });
 
+  // INT-002
   it("INSTRUCTOR signup notifies every active admin once, and no one else", async () => {
     const { user: a1 } = await createUser({ systemRole: "ADMIN" });
     const { user: a2 } = await createUser({ systemRole: "ADMIN" });

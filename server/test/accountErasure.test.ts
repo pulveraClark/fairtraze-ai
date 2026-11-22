@@ -108,6 +108,7 @@ describe("deletion request flow", () => {
     expect(await prisma.alert.count({ where: { recipientId: juan.id, type: "DELETION_REJECTED" } })).toBe(1);
   });
 
+  // INT-032
   it("approval anonymizes the account and keeps teammates' reports intact", async () => {
     const { admin, juan, leader, project, report, password } = await seedGroup();
     const before = await memberScores(report.id);

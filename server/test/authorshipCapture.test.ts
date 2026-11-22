@@ -13,6 +13,7 @@ import { createUser, createProject } from "./factories.js";
 // and buffers into `state` until documentId resolves — this test proves an edit made *during*
 // an artificially slow upsert is still captured once it resolves.
 describe("attachAuthorshipTracking — registration-lag race", () => {
+  // INT-014
   it("captures an edit made while Document.upsert() is still in flight", async () => {
     const { user } = await createUser({ systemRole: "STUDENT" });
     const project = await createProject();

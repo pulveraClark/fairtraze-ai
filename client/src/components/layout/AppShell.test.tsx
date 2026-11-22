@@ -178,6 +178,7 @@ describe("AppShell sidebar: Verify report", () => {
 
 describe("AppShell sidebar: open disputes badge", () => {
   // DSP-02
+  // INT-025
   it("shows the count on Disputes with one accessible name, expanded and collapsed", async () => {
     mockOpenDisputes = 4;
     signInAs("INSTRUCTOR");

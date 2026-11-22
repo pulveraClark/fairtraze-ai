@@ -107,6 +107,7 @@ describe("AdminPage role and status changes ask in a dialog", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   // ADM-02
+  // INT-005
   it("role change: ConfirmDialog, no window.confirm; Cancel sends nothing, Confirm PATCHes", async () => {
     const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ ...users[1], systemRole: "INSTRUCTOR" }) }));
     vi.stubGlobal("fetch", fetchFn);
@@ -126,6 +127,7 @@ describe("AdminPage role and status changes ask in a dialog", () => {
   });
 
   // ADM-03
+  // INT-004
   it("deactivate: applies at once with no dialog, then offers Undo, which sets the account active again", async () => {
     const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => ({
       ok: true,

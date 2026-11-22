@@ -48,6 +48,7 @@ describe("InstructorApprovals", () => {
   });
 
   // ADM-04
+  // INT-003
   it("lists pending instructors with a count and approves one", async () => {
     const fetchFn = mockFetch({
       pendingCount: 1,

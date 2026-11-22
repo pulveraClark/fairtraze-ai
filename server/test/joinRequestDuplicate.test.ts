@@ -30,6 +30,7 @@ const pendingCount = (userId: number) =>
   prisma.groupJoinRequest.count({ where: { userId, status: "PENDING" } });
 
 describe("POST /api/groups/:id/request duplicates", () => {
+  // INT-010
   it("returns the existing pending request instead of creating another", async () => {
     const { student, groupA } = await setup();
     const first = await send(student, groupA.id);

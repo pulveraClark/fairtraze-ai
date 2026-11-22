@@ -145,6 +145,7 @@ describe("GET /api/student/group/:projectId: error cases keep their order and wo
   });
 
   // PRV-04
+  // INT-029
   it("403 for a student who is not a member", async () => {
     const { project, outsider } = await seed("COMBINED");
     const res = await get(project.id, outsider);

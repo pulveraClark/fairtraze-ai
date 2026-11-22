@@ -73,6 +73,7 @@ describe("POST /api/disputes/:id/seen", () => {
     expect(after.body.disputes[0].seenAt).toBeTruthy();
   });
 
+  // INT-026
   it("replying to an unseen note also sets seenAt, never later than the reply", async () => {
     const { instructor, dispute } = await setup();
 

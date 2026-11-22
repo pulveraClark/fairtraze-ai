@@ -49,6 +49,7 @@ describe("GET /api/groups/:id/evidence-report", () => {
     expect(res.body.reportId).toMatch(REPORT_ID_PATTERN);
   });
 
+  // INT-030
   it("a plain member and the leader of another group get 403", async () => {
     const { project, member } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
@@ -136,6 +137,7 @@ describe("Report ID", () => {
     expect(seen.size).toBeGreaterThan(495);
   });
 
+  // INT-024
   it("is made once per analysis, reused for everyone who opens it, and new after a new analysis", async () => {
     const { project, leader, instructor } = await setup("GITHUB");
     const first = await saveReport(project.id, "GITHUB");

@@ -130,6 +130,7 @@ describe("GroupManageModal Accept all", () => {
   });
 
   // LDR-02
+  // INT-010
   it("asks 'Accept 2 requests?' first, and only then calls the server", async () => {
     const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ accepted: 2, skipped: 0 }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -181,6 +182,7 @@ describe("GroupManageModal leader actions", () => {
     vi.unstubAllGlobals();
   });
 
+  // INT-017
   it("LDR-03: Remove asks first; Cancel keeps the member, and confirming deletes that member", async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
     vi.stubGlobal("fetch", fetchMock);

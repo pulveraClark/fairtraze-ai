@@ -100,6 +100,7 @@ describe("ProjectCard after a join request", () => {
   });
 
   // STU-06
+  // INT-010
   it("says the request was sent, names the leader, and offers Cancel request", () => {
     renderCard(pending());
     expect(screen.getByText("Request sent ✓, waiting for Ana Cruz to approve")).toBeInTheDocument();

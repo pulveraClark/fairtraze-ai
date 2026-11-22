@@ -14,6 +14,7 @@ describe("GET /api/privacy/export", () => {
   });
 
   // STU-17
+  // INT-031
   it("contains the caller's own data and nothing of another member's", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const cs = await createClassSection(instructor.id);

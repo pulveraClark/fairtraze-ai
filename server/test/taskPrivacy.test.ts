@@ -100,6 +100,7 @@ const exportOf = async (u: Parameters<typeof authHeaderFor>[0]) => {
 };
 
 describe("personal-data export: task data", () => {
+  // INT-031
   it("includes the person's own task data and nothing of another member's", async () => {
     const { juan, maria, t2 } = await seed();
     const { body, raw } = await exportOf(juan);
@@ -152,6 +153,7 @@ describe("personal-data export: task data", () => {
 });
 
 describe("erasure: task data", () => {
+  // INT-032
   it("removes the person's identity from task text, files, commits and History, and changes nothing else", async () => {
     const { admin, juan, maria, project, t1, t2, t3, fJuan, fMaria, linkJuan, linkMaria } = await seed();
     const counts = async () => ({

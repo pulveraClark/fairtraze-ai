@@ -7,6 +7,7 @@ import { createUser, authHeaderFor, CONSENT } from "./factories.js";
 const app = createApp();
 
 describe("instructor approval", () => {
+  // INT-002
   it("registers an INSTRUCTOR as pending and a STUDENT as approved", async () => {
     const inst = await request(app).post("/api/auth/register").send({ ...CONSENT, email: "i@example.com", password: "password123", name: "Ins", role: "INSTRUCTOR" });
     expect(inst.status).toBe(201);
@@ -17,6 +18,7 @@ describe("instructor approval", () => {
     expect(stu.body.user.instructorStatus).toBe("APPROVED");
   });
 
+  // INT-002
   it("lets a pending instructor log in but blocks instructor routes with 403", async () => {
     const { user, password } = await createUser({ systemRole: "INSTRUCTOR", instructorStatus: "PENDING" });
 
@@ -45,6 +47,7 @@ describe("instructor approval", () => {
     expect(res.body.error).toBe("Your instructor request was not approved. Contact your administrator.");
   });
 
+  // INT-003
   it("approval takes effect immediately with the same, already-issued token", async () => {
     const { user } = await createUser({ systemRole: "INSTRUCTOR", instructorStatus: "PENDING" });
     const { user: admin } = await createUser({ systemRole: "ADMIN" });

@@ -120,6 +120,7 @@ describe("project-level scoring settings", () => {
     expect(r.scoringConfig?.weights).toEqual({ commits: 0.4, lines: 0.4, activeDays: 0.2 });
   });
 
+  // INT-016
   it("old reports keep their stored scoringConfig; changed settings mark them outdated until re-analyzed", async () => {
     const { instructor, assignment, groups } = await setup();
     await analyze(groups[0].id, instructor);
@@ -138,6 +139,7 @@ describe("project-level scoring settings", () => {
     expect((await getSummary(instructor)).find((s) => s.projectId === groups[0].id)?.settingsOutdated).toBe(false);
   });
 
+  // INT-016
   it("a save marks every group stale; a save that changes nothing marks none", async () => {
     const { instructor, assignment, groups } = await setup();
     for (const g of groups) await analyze(g.id, instructor);

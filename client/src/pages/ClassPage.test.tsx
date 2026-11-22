@@ -67,6 +67,7 @@ describe("ClassPage", () => {
     expect(screen.getByRole("button", { name: /Create first project/ })).toBeInTheDocument();
   });
 
+  // INT-008
   it("INS-04: creating a project sends title, deadline, size and source, and shows no group join code afterwards", async () => {
     const fetchMock = renderClass([], (u, init) =>
       u.endsWith("/api/assignments") && init?.method === "POST" ? { id: 99, joinCode: "GRP-SECRET-1" } : undefined);

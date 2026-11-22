@@ -56,6 +56,7 @@ describe("StudentNotesPage", () => {
     expect(screen.getByText(/Your instructor opened it on Oct 20, 2026\./)).toBeInTheDocument();
   });
 
+  // INT-026
   it("shows the instructor reply on a reviewed note, newest note first", () => {
     state.data = [
       note({ id: 1, createdAt: "2026-10-01T10:00:00Z" }),

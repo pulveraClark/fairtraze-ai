@@ -53,6 +53,7 @@ async function seedAiReview(s: { project: { id: number }; leader: { id: number }
 
 // The Gini value is the instructor's measure. Students never see it, so the server does not even send it.
 describe("student API responses carry no Gini", () => {
+  // INT-028
   it("the group page, the class list and the class's group list, for a member and for a leader", async () => {
     const s = await setup();
     for (const user of [s.member, s.leader]) {

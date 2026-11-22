@@ -31,6 +31,7 @@ function renderPage() {
 }
 
 describe("AuditLogPage", () => {
+  // INT-006
   it("ADM-06: lists the entries newest first, as the server sends them, and says so", async () => {
     renderPage();
     await screen.findByText("Admin C");
@@ -43,6 +44,7 @@ describe("AuditLogPage", () => {
     expect(within(rows[0]).getByText("USER DEACTIVATED")).toBeInTheDocument();
   });
 
+  // INT-006
   it("ADM-06: choosing an action asks the server for only that action and shows only those rows", async () => {
     const fetchMock = renderPage();
     await screen.findByText("Admin C");

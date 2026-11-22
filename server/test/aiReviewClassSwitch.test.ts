@@ -46,6 +46,7 @@ describe("PATCH /api/classes/:id/ai-review", () => {
     expect((await patch(s.cls.id, s.instructor as never, {})).status).toBe(400);
   });
 
+  // INT-022
   it("off: summaries are hidden from the member and the instructor, Generate refuses and makes no AI call; on again restores them", async () => {
     const s = await setup();
     const asStudent = () => request(app).get(`/api/groups/${s.project.id}/ai-review`).set("Authorization", authHeaderFor(s.student as never));

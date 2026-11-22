@@ -91,6 +91,7 @@ async function setup(sourceType: "GITHUB" | "EDITOR" | "COMBINED") {
 }
 
 describe("GET /api/student/group/:projectId — contribution matching and privacy (caller studentA is a regular member)", () => {
+  // INT-020
   it("GITHUB: matches by githubUsername and leaks no other member's data", async () => {
     const { project, studentA, studentB } = await setup("GITHUB");
     await prisma.user.update({ where: { id: studentA.id }, data: { githubUsername: "alice-gh" } });
@@ -168,6 +169,7 @@ describe("GET /api/student/group/:projectId — contribution matching and privac
     expect(resB.body.report.myContribution).toBeNull();
   });
 
+  // INT-015
   it("COMBINED: matches by userId, passes through a null nested github without crashing, and leaks no other member's data", async () => {
     const { project, studentA, studentB } = await setup("COMBINED");
 
@@ -197,6 +199,8 @@ describe("GET /api/student/group/:projectId — contribution matching and privac
 });
 
 describe("GET /api/student/group/:projectId — leader team view", () => {
+  // INT-020
+  // INT-028
   it("leader receives every member's share, GitHub/Docs split, flags and task counts", async () => {
     const { project, studentA, studentB } = await setup("COMBINED"); // A = member, B = leader
     await saveReport(project.id, teamReport([
@@ -240,6 +244,7 @@ describe("GET /api/student/group/:projectId — leader team view", () => {
     expect(team.find((t) => t.userId === studentB.id)!.contributionShare).toBe(1);
   });
 
+  // INT-028
   it("a regular member's response has no team key and no teammate values", async () => {
     const { project, studentA, studentB } = await setup("EDITOR");
     await saveReport(project.id, teamReport([
