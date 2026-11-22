@@ -78,4 +78,52 @@ describe("GET /api/privacy/export", () => {
     expect(res.status).toBe(200);
     expect(JSON.parse(res.text).disputes[0].seenAt).toBe(seenAt.toISOString());
   });
+
+  // PRV-11
+  // INT-040
+  it("an instructor's file has only the instructor's own data, nothing of their students", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR", name: "Prof Ramos", email: "ramos@uclm.edu.ph" });
+    const cs = await createClassSection(instructor.id);
+    const asgn = await createAssignment(cs.id, { sourceType: "COMBINED" });
+    const project = await createProject({ assignmentId: asgn.id });
+    const { user: student } = await createUser({ systemRole: "STUDENT", name: "Lena Villanueva", email: "lena@uclm.edu.ph" });
+    await prisma.user.update({ where: { id: student.id }, data: { githubUsername: "lenavv" } });
+    await createMembership(student.id, project.id, "LEADER");
+    await prisma.report.create({
+      data: {
+        projectId: project.id,
+        content: JSON.stringify({
+          report: { memberCount: 1, members: [{ studentName: "Lena Villanueva", githubUsername: "lenavv", userId: student.id, contributionShare: 1, flags: [] }] },
+          narrative: "Lena Villanueva did all the work.",
+        }),
+      },
+    });
+    await prisma.dispute.create({ data: { projectId: project.id, studentUserId: student.id, memberName: "Lena Villanueva", reason: "Lena dispute text" } });
+
+    const res = await request(app).get("/api/privacy/export").set("Authorization", authHeaderFor(instructor));
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toContain("attachment");
+    const body = JSON.parse(res.text);
+    expect(body.profile.email).toBe("ramos@uclm.edu.ph");
+    expect(body.profile.passwordHash).toBeUndefined();
+    for (const leak of ["Lena", "lena@uclm.edu.ph", "lenavv", "passwordHash"]) {
+      expect(res.text).not.toContain(leak);
+    }
+  });
+
+  // PRV-12
+  it("an admin's file has only the admin's own data, nothing of other users", async () => {
+    const { user: admin } = await createUser({ systemRole: "ADMIN", name: "Ada Admin", email: "ada.admin@uclm.edu.ph" });
+    const { user: other } = await createUser({ systemRole: "STUDENT", name: "Nico Bautista", email: "nico@uclm.edu.ph" });
+    await prisma.user.update({ where: { id: other.id }, data: { githubUsername: "nicobb" } });
+
+    const res = await request(app).get("/api/privacy/export").set("Authorization", authHeaderFor(admin));
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.text);
+    expect(body.profile.email).toBe("ada.admin@uclm.edu.ph");
+    expect(body.profile.passwordHash).toBeUndefined();
+    for (const leak of ["Nico", "nico@uclm.edu.ph", "nicobb", "passwordHash"]) {
+      expect(res.text).not.toContain(leak);
+    }
+  });
 });

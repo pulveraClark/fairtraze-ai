@@ -52,6 +52,7 @@ describe("data export and deletion request", () => {
     expect(screen.queryByText("Your data file is ready.")).not.toBeInTheDocument();
   });
 
+  // PRV-13
   it("sending a deletion request confirms with a toast; withdrawing it does too", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/privacy/deletion-request" && init?.method === "POST") {
@@ -67,6 +68,9 @@ describe("data export and deletion request", () => {
     expect(await screen.findByText("Deletion request sent.")).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "Withdraw request" }));
     expect(await screen.findByText("Deletion request withdrawn.")).toBeInTheDocument();
+    // The account carries on as normal: the deletion request is gone and can be sent again.
+    expect(screen.queryByRole("button", { name: "Withdraw request" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Request account deletion" })).toBeInTheDocument();
   });
 
   it("a refused deletion request shows the server's message and no success toast", async () => {
@@ -112,6 +116,7 @@ describe("profile and password on the Settings page", () => {
   };
   const renderPage = () => render(<RouterProvider><ToastProvider><SettingsPage /></ToastProvider></RouterProvider>);
 
+  // PRV-08
   it("saving the profile closes the form and says 'Profile saved.' (no banner that disappears by itself)", async () => {
     window.history.pushState({}, "", "/settings");
     vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) =>
@@ -141,6 +146,74 @@ describe("profile and password on the Settings page", () => {
     expect(screen.getByRole("heading", { name: "Edit Profile" })).toBeInTheDocument();
   });
 
+  // PRV-08
+  it("saving a new GitHub username sends it and says 'Profile saved.'", async () => {
+    window.history.pushState({}, "", "/settings");
+    const f = vi.fn(async (_u: string, init?: RequestInit) =>
+      (init?.method === "PATCH" ? ok({ name: "Ana Cruz", githubUsername: "ana-cruz-dev" }) : ok(profile)));
+    vi.stubGlobal("fetch", f);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    const gh = screen.getByLabelText("GitHub username");
+    await user.clear(gh);
+    await user.type(gh, "ana-cruz-dev");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Profile saved.")).toBeInTheDocument();
+    const patch = f.mock.calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(JSON.parse(patch[1]!.body as string)).toEqual({ name: "Ana Cruz", githubUsername: "ana-cruz-dev" });
+  });
+
+  async function openPasswordForm(f: ReturnType<typeof vi.fn>) {
+    window.history.pushState({}, "", "/settings");
+    vi.stubGlobal("fetch", f);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Change password/ }));
+    return user;
+  }
+  const passwordPosts = (f: ReturnType<typeof vi.fn>) => f.mock.calls.filter(([, init]) => init?.method === "POST").length;
+
+  // PRV-10
+  it("two different new passwords are refused in the browser and nothing is sent", async () => {
+    const f = vi.fn(async (_u: string, init?: RequestInit) => (init?.method === "POST" ? ok({}) : ok(profile)));
+    const user = await openPasswordForm(f);
+    await user.type(screen.getByLabelText("Current password"), "oldpassword1");
+    await user.type(screen.getByLabelText("New password"), "newpassword1");
+    await user.type(screen.getByLabelText("Confirm new password"), "newpassword2");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+    expect(await screen.findByText("New passwords do not match")).toBeInTheDocument();
+    expect(passwordPosts(f)).toBe(0);
+    expect(screen.queryByText("Password changed.")).not.toBeInTheDocument();
+  });
+
+  // PRV-10
+  it("a 7-character new password is refused in the browser and nothing is sent", async () => {
+    const f = vi.fn(async (_u: string, init?: RequestInit) => (init?.method === "POST" ? ok({}) : ok(profile)));
+    const user = await openPasswordForm(f);
+    await user.type(screen.getByLabelText("Current password"), "oldpassword1");
+    await user.type(screen.getByLabelText("New password"), "1234567");
+    await user.type(screen.getByLabelText("Confirm new password"), "1234567");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+    expect(await screen.findByText("New password must be at least 8 characters")).toBeInTheDocument();
+    expect(passwordPosts(f)).toBe(0);
+    expect(screen.queryByText("Password changed.")).not.toBeInTheDocument();
+  });
+
+  // PRV-10
+  it("a wrong current password shows the server's message and no success toast", async () => {
+    const f = vi.fn(async (_u: string, init?: RequestInit) =>
+      (init?.method === "POST" ? fail("Current password is incorrect") : ok(profile)));
+    const user = await openPasswordForm(f);
+    await user.type(screen.getByLabelText("Current password"), "wrong-one");
+    await user.type(screen.getByLabelText("New password"), "newpassword1");
+    await user.type(screen.getByLabelText("Confirm new password"), "newpassword1");
+    await user.click(screen.getByRole("button", { name: "Update password" }));
+    expect(await screen.findByText("Current password is incorrect")).toBeInTheDocument();
+    expect(screen.queryByText("Password changed.")).not.toBeInTheDocument();
+  });
+
+  // PRV-09
   it("changing the password says 'Password changed.'", async () => {
     window.history.pushState({}, "", "/settings");
     vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => (init?.method === "POST" ? ok({}) : ok(profile))));

@@ -80,12 +80,16 @@ describe("deletion request flow", () => {
     expect(list.body.pendingCount).toBe(1);
   });
 
+  // PRV-13
   it("lets the user cancel their own pending request", async () => {
     const { juan } = await seedGroup();
     await request(app).post("/api/privacy/deletion-request").set("Authorization", authHeaderFor(juan)).send({});
     const res = await request(app).delete("/api/privacy/deletion-request").set("Authorization", authHeaderFor(juan));
     expect(res.status).toBe(200);
     expect((await prisma.deletionRequest.findFirst({ where: { userId: juan.id } }))?.status).toBe("CANCELLED");
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: juan.id } });
+    expect(row.active).toBe(true);
+    expect(row.deletedAt).toBeNull();
   });
 
   it("only an admin can review", async () => {
