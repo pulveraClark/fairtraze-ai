@@ -11,9 +11,10 @@ import { recordSessionRefresh } from "../lib/lastLogin.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
 import { issueResetToken, consumeResetToken, peekResetToken } from "../lib/passwordReset.js";
 import { findUserByEmail } from "../lib/userByEmail.js";
-import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
+import { issueVerificationToken, consumeVerificationToken, peekVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
 import { isEmailEnabled, effectiveEmailVerified } from "../lib/emailConfig.js";
+import { resendVerificationLimiter } from "../middleware/security.js";
 import { notify, activeAdminIds } from "../lib/notify.js";
 import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice.js";
 
@@ -86,6 +87,8 @@ const resetPasswordSchema = z.object({
   token:       z.string().min(1),
   newPassword: z.string().min(8),
 });
+
+const VERIFY_LINK_USED_TEXT = "This link expired or was already used.";
 
 const verifyEmailSchema = z.object({
   token: z.string().min(1),
@@ -432,8 +435,12 @@ authRouter.post("/api/auth/verify-email", async (req, res) => {
   }
 
   const userId = await consumeVerificationToken(result.data.token);
-  if (!userId) {
-    res.status(400).json({ error: "This verification link is invalid or has expired." });
+  const target = userId
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { active: true, deletedAt: true } })
+    : null;
+  // A deleted or deactivated account is never marked verified; the answer is the same as for a bad link.
+  if (!userId || !target || !target.active || target.deletedAt) {
+    res.status(400).json({ error: VERIFY_LINK_USED_TEXT });
     return;
   }
 
@@ -442,10 +449,19 @@ authRouter.post("/api/auth/verify-email", async (req, res) => {
   res.json({ message: "Email verified successfully." });
 });
 
+// GET /api/auth/verify-email/check?token=...
+// Read-only. The same { valid } answer for an unknown, used or expired link. The page calls it on open, so an
+// email scanner or a prefetch that opens the link cannot use it up: only the person's own button press does.
+authRouter.get("/api/auth/verify-email/check", async (req, res) => {
+  const token = req.query.token;
+  const valid = typeof token === "string" && token.length > 0 && token.length <= 256 && (await peekVerificationToken(token));
+  res.json({ valid });
+});
+
 // POST /api/auth/resend-verification — authenticated, so it can't be used to
 // probe which emails are registered (unlike forgot-password, which must stay
 // generic because it's reachable while logged out).
-authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, res) => {
+authRouter.post("/api/auth/resend-verification", authenticateToken, resendVerificationLimiter, async (req, res) => {
   if (!req.user) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -464,9 +480,19 @@ authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, 
 
   const rawVerifyToken = await issueVerificationToken(user.id);
   const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
-  sendVerificationEmail(user.email, user.name, verifyLink).catch(() =>
-    console.error("[auth] failed to send verification email")
-  );
+  // Awaited: the person pressed a button and is waiting, so "sent" must be true. (Register stays fire-and-forget.)
+  // `false` = mail is not configured on this server; a thrown error = the provider or network failed.
+  let sent = true;
+  try {
+    sent = (await sendVerificationEmail(user.email, user.name, verifyLink)) !== false;
+  } catch {
+    sent = false;
+    console.error("[auth] failed to send verification email");
+  }
+  if (!sent) {
+    res.status(502).json({ error: "Could not send the email. Try again in a minute.", code: "EMAIL_SEND_FAILED" });
+    return;
+  }
 
   res.json({ message: "Verification email sent." });
 });

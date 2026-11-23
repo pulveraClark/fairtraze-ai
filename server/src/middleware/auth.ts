@@ -132,7 +132,10 @@ export async function requireVerifiedEmail(req: Request, res: Response, next: Ne
 
   const user = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { emailVerified: true } });
   if (!user?.emailVerified) {
-    res.status(403).json({ error: "Please verify your email before doing this.", code: "EMAIL_NOT_VERIFIED" });
+    res.status(403).json({
+      error: "Please verify your email before doing this. Check your inbox or use Resend email at the top of the page.",
+      code: "EMAIL_NOT_VERIFIED",
+    });
     return;
   }
 

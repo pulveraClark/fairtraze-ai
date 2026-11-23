@@ -121,6 +121,23 @@ const resetCheckLimiter = rateLimit({
   keyGenerator: (req) => `reset-check:${clientIp(req)}`,
 });
 
+/** 30 verification-link checks per 15 min per address (the page checks once per open; read-only). */
+const verifyCheckLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => `verify-check:${clientIp(req)}`,
+});
+
+/** 5 verification emails per hour per signed-in user, so nobody can fill an inbox from one account. */
+export const resendVerificationLimiter = rateLimit({
+  ...rateLimitDefaults,
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many requests. Please wait a few minutes and try again." },
+  keyGenerator: (req) => `resend-verify:${req.user?.sub ?? clientIp(req)}`,
+});
+
 function runInOrder(handlers: RequestHandler[]): RequestHandler {
   return (req, res, next) => {
     let i = 0;
@@ -145,6 +162,7 @@ export const authLimiter: RequestHandler = (req, res, next) => {
   if (path.endsWith("/register")) return registerLimiter(req, res, next);
   if (path.endsWith("/forgot-password")) return forgotLimiters(req, res, next);
   if (path.endsWith("/reset-password/check")) return resetCheckLimiter(req, res, next);
+  if (path.endsWith("/verify-email/check")) return verifyCheckLimiter(req, res, next);
   if (path.endsWith("/reset-password")) return resetPasswordLimiter(req, res, next);
   return loginLimiters(req, res, next);
 };

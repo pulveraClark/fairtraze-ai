@@ -42,8 +42,9 @@ This link expires in 30 minutes. If you didn't request this, you can safely igno
   });
 }
 
-export async function sendVerificationEmail(to: string, name: string, verifyLink: string): Promise<void> {
-  if (!isEmailEnabled()) return;
+/** Resolves true when the message was handed to the provider, false when mail is off or not configured. */
+export async function sendVerificationEmail(to: string, name: string, verifyLink: string): Promise<boolean> {
+  if (!isEmailEnabled()) return false;
   const text = `Hi ${name},
 
 Welcome to FAIR TRAZE AI! Please verify your email address (${to}) to unlock full access.
@@ -74,7 +75,7 @@ This link expires in 24 hours. If you didn't create this account, you can safely
     </div>
   `;
 
-  await sendMail({
+  return sendMail({
     to,
     toName: name,
     subject: "Verify your FAIR TRAZE AI email",
