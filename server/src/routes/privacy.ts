@@ -93,7 +93,9 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
     }),
     prisma.alert.findMany({
       where:  { OR: [{ recipientId: userId }, { instructorId: userId }] },
-      select: { type: true, message: true, link: true, read: true, createdAt: true },
+      // Type, read state and date only. The message text is left out on purpose: it can name another
+      // person ("New dispute from ...", "... requested to join ..."), and this file is own-data only.
+      select: { type: true, read: true, createdAt: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.comment.findMany({
@@ -208,7 +210,7 @@ privacyRouter.get("/api/privacy/export", requireAuth, async (req, res) => {
   const payload = {
     exportedAt:    new Date().toISOString(),
     noticeVersion: PRIVACY_NOTICE_VERSION,
-    note:          "This file contains only your own personal data. Other members' data is never included.",
+    note:          "This file contains only your own personal data. Other members' data is never included. Notification texts are not included because they can name other people.",
     profile:       { ...user, avatarOnFile: user.avatarUpdatedAt !== null },
     classEnrollments: enrollments.map((e) => ({ joinedAt: e.joinedAt, subjectCode: e.classSection.subjectCode, subjectName: e.classSection.subjectName })),
     groups,
