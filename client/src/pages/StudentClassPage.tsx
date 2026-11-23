@@ -367,7 +367,7 @@ export function ProjectCard({
                   disabled={submitting}
                   className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
-                {error && <p className="text-xs text-red-600">{error}</p>}
+                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleCreate()}
@@ -430,7 +430,7 @@ export function ProjectCard({
                     ))}
                   </div>
                 )}
-                {error && <p className="text-xs text-red-600">{error}</p>}
+                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
                 <p className="text-xs text-slate-600">
                   The group leader must approve your request before you are added.
                 </p>
