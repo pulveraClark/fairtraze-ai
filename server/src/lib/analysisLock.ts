@@ -1,4 +1,4 @@
-// One analysis per group at a time, so a manual click, the nightly run and a refresh-on-open
+// One analysis per group at a time, so a manual click, the hourly run and a refresh-on-open
 // never analyze the same group together (which would write two reports and double the GitHub calls).
 //
 // In memory on purpose: the app runs as a single server process (Render). If it is ever scaled to

@@ -16,7 +16,7 @@ function secretMatches(provided: string, expected: string): boolean {
 
 // POST /api/internal/analyze-due   header: x-cron-secret
 // Answers 202 at once and analyzes every due group in the background (see runAutoAnalysis). Called by
-// .github/workflows/nightly-analysis.yml; safe to call again, a run already in progress is not doubled.
+// .github/workflows/nightly-analysis.yml (runs hourly; the file name is historical); safe to call again, a run already in progress is not doubled.
 internalRouter.post("/api/internal/analyze-due", internalLimiter, (req, res) => {
   const expected = process.env.CRON_SECRET;
   if (!expected) {
