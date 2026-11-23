@@ -1,5 +1,40 @@
 @import "tailwindcss";
 
+/* ── Typography: Geist (self-hosted, imported in main.tsx) + compact in-app scale ───────────────
+   Remapping the theme tokens shifts every text-* utility at once. text-xs stays 12px (the floor).
+   text-3xl and up are untouched. Surfaces that must keep the old scale (landing page) opt out with
+   .ft-legacy-scale below; the document body and print output are pinned with explicit sizes. */
+@theme {
+  --font-sans: "Geist Variable", system-ui, -apple-system, sans-serif;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.8125rem;
+  --text-base--line-height: 1.25rem;
+  --text-lg: 0.875rem;
+  --text-lg--line-height: 1.25rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.5rem;
+  --text-2xl: 1.25rem;
+  --text-2xl--line-height: 1.5rem;
+}
+
+/* Restores Tailwind's default scale for everything inside (landing page). */
+.ft-legacy-scale {
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+}
+
+/* Tabular numerals for tiles, tables, shares and Gini values. */
+table, .tabular-nums { font-variant-numeric: tabular-nums; }
+
 /* ── Brand tokens (CSS custom properties) ──────────────────────────────────── */
 :root {
   /* Primary accent: indigo — used for buttons, links, active states, highlights */
@@ -16,8 +51,12 @@
   --brand-risk-amber:   #f59e0b;   /* amber-500 — overload bars / moderate badge */
   --brand-risk-green:   #10b981;   /* emerald-500 — healthy                      */
 
+  /* Source colours for the GitHub / Docs split bar and its legend (see lib/sourceColors.ts) */
+  --ft-source-github:   #2563eb;   /* blue-600   */
+  --ft-source-docs:     #ea580c;   /* orange-600 */
+
   /* Backgrounds */
-  --brand-bg-light:     #ffffff;   /* page base — pure white                     */
+  --brand-bg-light:    #ffffff;   /* page base — pure white                     */
   --brand-bg-subtle:    #f8fafc;   /* slate-50  — section alternates, auth bg    */
   --brand-white:        #ffffff;
 
@@ -25,7 +64,7 @@
   --brand-text-primary:   #0f172a; /* slate-900 */
   --brand-text-secondary: #334155; /* slate-700 */
   --brand-text-muted:     #64748b; /* slate-500 */
-  --brand-text-faint:     #94a3b8; /* slate-400 */
+  --brand-text-faint:     #475569; /* slate-600 - the one secondary-text colour, 7.6:1 on white; never lighter for text */
 
   /* Borders */
   --brand-border:         #e2e8f0; /* slate-200 */
@@ -42,11 +81,65 @@
 
 /* ── Display font for headings and wordmark ────────────────────────────────── */
 .font-display {
-  font-family: "Outfit", system-ui, sans-serif;
+  font-family: "Geist Variable", system-ui, sans-serif;
 }
 
+/* ── Writing-area fonts ─────────────────────────────────────────────────────────────────────────
+   Self-hosted WOFF (src/assets/fonts, licenses in LICENSES.md). The SAME files are embedded in the
+   PDF export (lib/pdf/fontRegistry.ts), so screen and PDF cannot differ. Each face is split into
+   latin / latin-ext parts by unicode-range: a part is only downloaded when text that needs it is on
+   the page (font-display: swap). The family names are private ("FT …") and only ever applied inside
+   .ft-doc-content, so the app UI is unaffected. */
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/geist-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Geist"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/geist-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Sans"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/arimo-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Serif"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/gelasio-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-400-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-400-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-700-normal.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Mono"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/cousine-latin-ext-700-italic.woff") format("woff"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "FT Comic"; font-weight: 400; font-style: normal; font-display: swap; src: url("./assets/fonts/comic-neue-latin-400-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Comic"; font-weight: 400; font-style: italic; font-display: swap; src: url("./assets/fonts/comic-neue-latin-400-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Comic"; font-weight: 700; font-style: normal; font-display: swap; src: url("./assets/fonts/comic-neue-latin-700-normal.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "FT Comic"; font-weight: 700; font-style: italic; font-display: swap; src: url("./assets/fonts/comic-neue-latin-700-italic.woff") format("woff"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+/* The document text uses the bundled default face. The editor's font menu stores these CSS stacks
+   (kept as they are, so existing documents and the .docx export are unchanged); inside the writing
+   area they resolve to the bundled look-alikes: Arial -> Arimo, Georgia -> Gelasio,
+   Courier New -> Cousine, Comic Sans -> Comic Neue. Every stack falls back to the default face
+   for glyphs its own font lacks (the PDF export uses the same chain). !important beats the inline style. */
+.ft-doc-content { font-family: "FT Geist", "Geist Variable", system-ui, sans-serif; }
+.ft-doc-content [style*="Arial"] { font-family: "FT Sans", "FT Geist", Arial, Helvetica, sans-serif !important; }
+.ft-doc-content [style*="Georgia"] { font-family: "FT Serif", "FT Geist", Georgia, "Times New Roman", serif !important; }
+.ft-doc-content [style*="Courier New"], .ft-doc-content code, .ft-doc-content pre { font-family: "FT Mono", "FT Geist", "Courier New", monospace !important; }
+.ft-doc-content [style*="Comic Sans"] { font-family: "FT Comic", "FT Geist", "Comic Sans MS", cursive !important; }
+
 body {
-  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  font-family: "Geist Variable", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--brand-bg-light);
@@ -148,15 +241,6 @@ body {
     print-color-adjust: exact !important;
   }
 
-  /* DocumentEditor's PDF export: its printable content is portaled to a direct sibling of #root
-     (see DocumentEditor.tsx's handleExportPdf), so hiding the app shell here — rather than
-     relying on every page that embeds DocumentEditor to mark its own chrome print:hidden, the
-     way ProjectDetailPage.tsx/AssignmentPage.tsx do for PrintableReport — keeps this export
-     self-contained to DocumentEditor.tsx alone. */
-  body.ft-printing-document #root {
-    display: none !important;
-  }
-
   /* Prevent orphaned table rows */
   tr {
     break-inside: avoid;
@@ -173,18 +257,55 @@ body {
 /* ── TipTap document editor content ────────────────────────────────────────── */
 .ft-doc-content {
   outline: none;
+  /* Writing area keeps a comfortable fixed size; independent of the compact UI scale. */
+  font-size: 1rem;
+  line-height: 1.625;
 }
 .ft-doc-content h1 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--brand-text-primary);
   margin: 1.25rem 0 0.75rem;
 }
 .ft-doc-content h2 {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--brand-text-primary);
   margin: 1rem 0 0.5rem;
+}
+/* AppShell chrome height above the page: the mobile top bar (3.5rem) below md, nothing at md+
+   where the sidebar sits beside the content. Public (signed-out) frames always have the bar. */
+.ft-app-content { --ft-header-h: 3.5rem; }
+@media (min-width: 48rem) {
+  .ft-app-content:not(.ft-app-content--public) { --ft-header-h: 0px; }
+}
+/* Page roots are min-h-screen; subtract the chrome so the shell never adds a phantom scrollbar. */
+.ft-app-content > .min-h-screen {
+  min-height: calc(100vh - var(--ft-header-h));
+  min-height: calc(100dvh - var(--ft-header-h));
+}
+/* TOC click target: clear the sticky mobile bar (if any) plus 1rem. */
+.ft-doc-content h1,
+.ft-doc-content h2 {
+  scroll-margin-top: calc(var(--ft-header-h, 0px) + 1rem);
+}
+/* Focus mode is a fixed full-viewport overlay above the shell, so no header to clear. */
+.ft-focus-scroll .ft-doc-content h1,
+.ft-focus-scroll .ft-doc-content h2 {
+  scroll-margin-top: 1rem;
+}
+@keyframes ft-drawer-in {
+  from { transform: translateX(-100%); }
+  to   { transform: none; }
+}
+.ft-drawer-in { animation: ft-drawer-in 0.2s ease-out; }
+@keyframes ft-drawer-right-in {
+  from { transform: translateX(100%); }
+  to   { transform: none; }
+}
+.ft-drawer-right-in { animation: ft-drawer-right-in 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .ft-drawer-in, .ft-drawer-right-in { animation: none; }
 }
 .ft-doc-content p {
   margin: 0 0 0.85rem;
@@ -268,6 +389,66 @@ body {
   border-bottom: 2px solid rgba(148, 163, 184, 0.4);
 }
 
+/* ── Editor tools: links, checklists, horizontal line, find matches ────────────────────────
+   All render-only. Find matches are ProseMirror decorations (lib/searchReplace.ts), never
+   document content. */
+.ft-doc-content a.ft-link {
+  color: #1d4ed8;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ft-doc-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+/* A checklist item is a plain block with the checkbox taken out of the flow (it used to be a flex
+   row). A flex item box is a block formatting context, which next to the page extension's float
+   spacers shrinks to a sliver at a page boundary (the text stacked one letter per line, in the page
+   view and so in the PDF). A normal block's lines simply flow past the floats. Same geometry:
+   0.25rem list padding + 1rem box + 0.5rem gap = 1.5rem item padding. */
+.ft-doc-content ul[data-type="taskList"] li {
+  position: relative;
+  padding-left: 1.5rem;
+}
+.ft-doc-content ul[data-type="taskList"] li > label {
+  position: absolute;
+  left: 0;
+  top: 0.2rem;
+  user-select: none;
+}
+.ft-doc-content ul[data-type="taskList"] li > label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #4338ca;
+  cursor: pointer;
+}
+.ft-doc-content ul[data-type="taskList"] li > div { min-width: 0; }
+.ft-doc-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: #475569;
+}
+.ft-doc-content hr {
+  border: 0;
+  border-top: 1px solid #94a3b8;
+  margin: 1rem 0;
+}
+.ft-doc-content hr.ProseMirror-selectednode {
+  outline: 2px solid #4338ca;
+  outline-offset: 2px;
+}
+.ft-find-match {
+  background-color: #fde68a;
+  border-radius: 2px;
+}
+.ft-find-match-current {
+  background-color: #fb923c;
+  outline: 2px solid #9a3412;
+  outline-offset: 0;
+}
+@media print {
+  .ft-find-match, .ft-find-match-current { background: none; outline: none; }
+}
+
 /* ── Collaboration cursor (Yjs) ────────────────────────────────────────────
    `.collaboration-cursor__caret` is an inline, zero-width marker inserted as a
    ProseMirror widget decoration (never part of the document schema/content).
@@ -291,8 +472,8 @@ body {
   display: inline-block;
   padding: 0.1rem 0.4rem;
   border-radius: 3px 3px 3px 0;
-  font-family: "Outfit", system-ui, sans-serif;
-  font-size: 11px;
+  font-family: "Geist Variable", system-ui, sans-serif;
+  font-size: 12px;
   font-weight: 600;
   font-style: normal;
   line-height: normal;
@@ -301,4 +482,148 @@ body {
   user-select: none;
   pointer-events: none;
   z-index: 20;
+}
+
+/* Analysis panel: dots travelling along a data-flow line while that source's events arrive. */
+.ft-flow-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #4f46e5;
+}
+.ft-flow-dot-x { top: -2px; left: -6px; animation: ft-flow-x 0.9s linear infinite; }
+.ft-flow-dot-y { left: -2px; top: -6px; animation: ft-flow-y 0.9s linear infinite; }
+@keyframes ft-flow-x { to { left: 100%; } }
+@keyframes ft-flow-y { to { top: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .ft-flow-dot { animation: none; display: none; }
+}
+
+/* ── Page view (tiptap-pagination-plus) ──────────────────────────────────────────────────────
+   The extension's spacer widgets sit inside the editor, so they inherit .ft-doc-content's
+   line-height (1.625). Its inline-level pieces then create a ~26px strut per sheet, making every
+   sheet 26px taller than the declared paper (and the PDF drift by 26px per page). The widgets
+   only hold empty boxes, so zero the strut — sheet pitch becomes exactly pageHeight + gap. */
+.ft-doc-content .rm-pages-wrapper,
+.ft-doc-content .rm-pages-wrapper * {
+  line-height: 0;
+  font-size: 0;
+}
+/* The extension draws a 1px inline border on the editor, shrinking the text column by 2px on screen
+   only; drop it so the screen and the print instance wrap text identically. Sheet edges come from
+   the white page vs. the gray stage instead. */
+.ft-doc-content.rm-with-pagination { border: 0 !important; background: #fff; }
+
+/* A short document still shows one full sheet; the paper casts a soft shadow on the gray desk. */
+.ft-doc-content.rm-with-pagination { min-height: var(--rm-page-height, 1056px); }
+.ft-paper { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25), 0 4px 12px rgba(15, 23, 42, 0.12); background: #fff; }
+
+/* ── Page break and header/footer text (page view + PDF) ─────────────────────────────────────
+   The page-break block is layout only: its height is computed from the sheet bands
+   (lib/pageBreak.ts). The label is a screen-only marker and is hidden in the PDF copy. */
+.ft-doc-content .ft-page-break {
+  position: relative;
+  margin: 0;
+  user-select: none;
+}
+.ft-doc-content .ft-page-break .ft-page-break-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  border-top: 1px dashed #64748b;
+  padding-top: 2px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  color: #475569;
+}
+.ft-doc-content .ft-page-break.ProseMirror-selectednode .ft-page-break-label {
+  outline: 2px solid #4338ca;
+}
+/* The pagination wrapper zeroes font-size/line-height to kill a strut (rule above, specificity
+   0,2,0); header and footer text needs real type again, so these match its specificity and come
+   later. Plain text only (escaped in lib/headerFooter.ts). */
+.ft-doc-content .rm-page-header-content, .ft-doc-content .rm-page-footer-content {
+  position: relative;
+}
+.ft-doc-content .rm-page-header-content *, .ft-doc-content .rm-page-footer-content * {
+  font-size: 12px;
+  line-height: 16px;
+  color: #475569;
+  font-family: inherit;
+}
+/* Percent widths need a definite parent: cap the plugin's own left/right boxes, not the text. */
+.ft-doc-content .rm-page-header-left, .ft-doc-content .rm-page-header-right,
+.ft-doc-content .rm-page-footer-left, .ft-doc-content .rm-page-footer-right {
+  max-width: 30%;
+}
+.ft-doc-content .ft-hf-slot {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+.ft-doc-content .ft-hf-center {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 36%;
+  text-align: center;
+}
+
+/* Help search: matched words (CSS Custom Highlight API; set in HelpPage.tsx). */
+::highlight(ft-help-match) {
+  background-color: #fde68a;
+  color: #111827;
+}
+
+/* ── Tap targets ───────────────────────────────────────────────────────────────
+   .ft-hit: icon and text-only buttons that would otherwise be smaller than 32px. Always at least 32x32.
+   Coarse pointers (touch): every control in the app shell is at least 40px tall. Plain CSS (not a Tailwind variant) so one
+   rule covers every page. Left alone: the document writing area, the calendar chips (a 24px grid cell, WCAG 2.2 minimum),
+   print and the public landing page. Fine pointers (mouse) are not affected by the media query, so desktop heights are unchanged. */
+.ft-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+}
+@media (pointer: coarse) {
+  .ft-hit { min-width: 2.5rem; min-height: 2.5rem; }
+  .ft-app-content :where(button, [role="tab"], select, input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"], [type="file"])):not(.ft-doc-content *, .ft-legacy-scale *, [data-no-coarse]) {
+    min-height: 2.5rem;
+  }
+}
+
+/* ── Cursors ───────────────────────────────────────────────────────────────────
+   Tailwind v4's preflight no longer gives buttons a pointer, so one base rule covers everything that can be
+   clicked, instead of a cursor-pointer on every component. It sits in @layer base, so any explicit utility
+   (cursor-progress, cursor-grab, cursor-default...) still wins. :where() keeps the specificity at zero.
+   The document writing area (.ft-doc-content) keeps the text cursor and its own handle rules above. */
+@layer base {
+  :where(
+      button, summary, select, label[for], a[href],
+      [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="link"], [role="switch"],
+      input[type="checkbox"], input[type="radio"], input[type="range"], input[type="file"], input[type="submit"]
+    ):not(.ft-doc-content *) {
+    cursor: pointer;
+  }
+  :where(:disabled, [aria-disabled="true"]):not(.ft-doc-content *) {
+    cursor: not-allowed;
+  }
+  /* dnd-kit marks draggable task cards and calendar chips with these attributes. */
+  :where([aria-roledescription="sortable"], [aria-roledescription="draggable"]):not(:disabled, [aria-disabled="true"]) {
+    cursor: grab;
+  }
+  :where([aria-roledescription="sortable"], [aria-roledescription="draggable"]):not(:disabled, [aria-disabled="true"]):active,
+  :where([aria-roledescription="sortable"], [aria-roledescription="draggable"])[aria-pressed="true"] {
+    cursor: grabbing;
+  }
 }

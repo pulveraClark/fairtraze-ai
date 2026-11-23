@@ -1,0 +1,1135 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > brief check only (no findings yet) 1`] = `
+{
+  "instructor": {
+    "body": {
+      "briefCheck": {
+        "aiAddressedCount": 1,
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": false,
+        "requirements": [
+          {
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "Students log in with email.",
+                "quoteHidden": false,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "key": "335ec51afaeb6b1d4aacc690070256cb",
+            "sourceQuote": "The system must let students log in.",
+            "status": "FOUND",
+            "text": "Students can log in",
+            "unverified": false,
+          },
+          {
+            "evidence": [],
+            "key": "05d727f95aa70981f0b168103ddc74fc",
+            "sourceQuote": "The system must export a report.",
+            "status": "NOT_FOUND",
+            "text": "Report can be exported",
+            "unverified": false,
+          },
+        ],
+        "sources": {
+          "droppedCount": 2,
+          "filesRead": 0,
+          "skipped": [],
+          "writtenBrief": true,
+        },
+      },
+      "canGenerate": true,
+      "enabled": true,
+      "generatedAt": null,
+      "hasInstructions": true,
+      "hasReport": true,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": null,
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "briefCheck": {
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": false,
+        "requirements": [
+          {
+            "contributors": [
+              "Ben R.",
+            ],
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "",
+                "quoteHidden": true,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "key": "335ec51afaeb6b1d4aacc690070256cb",
+            "sourceQuote": "The system must let students log in.",
+            "state": "COVERED",
+            "text": "Students can log in",
+          },
+          {
+            "contributors": [],
+            "evidence": [],
+            "key": "05d727f95aa70981f0b168103ddc74fc",
+            "sourceQuote": "The system must export a report.",
+            "state": "NOT_FOUND",
+            "text": "Report can be exported",
+          },
+        ],
+      },
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": null,
+      "hasReport": true,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": null,
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "briefCheck": {
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": false,
+        "requirements": [
+          {
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "Students log in with email.",
+                "quoteHidden": false,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "sourceQuote": "The system must let students log in.",
+            "state": "COVERED",
+            "text": "Students can log in",
+          },
+          {
+            "evidence": [],
+            "sourceQuote": "The system must export a report.",
+            "state": "NOT_FOUND",
+            "text": "Report can be exported",
+          },
+        ],
+      },
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": null,
+      "hasReport": true,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": null,
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > brief outdated (instructions changed after the check) 1`] = `
+{
+  "instructor": {
+    "body": {
+      "aiAddressed": [
+        {
+          "count": 1,
+          "name": "Ben Reyes",
+          "userId": "<ben>",
+          "where": "docs",
+        },
+      ],
+      "basedOnReportAt": "<ts>",
+      "briefCheck": {
+        "aiAddressedCount": 1,
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": true,
+        "requirements": [
+          {
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "Students log in with email.",
+                "quoteHidden": false,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "key": "335ec51afaeb6b1d4aacc690070256cb",
+            "sourceQuote": "The system must let students log in.",
+            "status": "FOUND",
+            "text": "Students can log in",
+            "unverified": false,
+          },
+          {
+            "evidence": [],
+            "key": "05d727f95aa70981f0b168103ddc74fc",
+            "sourceQuote": "The system must export a report.",
+            "status": "NOT_FOUND",
+            "text": "Report can be exported",
+            "unverified": false,
+          },
+        ],
+        "sources": {
+          "droppedCount": 2,
+          "filesRead": 0,
+          "skipped": [],
+          "writtenBrief": true,
+        },
+      },
+      "canGenerate": true,
+      "enabled": true,
+      "errorCode": "AI_UNAVAILABLE",
+      "generatedAt": "<ts>",
+      "hasInstructions": true,
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "status": "PARTIAL",
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": false,
+          "name": "Lia Leader",
+          "source": "ai",
+          "summary": "Wrote the Intro.",
+          "userId": "<leader>",
+        },
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": "benreyes",
+          "isYou": false,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "basedOnReportAt": "<ts>",
+      "briefCheck": {
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": true,
+        "requirements": [
+          {
+            "contributors": [
+              "Ben R.",
+            ],
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "",
+                "quoteHidden": true,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "key": "335ec51afaeb6b1d4aacc690070256cb",
+            "sourceQuote": "The system must let students log in.",
+            "state": "COVERED",
+            "text": "Students can log in",
+          },
+          {
+            "contributors": [],
+            "evidence": [],
+            "key": "05d727f95aa70981f0b168103ddc74fc",
+            "sourceQuote": "The system must export a report.",
+            "state": "CONFIRMED",
+            "text": "Report can be exported",
+          },
+        ],
+      },
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": "<ts>",
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": true,
+          "name": "Lia Leader",
+          "source": "ai",
+          "summary": "Wrote the Intro.",
+          "userId": "<leader>",
+        },
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": false,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "basedOnReportAt": "<ts>",
+      "briefCheck": {
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": true,
+        "requirements": [
+          {
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "Students log in with email.",
+                "quoteHidden": false,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "sourceQuote": "The system must let students log in.",
+            "state": "COVERED",
+            "text": "Students can log in",
+          },
+          {
+            "evidence": [],
+            "sourceQuote": "The system must export a report.",
+            "state": "CONFIRMED",
+            "text": "Report can be exported",
+          },
+        ],
+      },
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": "<ts>",
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": true,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > class switch off: only { enabled: false }, even with stored findings; non-members still 403 first 1`] = `
+{
+  "instructor": {
+    "body": {
+      "enabled": false,
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "enabled": false,
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "enabled": false,
+    },
+    "status": 200,
+  },
+  "otherInstructor": {
+    "body": {
+      "error": "You do not have access to this group.",
+    },
+    "status": 403,
+  },
+  "outsider": {
+    "body": {
+      "error": "You do not have access to this group.",
+    },
+    "status": 403,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > errors: 400, 401, 403, 404 carry nothing but their message 1`] = `
+{
+  "anon": {
+    "body": {
+      "error": "Authentication required",
+    },
+    "status": 401,
+  },
+  "badId": {
+    "body": {
+      "error": "Invalid group id",
+    },
+    "status": 400,
+  },
+  "missing": {
+    "body": {
+      "error": "Group not found.",
+    },
+    "status": 404,
+  },
+  "otherInstructor": {
+    "body": {
+      "error": "You do not have access to this group.",
+    },
+    "status": 403,
+  },
+  "outsider": {
+    "body": {
+      "error": "You do not have access to this group.",
+    },
+    "status": 403,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > findings only, no instructions 1`] = `
+{
+  "instructor": {
+    "body": {
+      "aiAddressed": [
+        {
+          "count": 1,
+          "name": "Ben Reyes",
+          "userId": "<ben>",
+          "where": "docs",
+        },
+      ],
+      "basedOnReportAt": "<ts>",
+      "canGenerate": true,
+      "enabled": true,
+      "errorCode": "AI_UNAVAILABLE",
+      "generatedAt": "<ts>",
+      "hasInstructions": false,
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "status": "PARTIAL",
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": false,
+          "name": "Lia Leader",
+          "source": "ai",
+          "summary": "Wrote the Intro.",
+          "userId": "<leader>",
+        },
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": "benreyes",
+          "isYou": false,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "basedOnReportAt": "<ts>",
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": "<ts>",
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": true,
+          "name": "Lia Leader",
+          "source": "ai",
+          "summary": "Wrote the Intro.",
+          "userId": "<leader>",
+        },
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": false,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "basedOnReportAt": "<ts>",
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": "<ts>",
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": true,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > nothing at all 1`] = `
+{
+  "instructor": {
+    "body": {
+      "canGenerate": true,
+      "enabled": true,
+      "generatedAt": null,
+      "hasInstructions": false,
+      "hasReport": true,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": null,
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": null,
+      "hasReport": true,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": null,
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": null,
+      "hasReport": true,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": null,
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > server switch off: only { enabled: false }; non-members still 403 first 1`] = `
+{
+  "instructor": {
+    "body": {
+      "enabled": false,
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "enabled": false,
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "enabled": false,
+    },
+    "status": 200,
+  },
+  "outsider": {
+    "body": {
+      "error": "You do not have access to this group.",
+    },
+    "status": 403,
+  },
+}
+`;
+
+exports[`ai-review GET: full bodies stay identical (characterisation) > with findings and brief check (and a confirmed mark) 1`] = `
+{
+  "instructor": {
+    "body": {
+      "aiAddressed": [
+        {
+          "count": 1,
+          "name": "Ben Reyes",
+          "userId": "<ben>",
+          "where": "docs",
+        },
+      ],
+      "basedOnReportAt": "<ts>",
+      "briefCheck": {
+        "aiAddressedCount": 1,
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": false,
+        "requirements": [
+          {
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "Students log in with email.",
+                "quoteHidden": false,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "key": "335ec51afaeb6b1d4aacc690070256cb",
+            "sourceQuote": "The system must let students log in.",
+            "status": "FOUND",
+            "text": "Students can log in",
+            "unverified": false,
+          },
+          {
+            "evidence": [],
+            "key": "05d727f95aa70981f0b168103ddc74fc",
+            "sourceQuote": "The system must export a report.",
+            "status": "NOT_FOUND",
+            "text": "Report can be exported",
+            "unverified": false,
+          },
+        ],
+        "sources": {
+          "droppedCount": 2,
+          "filesRead": 0,
+          "skipped": [],
+          "writtenBrief": true,
+        },
+      },
+      "canGenerate": true,
+      "enabled": true,
+      "errorCode": "AI_UNAVAILABLE",
+      "generatedAt": "<ts>",
+      "hasInstructions": true,
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "status": "PARTIAL",
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": false,
+          "name": "Lia Leader",
+          "source": "ai",
+          "summary": "Wrote the Intro.",
+          "userId": "<leader>",
+        },
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": "benreyes",
+          "isYou": false,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "leader": {
+    "body": {
+      "basedOnReportAt": "<ts>",
+      "briefCheck": {
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": false,
+        "requirements": [
+          {
+            "contributors": [
+              "Ben R.",
+            ],
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "",
+                "quoteHidden": true,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "key": "335ec51afaeb6b1d4aacc690070256cb",
+            "sourceQuote": "The system must let students log in.",
+            "state": "COVERED",
+            "text": "Students can log in",
+          },
+          {
+            "contributors": [],
+            "evidence": [],
+            "key": "05d727f95aa70981f0b168103ddc74fc",
+            "sourceQuote": "The system must export a report.",
+            "state": "CONFIRMED",
+            "text": "Report can be exported",
+          },
+        ],
+      },
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": "<ts>",
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": true,
+          "name": "Lia Leader",
+          "source": "ai",
+          "summary": "Wrote the Intro.",
+          "userId": "<leader>",
+        },
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": false,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+  "member": {
+    "body": {
+      "basedOnReportAt": "<ts>",
+      "briefCheck": {
+        "generatedAt": "<ts>",
+        "nothingFound": false,
+        "outdated": false,
+        "requirements": [
+          {
+            "evidence": [
+              {
+                "href": "https://github.com/example/repo/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/src/login.ts#L1-L2",
+                "isCommit": false,
+                "lines": [
+                  1,
+                  2,
+                ],
+                "quote": "export function login()",
+                "quoteHidden": false,
+                "ref": "src/login.ts",
+                "type": "file",
+              },
+              {
+                "quote": "Students log in with email.",
+                "quoteHidden": false,
+                "ref": "Intro",
+                "type": "doc",
+              },
+            ],
+            "sourceQuote": "The system must let students log in.",
+            "state": "COVERED",
+            "text": "Students can log in",
+          },
+          {
+            "evidence": [],
+            "sourceQuote": "The system must export a report.",
+            "state": "CONFIRMED",
+            "text": "Report can be exported",
+          },
+        ],
+      },
+      "canGenerate": false,
+      "enabled": true,
+      "generatedAt": "<ts>",
+      "hasReport": true,
+      "outdated": false,
+      "repoUrl": "https://github.com/example/repo",
+      "running": false,
+      "summaries": [
+        {
+          "evidence": {
+            "commitCount": 1,
+            "docSections": [
+              "Intro",
+            ],
+            "files": [
+              {
+                "added": 3,
+                "href": "https://github.com/example/repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#diff-072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+                "isCommit": true,
+                "more": [],
+                "path": "src/a.ts",
+                "removed": 0,
+              },
+            ],
+            "otherCommits": 0,
+          },
+          "githubUsername": null,
+          "isYou": true,
+          "name": "Ben Reyes",
+          "source": "ai",
+          "summary": "Added the login page.",
+          "userId": "<ben>",
+        },
+      ],
+    },
+    "status": 200,
+  },
+}
+`;

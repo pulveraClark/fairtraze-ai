@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { attachYjsCollabServer } from "./collab/yjsServer.js";
 import { attachAuthorshipBroadcastServer } from "./collab/authorshipBroadcast.js";
 import { closeDanglingSessions, startAuthorshipIdleSweep } from "./collab/authorshipCapture.js";
+import { startTaskDueSweep } from "./lib/taskDueSweep.js";
 
 const app = createApp();
 const rawPort = process.env.PORT?.trim();
@@ -15,6 +16,7 @@ attachAuthorshipBroadcastServer(httpServer);
 
 closeDanglingSessions().catch((err) => console.error("[collab] closeDanglingSessions failed", err));
 startAuthorshipIdleSweep();
+startTaskDueSweep();
 
 httpServer.listen(PORT, () => {
   console.log(`FairTraze AI server running on http://localhost:${PORT}`);

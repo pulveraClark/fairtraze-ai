@@ -1,0 +1,153 @@
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { RouterProvider } from "../router";
+import { GroupSummaryCard } from "./GroupSummaryCard";
+import type { ProjectSummaryItem } from "@shared/types";
+import type { GroupTaskSummary } from "@shared/taskTypes";
+
+const item = (names: string[], over: Partial<ProjectSummaryItem> = {}): ProjectSummaryItem => ({
+  projectId: 1, groupName: "Group A", assignmentLabel: "X", classId: 1, assignmentId: 1, sourceType: "COMBINED",
+  memberCount: names.length, teamHealth: "Healthy", gini: 0.1,
+  memberShares: names.map((studentName) => ({ studentName, contributionShare: 1 / names.length, flags: [] })),
+  flagsPresent: [], lastAnalyzedAt: "2026-10-19T00:00:00Z", isAnalyzed: true, membershipChangedAt: null, scoringConfigChangedAt: null,
+  settingsOutdated: false, rulesOutdated: false,
+  ...over,
+} as ProjectSummaryItem);
+
+function renderCard(names: string[], over: Partial<ProjectSummaryItem> = {}, tasks?: GroupTaskSummary) {
+  return render(
+    <RouterProvider>
+      <GroupSummaryCard item={item(names, over)} onAnalyze={() => {}} analyzing={false} onManage={() => {}} onTasks={() => {}} tasks={tasks} />
+    </RouterProvider>,
+  );
+}
+
+describe("GroupSummaryCard last analyzed", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("says 'Last analyzed 3 hours ago' (exact date in the tooltip) instead of a bare date", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    renderCard(["Ana", "Ben"], { lastAnalyzedAt: "2026-10-20T09:00:00Z" });
+    const line = screen.getByText("Last analyzed 3 hours ago");
+    expect(line).toHaveAttribute("title", "Oct 20, 2026, 5:00 PM");
+    expect(screen.queryByText(/^\d{1,2}\/\d{1,2}\/\d{4}$/)).toBeNull();
+  });
+
+  it("an unanalyzed group keeps its 'Not analyzed / No report yet' state and shows no analyzed time", () => {
+    renderCard(["Ana"], { isAnalyzed: false, lastAnalyzedAt: null, teamHealth: null });
+    expect(screen.getByText("No report yet")).toBeInTheDocument();
+    expect(screen.queryByText(/Last analyzed/)).toBeNull();
+  });
+});
+
+describe("GroupSummaryCard member legend", () => {
+  it("tells members apart even when they share a first word", () => {
+    renderCard(["UXA Leader", "UXA Member One", "UXA Member Two"]);
+    expect(screen.getByText("UXA L.: 33%")).toBeInTheDocument();
+    expect(screen.getByText("UXA O.: 33%")).toBeInTheDocument();
+    expect(screen.getByText("UXA T.: 33%")).toBeInTheDocument();
+  });
+  it("keeps the full name as a tooltip", () => {
+    renderCard(["Klent Sama", "Aldren Baricuatro"]);
+    expect(screen.getByTitle("Aldren Baricuatro")).toHaveTextContent("Aldren B.: 50%");
+  });
+});
+
+describe("GroupSummaryCard with older scoring rules", () => {
+  it("shows the scoring-updated notice and a Re-analyze button when the report uses older rules", () => {
+    renderCard(["A", "B"], { rulesOutdated: true });
+    expect(screen.getByText("Scoring was updated. Re-analyze to apply the new rules.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Re-analyze" }).length).toBeGreaterThan(1); // banner + the card's own button
+  });
+  it("shows no notice when the report is current", () => {
+    renderCard(["A", "B"]);
+    expect(screen.queryByText(/Scoring was updated/)).toBeNull();
+  });
+});
+
+describe("GroupSummaryCard with no recorded activity", () => {
+  const zero = (names: string[]) => names.map((studentName) => ({ studentName, contributionShare: 0, flags: ["inactive" as const] }));
+
+  it("shows 'Not enough activity yet' instead of a health label and hides the inactive chips", () => {
+    renderCard(["Ana Reyes", "Ben Cruz"], { teamHealth: "Healthy", memberShares: zero(["Ana Reyes", "Ben Cruz"]), flagsPresent: ["inactive"] });
+    expect(screen.getByText("Not enough activity yet")).toBeInTheDocument();
+    expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
+    expect(screen.queryByText(/low contribution/i)).not.toBeInTheDocument();
+  });
+
+  // INS-10
+  it("keeps the computed health and flags as soon as anyone has activity", () => {
+    renderCard(["Ana Reyes", "Ben Cruz"], {
+      teamHealth: "Moderate Risk",
+      memberShares: [{ studentName: "Ana Reyes", contributionShare: 1, flags: [] }, { studentName: "Ben Cruz", contributionShare: 0, flags: ["inactive"] }],
+      flagsPresent: ["inactive"],
+    });
+    expect(screen.queryByText("Not enough activity yet")).not.toBeInTheDocument();
+    expect(screen.getByText("Moderate risk")).toBeInTheDocument();
+    expect(screen.getByText(/low contribution/i)).toBeInTheDocument();
+  });
+});
+
+describe("GroupSummaryCard task line (R11, 19)", () => {
+  const t = (over: Partial<GroupTaskSummary>): GroupTaskSummary => ({ projectId: 1, groupName: "Group A", total: 8, done: 3, overdue: 2, milestones: [], ...over });
+
+  it("shows 'M of T done' and the overdue count with text, instead of a separate Task progress block", () => {
+    renderCard(["Ana Reyes", "Ben Cruz"], {}, t({}));
+    expect(screen.getByText(/3 of 8 done/)).toBeInTheDocument();
+    expect(screen.getByText("2 overdue")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Tasks done" })).toHaveAttribute("aria-valuenow", "38");
+  });
+
+  it("says 'No tasks' when the group has none, and shows nothing when counts are not loaded", () => {
+    const first = renderCard(["Ana Reyes", "Ben Cruz"], {}, t({ total: 0, done: 0, overdue: 0 }));
+    expect(screen.getByText(/No tasks/)).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    first.unmount();
+    renderCard(["Ana Reyes", "Ben Cruz"]);
+    expect(screen.queryByText(/Tasks:/)).not.toBeInTheDocument();
+  });
+
+  it("also shows it on a group that has not been analyzed yet", () => {
+    renderCard(["Ana Reyes", "Ben Cruz"], { isAnalyzed: false, teamHealth: null }, t({ overdue: 0 }));
+    expect(screen.getByText(/3 of 8 done/)).toBeInTheDocument();
+  });
+});
+
+describe("GroupSummaryCard footer actions (I14)", () => {
+  it("Tasks, Manage and Re-analyze are real bordered buttons with a tooltip saying what they do", () => {
+    renderCard(["Ana", "Ben"]);
+    for (const [name, hint] of [
+      ["Tasks", /task board/i],
+      ["Manage", /members, leader and roles/i],
+      ["Re-analyze", /analysis again/i],
+    ] as const) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveClass("border", "min-h-8");
+      expect(button).toHaveAttribute("title", expect.stringMatching(hint));
+    }
+  });
+});
+
+describe("GroupSummaryCard repository state", () => {
+  it("says 'Repo not linked yet' and disables Re-analyze for a GitHub group with no repository", () => {
+    renderCard(["A", "B"], { hasRepo: false, sourceType: "GITHUB" });
+    expect(screen.getByText("Repo not linked yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toHaveAttribute("title", "Link a GitHub repository first.");
+  });
+  it("offers View, not Analyze, on a not-yet-analyzed group with no repository", () => {
+    renderCard(["A"], { hasRepo: false, isAnalyzed: false, lastAnalyzedAt: null, memberShares: [] });
+    expect(screen.getByText("Repo not linked yet")).toBeInTheDocument();
+    expect(screen.queryByText("Analyze →")).toBeNull();
+    expect(screen.getByText("View →")).toBeInTheDocument();
+  });
+  it("never shows it for a Docs-only group, or when the repository is linked", () => {
+    renderCard(["A"], { hasRepo: false, sourceType: "EDITOR" });
+    expect(screen.queryByText("Repo not linked yet")).toBeNull();
+  });
+  it("shows 'Repository changed. Re-analyze to update.' when the repository changed after the report", () => {
+    renderCard(["A", "B"], { hasRepo: true, repoChanged: true, membershipChangedAt: "2026-10-20T00:00:00Z" });
+    expect(screen.getByText("Repository changed. Re-analyze to update.")).toBeInTheDocument();
+  });
+});

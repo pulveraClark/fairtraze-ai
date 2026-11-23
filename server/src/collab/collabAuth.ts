@@ -1,12 +1,17 @@
 import type { IncomingMessage } from "http";
 import { verifyToken } from "../lib/jwt.js";
 import { loadGroup } from "../routes/groups.js";
+import { prisma } from "../lib/prisma.js";
 
 export interface CollabAuthOk {
   ok: true;
   room: string;
   groupId: number;
   userId: number;
+  // True only for a member of the group. The class instructor (or an admin who owns the class) may
+  // read the document and the authorship broadcast but never write: the collab server drops their
+  // document-changing messages (readOnlyGate.ts).
+  canWrite: boolean;
 }
 
 export interface CollabAuthFail {
@@ -61,6 +66,15 @@ export async function resolveCollabAuth(
     return { ok: false, status: 401 };
   }
 
+  // Deactivated or erased accounts lose collab access immediately, not when their JWT expires.
+  const account = await prisma.user.findUnique({
+    where:  { id: payload.sub },
+    select: { active: true, deletedAt: true },
+  });
+  if (!account || !account.active || account.deletedAt) {
+    return { ok: false, status: 401 };
+  }
+
   const project = await loadGroup(groupId);
   if (!project) {
     return { ok: false, status: 404 };
@@ -75,5 +89,5 @@ export async function resolveCollabAuth(
     return { ok: false, status: 403 };
   }
 
-  return { ok: true, room, groupId, userId: payload.sub };
+  return { ok: true, room, groupId, userId: payload.sub, canWrite: isMember };
 }

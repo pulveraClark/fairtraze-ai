@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { notify } from "../lib/notify.js";
 import type { TeamReport } from "@shared/types.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 
 export const disputesRouter = Router();
 
@@ -79,7 +80,7 @@ disputesRouter.post("/api/disputes", ...requireRole("STUDENT"), async (req, res)
     }),
     prisma.report.findFirst({
       where:   { projectId },
-      orderBy: { generatedAt: "desc" },
+      orderBy: [...LATEST_REPORT_ORDER],
       select:  { content: true },
     }),
   ]);
@@ -107,7 +108,7 @@ async function createDisputeAlert(projectId: number, studentName: string): Promi
       assignment: {
         include: { classSection: { select: { instructorId: true, subjectCode: true } } },
       },
-      reports: { orderBy: { generatedAt: "desc" }, take: 1 },
+      reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 },
     },
   });
 
@@ -147,6 +148,16 @@ disputesRouter.get("/api/disputes/mine", ...requireRole("STUDENT"), async (req, 
   });
 
   res.json({ disputes });
+});
+
+// ── GET /api/disputes/open-count ──────────────────────────────────────────────
+// Sidebar badge: only the number of OPEN disputes in the instructor's own classes.
+disputesRouter.get("/api/disputes/open-count", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const instructorId = req.user!.sub;
+  const openCount = await prisma.dispute.count({
+    where: { project: { assignment: { classSection: { instructorId } } }, status: "OPEN" },
+  });
+  res.json({ openCount });
 });
 
 // ── GET /api/disputes ─────────────────────────────────────────────────────────
@@ -190,7 +201,7 @@ disputesRouter.get("/api/disputes", ...requireRole("INSTRUCTOR"), async (req, re
           select: {
             id:         true,
             groupName:  true,
-            reports:    { orderBy: { generatedAt: "desc" }, take: 1, select: { content: true } },
+            reports:    { orderBy: [...LATEST_REPORT_ORDER], take: 1, select: { content: true } },
             assignment: {
               select: {
                 id:    true,
@@ -256,7 +267,7 @@ disputesRouter.get("/api/projects/:id/disputes", ...requireRole("INSTRUCTOR"), a
     return;
   }
 
-  if (project.assignment && project.assignment.classSection.instructorId !== instructorId) {
+  if (project.assignment?.classSection.instructorId !== instructorId) {
     res.status(403).json({ error: "You do not have access to this project." });
     return;
   }
@@ -271,6 +282,48 @@ disputesRouter.get("/api/projects/:id/disputes", ...requireRole("INSTRUCTOR"), a
   });
 
   res.json({ disputes });
+});
+
+// ── POST /api/disputes/:id/seen ───────────────────────────────────────────────
+// The owning instructor opened the dispute. Sets seenAt once (idempotent: a later call keeps the
+// first time). Owner only, sends no alert, changes nothing else. Display only.
+
+disputesRouter.post("/api/disputes/:id/seen", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid dispute id" });
+    return;
+  }
+
+  const dispute = await prisma.dispute.findUnique({
+    where:  { id: idResult.data },
+    select: {
+      id: true, seenAt: true,
+      project: { select: { assignment: { select: { classSection: { select: { instructorId: true } } } } } },
+    },
+  });
+
+  if (!dispute) {
+    res.status(404).json({ error: "Dispute not found" });
+    return;
+  }
+  if (dispute.project.assignment?.classSection.instructorId !== req.user!.sub) {
+    res.status(403).json({ error: "You do not have access to this dispute." });
+    return;
+  }
+
+  if (dispute.seenAt) {
+    res.json({ seenAt: dispute.seenAt });
+    return;
+  }
+
+  // updateMany with seenAt: null keeps the first time even if two tabs call at once.
+  await prisma.dispute.updateMany({
+    where: { id: dispute.id, seenAt: null },
+    data:  { seenAt: new Date() },
+  });
+  const after = await prisma.dispute.findUnique({ where: { id: dispute.id }, select: { seenAt: true } });
+  res.json({ seenAt: after?.seenAt ?? null });
 });
 
 // ── POST /api/disputes/:id/resolve ────────────────────────────────────────────
@@ -321,12 +374,15 @@ disputesRouter.post("/api/disputes/:id/resolve", ...requireRole("INSTRUCTOR"), a
     return;
   }
 
+  const now = new Date();
   const updated = await prisma.dispute.update({
     where: { id: dispute.id },
     data: {
       status:             bodyResult.data.status,
       instructorResponse: bodyResult.data.instructorResponse,
-      resolvedAt:         new Date(),
+      resolvedAt:         now,
+      // Replying implies it was seen, so "Seen" never reads later than "Answered".
+      seenAt:             dispute.seenAt ?? now,
     },
   });
 
@@ -334,8 +390,8 @@ disputesRouter.post("/api/disputes/:id/resolve", ...requireRole("INSTRUCTOR"), a
     recipientIds: dispute.studentUserId,
     actorId:      req.user!.sub,
     type:         "DISPUTE_RESPONDED",
-    message:      "Your instructor responded to your review request",
-    link:         `/student/group/${dispute.projectId}`,
+    message:      "Your instructor replied to your note",
+    link:         `/disputes?note=${dispute.id}`,
     projectId:    dispute.projectId,
     refType:      "DISPUTE",
     refId:        dispute.id,

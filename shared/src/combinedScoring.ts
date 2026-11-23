@@ -4,7 +4,8 @@ import type {
 } from "./types.js";
 import { gini, round3, DEFAULT_THRESHOLDS, HEALTHY_GINI_THRESHOLD, MODERATE_RISK_GINI_THRESHOLD } from "./scoring.js";
 
-export const DEFAULT_BLEND_WEIGHTS: BlendWeights = { wGitHub: 0.5, wDocs: 0.5 };
+import { DEFAULT_BLEND_WEIGHTS, resolveBlendWeights } from "./weights.js";
+export { DEFAULT_BLEND_WEIGHTS };
 
 export interface CombinedRosterMember {
   userId: number;
@@ -25,10 +26,12 @@ export function computeCombinedTeamReport(
   githubScored: ScoredMember[],
   documentRaw: RawDocumentMemberStats[],
   documentScored: DocumentScoredMember[],
-  blend: BlendWeights = DEFAULT_BLEND_WEIGHTS,
+  blendInput: BlendWeights = DEFAULT_BLEND_WEIGHTS,
   thresholds: ScoringThresholds = DEFAULT_THRESHOLDS,
   deadline?: number | null
 ): TeamReport<CombinedScoredMember> {
+  // Invalid blend (not 0-1, or not adding up to 1.00) falls back to the defaults with a warning.
+  const blend = resolveBlendWeights(blendInput);
   if (roster.length === 0) {
     return { members: [], memberCount: 0, gini: 0, teamHealth: "Healthy", deadlineWindowBasis: "activity-span" };
   }
@@ -46,6 +49,22 @@ export function computeCombinedTeamReport(
     documentByUserId.set(raw.userId, { raw, scored: documentScored[i] });
   });
 
+  // A source is quiet when nobody on the roster has any share or recorded activity in it.
+  const githubQuiet = roster.every((r) => {
+    const g = githubByUsername.get(r.githubUsername.toLowerCase());
+    return !g?.scored.contributionShare && !g?.scored.commits;
+  });
+  const docsQuiet = roster.every((r) => {
+    const d = documentByUserId.get(r.userId);
+    return !d?.scored.contributionShare && !d?.scored.sessionCount;
+  });
+  // Exactly one quiet source: the active source carries the whole blend, so the shares still add up
+  // to 1 and flags compare a real share with 1/N. Both active or both quiet: the instructor's blend.
+  const effective: BlendWeights =
+    githubQuiet && !docsQuiet ? { wGitHub: 0, wDocs: 1 }
+    : docsQuiet && !githubQuiet ? { wGitHub: 1, wDocs: 0 }
+    : blend;
+
   const baseStats = roster.map((r) => {
     const gh  = githubByUsername.get(r.githubUsername.toLowerCase()) ?? null;
     const doc = documentByUserId.get(r.userId) ?? null;
@@ -53,7 +72,7 @@ export function computeCombinedTeamReport(
     const githubContributionShare   = gh?.scored.contributionShare ?? 0;
     const documentContributionShare = doc?.scored.contributionShare ?? 0;
     const contributionShare =
-      blend.wGitHub * githubContributionShare + blend.wDocs * documentContributionShare;
+      effective.wGitHub * githubContributionShare + effective.wDocs * documentContributionShare;
 
     const commits      = gh?.scored.commits ?? 0;
     const sessionCount = doc?.scored.sessionCount ?? 0;
@@ -114,8 +133,8 @@ export function computeCombinedTeamReport(
       githubUsername: m.githubUsername,
       githubContributionShare: round3(m.githubContributionShare),
       documentContributionShare: round3(m.documentContributionShare),
-      wGitHub: blend.wGitHub,
-      wDocs: blend.wDocs,
+      wGitHub: effective.wGitHub,
+      wDocs: effective.wDocs,
       contributionShare: round3(m.contributionShare),
       lastPhaseRatio: round3(lastPhaseRatio),
       flags,

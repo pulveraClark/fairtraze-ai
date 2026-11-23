@@ -5,6 +5,7 @@ import type { prosemirrorJSONToYXmlFragment as ProsemirrorJSONToYXmlFragmentType
 import { prisma } from "../lib/prisma.js";
 import { Y } from "./yjsCjs.js";
 import { attachAuthorshipTracking } from "./authorshipCapture.js";
+import { COLLAB_PERSIST_DEBOUNCE_MS } from "@shared/collabVersion.js";
 
 // prosemirror-model and @tiptap/y-tiptap are loaded via the same CJS `require` trick as `Y`
 // (see yjsCjs.ts) — only used here for the one-time legacy-content migration below.
@@ -40,7 +41,7 @@ export const legacySchema = new Schema({
   },
 });
 
-const DEBOUNCE_MS = 3000;
+const DEBOUNCE_MS = COLLAB_PERSIST_DEBOUNCE_MS; // shared with the client's save indicator
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // Tracks, per room, whether bindState's own restore (Document.findUnique + Y.applyUpdate below)
@@ -53,6 +54,58 @@ const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // distinct rooms is bounded by how many groups this server process ever serves, which is
 // negligible at this project's scale.
 const restoreReady = new Map<string, Promise<void>>();
+
+// Per room: the whole bindState (restore + authorship registration) as one promise, set
+// synchronously when the room is created. yjsServer.ts awaits it (roomReady below) before
+// setupWSConnection, because y-websocket's getYDoc() does not: the server's sync-step-1 would
+// otherwise carry the EMPTY state vector, a client holding the whole document would answer with all
+// of it, and authorshipCapture would diff that against an empty baseline and credit the whole
+// document to that connection as one INSERT.
+const bindReady = new Map<string, Promise<void>>();
+
+// Rooms whose restore threw. Their in-memory doc is empty/untrusted: writeState must never persist
+// it, and yjsServer.ts refuses connections to it.
+const restoreFailed = new Set<string>();
+
+// Overridable through COLLAB_ROOM_READY_TIMEOUT_MS (tests shorten it); read per call.
+const DEFAULT_ROOM_READY_TIMEOUT_MS = 10_000;
+function roomReadyTimeoutMs(): number {
+  const fromEnv = Number(process.env.COLLAB_ROOM_READY_TIMEOUT_MS);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_ROOM_READY_TIMEOUT_MS;
+}
+
+export class RoomUnavailableError extends Error {
+  constructor(
+    readonly room: string,
+    readonly reason: "restore-failed" | "timeout" | "not-bound"
+  ) {
+    super(`Collab room ${room} is not ready (${reason}).`);
+  }
+}
+
+// Resolves once the room's restore has been applied and authorship tracking is registered; rejects
+// with RoomUnavailableError if the restore failed or takes longer than `timeoutMs`. Callers must
+// not let a connection sync with a room that has not resolved here.
+export async function roomReady(room: string, timeoutMs: number = roomReadyTimeoutMs()): Promise<void> {
+  const bound = bindReady.get(room);
+  if (!bound) throw new RoomUnavailableError(room, "not-bound");
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new RoomUnavailableError(room, "timeout")), timeoutMs);
+  });
+  try {
+    await Promise.race([
+      bound.catch(() => {
+        throw new RoomUnavailableError(room, "restore-failed");
+      }),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (restoreFailed.has(room)) throw new RoomUnavailableError(room, "restore-failed");
+}
 
 export function groupIdFromRoom(room: string): number {
   const match = /^group-doc-(\d+)$/.exec(room);
@@ -115,6 +168,7 @@ export const yjsPersistence = {
     // this room is created (a fast connect/disconnect cycle) always finds this entry and waits
     // on it rather than persisting a not-yet-restored, still-empty ydoc. See restoreReady's
     // declaration above and its consumer in writeState below.
+    restoreFailed.delete(room);
     const restorePromise = (async () => {
       const doc = await prisma.document.findUnique({ where: { groupId } });
 
@@ -132,11 +186,20 @@ export const yjsPersistence = {
     restoreReady.set(
       room,
       restorePromise.catch((err) => {
+        restoreFailed.add(room);
         console.error(`[collab] restore failed for ${room}`, err);
       })
     );
 
-    await Promise.all([authorshipTracking, restorePromise]);
+    // Also set before the first await. Never rethrows: getYDoc() ignores this function's promise,
+    // so a rejection here would be an unhandled rejection (a process crash on modern Node);
+    // failure is reported through roomReady() instead.
+    const bound = Promise.all([authorshipTracking, restorePromise]).then(() => undefined);
+    bindReady.set(room, bound);
+    await bound.catch((err) => {
+      restoreFailed.add(room);
+      console.error(`[collab] bindState failed for ${room}`, err);
+    });
   },
 
   async writeState(room: string, ydoc: YTypes.Doc): Promise<void> {
@@ -150,6 +213,20 @@ export const yjsPersistence = {
     // still-empty in-memory doc, silently overwriting real content already sitting in Postgres.
     const restore = restoreReady.get(room);
     if (restore) await restore;
-    await persist(room, ydoc);
+    // A failed restore leaves an empty, untrusted doc: persisting it would overwrite the real state.
+    if (restoreFailed.has(room)) {
+      console.error(`[collab] not persisting ${room}: its restore failed`);
+      return;
+    }
+    try {
+      await persist(room, ydoc);
+    } catch (err) {
+      // y-websocket's closeConn calls writeState without a .catch, so a rejection here would be an
+      // unhandled rejection (a process exit on modern Node). P2003 = the group (and so its
+      // Document's parent) was deleted: nothing to save, ignore it quietly. Anything else is
+      // logged with the room name only (no error object) and not rethrown. Saved bytes unchanged.
+      if ((err as { code?: string } | null)?.code === "P2003") return;
+      console.error(`[collab] persist failed for ${room}`);
+    }
   },
 };

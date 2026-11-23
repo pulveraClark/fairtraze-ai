@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertOwnsClass } from "../lib/ownership.js";
 import { generateUniqueJoinCode } from "../lib/joinCode.js";
+import { EDP_TAKEN_MESSAGE, SEMESTERS, isValidSchoolYear, termOf } from "@shared/schoolTerm.js";
 
 export const classesRouter = Router();
 
@@ -13,6 +14,9 @@ const createClassSchema = z.object({
   departmentId: z.number().int().positive(),
   edpCode:      z.string().min(1),
   type:         z.enum(["LECTURE", "LABORATORY"]).default("LECTURE"),
+  // The form prefills the current term from today's date; a client that sends none gets the same.
+  schoolYear:   z.string().refine(isValidSchoolYear, "Use a school year like 2026-2027.").optional(),
+  semester:     z.enum(SEMESTERS).optional(),
 });
 
 const idParam = z.coerce.number().int().positive();
@@ -26,6 +30,7 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
   }
 
   const { subjectCode, subjectName, departmentId, edpCode, type } = result.data;
+  const term = { ...termOf(new Date()), ...(result.data.schoolYear ? { schoolYear: result.data.schoolYear } : {}), ...(result.data.semester ? { semester: result.data.semester } : {}) };
   const instructorId = req.user!.sub;
 
   const department = await prisma.department.findUnique({ where: { id: departmentId } });
@@ -34,23 +39,28 @@ classesRouter.post("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res
     return;
   }
 
-  const existing = await prisma.classSection.findUnique({
-    where: { instructorId_edpCode: { instructorId, edpCode } },
-  });
-  if (existing) {
-    res.status(409).json({
-      error: `EDP code "${edpCode}" is already used by your "${existing.subjectCode} — ${existing.subjectName}" class section. Each of your class sections must have a unique EDP code.`,
-    });
+  // Unique per term across all instructors. The answer never says who holds the code.
+  const taken = { code: "EDP_TAKEN", error: EDP_TAKEN_MESSAGE };
+  if (await prisma.classSection.findFirst({ where: { edpCode, ...term }, select: { id: true } })) {
+    res.status(409).json(taken);
     return;
   }
 
   const joinCode = await generateUniqueJoinCode();
 
-  const cls = await prisma.classSection.create({
-    data: { subjectCode, subjectName, departmentId, edpCode, type, instructorId, joinCode },
-  });
-
-  res.status(201).json(cls);
+  try {
+    const cls = await prisma.classSection.create({
+      data: { subjectCode, subjectName, departmentId, edpCode, type, instructorId, joinCode, ...term },
+    });
+    res.status(201).json(cls);
+  } catch (err) {
+    // Two requests with the same code at once: the partial unique index decides.
+    if ((err as { code?: string }).code === "P2002") {
+      res.status(409).json(taken);
+      return;
+    }
+    throw err;
+  }
 });
 
 // DELETE /api/classes/:id — delete the class and all descendants in dependency order
@@ -98,6 +108,30 @@ classesRouter.delete("/api/classes/:id", ...requireRole("INSTRUCTOR"), async (re
   res.json({ message: "Class section deleted" });
 });
 
+// PATCH /api/classes/:id/ai-review - the owning instructor turns AI work summaries on or off for the
+// class. Off: no AI calls for its groups and the summaries are hidden from everyone (stored rows are
+// kept, not served). Admins are read-only.
+classesRouter.patch("/api/classes/:id/ai-review", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid class section id" });
+    return;
+  }
+  const body = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "enabled must be true or false" });
+    return;
+  }
+  const cls = await assertOwnsClass(req, res, idResult.data);
+  if (!cls) return;
+  const updated = await prisma.classSection.update({
+    where: { id: cls.id },
+    data: { aiReviewEnabled: body.data.enabled },
+    select: { id: true, aiReviewEnabled: true },
+  });
+  res.json(updated);
+});
+
 // GET /api/classes — list the instructor's class sections with assignments and group counts
 classesRouter.get("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const instructorId = req.user!.sub;
@@ -118,7 +152,7 @@ classesRouter.get("/api/classes", ...requireRole("INSTRUCTOR"), async (req, res)
 });
 
 // GET /api/classes/:id/assignments — assignments for one class (ownership-verified; ADMIN bypasses ownership)
-classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "ADMIN"), async (req, res) => {
+classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid class section id" });
@@ -146,6 +180,7 @@ classesRouter.get("/api/classes/:id/assignments", ...requireRole("INSTRUCTOR", "
       edpCode:     cls.edpCode,
       type:        cls.type,
       joinCode:    cls.joinCode,
+      aiReviewEnabled: cls.aiReviewEnabled,
       createdAt:   cls.createdAt,
     },
     assignments,

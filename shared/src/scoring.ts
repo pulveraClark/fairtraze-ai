@@ -1,3 +1,5 @@
+import { countDistinctAnalysisDays } from "./analysisDay.js";
+import { LINE_TYPE_WEIGHTS } from "./lineClassifier.js";
 import type { RawMemberStats, ScoredMember, TeamReport, TeamHealth, ScoringWeights, ScoringThresholds, Flag } from "./types.js";
 
 export const DEFAULT_WEIGHTS: ScoringWeights = { commits: 0.4, lines: 0.4, activeDays: 0.2 };
@@ -49,7 +51,9 @@ export function computeTeamReport(
     const codeLinesAdded    = m.codeLinesAdded    ?? 0;
     const commentLinesAdded = m.commentLinesAdded ?? 0;
     const blankLinesAdded   = m.blankLinesAdded   ?? 0;
-    const meaningfulLines   = codeLinesAdded + 0.25 * commentLinesAdded;
+    const meaningfulLines   = codeLinesAdded * LINE_TYPE_WEIGHTS.code
+      + commentLinesAdded * LINE_TYPE_WEIGHTS.comment
+      + blankLinesAdded * LINE_TYPE_WEIGHTS.blank;
 
     // Significance fields — fall back to meaningfulLines when not provided (preserves existing tests)
     const weightedAdditionsRaw = m.weightedAdditions ?? meaningfulLines;
@@ -74,7 +78,7 @@ export function computeTeamReport(
       commitImpactBreakdown,
       fileTypeBreakdown,
       churn: m.additions + m.deletions,
-      activeDays: new Set(m.commitDates.map((d) => d.slice(0, 10))).size,
+      activeDays: countDistinctAnalysisDays(m.commitDates),
     };
   });
 

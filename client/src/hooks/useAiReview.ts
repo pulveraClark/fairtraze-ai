@@ -1,0 +1,131 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AI_POLL_MAX_MS, AI_POLL_MS, normalizeBriefCheck, type AiReviewResponse } from "../lib/aiReview";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
+
+export interface UseAiReview {
+  data: AiReviewResponse | null;
+  /** Plain message from the last failed start; null otherwise. */
+  error: string | null;
+  /** Starts a review (instructor only; the server decides). Resolves true if one is running afterwards. */
+  start: () => Promise<boolean>;
+}
+
+/**
+ * Reads the stored AI review of a group and, while a review is running, re-reads it every 5 s for up
+ * to 5 minutes. Never blocks the page: any failure just leaves `data` as it was.
+ *
+ * After `start()` (the instructor's Generate) the member findings and the instructions check are saved at
+ * different moments. Until the run finishes, `data` keeps the last finished result (with `running: true`), so
+ * both parts change at the same moment. After the 5-minute limit the latest result is shown anyway. A page that
+ * never calls `start()` (students) reads and shows every poll as before.
+ */
+export function useAiReview(projectId: number, token: string | null): UseAiReview {
+  const [data, setData] = useState<AiReviewResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const startedAt = useRef<number | null>(null);
+  const shown = useRef<AiReviewResponse | null>(null); // what `data` currently holds
+  const settled = useRef<AiReviewResponse | null>(null); // last finished result, kept while a started run is held back
+  const held = useRef(false);
+
+  const load = useCallback(async (): Promise<AiReviewResponse | null> => {
+    try {
+      const res = await fetch(`/api/groups/${projectId}/ai-review`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return null;
+      const raw = (await res.json()) as AiReviewResponse;
+      const body: AiReviewResponse = raw.briefCheck ? { ...raw, briefCheck: normalizeBriefCheck(raw.briefCheck) } : raw;
+      if (held.current && body.running && settled.current) {
+        shown.current = { ...settled.current, running: true };
+      } else {
+        if (!body.running) held.current = false;
+        settled.current = body;
+        shown.current = body;
+      }
+      setData(shown.current);
+      return body;
+    } catch {
+      return null;
+    }
+  }, [projectId, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // A hidden tab makes no request: the next poll is skipped and made at once when the tab is visible
+    // again. The time limit below counts wall time, so waiting hidden can only end the wait sooner.
+    let skippedWhileHidden = false;
+    const onVisible = () => {
+      if (skippedWhileHidden && document.visibilityState === "visible") {
+        skippedWhileHidden = false;
+        void tick();
+      }
+    };
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        if (document.visibilityState === "hidden") skippedWhileHidden = true;
+        else void tick();
+      }, AI_POLL_MS);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    const tick = async () => {
+      const body = await load();
+      if (cancelled || !body?.running) return;
+      startedAt.current ??= Date.now();
+      if (Date.now() - startedAt.current < AI_POLL_MAX_MS) {
+        scheduleNext();
+      } else {
+        // Limit reached: nothing stays hidden. Show the latest result and stop waiting.
+        held.current = false;
+        settled.current = null;
+        shown.current = { ...body, running: false };
+        setData(shown.current);
+      }
+    };
+    void tick();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load, nonce, token]);
+
+  // A different group starts from a clean slate.
+  useEffect(() => {
+    setData(null);
+    setError(null);
+    startedAt.current = null;
+    shown.current = null;
+    settled.current = null;
+    held.current = false;
+  }, [projectId]);
+
+  const start = useCallback(async (): Promise<boolean> => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/groups/${projectId}/ai-review`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 202 || res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
+        if (res.status === 409 && body.code && body.code !== "REVIEW_IN_PROGRESS") {
+          setError(body.error ?? "Could not start the AI findings.");
+return false;
+        }
+        startedAt.current = Date.now();
+        held.current = true;
+        settled.current = shown.current;
+        shown.current = shown.current ? { ...shown.current, running: true } : shown.current;
+        setData(shown.current);
+        setNonce((n) => n + 1);
+        return true;
+      }
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(body.error ?? "Could not start the AI findings.");
+      return false;
+    } catch {
+      setError(NETWORK_ERROR_TEXT);
+      return false;
+    }
+  }, [projectId, token]);
+
+  return { data, error, start };
+}

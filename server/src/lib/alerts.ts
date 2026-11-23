@@ -4,14 +4,17 @@ import type { AnyScoredMember, TeamReport } from "@shared/types.js";
 
 /**
  * Called after every analyze run.  Reads the already-computed TeamReport and
- * creates (or refreshes) at-risk alerts for the owning instructor.
+ * creates (or refreshes) ONE alert per group for the owning instructor.
  *
  * Rules:
- *  - Only non-healthy groups trigger alerts (Moderate Risk or High Risk).
- *  - MEMBER_FLAGGED fires whenever at least one member carries a flag.
- *  - No-duplicate: if an *unread* alert of the same type already exists for
- *    this project we update it (refresh message + timestamp) instead of
- *    stacking a second one.
+ *  - Risky group (Moderate Risk / High Risk): one MODERATE_RISK / HIGH_RISK alert.
+ *  - Healthy group with at least one flagged member: one MEMBER_FLAGGED alert.
+ *  - When both apply the alert carries the risk type and a combined message,
+ *    e.g. "Group 1: Moderate risk · 1 member flagged".
+ *  - No-duplicate: if an *unread* alert of any of these three types already
+ *    exists for this project we update the newest in place (type, message,
+ *    timestamp) and mark older unread siblings read, instead of stacking more.
+ *  - Link goes to that group's Report.
  *  - Projects with no linked Assignment are skipped — there is no instructor
  *    to notify.
  */
@@ -34,57 +37,41 @@ export async function generateAlertsForProject(
 
   const instructorId = assignment.classSection.instructorId;
 
-  // Build a human-readable label for the group and the class
   const groupLabel = project.groupName.trim() || `Project ${projectId}`;
-  const classLabel =
-    project.assignmentLabel.trim() ||
-    `${assignment.classSection.subjectCode} — ${assignment.classSection.subjectName}`;
-
-  // Determine which alert types apply
-  const pending: Array<{ type: AlertType; message: string }> = [];
-
-  if (report.teamHealth === "High Risk") {
-    pending.push({
-      type: "HIGH_RISK",
-      message: `${groupLabel} in ${classLabel} is High Risk (Gini ${report.gini.toFixed(2)})`,
-    });
-  } else if (report.teamHealth === "Moderate Risk") {
-    pending.push({
-      type: "MODERATE_RISK",
-      message: `${groupLabel} in ${classLabel} is Moderate Risk (Gini ${report.gini.toFixed(2)})`,
-    });
-  }
 
   const flaggedCount = report.members.filter((m) => m.flags.length > 0).length;
-  if (flaggedCount > 0) {
-    pending.push({
-      type: "MEMBER_FLAGGED",
-      message: `${flaggedCount} member${flaggedCount !== 1 ? "s" : ""} flagged in ${groupLabel}`,
-    });
+  const flaggedText = flaggedCount > 0 ? `${flaggedCount} member${flaggedCount !== 1 ? "s" : ""} flagged` : "";
+
+  let type: AlertType;
+  let message: string;
+  if (report.teamHealth === "High Risk" || report.teamHealth === "Moderate Risk") {
+    type = report.teamHealth === "High Risk" ? "HIGH_RISK" : "MODERATE_RISK";
+    const label = report.teamHealth === "High Risk" ? "High risk" : "Moderate risk";
+    message = `${groupLabel}: ${[label, flaggedText].filter(Boolean).join(" · ")}`;
+  } else if (flaggedCount > 0) {
+    type = "MEMBER_FLAGGED";
+    message = `${groupLabel}: ${flaggedText}`;
+  } else {
+    return;
   }
 
-  // Upsert: refresh existing unread alert or create a new one
-  for (const { type, message } of pending) {
-    const existing = await prisma.alert.findFirst({
-      where: { projectId, type, read: false },
+  const link = `/project/${projectId}?tab=report`;
+  const unread = await prisma.alert.findMany({
+    where: { projectId, read: false, type: { in: ["HIGH_RISK", "MODERATE_RISK", "MEMBER_FLAGGED"] } },
+    orderBy: { createdAt: "desc" },
+  });
+  const [newest, ...older] = unread;
+  if (older.length > 0) {
+    await prisma.alert.updateMany({ where: { id: { in: older.map((a) => a.id) } }, data: { read: true } });
+  }
+  if (newest) {
+    await prisma.alert.update({
+      where: { id: newest.id },
+      data: { type, message, link, teamHealth: report.teamHealth, createdAt: new Date() },
     });
-    if (existing) {
-      await prisma.alert.update({
-        where: { id: existing.id },
-        data: { message, teamHealth: report.teamHealth, createdAt: new Date() },
-      });
-    } else {
-      await prisma.alert.create({
-        data: {
-          projectId,
-          instructorId,
-          recipientId: instructorId,
-          link: `/project/${projectId}`,
-          type,
-          message,
-          teamHealth: report.teamHealth,
-        },
-      });
-    }
+  } else {
+    await prisma.alert.create({
+      data: { projectId, instructorId, recipientId: instructorId, link, type, message, teamHealth: report.teamHealth },
+    });
   }
 }

@@ -1,7 +1,14 @@
+import { groupsNeedAttention } from "../lib/attentionLabel";
 import { useState } from "react";
+import { classAccent } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
+import { isAtRiskGroup, noActivityCount, presentedHealth } from "../lib/groupActivity";
+import { NoActivityRollup } from "./NoActivityRollup";
+import { OverflowMenu } from "./ui/OverflowMenu";
+import { ClassCodeLabel } from "./ClassCodeLabel";
 
 interface Props {
+  classId: number;
   assignmentLabel: string;
   items: ProjectSummaryItem[];
   onClick: () => void;
@@ -12,21 +19,6 @@ interface Props {
   joinCode?: string;
 }
 
-// Deterministic gradient based on label string — stable across renders
-const BAND_GRADIENTS = [
-  "linear-gradient(135deg, #4338ca 0%, #6366f1 100%)",
-  "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
-  "linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%)",
-  "linear-gradient(135deg, #be123c 0%, #f43f5e 100%)",
-  "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
-  "linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)",
-];
-
-function pickGradient(label: string): string {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
-  return BAND_GRADIENTS[h % BAND_GRADIENTS.length];
-}
 
 export function parseClassLabel(label: string): { code: string; subjectName: string } {
   const sep = label.indexOf(" — ");
@@ -35,16 +27,10 @@ export function parseClassLabel(label: string): { code: string; subjectName: str
 }
 
 export function classAtRiskCount(items: ProjectSummaryItem[]): number {
-  return items.filter(
-    (i) =>
-      i.isAnalyzed &&
-      (i.teamHealth === "High Risk" ||
-        i.teamHealth === "Moderate Risk" ||
-        i.flagsPresent.length > 0)
-  ).length;
+  return items.filter(isAtRiskGroup).length;
 }
 
-export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount, joinCode }: Props) {
+export function ClassCard({ classId, assignmentLabel, items, onClick, edpCode, classType, onDelete, projectCount, joinCode }: Props) {
   const { code, subjectName } = parseClassLabel(assignmentLabel);
   const [copied, setCopied] = useState(false);
 
@@ -57,13 +43,14 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
   }
 
   const analyzed   = items.filter((i) => i.isAnalyzed);
-  const healthy    = analyzed.filter((i) => i.teamHealth === "Healthy").length;
-  const moderate   = analyzed.filter((i) => i.teamHealth === "Moderate Risk").length;
-  const highRisk   = analyzed.filter((i) => i.teamHealth === "High Risk").length;
+  const healthy    = analyzed.filter((i) => presentedHealth(i) === "Healthy").length;
+  const quiet      = noActivityCount(items);
+  const moderate   = analyzed.filter((i) => presentedHealth(i) === "Moderate Risk").length;
+  const highRisk   = analyzed.filter((i) => presentedHealth(i) === "High Risk").length;
   const unanalyzed = items.filter((i) => !i.isAnalyzed).length;
   const atRisk     = classAtRiskCount(items);
 
-  const gradient = pickGradient(assignmentLabel);
+  
 
   return (
     <div
@@ -75,12 +62,12 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
     >
       {/* Colored band */}
       <div
-        className="relative px-5 pt-5 pb-4 flex flex-col gap-3"
-        style={{ background: gradient }}
+        className="relative px-4 py-3 flex flex-col gap-2"
+        style={{ background: classAccent(classId).color }}
       >
         <div className="flex items-start justify-between gap-2">
           {/* Clipboard icon */}
-          <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round"
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
@@ -90,34 +77,27 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
 
           <div className="flex items-center gap-1.5">
             {atRisk > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-[11px] font-semibold whitespace-nowrap">
-                ⚠ {atRisk} at risk
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-xs font-semibold whitespace-nowrap">
+                ⚠ {groupsNeedAttention(atRisk)}
               </span>
             )}
             {onDelete && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                title="Delete class section"
-                className="p-1 rounded text-white/50 hover:text-white hover:bg-red-500/40 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+              <OverflowMenu
+                label="Class options"
+                variant="onColor"
+                items={[{ label: "Delete class section…", tone: "danger", onSelect: onDelete }]}
+              />
             )}
           </div>
         </div>
 
         {/* Subject code · EDP code */}
         <div>
-          <p className="text-white font-mono font-bold text-lg leading-tight tracking-tight">
-            {code}
-            {edpCode && (
-              <span className="font-semibold text-white/75"> · EDP {edpCode}</span>
-            )}
+          <p className="text-white font-mono font-bold text-base leading-tight tracking-tight">
+            <ClassCodeLabel subjectCode={code} edpCode={edpCode} edpClassName="font-semibold text-white/75" />
           </p>
           {classType && (
-            <p className="text-white/60 text-[11px] font-mono mt-0.5">
+            <p className="text-white/60 text-xs font-mono mt-0.5">
               {classType.charAt(0) + classType.slice(1).toLowerCase()}
             </p>
           )}
@@ -125,13 +105,13 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
       </div>
 
       {/* Card body */}
-      <div className="px-5 py-4 flex flex-col gap-3">
+      <div className="px-4 py-3 flex flex-col gap-2">
         {/* Subject name + BSIT badge */}
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-slate-800 leading-snug group-hover:text-indigo-700 transition-colors">
             {subjectName || code}
           </p>
-          <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
+          <span className="shrink-0 text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase">
             BSIT
           </span>
         </div>
@@ -150,14 +130,14 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
             <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
-            <span className="text-[11px] text-slate-400 shrink-0">Join code:</span>
+            <span className="text-xs text-slate-600 shrink-0">Join code:</span>
             <span className="font-mono font-extrabold text-sm text-violet-700 tracking-wide select-all break-all">
               {joinCode}
             </span>
             <button
               onClick={handleCopyJoinCode}
               title={copied ? "Copied!" : "Copy join code"}
-              className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+              className={`ft-hit rounded transition-colors ${copied ? "text-emerald-700" : "text-slate-500 hover:text-indigo-600"}`}
             >
               {copied ? (
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -175,34 +155,35 @@ export function ClassCard({ assignmentLabel, items, onClick, edpCode, classType,
         {/* Risk rollup */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {highRisk > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-red-600 font-medium">
+            <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
               <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
               {highRisk} High Risk
             </span>
           )}
           {moderate > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-medium">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
               {moderate} Moderate
             </span>
           )}
           {healthy > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
               {healthy} Healthy
             </span>
           )}
           {unanalyzed > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+            <span className="inline-flex items-center gap-1 text-xs text-slate-600">
               <span className="h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />
               {unanalyzed} Not analyzed
             </span>
           )}
         </div>
+        <NoActivityRollup count={quiet} />
 
         {/* Footer arrow */}
-        <div className="flex justify-end pt-1">
-          <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">
+        <div className="flex justify-end">
+          <span className="text-xs text-slate-600 group-hover:text-indigo-700 transition-colors">
             View groups →
           </span>
         </div>

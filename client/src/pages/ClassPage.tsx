@@ -1,11 +1,28 @@
+import { groupsNeedAttention } from "../lib/attentionLabel";
+import { useToast } from "../components/Toast";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
+import { ProjectCardHeader } from "../components/ProjectCardHeader";
+import { AppFooter } from "../components/AppFooter";
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { classCrumb } from "../lib/classLabel";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { classAccent } from "../lib/classBand";
 import type { ProjectSummaryItem } from "@shared/types";
-import { AppTopBar } from "../components/AppTopBar";
+import { noActivityCount, presentedHealth } from "../lib/groupActivity";
+import { NoActivityHeaderPill, NoActivityRollup } from "../components/NoActivityRollup";
 import { classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
+import { joinInviteUrl } from "../lib/joinInvite";
 import { useProjectsSummaryQuery } from "../hooks/useSharedQueries";
+import { AiReviewSwitch } from "../components/AiReviewSwitch";
+import { BriefEditor } from "../components/BriefEditor";
+import { instructionsProblem } from "../lib/instructionsRule";
+import { EditAssignmentModal, UploadFailurePanel } from "../components/EditAssignmentModal";
+import { emptyDraft, retryUploads, syncBrief, type BriefDraft, type DraftItem } from "../lib/briefAttachments";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -26,33 +43,19 @@ interface ClassInfo {
   edpCode: string;
   type: "LECTURE" | "LABORATORY";
   joinCode: string | null;
+  aiReviewEnabled?: boolean;
   createdAt: string;
 }
 
 interface AssignmentGroup {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   memberCount: number;
   lastAnalyzedAt: string | null;
   isAnalyzed: boolean;
 }
 
-// ── Gradient palette (matches ClassCard) ─────────────────────────────────────
-const BAND_GRADIENTS = [
-  "linear-gradient(135deg, #4338ca 0%, #6366f1 100%)",
-  "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
-  "linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%)",
-  "linear-gradient(135deg, #be123c 0%, #f43f5e 100%)",
-  "linear-gradient(135deg, #b45309 0%, #f59e0b 100%)",
-  "linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)",
-];
-
-function pickGradient(label: string): string {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
-  return BAND_GRADIENTS[h % BAND_GRADIENTS.length];
-}
 
 function fmtDeadline(iso: string | null): string {
   if (!iso) return "No deadline";
@@ -60,30 +63,33 @@ function fmtDeadline(iso: string | null): string {
 }
 
 // ── Risk pills ────────────────────────────────────────────────────────────────
-function RiskPills({ healthy, moderate, highRisk, unanalyzed }: { healthy: number; moderate: number; highRisk: number; unanalyzed: number }) {
+function RiskPills({ healthy, moderate, highRisk, unanalyzed, quiet = 0 }: { healthy: number; moderate: number; highRisk: number; unanalyzed: number; quiet?: number }) {
   return (
+    <>
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {highRisk > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-red-600 font-medium">
+        <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
           <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />{highRisk} High Risk
         </span>
       )}
       {moderate > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+        <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-medium">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />{moderate} Moderate
         </span>
       )}
       {healthy > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />{healthy} Healthy
         </span>
       )}
       {unanalyzed > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />{unanalyzed} Not analyzed
         </span>
       )}
     </div>
+    <NoActivityRollup count={quiet} className="mt-1" />
+    </>
   );
 }
 
@@ -93,12 +99,16 @@ function CreateAssignmentModal({
   token,
   onClose,
   onCreated,
+  onEditCreated,
 }: {
   classSectionId: number;
   token: string | null;
   onClose: () => void;
   onCreated: () => void;
+  /** Opens the edit form for the just-created project (used when attachment uploads fail). */
+  onEditCreated: (assignmentId: number) => void;
 }) {
+  const { showSuccessToast } = useToast();
   const [title, setTitle]           = useState("");
   const [deadline, setDeadline]     = useState("");
   const [deadlineErr, setDeadlineErr] = useState<string | null>(null);
@@ -108,6 +118,12 @@ function CreateAssignmentModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [instructionsErr, setInstructionsErr] = useState<string | null>(null);
+  const [draft, setDraft] = useState<BriefDraft>(emptyDraft());
+  const [createdId, setCreatedId] = useState<number | null>(null);
+  const [failedUploads, setFailedUploads] = useState<DraftItem[]>([]);
+  const [retrying, setRetrying] = useState(false);
 
   // Soft warning only — does not block submission
   const todayStr        = new Date().toISOString().slice(0, 10);
@@ -126,6 +142,9 @@ function CreateAssignmentModal({
     setDeadlineErr(null);
     if (!sourceType) { setSourceTypeErr("Please choose an analysis source"); return; }
     setSourceTypeErr(null);
+    const problem = instructionsProblem("create", description, draft);
+    setInstructionsErr(problem);
+    if (problem) { document.getElementById("brief-description")?.focus(); return; }
     setSubmitting(true);
     setError(null);
     try {
@@ -135,6 +154,7 @@ function CreateAssignmentModal({
         maxGroupSize: parseInt(maxGroupSize) || 5,
         sourceType,
         deadline: new Date(deadline + "T00:00:00").toISOString(),
+        description,
       };
 
       const res = await fetch("/api/assignments", {
@@ -143,17 +163,32 @@ function CreateAssignmentModal({
         body:    JSON.stringify(body),
       });
       if (res.ok) {
+        const created = (await res.json()) as { id: number };
+        setCreatedId(created.id);
+        // The project exists now; a failed upload must not look like a failed create.
+        const { failed } = await syncBrief(created.id, draft, token ?? "");
+        setFailedUploads(failed);
         setCreatedCode("ok");
         onCreated();
+        showSuccessToast("Project created.");
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Failed to create project");
       }
     } catch {
-      setError("Network error — is the server running?");
+      setError(NETWORK_ERROR_TEXT);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleRetryUploads() {
+    if (createdId === null) return;
+    setRetrying(true);
+    const { failed } = await retryUploads(createdId, failedUploads, token ?? "");
+    setRetrying(false);
+    setFailedUploads(failed);
+    onCreated();
   }
 
   const SOURCE_OPTS = [
@@ -164,7 +199,7 @@ function CreateAssignmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !createdCode && onClose()}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -172,11 +207,11 @@ function CreateAssignmentModal({
             <h2 className="text-sm font-semibold text-slate-800">
               {createdCode ? "Project created" : "Create Project"}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               {createdCode ? "Share the join code with your class" : "Add a new project to this class section"}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -184,7 +219,18 @@ function CreateAssignmentModal({
         </div>
 
         {/* Success state */}
-        {createdCode ? (
+        {createdCode && failedUploads.length > 0 && createdId !== null ? (
+          <>
+            <div className="px-6 pt-5 text-sm text-emerald-800">&quot;{title}&quot; was created.</div>
+            <UploadFailurePanel
+              failed={failedUploads}
+              retrying={retrying}
+              onRetry={() => void handleRetryUploads()}
+              onEdit={() => onEditCreated(createdId)}
+              onDone={onClose}
+            />
+          </>
+        ) : createdCode ? (
           <div className="px-6 py-6 space-y-4">
             <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -216,7 +262,7 @@ function CreateAssignmentModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Final Group Project"
-                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -231,9 +277,9 @@ function CreateAssignmentModal({
                       deadlineErr ? "border-red-300 focus:border-red-400" : "border-slate-200 focus:border-indigo-400"
                     }`}
                   />
-                  {deadlineErr && <p className="text-[11px] text-red-600 mt-1">{deadlineErr}</p>}
+                  {deadlineErr && <p className="text-xs text-red-600 mt-1">{deadlineErr}</p>}
                   {!deadlineErr && isPastDeadline && (
-                    <p className="text-[11px] text-amber-600 mt-1">This deadline has already passed — are you sure?</p>
+                    <p className="text-xs text-amber-800 mt-1">This deadline has already passed — are you sure?</p>
                   )}
                 </div>
                 <div>
@@ -268,8 +314,18 @@ function CreateAssignmentModal({
                     </label>
                   ))}
                 </div>
-                {sourceTypeErr && <p className="text-[11px] text-red-600 mt-1">{sourceTypeErr}</p>}
+                {sourceTypeErr && <p className="text-xs text-red-600 mt-1">{sourceTypeErr}</p>}
               </div>
+
+              <BriefEditor
+                assignmentId={null}
+                description={description}
+                onDescriptionChange={(v) => { setDescription(v); if (instructionsErr && v.trim()) setInstructionsErr(null); }}
+                draft={draft}
+                onDraftChange={setDraft}
+                disabled={submitting}
+                error={instructionsErr}
+              />
 
             </div>
 
@@ -277,7 +333,7 @@ function CreateAssignmentModal({
               <button
                 type="submit"
                 disabled={submitting || !title.trim() || !deadline}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
               >
                 {submitting ? (
                   <>
@@ -326,14 +382,14 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
 
   return (
     <div ref={popoverRef} className="relative flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-      <span className="text-xs text-slate-400 shrink-0">Class code:</span>
-      <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+      <span className="text-xs text-slate-600 shrink-0">Class code:</span>
+      <span className="font-mono font-bold text-xs text-indigo-700 tracking-wider select-all">{code}</span>
 
       {/* Copy button */}
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
-        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+        className={`ft-hit rounded transition-colors ${copied ? "text-emerald-700" : "text-slate-500 hover:text-indigo-600"}`}
       >
         {copied ? (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -346,11 +402,13 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
         )}
       </button>
 
+      <CopyInviteLinkButton code={code} className="ml-1" />
+
       {/* QR reveal button */}
       <button
         onClick={() => setShowQR((v) => !v)}
         title={showQR ? "Hide QR code" : "Show QR code"}
-        className={`p-0.5 rounded transition-colors ${showQR ? "text-indigo-600" : "text-slate-300 hover:text-indigo-500"}`}
+        className={`ft-hit rounded transition-colors ${showQR ? "text-indigo-600" : "text-slate-500 hover:text-indigo-600"}`}
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -364,14 +422,14 @@ function ClassJoinCodeBadge({ code }: { code: string }) {
       {showQR && (
         <div className="absolute top-full left-0 mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col items-center gap-2.5 min-w-[188px]">
           <QRCodeSVG
-            value={`${window.location.origin}/join?code=${encodeURIComponent(code)}`}
+            value={joinInviteUrl(code)}
             size={148}
             level="M"
             bgColor="#ffffff"
             fgColor="#312e81"
           />
           <p className="font-mono font-bold text-sm text-indigo-700 tracking-wider">{code}</p>
-          <p className="text-xs text-slate-400 text-center">Scan with a phone camera<br />to copy the join code</p>
+          <p className="text-xs text-slate-600 text-center">Scan with a phone camera<br />to copy the join code</p>
         </div>
       )}
     </div>
@@ -405,7 +463,7 @@ function ConfirmDialog({
                 onChange={(e) => setTypedValue(e.target.value)}
                 placeholder={typeToConfirm}
                 autoFocus
-                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
               />
             </div>
           )}
@@ -413,7 +471,7 @@ function ConfirmDialog({
         </div>
         <div className="px-6 py-4 flex justify-end gap-2 border-t border-slate-100 mt-4">
           <button onClick={onCancel} disabled={busy} className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-colors disabled:opacity-50">Cancel</button>
-          <button onClick={onConfirm} disabled={busy || !canConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors">
+          <button onClick={onConfirm} disabled={busy || !canConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors">
             {busy ? <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Deleting…</span> : confirmLabel}
           </button>
         </div>
@@ -426,8 +484,10 @@ function ConfirmDialog({
 interface Props { classId: number }
 
 export function ClassPage({ classId }: Props) {
+  const accent = classAccent(classId).color;
   const { navigate }        = useRouter();
   const { token, user }     = useAuth();
+  const { showSuccessToast } = useToast();
   const isAdmin             = user?.systemRole === "ADMIN";
   const dashboardUrl        = isAdmin ? "/admin" : "/dashboard";
 
@@ -437,6 +497,7 @@ export function ClassPage({ classId }: Props) {
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState<string | null>(null);
   const [showModal, setShowModal]           = useState(false);
+  const [editingId, setEditingId]            = useState<number | null>(null);
   const [filterAtRisk, setFilterAtRisk]     = useState(false);
   const [search, setSearch]                 = useState("");
   const [deleteTarget, setDeleteTarget]     = useState<LifecycleAssignment | null>(null);
@@ -493,13 +554,14 @@ export function ClassPage({ classId }: Props) {
       });
       if (res.ok) {
         setDeleteTarget(null);
+        showSuccessToast("Project deleted.");
         await Promise.all([fetchData(), summaryQuery.refetch()]);
       } else {
         const data = (await res.json()) as { error?: string };
         setDeleteError(data.error ?? "Failed to delete project");
       }
     } catch {
-      setDeleteError("Network error — is the server running?");
+      setDeleteError(NETWORK_ERROR_TEXT);
     } finally {
       setDeleting(false);
     }
@@ -512,6 +574,7 @@ export function ClassPage({ classId }: Props) {
   }
 
   const totalAtRisk = assignments.reduce((sum, a) => sum + classAtRiskCount(getAssignmentItems(a.id)), 0);
+  const totalQuiet = assignments.reduce((sum, a) => sum + noActivityCount(getAssignmentItems(a.id)), 0);
 
   const filteredByRisk = filterAtRisk
     ? assignments.filter((a) => classAtRiskCount(getAssignmentItems(a.id)) > 0)
@@ -529,6 +592,15 @@ export function ClassPage({ classId }: Props) {
           token={token}
           onClose={() => setShowModal(false)}
           onCreated={() => { void fetchData(); void summaryQuery.refetch(); }}
+          onEditCreated={(id) => { setShowModal(false); setEditingId(id); }}
+        />
+      )}
+      {!isAdmin && editingId !== null && (
+        <EditAssignmentModal
+          assignmentId={editingId}
+          token={token}
+          onClose={() => setEditingId(null)}
+          onSaved={() => { void fetchData(); void summaryQuery.refetch(); }}
         />
       )}
       {deleteTarget && (() => {
@@ -555,44 +627,44 @@ export function ClassPage({ classId }: Props) {
           />
         );
       })()}
-      <AppTopBar />
-
       {/* Page header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-white border-b border-slate-200 border-t-4" style={{ borderTopColor: accent }}>
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <button onClick={() => navigate(dashboardUrl)} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to {isAdmin ? "Admin" : "Dashboard"}
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: isAdmin ? "Admin" : "Dashboard", href: dashboardUrl },
+                classCrumb(classInfo),
+              ]}
+            />
             <div className="flex items-center gap-2 flex-wrap">
               {classInfo ? (
                 <>
-                  <h1 className="text-xl font-bold text-slate-900 shrink-0">{classInfo.subjectName}</h1>
-                  <span className="shrink-0 text-xs font-mono font-bold text-indigo-600">
-                    {classInfo.subjectCode}
-                    {classInfo.edpCode && (
-                      <span className="font-semibold text-indigo-400"> · EDP {classInfo.edpCode}</span>
-                    )}
+                  <h1 className="text-xl font-semibold text-slate-900 shrink-0">{classInfo.subjectName}</h1>
+                  <span className="shrink-0" style={{ color: accent }}>
+                    <ClassCodeLabel
+                      subjectCode={classInfo.subjectCode}
+                      edpCode={classInfo.edpCode}
+                      className="text-xs font-mono font-bold"
+                      edpClassName="font-semibold"
+                    />
                   </span>
                   {classInfo.department && (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {classInfo.department.code}
                     </span>
                   )}
                   {classInfo.type && (
-                    <span className="shrink-0 text-xs text-slate-400 font-mono">
+                    <span className="shrink-0 text-xs text-slate-600 font-mono">
                       {classInfo.type.charAt(0) + classInfo.type.slice(1).toLowerCase()}
                     </span>
                   )}
                 </>
               ) : (
-                <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
+                <h1 className="text-xl font-semibold text-slate-600">Loading…</h1>
               )}
             </div>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {assignments.reduce((s, a) => s + a._count.projects, 0)} group{assignments.reduce((s, a) => s + a._count.projects, 0) !== 1 ? "s" : ""} · {assignments.length} project{assignments.length !== 1 ? "s" : ""}
             </p>
           </div>
@@ -602,8 +674,16 @@ export function ClassPage({ classId }: Props) {
             {classInfo?.joinCode && !isAdmin && (
               <ClassJoinCodeBadge code={classInfo.joinCode} />
             )}
+            {classInfo && !isAdmin && (
+              <AiReviewSwitch
+                classId={classInfo.id}
+                enabled={classInfo.aiReviewEnabled !== false}
+                token={token}
+                onChanged={(next) => setClassInfo((c) => (c ? { ...c, aiReviewEnabled: next } : c))}
+              />
+            )}
             {isAdmin && (
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+              <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
                 Admin view — read only
               </span>
             )}
@@ -626,9 +706,10 @@ export function ClassPage({ classId }: Props) {
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {totalAtRisk} group{totalAtRisk !== 1 ? "s" : ""} need attention
+                {groupsNeedAttention(totalAtRisk)}
               </button>
             )}
+            <NoActivityHeaderPill count={totalQuiet} />
           </div>
         </div>
       </div>
@@ -646,14 +727,14 @@ export function ClassPage({ classId }: Props) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search projects…"
-                className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-44"
+                className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-44"
               />
             </div>
           </div>
         )}
 
         {isPageLoading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading projects…
           </div>
@@ -674,7 +755,7 @@ export function ClassPage({ classId }: Props) {
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-semibold text-slate-700">No projects yet</p>
-                  <p className="text-xs text-slate-400 mt-1">Create your first project for this class section.</p>
+                  <p className="text-xs text-slate-600 mt-1">Create your first project for this class section.</p>
                 </div>
                 {!isAdmin && (
                   <button
@@ -689,7 +770,7 @@ export function ClassPage({ classId }: Props) {
                 )}
               </div>
             ) : visibleAssignments.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 text-sm">
+              <div className="text-center py-16 text-slate-600 text-sm">
                 {search.trim() ? (
                   <>
                     No projects match &ldquo;{search}&rdquo;.{" "}
@@ -707,9 +788,10 @@ export function ClassPage({ classId }: Props) {
                 {visibleAssignments.map((a) => {
                   const items      = getAssignmentItems(a.id);
                   const atRisk     = classAtRiskCount(items);
-                  const healthy    = items.filter((i) => i.isAnalyzed && i.teamHealth === "Healthy").length;
-                  const moderate   = items.filter((i) => i.isAnalyzed && i.teamHealth === "Moderate Risk").length;
-                  const highRisk   = items.filter((i) => i.isAnalyzed && i.teamHealth === "High Risk").length;
+                  const healthy    = items.filter((i) => presentedHealth(i) === "Healthy").length;
+                  const quiet      = items.filter((i) => presentedHealth(i) === "no-activity").length;
+                  const moderate   = items.filter((i) => presentedHealth(i) === "Moderate Risk").length;
+                  const highRisk   = items.filter((i) => presentedHealth(i) === "High Risk").length;
                   const unanalyzed = items.filter((i) => !i.isAnalyzed).length;
 
                   return (
@@ -721,50 +803,27 @@ export function ClassPage({ classId }: Props) {
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/class/${classId}/assignment/${a.id}`); }}
                       className="group cursor-pointer w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
-                      {/* Colored band */}
-                      <div className="relative px-5 pt-5 pb-4 flex flex-col gap-3" style={{ background: pickGradient(a.title) }}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            <span className="text-[10px] font-bold text-white/90 bg-white/20 border border-white/30 rounded px-1.5 py-0.5 uppercase tracking-wide">
-                              {a.sourceType}
-                            </span>
-                            {atRisk > 0 && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 border border-white/30 text-white text-[11px] font-semibold whitespace-nowrap">
-                                ⚠ {atRisk} at risk
-                              </span>
-                            )}
-                            {!isAdmin && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
-                                title="Delete project"
-                                className="p-1 rounded text-white/50 hover:text-white hover:bg-red-500/40 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-white font-semibold text-sm leading-snug">{a.title}</p>
+                      {/* Colored band (same layout for every source type) */}
+                      <div className="relative px-4 py-3" style={{ background: accent }}>
+                        <ProjectCardHeader
+                          sourceType={a.sourceType}
+                          title={a.title}
+                          attentionLabel={atRisk > 0 ? groupsNeedAttention(atRisk) : null}
+                          onDelete={isAdmin ? undefined : (e) => { e.stopPropagation(); setDeleteTarget(a); setDeleteError(null); }}
+                        />
                       </div>
 
                       {/* Card body */}
-                      <div className="px-5 py-4 flex flex-col gap-3">
+                      <div className="px-4 py-3 flex flex-col gap-2">
                         <p className="text-xs text-slate-500">
                           Deadline: <span className="font-medium text-slate-700">{fmtDeadline(a.deadline)}</span>
                         </p>
                         <p className="text-xs text-slate-500">
                           {a._count.projects} group{a._count.projects !== 1 ? "s" : ""}
                         </p>
-                        <RiskPills healthy={healthy} moderate={moderate} highRisk={highRisk} unanalyzed={unanalyzed} />
-                        <div className="flex justify-end pt-1">
-                          <span className="text-xs text-slate-400 group-hover:text-indigo-500 transition-colors">View groups →</span>
+                        <RiskPills healthy={healthy} moderate={moderate} highRisk={highRisk} unanalyzed={unanalyzed} quiet={quiet} />
+                        <div className="flex justify-end">
+                          <span className="text-xs text-slate-600 group-hover:text-indigo-700 transition-colors">View groups →</span>
                         </div>
                       </div>
                     </div>
@@ -776,16 +835,7 @@ export function ClassPage({ classId }: Props) {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { getUserColor } from "./collabColors";
+import { UNDERLINE_WIDTH_PX, getUserColor, getUserTint, getUserUnderlineStyle } from "./collabColors";
 
 // Same principle as the CollaborationCursor fix: this is a non-intrusive ProseMirror
 // decoration, not real document content — it never touches the Yjs/TipTap document schema.
@@ -70,18 +70,34 @@ export function plainTextRangeToPMRange(doc: PMNode, start: number, end: number)
   return { from, to: Math.max(from, to) };
 }
 
+// The look of one author's text: a colored wash (TINT_ALPHA) plus a thin underline in the author's
+// color and line style, so authors differ by more than color. `title` shows the name on hover (it
+// is a plain attribute on the decoration; nothing is added to the document). Keyboard focus is not
+// covered: highlighted spans are not focusable, and making them tab stops would add one per span.
+export function authorshipDecorationAttrs(
+  userId: number,
+  memberIds: number[],
+  name?: string
+): { style: string; title?: string } {
+  const marker = getUserColor(userId, memberIds);
+  const lineStyle = getUserUnderlineStyle(userId, memberIds);
+  const style =
+    `background-color: ${getUserTint(userId, memberIds)}; ` +
+    `text-decoration: underline ${lineStyle} ${UNDERLINE_WIDTH_PX}px ${marker}; ` +
+    `text-underline-offset: 2px; text-decoration-skip-ink: none;`;
+  return name ? { style, title: `Written by ${name}` } : { style };
+}
+
 function buildDecorations(doc: PMNode, update: AuthorshipDecorationInput | null): DecorationSet {
   if (!update || update.spans.length === 0) return DecorationSet.empty;
 
+  const names = new Map(update.users.map((u) => [u.id, u.name]));
   const decorations: Decoration[] = [];
   for (const span of update.spans) {
     const range = plainTextRangeToPMRange(doc, span.start, span.end);
     if (!range || range.to <= range.from) continue;
-    const color = getUserColor(span.userId, update.memberIds);
     decorations.push(
-      Decoration.inline(range.from, range.to, {
-        style: `background-color: ${color}33;`,
-      })
+      Decoration.inline(range.from, range.to, authorshipDecorationAttrs(span.userId, update.memberIds, names.get(span.userId)))
     );
   }
   return DecorationSet.create(doc, decorations);

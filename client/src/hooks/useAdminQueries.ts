@@ -9,48 +9,20 @@ interface UserRecord {
   active:         boolean;
   lockedUntil:    string | null;
   createdAt:      string;
+  lastLoginAt:    string | null;
+  deletedAt:      string | null;
 }
 
 interface UsersPage {
-  users:      UserRecord[];
-  total:      number;
+  users:       UserRecord[];
+  total:       number;
+  formerCount: number;
   totalPages: number;
   pageSize:   number;
 }
 
-interface AtRiskGroup {
-  projectId:      number;
-  groupName:      string;
-  classDisplay:   string;
-  subjectName:    string;
-  instructorName: string;
-  teamHealth:     string;
-  gini:           number | null;
-  analyzedAt:     string;
-}
-
 interface OverviewData {
-  users:              { total: number; admins: number; instructors: number; students: number };
-  classSections:      number;
-  totalProjects:      number;
-  totalGroups:        number;
-  analyzedGroups:     number;
-  healthDistribution: { healthy: number; moderateRisk: number; highRisk: number };
-  flagTotals:         { inactive: number; freeRider: number; overload: number; deadlineDriven: number };
-  atRiskGroups:       AtRiskGroup[];
-  openDisputesCount:  number;
-}
-
-interface ClassSectionItem {
-  id:          number;
-  subjectCode: string;
-  subjectName: string;
-  edpCode:     string;
-  department:  { id: number; name: string; code: string } | null;
-  type:        string;
-  createdAt:   string;
-  instructor:  { id: number; name: string; email: string };
-  assignments: Array<{ id: number; title: string; _count: { projects: number } }>;
+  users: { total: number; admins: number; instructors: number; students: number; active: number; inactive: number };
 }
 
 interface DepartmentItem {
@@ -61,25 +33,50 @@ interface DepartmentItem {
   _count:    { classSections: number };
 }
 
-/** Admin users list, keyed on the current page/search/role filter (mirrors the query string sent to the API). */
-export function useAdminUsersQuery(
-  token: string | null,
-  params: { page: number; search: string; roleFilter: string }
-) {
+export interface AdminUsersParams {
+  page:          number;
+  search:        string;
+  roleFilter:    string;
+  status:        string;
+  lastActive:    string;
+  sort:          string;
+  dir:           string;
+  includeFormer: boolean;
+}
+
+export const adminUsersKey = (p: AdminUsersParams) =>
+  ["admin-users", p.page, p.search, p.roleFilter, p.status, p.lastActive, p.sort, p.dir, p.includeFormer] as const;
+
+/** Query string for the users list and the CSV export (everything except paging). */
+export function adminUsersFilterQuery(p: Omit<AdminUsersParams, "page">): URLSearchParams {
+  const qs = new URLSearchParams();
+  if (p.search)     qs.set("search", p.search);
+  if (p.roleFilter) qs.set("role", p.roleFilter);
+  if (p.status)     qs.set("status", p.status);
+  if (p.lastActive) qs.set("lastActive", p.lastActive);
+  qs.set("sort", p.sort);
+  qs.set("dir", p.dir);
+  if (p.includeFormer) qs.set("includeFormer", "true");
+  return qs;
+}
+
+/** Admin users list, keyed on every filter, the sort and the page (mirrors the query string sent to the API). */
+export function useAdminUsersQuery(token: string | null, params: AdminUsersParams) {
   return useQuery({
-    queryKey: ["admin-users", params.page, params.search, params.roleFilter],
+    queryKey: adminUsersKey(params),
     queryFn: async () => {
-      const qs = new URLSearchParams({ page: String(params.page), pageSize: "20" });
-      if (params.search)     qs.set("search", params.search);
-      if (params.roleFilter) qs.set("role", params.roleFilter);
+      const qs = adminUsersFilterQuery(params);
+      qs.set("page", String(params.page));
+      qs.set("pageSize", "10");
       const res  = await fetch(`/api/admin/users?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = (await res.json()) as Partial<UsersPage> & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Could not load users.");
       return {
         users:      json.users ?? [],
         total:      json.total ?? 0,
+        formerCount: json.formerCount ?? 0,
         totalPages: json.totalPages ?? 1,
-        pageSize:   json.pageSize ?? 20,
+        pageSize:   json.pageSize ?? 10,
       } satisfies UsersPage;
     },
     enabled: !!token,
@@ -99,19 +96,6 @@ export function useAdminOverviewQuery(token: string | null) {
   });
 }
 
-export function useAdminClassesQuery(token: string | null) {
-  return useQuery({
-    queryKey: ["admin-classes"],
-    queryFn: async () => {
-      const res  = await fetch("/api/admin/classes", { headers: { Authorization: `Bearer ${token}` } });
-      const json = (await res.json()) as { classes?: ClassSectionItem[]; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Could not load classes.");
-      return json.classes ?? [];
-    },
-    enabled: !!token,
-  });
-}
-
 export function useAdminDepartmentsQuery(token: string | null) {
   return useQuery({
     queryKey: ["admin-departments"],
@@ -122,5 +106,21 @@ export function useAdminDepartmentsQuery(token: string | null) {
       return json.departments ?? [];
     },
     enabled: !!token,
+  });
+}
+
+export interface AdminUserDetails { classCount: number; groupCount: number }
+
+/** Counts for the user details panel; only fetched while the panel is open. */
+export function useAdminUserDetailsQuery(token: string | null, userId: number | null) {
+  return useQuery({
+    queryKey: ["admin-user-details", userId],
+    queryFn: async () => {
+      const res  = await fetch(`/api/admin/users/${userId}/details`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = (await res.json()) as Partial<AdminUserDetails> & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not load details.");
+      return { classCount: json.classCount ?? 0, groupCount: json.groupCount ?? 0 } satisfies AdminUserDetails;
+    },
+    enabled: !!token && userId !== null,
   });
 }

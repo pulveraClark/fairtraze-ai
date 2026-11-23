@@ -1,0 +1,94 @@
+import type { Flag, TeamHealth } from "@shared/types";
+import { flagLabel } from "../../lib/flagLabel";
+
+// Each tone is a foreground/background pair with a contrast ratio of at least 4.5:1 (checked in
+// StatusPill.test.tsx from the hex values below, which are the palette values behind the class
+// names). Meaning is always carried by the text label and an icon, never by colour.
+export type PillTone = "green" | "amber" | "red" | "orange" | "yellow" | "violet" | "sky" | "indigo" | "neutral";
+
+export const PILL_TONES: Record<PillTone, { cls: string; fg: string; bg: string }> = {
+  green:   { cls: "bg-emerald-100 text-emerald-900 border-emerald-300", fg: "#064e3b", bg: "#d1fae5" },
+  amber:   { cls: "bg-amber-100 text-amber-900 border-amber-300",       fg: "#78350f", bg: "#fef3c7" },
+  red:     { cls: "bg-red-100 text-red-900 border-red-300",             fg: "#7f1d1d", bg: "#fee2e2" },
+  orange:  { cls: "bg-orange-100 text-orange-900 border-orange-300",    fg: "#7c2d12", bg: "#ffedd5" },
+  yellow:  { cls: "bg-yellow-100 text-yellow-900 border-yellow-300",    fg: "#713f12", bg: "#fef9c3" },
+  violet:  { cls: "bg-violet-100 text-violet-900 border-violet-300",    fg: "#4c1d95", bg: "#ede9fe" },
+  sky:     { cls: "bg-sky-100 text-sky-900 border-sky-300",             fg: "#0c4a6e", bg: "#e0f2fe" },
+  indigo:  { cls: "bg-indigo-100 text-indigo-900 border-indigo-300",    fg: "#312e81", bg: "#e0e7ff" },
+  neutral: { cls: "bg-slate-100 text-slate-800 border-slate-300",       fg: "#1e293b", bg: "#f1f5f9" },
+};
+
+/**
+ * "Early data" (muted) variant: the SAME hue as the full tone, only softer (lighter fill, dashed border), so a flag
+ * or health level keeps its identity and just reads less like an alarm. Instructor screens only; students keep
+ * their own FlagTag styles. Text is still at least 4.5:1 (checked in ui.test.tsx from the hex values).
+ */
+export const PILL_TONES_SOFT: Partial<Record<PillTone, { cls: string; fg: string; bg: string }>> = {
+  green:  { cls: "bg-emerald-50 text-emerald-900 border-emerald-300 border-dashed", fg: "#064e3b", bg: "#ecfdf5" },
+  amber:  { cls: "bg-amber-50 text-amber-900 border-amber-300 border-dashed",       fg: "#78350f", bg: "#fffbeb" },
+  red:    { cls: "bg-red-50 text-red-900 border-red-300 border-dashed",             fg: "#7f1d1d", bg: "#fef2f2" },
+  yellow: { cls: "bg-yellow-50 text-yellow-900 border-yellow-300 border-dashed",    fg: "#713f12", bg: "#fefce8" },
+};
+
+/** Classes for a tone; `soft` picks the early-data variant when the tone has one. */
+export function toneClasses(tone: PillTone, soft = false): string {
+  return (soft ? PILL_TONES_SOFT[tone]?.cls : undefined) ?? PILL_TONES[tone].cls;
+}
+
+export const HEALTH_LABEL: Record<TeamHealth, string> = {
+  Healthy: "Healthy",
+  "Moderate Risk": "Moderate risk",
+  "High Risk": "High risk",
+};
+export const HEALTH_TONE: Record<TeamHealth, PillTone> = { Healthy: "green", "Moderate Risk": "amber", "High Risk": "red" };
+
+export const FLAG_LABEL: Record<Flag, string> = {
+  inactive: flagLabel("inactive"),
+  "free-rider": flagLabel("free-rider"),
+  overload: flagLabel("overload"),
+  "deadline-driven": flagLabel("deadline-driven"),
+};
+// One colour per flag for every instructor surface (StatusPill and FlagTag both read this): Overload amber, Low contribution
+// (free-rider and inactive) red, Deadline-driven yellow. Meaning is always also carried by the label text and an icon.
+export const FLAG_TONE: Record<Flag, PillTone> = { inactive: "red", "free-rider": "red", overload: "amber", "deadline-driven": "yellow" };
+
+type Props =
+  | { kind: "health"; value: TeamHealth; className?: string; muted?: boolean }
+  | { kind: "flag"; value: Flag; className?: string; muted?: boolean }
+  | { kind: "status"; label: string; tone?: PillTone; className?: string };
+
+function Icon({ kind }: { kind: "ok" | "alert" | "clock" | "dot" }) {
+  const common = { className: "h-4 w-4 shrink-0", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2.5, "aria-hidden": true } as const;
+  if (kind === "ok") return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>;
+  if (kind === "clock") return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+  if (kind === "alert") return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" /></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="3" fill="currentColor" /></svg>;
+}
+
+/** Health level, flag or status — always text plus an icon, never colour alone. */
+export function StatusPill(props: Props) {
+  let tone: PillTone;
+  let label: string;
+  let icon: "ok" | "alert" | "clock" | "dot";
+  if (props.kind === "health") {
+    tone = HEALTH_TONE[props.value];
+    label = HEALTH_LABEL[props.value];
+    icon = props.value === "Healthy" ? "ok" : "alert";
+  } else if (props.kind === "flag") {
+    tone = FLAG_TONE[props.value];
+    label = FLAG_LABEL[props.value];
+    icon = props.value === "deadline-driven" ? "clock" : "alert";
+  } else {
+    tone = props.tone ?? "neutral";
+    label = props.label;
+    icon = "dot";
+  }
+  // "Early data": same words, icon and hue, in the softer variant. Display only.
+  const soft = (props.kind === "health" || props.kind === "flag") && !!props.muted;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-normal ${toneClasses(tone, soft)} ${props.className ?? ""}`}>
+      <Icon kind={icon} />
+      {label}
+    </span>
+  );
+}

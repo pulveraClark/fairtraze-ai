@@ -2,6 +2,8 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import logoUrl from "../assets/logo_transparent.png";
+import { useMinWidth } from "../lib/useMinWidth";
+import { useEmailEnabled } from "../lib/useEmailEnabled";
 
 // ── Left-panel illustration: stylized contribution dashboard ──────────────────
 function AuthIllustration() {
@@ -31,32 +33,35 @@ function AuthIllustration() {
       {/* Member A — overload, indigo full */}
       <rect x="40" y="128" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
       <rect x="70" y="128" width="158" height="9" rx="2.5" fill="rgba(165,180,252,0.65)" />
-      <text x="236" y="137" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">36%</text>
+      <text x="236" y="137" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">46%</text>
 
       {/* Member B */}
       <rect x="40" y="143" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
-      <rect x="70" y="143" width="110" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
-      <text x="236" y="152" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">26%</text>
+      <rect x="70" y="143" width="75" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
+      <text x="236" y="152" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">22%</text>
 
       {/* Member C */}
       <rect x="40" y="158" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
-      <rect x="70" y="158" width="105" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
-      <text x="236" y="167" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">25%</text>
+      <rect x="70" y="158" width="75" height="9" rx="2.5" fill="rgba(165,180,252,0.5)" />
+      <text x="236" y="167" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">22%</text>
 
-      {/* Member D — free-rider, red */}
+      {/* Member D — low contribution, red */}
       <rect x="40" y="173" width="24" height="9" rx="2.5" fill="rgba(255,255,255,0.2)" />
-      <rect x="70" y="173" width="54" height="9" rx="2.5" fill="rgba(248,113,113,0.6)" />
-      <text x="236" y="182" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">13%</text>
+      <rect x="70" y="173" width="34" height="9" rx="2.5" fill="rgba(248,113,113,0.6)" />
+      <text x="236" y="182" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">10%</text>
 
-      {/* Free-rider badge */}
-      <rect x="130" y="171" width="56" height="13" rx="3.5" fill="rgba(248,113,113,0.2)" stroke="rgba(248,113,113,0.4)" strokeWidth="1" />
-      <text x="158" y="181" fontSize="7" fill="rgba(248,113,113,0.9)" fontFamily="monospace" textAnchor="middle" fontWeight="bold">FREE RIDER</text>
+      {/* Low contribution badge */}
+      <rect x="120" y="171" width="76" height="13" rx="3.5" fill="rgba(248,113,113,0.2)" stroke="rgba(248,113,113,0.4)" strokeWidth="1" />
+      <text x="158" y="181" fontSize="7" fill="rgba(248,113,113,0.9)" fontFamily="monospace" textAnchor="middle" fontWeight="bold">LOW CONTRIBUTION</text>
     </svg>
   );
 }
 
 export function LoginPage() {
+  // The sample artwork is decorative and only fits the desktop side panel (lg and up).
+  const showArt = useMinWidth(1024);
   const { navigate } = useRouter();
+  const emailEnabled = useEmailEnabled();
   const { login, user, loading: authLoading } = useAuth();
 
   const [email,      setEmail]      = useState("");
@@ -99,7 +104,7 @@ export function LoginPage() {
   }
 
   const inputClass =
-    "w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
+    "w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
 
   return (
     <div className="min-h-screen flex bg-slate-50">
@@ -129,7 +134,7 @@ export function LoginPage() {
 
         {/* Center: illustration + copy */}
         <div className="relative z-10 space-y-7">
-          <AuthIllustration />
+          {showArt && <AuthIllustration />}
           <div>
             <h2 className="font-display font-bold text-white text-2xl leading-tight mb-2">
               Fair assessment starts<br />with visible data.
@@ -170,7 +175,7 @@ export function LoginPage() {
 
           {/* Heading */}
           <div className="mb-7">
-            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Welcome back</h1>
+            <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Welcome back</h1>
             <p className="text-slate-500 text-sm">Sign in to your account</p>
           </div>
 
@@ -178,10 +183,11 @@ export function LoginPage() {
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="login-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email address
               </label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -195,18 +201,21 @@ export function LoginPage() {
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
+                <label htmlFor="login-password" className="block text-xs font-semibold text-slate-700">
                   Password
                 </label>
-                <button
-                  type="button"
-                  onClick={() => navigate("/forgot-password")}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-                >
-                  Forgot password?
-                </button>
+                {emailEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/forgot-password")}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

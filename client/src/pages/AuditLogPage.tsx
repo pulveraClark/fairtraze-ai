@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { AppFooter } from "../components/AppFooter";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
 
 interface AuditEntry {
@@ -21,6 +21,9 @@ const ACTION_BADGE: Record<string, string> = {
   USER_ACTIVATED:   "text-emerald-700 bg-emerald-50 border-emerald-200",
   USER_DEACTIVATED: "text-amber-700  bg-amber-50  border-amber-200",
   USER_DELETED:     "text-red-700    bg-red-50    border-red-200",
+  USERS_EXPORTED:   "text-slate-700  bg-slate-50  border-slate-200",
+  INSTRUCTOR_APPROVED: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  INSTRUCTOR_REJECTED: "text-red-700    bg-red-50    border-red-200",
 };
 
 const ACTION_OPTIONS = [
@@ -29,6 +32,9 @@ const ACTION_OPTIONS = [
   { value: "USER_ACTIVATED", label: "User Activated" },
   { value: "USER_DEACTIVATED", label: "User Deactivated" },
   { value: "USER_DELETED",   label: "User Deleted" },
+  { value: "USERS_EXPORTED", label: "Users Exported" },
+  { value: "INSTRUCTOR_APPROVED", label: "Instructor Approved" },
+  { value: "INSTRUCTOR_REJECTED", label: "Instructor Rejected" },
 ];
 
 function fmtDate(iso: string): string {
@@ -70,23 +76,21 @@ export function AuditLogPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <button
               onClick={() => navigate("/admin")}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
+              className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-600 transition-colors mb-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
               Back to Admin
             </button>
-            <h1 className="text-xl font-bold text-slate-900">Audit Log</h1>
-            <p className="text-sm text-slate-400">
+            <h1 className="text-xl font-semibold text-slate-900">Audit Log</h1>
+            <p className="text-sm text-slate-600">
               Admin actions recorded most-recent first
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>
@@ -103,7 +107,7 @@ export function AuditLogPage() {
             </select>
             <button
               onClick={load}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -114,7 +118,7 @@ export function AuditLogPage() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
 
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-slate-400 text-sm">
+          <div className="flex items-center justify-center gap-2 py-20 text-slate-600 text-sm">
             <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
             Loading…
           </div>
@@ -123,12 +127,12 @@ export function AuditLogPage() {
         {!loading && error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
             <p className="text-sm text-red-600 mb-2">{error}</p>
-            <button onClick={load} className="text-xs text-indigo-600 hover:underline">Retry</button>
+            <button onClick={load} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
           </div>
         )}
 
         {!loading && !error && entries.length === 0 && (
-          <p className="text-center py-20 text-sm text-slate-400">No audit log entries yet.</p>
+          <p className="text-center py-20 text-sm text-slate-600">No audit log entries yet.</p>
         )}
 
         {!loading && !error && entries.length > 0 && (
@@ -137,18 +141,18 @@ export function AuditLogPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Action</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Actor</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">Target</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Details</th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-widest">When</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Action</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Actor</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden sm:table-cell">Target</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden md:table-cell">Details</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-widest">When</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {entries.map((e, i) => (
                     <tr key={e.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-slate-100 transition-colors`}>
                       <td className="px-5 py-3.5">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ACTION_BADGE[e.action] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
+                        <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ACTION_BADGE[e.action] ?? "text-slate-600 bg-slate-50 border-slate-200"}`}>
                           {e.action.replace(/_/g, " ")}
                         </span>
                       </td>
@@ -162,7 +166,7 @@ export function AuditLogPage() {
                         <span className="text-xs text-slate-500">{e.details ?? "—"}</span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <span className="text-xs text-slate-400 whitespace-nowrap">{fmtDate(e.createdAt)}</span>
+                        <span className="text-xs text-slate-600 whitespace-nowrap">{fmtDate(e.createdAt)}</span>
                       </td>
                     </tr>
                   ))}
@@ -183,13 +187,7 @@ export function AuditLogPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

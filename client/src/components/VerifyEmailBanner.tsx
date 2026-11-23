@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 export function VerifyEmailBanner() {
   const { user, token } = useAuth();
+  const busyRef = useRef(false);   // A second click while the first request runs is ignored.
   const [sending, setSending] = useState(false);
   const [sent,    setSent]    = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  if (!user || user.emailVerified !== false || user.emailVerificationRequired === false) return null;
+  if (!user || user.emailVerified !== false || user.emailVerificationRequired === false || user.emailEnabled === false) return null;
 
   async function handleResend() {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setSending(true);
     setError(null);
     try {
@@ -17,14 +20,20 @@ export function VerifyEmailBanner() {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 429) {
+        setError("Too many requests. Please wait a few minutes and try again.");
+        return;
+      }
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? `Resend failed (${res.status})`);
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "Could not send the email. Try again in a minute.");
+        return;
       }
       setSent(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not resend verification email.");
+    } catch {
+      setError("Could not send the email. Try again in a minute.");
     } finally {
+      busyRef.current = false;
       setSending(false);
     }
   }
@@ -43,7 +52,7 @@ export function VerifyEmailBanner() {
         <div className="flex items-center gap-2 shrink-0">
           {error && <span className="text-xs text-red-600">{error}</span>}
           {sent ? (
-            <span className="text-xs font-semibold text-amber-700">Sent — check your inbox.</span>
+            <span className="text-xs font-semibold text-amber-700">Sent — check your inbox, and your spam folder too.</span>
           ) : (
             <button
               onClick={() => void handleResend()}

@@ -1,41 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-
-const ROLE_LABEL: Record<string, string> = {
-  INSTRUCTOR: "Instructor",
-  ADMIN:      "Admin",
-  STUDENT:    "Student",
-};
-
-const AVATAR_STYLE: Record<string, string> = {
-  INSTRUCTOR: "border-indigo-400 text-indigo-300",
-  ADMIN:      "border-amber-400  text-amber-300",
-  STUDENT:    "border-teal-400   text-teal-300",
-};
-
-const AVATAR_BG: Record<string, string> = {
-  INSTRUCTOR: "rgba(99,102,241,0.15)",
-  ADMIN:      "rgba(245,158,11,0.15)",
-  STUDENT:    "rgba(20,184,166,0.15)",
-};
+import { AVATAR_BG, AVATAR_STYLE, ROLE_BADGE_DARK, ROLE_LABEL } from "../lib/roleStyle";
+import { Avatar } from "./Avatar";
 
 // Role badge: dark theme uses translucent; light theme uses solid for readability on white
-const ROLE_BADGE_DARK: Record<string, string> = {
-  INSTRUCTOR: "text-indigo-300 border-indigo-500/50 bg-indigo-500/10",
-  ADMIN:      "text-amber-300  border-amber-500/50  bg-amber-500/10",
-  STUDENT:    "text-teal-300   border-teal-500/50   bg-teal-500/10",
-};
-
 const ROLE_BADGE_LIGHT: Record<string, string> = {
   INSTRUCTOR: "text-indigo-700 border-indigo-200 bg-indigo-50",
   ADMIN:      "text-amber-700  border-amber-200  bg-amber-50",
   STUDENT:    "text-teal-700   border-teal-200   bg-teal-50",
 };
-
-function initials(name: string): string {
-  return name.split(" ").map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
-}
 
 interface Styles {
   trigger:    string;
@@ -58,20 +32,20 @@ const DARK: Styles = {
   header:    "px-5 py-4 border-b border-slate-800 bg-slate-800/50",
   nameTitle: "text-sm font-semibold text-white truncate",
   item:      "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors text-left font-medium",
-  icon:      "w-4 h-4 text-slate-400",
+  icon:      "w-4 h-4 text-slate-600",
   divider:   "border-t border-slate-800 py-1.5",
-  signOut:   "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-medium",
+  signOut:   "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-medium",
 };
 
 const LIGHT: Styles = {
   trigger:   "flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors group",
   nameText:  "text-sm text-slate-700 max-w-[8rem] truncate font-medium group-hover:text-slate-900 transition-colors",
-  caret:     "w-3.5 h-3.5 text-slate-400 transition-transform duration-150",
+  caret:     "w-3.5 h-3.5 text-slate-600 transition-transform duration-150",
   dropdown:  "absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/60 overflow-hidden bg-white",
   header:    "px-5 py-4 border-b border-slate-100 bg-slate-50",
   nameTitle: "text-sm font-semibold text-slate-900 truncate",
   item:      "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors text-left font-medium",
-  icon:      "w-4 h-4 text-slate-400",
+  icon:      "w-4 h-4 text-slate-600",
   divider:   "border-t border-slate-100 py-1.5",
   signOut:   "w-full flex items-center gap-3 px-5 py-2.5 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors text-left font-medium",
 };
@@ -122,15 +96,16 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
         aria-expanded={open}
         className={s.trigger}
       >
-        <span
-          className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 select-none ${avatarStyle}`}
+        <Avatar
+          userId={user.id}
+          name={user.name}
+          avatarUpdatedAt={user.avatarUpdatedAt}
+          className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${avatarStyle}`}
           style={{ background: avatarBg }}
-        >
-          {initials(user.name)}
-        </span>
+        />
         <span className={s.nameText}>{user.name}</span>
         {/* Role pill — visible md+ only to avoid crowding the nav at 640px */}
-        <span className={`hidden md:inline-block shrink-0 text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badge}`}>
+        <span className={`hidden md:inline-block shrink-0 text-xs font-bold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badge}`}>
           {ROLE_LABEL[user.systemRole] ?? user.systemRole}
         </span>
         <svg
@@ -147,15 +122,16 @@ export function UserMenu({ theme = "dark" }: UserMenuProps) {
           {/* Header */}
           <div className={s.header}>
             <div className="flex items-center gap-3">
-              <span
-                className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold shrink-0 select-none ${avatarStyle}`}
+              <Avatar
+                userId={user.id}
+                name={user.name}
+                avatarUpdatedAt={user.avatarUpdatedAt}
+                className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold shrink-0 ${avatarStyle}`}
                 style={{ background: avatarBg }}
-              >
-                {initials(user.name)}
-              </span>
+              />
               <div className="min-w-0">
                 <p className={s.nameTitle}>{user.name}</p>
-                <span className={`inline-block text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border mt-1 ${badge}`}>
+                <span className={`inline-block text-xs font-bold tracking-wide uppercase px-2 py-0.5 rounded-md border mt-1 ${badge}`}>
                   {ROLE_LABEL[user.systemRole] ?? user.systemRole}
                 </span>
               </div>

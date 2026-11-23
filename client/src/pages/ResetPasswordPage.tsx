@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "../router";
 import logoUrl from "../assets/logo_transparent.png";
 
 const inputClass =
-  "w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
+  "w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
 
 export function ResetPasswordPage() {
   const { navigate } = useRouter();
@@ -14,9 +14,32 @@ export function ResetPasswordPage() {
   const [error,           setError]           = useState<string | null>(null);
   const [submitting,      setSubmitting]      = useState(false);
   const [succeeded,       setSucceeded]       = useState(false);
+  const [linkProblem,     setLinkProblem]     = useState(false);
+  const [showPassword,    setShowPassword]    = useState(false);
+  // Ask the server once, on open, whether the link still works (read-only: it does not use the link up).
+  const [checking,        setChecking]        = useState(!!token);
+  const checkStartedRef = useRef(false);   // StrictMode runs effects twice in development; send one check.
+  const submittingRef   = useRef(false);   // A second Enter or click while a reset is running is ignored.
+
+  useEffect(() => {
+    if (!token || checkStartedRef.current) return;
+    checkStartedRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/auth/reset-password/check?token=${encodeURIComponent(token)}`);
+        const data = (await res.json()) as { valid?: boolean };
+        if (res.ok && data.valid === false) setLinkProblem(true);
+      } catch {
+        // The check is a courtesy: if it fails, show the form and let the real submit decide.
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, [token]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submittingRef.current) return;
     setError(null);
 
     if (newPassword.length < 8) {
@@ -28,6 +51,7 @@ export function ResetPasswordPage() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const res = await fetch("/api/auth/reset-password", {
@@ -35,12 +59,19 @@ export function ResetPasswordPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ token, newPassword }),
       });
+      // 400 = the link is unknown, expired or already used (the server never says which).
+      if (res.status === 400) {
+        setLinkProblem(true);
+        return;
+      }
       const data = (await res.json()) as { message?: string; error?: string };
+      if (res.status === 429) throw new Error("Too many attempts. Please wait a few minutes and try again.");
       if (!res.ok) throw new Error(data.error ?? `Reset failed (${res.status})`);
       setSucceeded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed. Please try again.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -48,21 +79,57 @@ export function ResetPasswordPage() {
   const heading = (
     <div className="text-center mb-8">
       <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
-      <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Reset your password</h1>
+      <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Reset your password</h1>
     </div>
   );
 
-  if (!token) {
+  // Success is shown before a link problem: a 200 followed by a 400 from a double submit must not read "already used".
+  if (succeeded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
         <div className="w-full max-w-sm text-center">
           {heading}
-          <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-3 text-left mb-5">
+          <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
+            <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-indigo-700 leading-relaxed">
+              Password reset successful. Please sign in with your new password.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/login")}
+            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
+          >
+            Go to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-sm text-center">
+          {heading}
+          <p role="status" className="text-sm text-slate-600">Checking link…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!token || linkProblem) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-sm text-center">
+          {heading}
+          <div role="alert" className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-3 text-left mb-5">
             <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-red-700 leading-relaxed">
-              This reset link is missing a token. Request a new one below.
+              {token ? "This link expired or was already used." : "This reset link is missing a token. Request a new one below."}
             </p>
           </div>
           <button
@@ -76,30 +143,6 @@ export function ResetPasswordPage() {
     );
   }
 
-  if (succeeded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
-        <div className="w-full max-w-sm text-center">
-          {heading}
-          <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
-            <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-xs text-indigo-700 leading-relaxed">
-              Password reset successful. Please log in with your new password.
-            </p>
-          </div>
-          <button
-            onClick={() => navigate("/login")}
-            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all active:scale-[0.99]"
-          >
-            Go to login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6 py-12">
       <div className="w-full max-w-sm">
@@ -107,11 +150,22 @@ export function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              New password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="reset-new-password" className="block text-xs font-semibold text-slate-700">
+                New password
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                {showPassword ? "Hide passwords" : "Show passwords"}
+              </button>
+            </div>
             <input
-              type="password"
+              id="reset-new-password"
+              type={showPassword ? "text" : "password"}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="••••••••"
@@ -122,11 +176,12 @@ export function ResetPasswordPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label htmlFor="reset-confirm-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
               Confirm new password
             </label>
             <input
-              type="password"
+              id="reset-confirm-password"
+              type={showPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••"

@@ -21,7 +21,6 @@ This document is sourced entirely from the actual code. Every version number, fo
 | React | ^19.1.0 | Component-based UI for the instructor dashboard. |
 | Vite | ^6.3.5 | Fast dev server with HMR; proxies `/api` to the server so no CORS issues in development. |
 | Tailwind CSS | ^4.1.7 (via `@tailwindcss/vite`) | Utility-first styling; v4 integrates as a Vite plugin so no separate config file is needed. |
-| Recharts | ^3.8.1 | Declarative bar chart for contribution shares; chosen for its straightforward React integration. |
 | react-markdown | ^10.1.0 | Renders the Gemini narrative (plain prose) as formatted HTML without writing a custom parser. |
 | TypeScript | ^5.8.3 | Same version as server and shared to ensure compatible type definitions. |
 
@@ -62,7 +61,7 @@ The system has three packages that communicate in two ways: through shared TypeS
 4. The server looks up the project (name, repo URL) and its member roster from SQLite.
 5. The server calls the GitHub Stats API (`GET /repos/{owner}/{repo}/stats/contributors`) via Octokit to get per-contributor commit counts, additions, and deletions. This endpoint returns 202 while GitHub computes the data; the server retries up to 30 times with a 1-second delay.
 6. For each contributor, the server fetches all commit SHAs and dates (`GET /repos/{owner}/{repo}/commits`, paginated at 100 per page).
-7. The server samples the first 50 SHAs per contributor and calls `GET /repos/{owner}/{repo}/commits/{sha}` for each, parses the diff patch, and classifies every added line as code, comment, or blank using `classifyAddedLines()` from `shared/src/lineClassifier.ts`.
+7. The server samples the newest 100 non-merge SHAs per contributor and calls `GET /repos/{owner}/{repo}/commits/{sha}` for each, parses the diff patch, and classifies every added line as code, comment, or blank using `classifyAddedLines()` from `shared/src/lineClassifier.ts`; the class decides how much the line is worth (`LINE_TYPE_WEIGHTS`).
 8. GitHub contributor logins are matched (case-insensitively) to the seeded member roster. Unmatched logins are collected separately.
 9. `computeTeamReport()` in `shared/src/scoring.ts` runs the deterministic scoring pipeline and returns a `TeamReport`.
 10. `generateFairnessNarrative()` in `server/src/lib/gemini.ts` sends the `TeamReport` JSON to Gemini and gets back a prose explanation.
@@ -123,35 +122,38 @@ All of the following is implemented in `shared/src/scoring.ts`. These values are
 
 ```
 commits:    0.4
-lines:      0.4   ← applied to meaningfulLines share (renamed from churn)
+lines:      0.4   ← applied to the lines share (effectiveAdditions; renamed from churn)
 activeDays: 0.2
 ```
 
-**Why these weights:** Commits and meaningful lines are weighted equally (0.4 each) because both frequency and code substance matter. Active days gets a lower weight (0.2) because a member who commits all work in two large sessions should not be penalized relative to one who makes small daily commits.
+**Why these weights:** Commits and lines added are weighted equally (0.4 each) because both frequency and code substance matter. Active days gets a lower weight (0.2) because a member who commits all work in two large sessions should not be penalized relative to one who makes small daily commits.
 
 ### Component Shares (all normalized to [0, 1] across the team)
 
 ```
 commitShare    = member.commits / sum(all commits)
-linesShare     = member.meaningfulLines / sum(all meaningfulLines)
+linesShare     = member.effectiveAdditions / sum(all effectiveAdditions)
+                (effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio); see below)
 activeDaysShare = member.activeDays / sum(all activeDays)
 ```
 
-- `activeDays` = count of distinct calendar days (YYYY-MM-DD) that appear in the member's commit timestamps.
+- `activeDays` = count of distinct Asia/Manila calendar days (YYYY-MM-DD, `analysisDayOf` in `shared/src/analysisDay.ts`) that appear in the member's commit timestamps. Docs: days with at least `MIN_ACTIVE_DAY_RETAINED_CHARS` (30) retained characters written that day (Docs weights default to 0.37 retained text / 0.30 sessions / 0.33 active days, the expert-survey (AHP) values; the instructor can change them per project, and the GitHub/Docs blend defaults to 0.55 / 0.45).
 - If a total is zero (e.g., no commits at all), the corresponding share is 0.
 
-### Meaningful Lines Formula
+### Lines signal: what real runs score
 
 ```
-meaningfulLines = codeLinesAdded + 0.25 * commentLinesAdded
+weightedAdditions  = Σ over the member's sampled commits of
+                       (Σ over files: lineTypeWeightedLines × fileTypeWeight) × commitImpactMultiplier
+effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)
 ```
 
-- `codeLinesAdded`, `commentLinesAdded`, and `blankLinesAdded` come from parsing the actual diff patches of up to 50 commits per member.
-- Blank lines contribute **zero** to `meaningfulLines`. This prevents large formatting-only commits from inflating a member's line score.
-- Comments contribute at 25% of full weight. They are recognized effort but less than substantive code.
-- `codeToCommentRatio = codeLinesAdded / commentLinesAdded` (null when `commentLinesAdded === 0`).
+- **Each added line is worth its line-type weight** (`LINE_TYPE_WEIGHTS`: code 1.0, comment 0.25, blank 0; `+` lines of the patch) times its file-type weight (`FILE_WEIGHTS`: source 1.0, test 0.8, style 0.7, docs 0.6, other 0.5, config 0.3, generated 0) times the multiplier of the commit it was in (`COMMIT_IMPACT`: structural 1.5, functional 1.0, cosmetic 0.5, trivial 0.2), and the total is discounted by up to 50% for lines the member later deleted themselves.
+- Lines come from the diff patches of the newest 100 authored, non-merge commits per member. A file whose patch GitHub omits adds nothing.
+- `analyze.ts` always supplies `weightedAdditions`, so the fallback in `scoring.ts` never fires in a real run.
+- `meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded` (blank lines 0, the same constants) is shown in the member details and is the fallback when `weightedAdditions` is absent (tests); real runs get the same weighting inside `weightedAdditions`. Before scoring rules version 2 (`SCORING_RULES_VERSION`) every added line counted equally; older reports are shown as outdated until re-analyzed. See `ux-audit/LINES_WEIGHTING_CHECK.md` (historical).
 
-**Why:** Raw additions + deletions (churn) counted whitespace and reformatting equally with logic. Classifying lines by type and discounting comments/blanks makes the line-magnitude signal reflect actual code contribution more accurately.
+**Why:** Raw additions + deletions (churn) counted generated and config files equally with source. File-type weights, commit impact and the self-churn discount make the line signal reflect the weight of the work. Comment lines count a quarter and blank lines nothing, because they carry little of the work.
 
 ### Contribution Score
 

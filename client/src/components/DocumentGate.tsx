@@ -1,8 +1,14 @@
+import { CHANGE_TEMPLATE_HINT } from "../lib/docActionHints";
+import { BusyLabel } from "./ui/BusyLabel";
+import { LoadingState } from "./ui/LoadingState";
+import { BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { DocumentEditor } from "./DocumentEditor";
 import { DOCUMENT_TEMPLATES, findDocumentTemplate } from "@shared/documentTemplates";
 import type { DocumentTemplate } from "@shared/documentTemplates";
+import type { SaveState } from "../lib/saveState";
 
 interface Props {
   groupId: number;
@@ -11,13 +17,19 @@ interface Props {
   // see server/src/routes/documents.ts POST /document/init). Non-choosers just wait or,
   // for the read-only instructor view, see an empty state.
   canChooseTemplate: boolean;
+  /** The document's title (the group's name): the PDF's file name and title metadata. */
+  title?: string;
+  /** Heading a task is linked to: the editor scrolls to it once the document has synced. */
+  scrollToHeading?: string | null;
+  onHeadingResolved?: (found: boolean) => void;
+  onSaveStateChange?: (state: SaveState | null) => void;
 }
 
 // Gates DocumentEditor behind a one-time "start your document" step: before any Document row
 // exists for the group, the leader (or instructor) picks a template or starts blank. Once a
 // document exists, this renders DocumentEditor exactly as before — no behavior change for
 // already-started documents.
-export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
+export function DocumentGate({ groupId, editable, canChooseTemplate, title, scrollToHeading, onHeadingResolved, onSaveStateChange }: Props) {
   const { token } = useAuth();
   const [exists, setExists] = useState<boolean | null>(null);
   // Whether the document is still safe to reset (no real typed/imported content, no image
@@ -27,6 +39,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
   const [resettable, setResettable] = useState(false);
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [confirmingChange, setConfirmingChange] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set only when THIS browser session just created the document via handleChoose below — never
   // on the initial /status load. Tells DocumentEditor how many top-level nodes to wait for before
@@ -110,8 +123,8 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
 
   if (exists === null) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-400">
-        Loading…
+      <div className="flex justify-center rounded-xl border border-slate-200 bg-white p-8">
+        <LoadingState label="Loading document…" />
       </div>
     );
   }
@@ -128,21 +141,32 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
             <button
               type="button"
               disabled={resetting}
-              onClick={() => {
-                if (window.confirm("Change the starting template? This only works because nobody has added any content yet.")) {
-                  handleReset();
-                }
-              }}
-              className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-700 underline disabled:opacity-50"
+              onClick={() => setConfirmingChange(true)}
+              title={CHANGE_TEMPLATE_HINT}
+              className={`${BUTTON_SECONDARY_COMPACT} ml-auto`}
             >
-              {resetting ? "Changing template…" : "Change template"}
+              <BusyLabel busy={resetting} idle="Change template" busyText="Changing template…" />
             </button>
           </div>
         )}
+        {confirmingChange && (
+          <ConfirmDialog
+            title="Change the starting template?"
+            confirmLabel="Change template"
+            onCancel={() => setConfirmingChange(false)}
+            onConfirm={() => { setConfirmingChange(false); handleReset(); }}
+          >
+            This only works because nobody has added any content yet.
+          </ConfirmDialog>
+        )}
         <DocumentEditor
           groupId={groupId}
+          title={title}
           editable={editable}
           awaitInitialNodeCount={justCreatedNodeCount ?? undefined}
+          scrollToHeading={scrollToHeading}
+          onHeadingResolved={onHeadingResolved}
+          onSaveStateChange={onSaveStateChange}
         />
       </div>
     );
@@ -163,7 +187,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6">
       <h3 className="text-sm font-semibold text-slate-700 mb-1">Start your document</h3>
-      <p className="text-xs text-slate-400 mb-4">
+      <p className="text-xs text-slate-600 mb-4">
         Choose a starting structure, or start blank. This is a one-time choice for the group.
       </p>
       {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
@@ -177,7 +201,7 @@ export function DocumentGate({ groupId, editable, canChooseTemplate }: Props) {
             className="text-left border border-slate-200 rounded-lg p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors disabled:opacity-50"
           >
             <p className="text-sm font-semibold text-slate-700">{t.name}</p>
-            <p className="text-xs text-slate-400 mt-1">{t.description}</p>
+            <p className="text-xs text-slate-600 mt-1">{t.description}</p>
           </button>
         ))}
       </div>

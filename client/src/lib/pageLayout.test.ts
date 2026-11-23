@@ -1,0 +1,157 @@
+import { describe, it, expect } from "vitest";
+import { Editor } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
+import { Table } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import * as Y from "yjs";
+import { PAGE_SIZES, PAGE_SIZE_KEYS, PAGE_MARGIN_PX } from "@shared/pageSizes";
+import { paginationExtension, paginationSize } from "./pageLayout";
+import { PageBreak } from "./pageBreak";
+import { applyPageSetup, DEFAULT_PAGE_SETUP } from "./pageSetup";
+import { MARGIN_PRESET_KEYS, PAGE_ORIENTATIONS, resolveMargins } from "@shared/pageSizes";
+
+// Page layout must add 0 characters to anyone's authorship count. Layout is pure ProseMirror
+// decorations/widgets + meta-only transactions, so it can never reach the Yjs document. This builds
+// two identical collab editors on real Y.Docs — one WITH the pagination extension (and size
+// switches), one without — drives the same edits through both, and asserts the shared document is
+// identical and the pagination editor emitted no extra Yjs updates. (Server-side, the same
+// guarantee is checked against the real capture pipeline in
+// server/test/authorshipCapturePagination.test.ts.)
+function makeEditor(ydoc: Y.Doc, withPagination: boolean) {
+  return new Editor({
+    element: document.createElement("div"),
+    extensions: [
+      StarterKit.configure({ undoRedo: false }),
+      Collaboration.configure({ document: ydoc }),
+      Table,
+      TableRow,
+      TableHeader,
+      TableCell,
+      ...(withPagination ? [paginationExtension("LETTER", 24)] : []),
+    ],
+  });
+}
+
+function textChars(ydoc: Y.Doc): number {
+  let n = 0;
+  const walk = (node: Y.XmlFragment | Y.XmlElement | Y.XmlText) => {
+    if (node instanceof Y.XmlText) {
+      for (const op of node.toDelta()) if (typeof op.insert === "string") n += op.insert.length;
+    } else {
+      node.toArray().forEach((c) => walk(c as Y.XmlElement | Y.XmlText));
+    }
+  };
+  walk(ydoc.getXmlFragment("default"));
+  return n;
+}
+
+describe("page layout is invisible to authorship", () => {
+  it("adds 0 characters and 0 Yjs updates, including across page-size switches", () => {
+    const plainDoc = new Y.Doc();
+    const pagedDoc = new Y.Doc();
+    let plainUpdates = 0;
+    let pagedUpdates = 0;
+    plainDoc.on("update", () => plainUpdates++);
+    pagedDoc.on("update", () => pagedUpdates++);
+
+    const plain = makeEditor(plainDoc, false);
+    const paged = makeEditor(pagedDoc, true);
+
+    // Layout alone (mount + every size) must not write to the document.
+    for (const key of PAGE_SIZE_KEYS) paged.chain().updatePageSize(paginationSize(key)).run();
+    expect(pagedUpdates).toBe(0);
+
+    const typed = "The quick brown fox jumps over the lazy dog. ".repeat(40);
+    for (const ed of [plain, paged]) {
+      ed.commands.insertContent(`<p>${typed}</p>`);
+      ed.commands.insertContent("<p>second paragraph</p>");
+    }
+    paged.chain().updatePageSize(paginationSize("A4")).run();
+    paged.chain().updatePageSize(paginationSize("LEGAL")).run();
+
+    expect(pagedUpdates).toBe(plainUpdates);
+    expect(textChars(pagedDoc)).toBe(textChars(plainDoc));
+    expect(textChars(pagedDoc)).toBe(typed.length + "second paragraph".length);
+    expect(pagedDoc.getXmlFragment("default").toString()).toBe(plainDoc.getXmlFragment("default").toString());
+
+    plain.destroy();
+    paged.destroy();
+  });
+});
+
+describe("page sizes and margins", () => {
+  it("defines Letter, Legal and A4 with a 1 inch default margin", () => {
+    expect(PAGE_SIZES.LETTER).toMatchObject({ widthPx: 816, heightPx: 1056, cssWidth: "8.5in", cssHeight: "11in" });
+    expect(PAGE_SIZES.LEGAL).toMatchObject({ widthPx: 816, heightPx: 1344, cssWidth: "8.5in", cssHeight: "14in" });
+    expect(PAGE_SIZES.A4).toMatchObject({ widthPx: 794, heightPx: 1123, cssWidth: "210mm", cssHeight: "297mm" });
+    expect(PAGE_MARGIN_PX).toBe(96);
+    for (const key of PAGE_SIZE_KEYS) {
+      expect(paginationSize(key)).toMatchObject({
+        marginTop: 96, marginBottom: 96, marginLeft: 96, marginRight: 96,
+        pageWidth: PAGE_SIZES[key].widthPx, pageHeight: PAGE_SIZES[key].heightPx,
+      });
+    }
+  });
+
+  it("adds no header, footer or page number of its own", () => {
+    const ext = paginationExtension("LETTER", 0);
+    expect(ext.options).toMatchObject({ headerLeft: "", headerRight: "", footerLeft: "", footerRight: "", pageGap: 0 });
+  });
+});
+
+describe("page setup and header/footer are invisible to authorship", () => {
+  it("every paper x orientation x margin setting and any header/footer text writes 0 Yjs updates", () => {
+    const ydoc = new Y.Doc();
+    let updates = 0;
+    ydoc.on("update", () => updates++);
+    const ed = new Editor({
+      element: document.createElement("div"),
+      extensions: [
+        StarterKit.configure({ undoRedo: false }),
+        Collaboration.configure({ document: ydoc }),
+        PageBreak,
+        paginationExtension("LETTER", 24),
+      ],
+    });
+    ed.commands.insertContent("<p>some typed text</p>");
+    const baseline = updates;
+    const textBefore = textChars(ydoc);
+
+    for (const pageSize of PAGE_SIZE_KEYS) {
+      for (const orientation of PAGE_ORIENTATIONS) {
+        for (const marginPreset of MARGIN_PRESET_KEYS) {
+          applyPageSetup(ed, {
+            ...DEFAULT_PAGE_SETUP,
+            pageSize,
+            orientation,
+            marginPreset,
+            margins: resolveMargins(marginPreset, { top: 0.7, bottom: 1.3, left: 2.2, right: 0.4 }),
+            header: { left: "Group 4 <b>x</b>", center: "Title", right: "Page {page}" },
+            footer: { left: "", center: "{page}", right: "" },
+          });
+        }
+      }
+    }
+    applyPageSetup(ed, DEFAULT_PAGE_SETUP); // and clearing it again
+    expect(updates).toBe(baseline);
+    expect(textChars(ydoc)).toBe(textBefore);
+    ed.destroy();
+  });
+
+  it("a page break is a leaf block: it adds a node but 0 characters", () => {
+    const ydoc = new Y.Doc();
+    const ed = new Editor({
+      element: document.createElement("div"),
+      extensions: [StarterKit.configure({ undoRedo: false }), Collaboration.configure({ document: ydoc }), PageBreak],
+    });
+    ed.commands.insertContent("<p>hello</p>");
+    const before = textChars(ydoc);
+    ed.commands.setPageBreak();
+    expect(textChars(ydoc)).toBe(before);
+    expect(JSON.stringify(ed.getJSON())).toContain("pageBreak");
+    ed.destroy();
+  });
+});

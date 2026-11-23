@@ -8,6 +8,7 @@ import {
   createAssignment,
   createProject,
   createMembership,
+  CONSENT,
 } from "./factories.js";
 
 // Notification tests make many login calls in one file; the IP-keyed authLimiter
@@ -65,6 +66,7 @@ async function waitFor<T>(fn: () => Promise<T | null | undefined | false>, timeo
 // ── Join requests ─────────────────────────────────────────────────────────────
 
 describe("join-request notifications", () => {
+  // INT-010
   it("submitting a request notifies only the leader, with only the requester's name", async () => {
     const { leader, instructor, member, classSection, project } = await setupGroup();
     const requester = await createRequester(classSection.id);
@@ -88,6 +90,7 @@ describe("join-request notifications", () => {
     expect([instructor.id, member.id, requester.id]).not.toContain(rows[0].recipientId);
   });
 
+  // INT-010
   it("accepting notifies only the requester and removes the leader's pending notification", async () => {
     const { leader, classSection, project } = await setupGroup();
     const requester = await createRequester(classSection.id);
@@ -177,7 +180,8 @@ describe("task-assignment notifications", () => {
     expect(rows[0]).toMatchObject({
       recipientId: member.id,
       type: "TASK_ASSIGNED",
-      link: `/student/group/${project.id}`,
+      // Deep link: opens the Tasks tab with this task's panel.
+      link: `/student/group/${project.id}?tab=tasks&task=${res.body.id}`,
     });
   });
 
@@ -229,6 +233,7 @@ describe("task-assignment notifications", () => {
 // ── Disputes ──────────────────────────────────────────────────────────────────
 
 describe("dispute notifications", () => {
+  // INT-025
   it("filing a dispute still creates exactly one DISPUTE_FILED alert for the instructor (legacy behaviour)", async () => {
     const { instructor, member, project } = await setupGroup();
 
@@ -248,6 +253,7 @@ describe("dispute notifications", () => {
     expect(await prisma.alert.count()).toBe(1);
   });
 
+  // INT-026
   it("responding to a dispute notifies only the student, without the response text", async () => {
     const { instructor, member, project } = await setupGroup();
     const dispute = await prisma.dispute.create({
@@ -265,7 +271,7 @@ describe("dispute notifications", () => {
     expect(rows[0]).toMatchObject({
       recipientId: member.id,
       type: "DISPUTE_RESPONDED",
-      link: `/student/group/${project.id}`,
+      link: `/disputes?note=${dispute.id}`,
     });
     expect(rows[0].message).not.toContain("0.12");
   });
@@ -480,6 +486,7 @@ describe("report-ready notifications", () => {
 });
 
 describe("leader-change notifications", () => {
+  // INT-012
   it("instructor reassigning notifies the new and the old leader", async () => {
     const { instructor, leader, member, project } = await setupGroup();
     const res = await request(app)
@@ -584,6 +591,7 @@ describe("role-suggestion notifications", () => {
 });
 
 describe("group-created notifications", () => {
+  // INT-009
   it("creating a group notifies the class instructor only", async () => {
     const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const cs = await createClassSection(instructor.id);
@@ -635,13 +643,14 @@ describe("department-created notifications", () => {
 
 describe("instructor-registration notifications", () => {
   const register = (role?: string) =>
-    request(app).post("/api/auth/register").send({
+    request(app).post("/api/auth/register").send({ ...CONSENT,
       email: `reg-${role ?? "none"}@example.com`,
       password: "password123",
       name: "Newcomer",
       ...(role ? { role } : {}),
     });
 
+  // INT-002
   it("INSTRUCTOR signup notifies every active admin once, and no one else", async () => {
     const { user: a1 } = await createUser({ systemRole: "ADMIN" });
     const { user: a2 } = await createUser({ systemRole: "ADMIN" });
@@ -655,7 +664,7 @@ describe("instructor-registration notifications", () => {
     for (const admin of [a1, a2]) {
       const [a] = await alertsFor(admin.id);
       expect(a.type).toBe("USER_REGISTERED");
-      expect(a.link).toBe("/admin");
+      expect(a.link).toBe("/admin?section=instructor-approvals");
       expect(a.refType).toBe("USER");
       expect(a.refId).toBe(res.body.user.id);
       expect(a.message).not.toContain("@"); // no email in the notification

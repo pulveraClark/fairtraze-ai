@@ -1,8 +1,14 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
-import { notify, activeAdminIds } from "../lib/notify.js";
+import { notify, activeAdminIds, resolveNotifications } from "../lib/notify.js";
+import { anonymizeUser } from "../lib/anonymizeUser.js";
+import { toCsv } from "../lib/csv.js";
+import { EDP_TAKEN_MESSAGE, SEMESTERS, isValidSchoolYear } from "@shared/schoolTerm.js";
+import { exportedByLine } from "@shared/exportFooter.js";
+import { parseAdminUsersFilters, buildUserFilters, buildUserOrderBy } from "../lib/adminUsersQuery.js";
 
 export const adminRouter = Router();
 
@@ -19,6 +25,8 @@ const USER_SELECT = {
   active:         true,
   lockedUntil:    true,
   createdAt:      true,
+  lastLoginAt:    true,
+  deletedAt:      true,
 } as const;
 
 // Fetch the requesting actor's display name for audit entries.
@@ -27,40 +35,128 @@ async function getActorName(actorId: number): Promise<string> {
   return actor?.name ?? `Admin #${actorId}`;
 }
 
+// A deleted account is an anonymised "Former member" tombstone: it can no longer be changed.
+// Sends the 409 and returns true when the target is one.
+function rejectFormerMember(target: { deletedAt: Date | null }, res: Response): boolean {
+  if (!target.deletedAt) return false;
+  res.status(409).json({
+    error: "This account was deleted and can no longer be changed.",
+    code: "FORMER_MEMBER",
+  });
+  return true;
+}
+
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
-// List all users with server-side pagination.
-// Query params: search, role, page (default 1), pageSize (default 20).
+// List users with server-side pagination.
+// Query params: search, role, status (active|inactive), lastActive (7d|30d|never),
+// sort (name|joined|lastActive), dir (asc|desc), includeFormer (default false),
+// page (default 1), pageSize (default 20). See lib/adminUsersQuery.ts.
 
 adminRouter.get("/api/admin/users", ...requireRole("ADMIN"), async (req, res) => {
-  const search    = typeof req.query.search === "string" ? req.query.search.trim() : "";
-  const roleRaw   = typeof req.query.role   === "string" ? req.query.role          : "";
-  const roleParsed = roleEnum.safeParse(roleRaw);
+  const filters = parseAdminUsersFilters(req.query);
 
   const page     = Math.max(1, parseInt(String(req.query.page     ?? "1"),  10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
 
-  const where = {
-    ...(roleParsed.success ? { systemRole: roleParsed.data } : {}),
-    ...(search ? {
-      OR: [
-        { name:  { contains: search } },
-        { email: { contains: search } },
-      ],
-    } : {}),
-  };
+  // Former members are anonymized tombstones (User.deletedAt, set by lib/anonymizeUser.ts).
+  // Hidden unless includeFormer=true; total and pagination count only what is shown.
+  const base  = buildUserFilters(filters);
+  const where = filters.includeFormer ? base : { AND: [base, { deletedAt: null }] };
 
-  const [users, total] = await Promise.all([
+  const [users, total, formerCount] = await Promise.all([
     prisma.user.findMany({
       where,
       select:  USER_SELECT,
-      orderBy: { createdAt: "desc" },
+      orderBy: buildUserOrderBy(filters),
       skip:    (page - 1) * pageSize,
       take:    pageSize,
     }),
     prisma.user.count({ where }),
+    // For the "Show former members (n)" toggle; same filters, regardless of includeFormer.
+    prisma.user.count({ where: { AND: [base, { deletedAt: { not: null } }] } }),
   ]);
 
-  res.json({ users, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+  res.json({ users, total, formerCount, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+});
+
+// ── GET /api/admin/users/export.csv ───────────────────────────────────────────
+// The current filtered, sorted list (same query string as the list, no paging) as a CSV download.
+// Columns: name, email, role, status, joined, last active. Admin only; writes one audit entry (counts only).
+
+const EXPORT_MAX_ROWS = 5000;
+
+adminRouter.get("/api/admin/users/export.csv", ...requireRole("ADMIN"), async (req, res) => {
+  const filters = parseAdminUsersFilters(req.query);
+  const base    = buildUserFilters(filters);
+  const where   = filters.includeFormer ? base : { AND: [base, { deletedAt: null }] };
+
+  const users = await prisma.user.findMany({
+    where,
+    select:  { name: true, email: true, systemRole: true, active: true, createdAt: true, lastLoginAt: true, deletedAt: true },
+    orderBy: buildUserOrderBy(filters),
+    take:    EXPORT_MAX_ROWS + 1,
+  });
+  if (users.length > EXPORT_MAX_ROWS) {
+    res.status(413).json({ error: `Too many users to export at once (over ${EXPORT_MAX_ROWS}). Narrow the filters and try again.` });
+    return;
+  }
+
+  const actorName = await getActorName(req.user!.sub);
+  const exporter = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true, email: true } });
+
+  // A blank row, then who exported it and when (the same line the report PDFs carry).
+  const csv = toCsv(
+    ["Name", "Email", "Role", "Status", "Joined", "Last active"],
+    [
+      ...users.map((u) => [
+        u.name,
+        u.email,
+        u.systemRole,
+        u.deletedAt ? "Deleted account" : u.active ? "Active" : "Inactive",
+        u.createdAt.toISOString(),
+        u.lastLoginAt ? u.lastLoginAt.toISOString() : "Never",
+      ]),
+      [],
+      [exportedByLine({ name: exporter?.name ?? actorName, email: exporter?.email ?? req.user!.email }, new Date())],
+    ],
+  );
+
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     "USERS_EXPORTED",
+      targetType: "USER",
+      targetId:   "list",
+      details:    `${users.length} ${users.length === 1 ? "user" : "users"} exported to CSV`,
+    },
+  });
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="fairtraze-users-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.send(csv);
+});
+
+// ── GET /api/admin/users/:id/details ──────────────────────────────────────────
+// Counts only, for the details panel: how many classes the person owns or is enrolled in, and how many
+// groups they belong to. No class, group or report content is returned.
+
+adminRouter.get("/api/admin/users/:id/details", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid user id" }); return; }
+  const userId = idResult.data;
+
+  const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!exists) { res.status(404).json({ error: "User not found" }); return; }
+
+  const [owned, enrolled, groupCount] = await Promise.all([
+    prisma.classSection.count({ where: { instructorId: userId } }),
+    prisma.classEnrollment.count({ where: { userId } }),
+    prisma.groupMembership.count({ where: { userId } }),
+  ]);
+
+  res.json({ classCount: owned + enrolled, groupCount });
 });
 
 // ── PATCH /api/admin/users/:id/role ──────────────────────────────────────────
@@ -83,9 +179,10 @@ adminRouter.patch("/api/admin/users/:id/role", ...requireRole("ADMIN"), async (r
 
   const target = await prisma.user.findUnique({
     where:  { id: targetId },
-    select: { id: true, name: true, systemRole: true },
+    select: { id: true, name: true, systemRole: true, deletedAt: true },
   });
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   const [updated, actorName] = await Promise.all([
     prisma.user.update({ where: { id: targetId }, data: { systemRole: role }, select: USER_SELECT }),
@@ -125,9 +222,10 @@ adminRouter.patch("/api/admin/users/:id/status", ...requireRole("ADMIN"), async 
 
   const target = await prisma.user.findUnique({
     where:  { id: targetId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, deletedAt: true },
   });
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   const [updated, actorName] = await Promise.all([
     prisma.user.update({ where: { id: targetId }, data: { active: bodyResult.data.active }, select: USER_SELECT }),
@@ -148,6 +246,63 @@ adminRouter.patch("/api/admin/users/:id/status", ...requireRole("ADMIN"), async 
   res.json(updated);
 });
 
+// ── POST /api/admin/users/bulk-status ─────────────────────────────────────────
+// Deactivate (or, for Undo, reactivate) several accounts at once. Never touches the caller's own
+// account or former (anonymized) members, and skips accounts already in the requested state.
+// One audit entry per account, all in one transaction. Returns what changed so Undo can reverse exactly that.
+
+const BULK_STATUS_MAX = 100;
+
+adminRouter.post("/api/admin/users/bulk-status", ...requireRole("ADMIN"), async (req, res) => {
+  const bodyResult = z.object({
+    ids:    z.array(idParam).min(1).max(BULK_STATUS_MAX),
+    active: z.boolean(),
+  }).safeParse(req.body);
+  if (!bodyResult.success) {
+    res.status(400).json({ error: `Choose between 1 and ${BULK_STATUS_MAX} users.` });
+    return;
+  }
+  const { active } = bodyResult.data;
+  const ids = [...new Set(bodyResult.data.ids)];
+  const selfId = req.user!.sub;
+
+  const rows = await prisma.user.findMany({
+    where:  { id: { in: ids } },
+    select: { id: true, name: true, active: true, deletedAt: true },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const eligible: Array<{ id: number; name: string }> = [];
+  const skipped: Array<{ id: number; reason: "self" | "former" | "unchanged" | "not_found" }> = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (id === selfId)              skipped.push({ id, reason: "self" });
+    else if (!row)                  skipped.push({ id, reason: "not_found" });
+    else if (row.deletedAt)         skipped.push({ id, reason: "former" });
+    else if (row.active === active) skipped.push({ id, reason: "unchanged" });
+    else                            eligible.push({ id, name: row.name });
+  }
+
+  if (eligible.length > 0) {
+    const actorName = await getActorName(selfId);
+    await prisma.$transaction([
+      prisma.user.updateMany({ where: { id: { in: eligible.map((e) => e.id) } }, data: { active } }),
+      prisma.auditLog.createMany({
+        data: eligible.map((e) => ({
+          actorId:    selfId,
+          actorName,
+          action:     active ? "USER_ACTIVATED" : "USER_DEACTIVATED",
+          targetType: "USER",
+          targetId:   String(e.id),
+          details:    `${e.name} (bulk)`,
+        })),
+      }),
+    ]);
+  }
+
+  res.json({ updated: eligible.map((e) => e.id), skipped });
+});
+
 // ── POST /api/admin/users/:id/unlock ──────────────────────────────────────────
 // Clear a login lockout (failedLoginAttempts/lockedUntil) before its 15-minute
 // auto-expiry — see MAX_FAILED_LOGIN_ATTEMPTS/LOCKOUT_DURATION_MS in auth.ts.
@@ -160,9 +315,10 @@ adminRouter.post("/api/admin/users/:id/unlock", ...requireRole("ADMIN"), async (
 
   const target = await prisma.user.findUnique({
     where:  { id: targetId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, deletedAt: true },
   });
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
   const [updated, actorName] = await Promise.all([
     prisma.user.update({
@@ -203,175 +359,118 @@ adminRouter.delete("/api/admin/users/:id", ...requireRole("ADMIN"), async (req, 
   }
 
   const [target, actorName] = await Promise.all([
-    prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, email: true } }),
+    prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, deletedAt: true } }),
     getActorName(req.user!.sub),
   ]);
   if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (rejectFormerMember(target, res)) return;
 
-  // Manual cascade in the correct FK order so no RESTRICT constraint fires.
-  // AuditLog entries where this user is the actor have actorId nulled (onDelete: SetNull on schema),
-  // but we do it explicitly here to be safe with SQLite FK enforcement.
-  await prisma.$transaction(async (tx) => {
-    await tx.auditLog.create({
-      data: {
-        actorId:    req.user!.sub,
-        actorName,
-        action:     "USER_DELETED",
-        targetType: "USER",
-        targetId:   String(targetId),
-        details:    `${target.name} (${target.email})`,
-      },
-    });
-    await tx.auditLog.updateMany({ where: { actorId: targetId }, data: { actorId: null } });
-    await tx.dispute.deleteMany({ where: { studentUserId: targetId } });
-    await tx.alert.deleteMany({ where: { instructorId: targetId } });
-    await tx.groupMembership.deleteMany({ where: { userId: targetId } });
-    await tx.classSection.deleteMany({ where: { instructorId: targetId } });
-    await tx.user.delete({ where: { id: targetId } });
-  });
+  // Deletion is anonymization (lib/anonymizeUser.ts): the account is scrubbed and kept as a
+  // "Former member" tombstone so FK-linked rows and teammates' stored reports stay intact.
+  const result = await anonymizeUser(targetId, { actorId: req.user!.sub, actorName, action: "USER_DELETED" });
+  if (!result.ok) {
+    res.status(result.code === "NOT_FOUND" ? 404 : 409).json({ error: result.message, code: result.code });
+    return;
+  }
 
   res.json({ message: `User "${target.name}" deleted.` });
 });
 
+// ── Account deletion requests (RA 10173 erasure) ──────────────────────────────
+// Users file these from Settings > Privacy (routes/privacy.ts). Approval anonymizes the account.
+
+adminRouter.get("/api/admin/deletion-requests", ...requireRole("ADMIN"), async (_req, res) => {
+  const select = {
+    id: true, status: true, reason: true, createdAt: true, reviewedAt: true, reviewNote: true,
+    user: { select: { id: true, name: true, email: true, systemRole: true } },
+  } as const;
+  const [pending, recent] = await Promise.all([
+    prisma.deletionRequest.findMany({ where: { status: "PENDING" }, select, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
+    prisma.deletionRequest.findMany({ where: { status: { in: ["APPROVED", "REJECTED"] } }, select, orderBy: { reviewedAt: "desc" }, take: 10 }),
+  ]);
+  res.json({ pendingCount: pending.length, pending, recent });
+});
+
+adminRouter.post("/api/admin/deletion-requests/:id/approve", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+
+  const request = await prisma.deletionRequest.findUnique({ where: { id: idResult.data }, select: { id: true, userId: true, status: true } });
+  if (!request) { res.status(404).json({ error: "Request not found" }); return; }
+  if (request.status !== "PENDING") { res.status(409).json({ error: `This request is already ${request.status.toLowerCase()}.` }); return; }
+  if (request.userId === req.user!.sub) { res.status(403).json({ error: "You cannot approve your own deletion." }); return; }
+
+  const actorName = await getActorName(req.user!.sub);
+  const result = await anonymizeUser(request.userId, { actorId: req.user!.sub, actorName, action: "ACCOUNT_ERASURE_APPROVED" });
+  if (!result.ok) {
+    res.status(result.code === "NOT_FOUND" ? 404 : 409).json({ error: result.message, code: result.code });
+    return;
+  }
+
+  await prisma.deletionRequest.update({
+    where: { id: request.id },
+    data:  { status: "APPROVED", reviewedAt: new Date(), reviewedById: req.user!.sub },
+  });
+  await resolveNotifications({ type: "DELETION_REQUESTED", refType: "DELETION_REQUEST", refId: request.id });
+
+  res.json({ id: request.id, status: "APPROVED" });
+});
+
+adminRouter.post("/api/admin/deletion-requests/:id/reject", ...requireRole("ADMIN"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+  const note = z.object({ note: z.string().trim().max(500).optional() }).safeParse(req.body ?? {});
+
+  const request = await prisma.deletionRequest.findUnique({ where: { id: idResult.data }, select: { id: true, userId: true } });
+  if (!request) { res.status(404).json({ error: "Request not found" }); return; }
+
+  const updated = await prisma.deletionRequest.updateMany({
+    where: { id: request.id, status: "PENDING" },
+    data:  { status: "REJECTED", reviewedAt: new Date(), reviewedById: req.user!.sub, reviewNote: note.success ? (note.data.note || null) : null },
+  });
+  if (updated.count === 0) { res.status(409).json({ error: "This request is no longer pending." }); return; }
+
+  const actorName = await getActorName(req.user!.sub);
+  await prisma.auditLog.create({
+    data: {
+      actorId: req.user!.sub, actorName, action: "ACCOUNT_ERASURE_REJECTED",
+      targetType: "USER", targetId: String(request.userId), details: `Deletion request #${request.id} rejected`,
+    },
+  });
+  await resolveNotifications({ type: "DELETION_REQUESTED", refType: "DELETION_REQUEST", refId: request.id });
+  await notify({
+    recipientIds: request.userId,
+    actorId:      req.user!.sub,
+    type:         "DELETION_REJECTED",
+    message:      "Your account deletion request was not approved. Contact your administrator for details.",
+    link:         "/settings",
+    refType:      "DELETION_REQUEST",
+    refId:        request.id,
+  });
+
+  res.json({ id: request.id, status: "REJECTED" });
+});
+
 // ── GET /api/admin/overview ───────────────────────────────────────────────────
-// Institution-wide aggregates from stored DB data only. No GitHub/Gemini calls.
+// Account counts only. The admin's job is accounts and the system: no class, group,
+// report or dispute figures are returned here. Former (anonymized) members are not counted.
 
 adminRouter.get("/api/admin/overview", ...requireRole("ADMIN"), async (_req, res) => {
-  const [roleCounts, classSectionCount, openDisputesCount, projects] = await Promise.all([
-    prisma.user.groupBy({ by: ["systemRole"], _count: { id: true } }),
-    prisma.classSection.count(),
-    prisma.dispute.count({ where: { status: "OPEN" } }),
-    prisma.project.findMany({
-      select: {
-        id:              true,
-        groupName:       true,
-        assignmentLabel: true,
-        assignmentId:    true,
-        reports: {
-          select:  { gini: true, teamHealth: true, content: true, generatedAt: true },
-          orderBy: { generatedAt: "desc" },
-          take:    1,
-        },
-        assignment: {
-          select: {
-            classSection: {
-              select: {
-                subjectCode: true,
-                edpCode:     true,
-                subjectName: true,
-                instructor:  { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
+  const [roleCounts, inactive] = await Promise.all([
+    prisma.user.groupBy({ by: ["systemRole"], where: { deletedAt: null }, _count: { id: true } }),
+    prisma.user.count({ where: { deletedAt: null, active: false } }),
   ]);
 
-  const users = { total: 0, admins: 0, instructors: 0, students: 0 };
+  const users = { total: 0, admins: 0, instructors: 0, students: 0, active: 0, inactive };
   for (const rc of roleCounts) {
     users.total += rc._count.id;
     if (rc.systemRole === "ADMIN")      users.admins      = rc._count.id;
     if (rc.systemRole === "INSTRUCTOR") users.instructors = rc._count.id;
     if (rc.systemRole === "STUDENT")    users.students    = rc._count.id;
   }
+  users.active = users.total - inactive;
 
-  const totalProjects = projects.length;
-  const totalGroups   = projects.filter((p) => p.assignmentId !== null).length;
-  let   analyzedGroups = 0;
-
-  const healthDist = { healthy: 0, moderateRisk: 0, highRisk: 0 };
-  const flagTotals = { inactive: 0, freeRider: 0, overload: 0, deadlineDriven: 0 };
-
-  interface AtRiskGroup {
-    projectId:      number;
-    groupName:      string;
-    classDisplay:   string;
-    subjectName:    string;
-    instructorName: string;
-    teamHealth:     string;
-    gini:           number | null;
-    analyzedAt:     Date;
-  }
-
-  const atRiskGroups: AtRiskGroup[] = [];
-
-  for (const project of projects) {
-    const report = project.reports[0];
-    if (!report) continue;
-    analyzedGroups++;
-
-    if      (report.teamHealth === "Healthy")       healthDist.healthy++;
-    else if (report.teamHealth === "Moderate Risk") healthDist.moderateRisk++;
-    else if (report.teamHealth === "High Risk")     healthDist.highRisk++;
-
-    let hasFlags = false;
-    if (report.content) {
-      try {
-        const parsed = JSON.parse(report.content) as { members?: Array<{ flags?: string[] }> };
-        for (const member of parsed.members ?? []) {
-          for (const flag of member.flags ?? []) {
-            hasFlags = true;
-            if      (flag === "inactive")       flagTotals.inactive++;
-            else if (flag === "free-rider")     flagTotals.freeRider++;
-            else if (flag === "overload")       flagTotals.overload++;
-            else if (flag === "deadline-driven") flagTotals.deadlineDriven++;
-          }
-        }
-      } catch { /* malformed content — skip */ }
-    }
-
-    if (report.teamHealth === "High Risk" || report.teamHealth === "Moderate Risk" || hasFlags) {
-      const cs = project.assignment?.classSection;
-      const classDisplay = cs
-        ? [cs.subjectCode, cs.edpCode].filter(Boolean).join(" ")
-        : project.assignmentLabel.split("—")[0]?.trim() ?? "";
-
-      atRiskGroups.push({
-        projectId:      project.id,
-        groupName:      project.groupName || `Group ${project.id}`,
-        classDisplay,
-        subjectName:    cs?.subjectName ?? "",
-        instructorName: cs?.instructor?.name ?? "Unknown",
-        teamHealth:     report.teamHealth ?? "Unknown",
-        gini:           report.gini,
-        analyzedAt:     report.generatedAt,
-      });
-    }
-  }
-
-  atRiskGroups.sort((a, b) => b.analyzedAt.getTime() - a.analyzedAt.getTime());
-
-  res.json({
-    users,
-    classSections:      classSectionCount,
-    totalProjects,
-    totalGroups,
-    analyzedGroups,
-    healthDistribution: healthDist,
-    flagTotals,
-    atRiskGroups,
-    openDisputesCount,
-  });
-});
-
-// ── GET /api/admin/classes ────────────────────────────────────────────────────
-// List ALL class sections across all instructors (admin oversight browsing).
-
-adminRouter.get("/api/admin/classes", ...requireRole("ADMIN"), async (_req, res) => {
-  const classes = await prisma.classSection.findMany({
-    orderBy: [{ instructorId: "asc" }, { createdAt: "asc" }],
-    include: {
-      instructor:  { select: { id: true, name: true, email: true } },
-      department:  { select: { id: true, name: true, code: true } },
-      assignments: {
-        orderBy: { createdAt: "asc" },
-        select:  { id: true, title: true, _count: { select: { projects: true } } },
-      },
-    },
-  });
-
-  res.json({ classes });
+  res.json({ users });
 });
 
 // ── GET /api/admin/departments ────────────────────────────────────────────────
@@ -428,6 +527,161 @@ adminRouter.post("/api/admin/departments", ...requireRole("ADMIN"), async (req, 
 
   res.status(201).json(department);
 });
+
+// ── EDP code changes ──────────────────────────────────────────────────────────
+// An EDP code is unique per term. When it is held by the wrong class the admin changes or releases it here,
+// naming the code and its term. The answer never describes the class or its owner (admins see no class content).
+
+adminRouter.patch("/api/admin/edp-codes", ...requireRole("ADMIN"), async (req, res) => {
+  const body = z.object({
+    edpCode:    z.string().trim().min(1),
+    schoolYear: z.string().refine(isValidSchoolYear, "Use a school year like 2026-2027."),
+    semester:   z.enum(SEMESTERS),
+    // "" releases the code; a new code moves the class to it.
+    newEdpCode: z.string().trim(),
+  }).safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid input", details: body.error.flatten() });
+    return;
+  }
+  const { edpCode, schoolYear, semester, newEdpCode } = body.data;
+  const cls = await prisma.classSection.findFirst({ where: { edpCode, schoolYear, semester }, select: { id: true } });
+  if (!cls) {
+    res.status(404).json({ error: "No class uses that EDP code in that term." });
+    return;
+  }
+  if (newEdpCode && await prisma.classSection.findFirst({ where: { edpCode: newEdpCode, schoolYear, semester }, select: { id: true } })) {
+    res.status(409).json({ code: "EDP_TAKEN", error: EDP_TAKEN_MESSAGE });
+    return;
+  }
+  await prisma.classSection.update({ where: { id: cls.id }, data: { edpCode: newEdpCode } });
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName:  await getActorName(req.user!.sub),
+      action:     newEdpCode ? "EDP_CODE_CHANGED" : "EDP_CODE_RELEASED",
+      targetType: "CLASS",
+      targetId:   String(cls.id),
+      details:    `${edpCode} (${schoolYear}, ${semester}) -> ${newEdpCode || "released"}`,
+    },
+  });
+  res.json({ ok: true });
+});
+
+// ── Instructor approvals ──────────────────────────────────────────────────────
+// Self-registered instructors start PENDING (auth.ts register) and are gated out of every
+// instructor route by requireRole until an admin approves them here.
+
+const APPROVAL_SELECT = {
+  id:                  true,
+  name:                true,
+  email:               true,
+  createdAt:           true,
+  instructorStatus:    true,
+  approvalReviewedAt:  true,
+  approvalReviewedById: true,
+} as const;
+
+// GET /api/admin/instructor-approvals — pending queue plus recently reviewed requests.
+adminRouter.get("/api/admin/instructor-approvals", ...requireRole("ADMIN"), async (_req, res) => {
+  const [pending, reviewed] = await Promise.all([
+    prisma.user.findMany({
+      where:   { systemRole: "INSTRUCTOR", instructorStatus: "PENDING" },
+      select:  APPROVAL_SELECT,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    prisma.user.findMany({
+      where:   { systemRole: "INSTRUCTOR", instructorStatus: { not: "PENDING" }, approvalReviewedAt: { not: null } },
+      select:  APPROVAL_SELECT,
+      orderBy: { approvalReviewedAt: "desc" },
+      take:    10,
+    }),
+  ]);
+
+  const reviewerIds = [...new Set(reviewed.map((u) => u.approvalReviewedById).filter((id): id is number => id !== null))];
+  const reviewers = reviewerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: reviewerIds } }, select: { id: true, name: true } })
+    : [];
+  const reviewerName = new Map(reviewers.map((r) => [r.id, r.name]));
+
+  res.json({
+    pendingCount: pending.length,
+    pending: pending.map((u) => ({ id: u.id, name: u.name, email: u.email, createdAt: u.createdAt })),
+    recent: reviewed.map((u) => ({
+      id:             u.id,
+      name:           u.name,
+      email:          u.email,
+      status:         u.instructorStatus,
+      reviewedAt:     u.approvalReviewedAt,
+      reviewedByName: u.approvalReviewedById !== null ? (reviewerName.get(u.approvalReviewedById) ?? null) : null,
+    })),
+  });
+});
+
+// Shared by approve/reject. `from` is the set of statuses the transition is allowed from; the
+// guarded updateMany makes it atomic so two admins acting at once can't both "win".
+async function reviewInstructor(
+  req: Request,
+  res: Response,
+  decision: "APPROVED" | "REJECTED",
+  from: Array<"PENDING" | "REJECTED">,
+): Promise<void> {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid user id" }); return; }
+  const targetId = idResult.data;
+
+  const target = await prisma.user.findUnique({
+    where:  { id: targetId },
+    select: { id: true, name: true, systemRole: true, instructorStatus: true },
+  });
+  if (!target || target.systemRole !== "INSTRUCTOR") {
+    res.status(404).json({ error: "Instructor not found" });
+    return;
+  }
+
+  const updated = await prisma.user.updateMany({
+    where: { id: targetId, systemRole: "INSTRUCTOR", instructorStatus: { in: from } },
+    data:  { instructorStatus: decision, approvalReviewedAt: new Date(), approvalReviewedById: req.user!.sub },
+  });
+  if (updated.count === 0) {
+    res.status(409).json({ error: `This request is already ${target.instructorStatus.toLowerCase()}.` });
+    return;
+  }
+
+  const actorName = await getActorName(req.user!.sub);
+  const approved  = decision === "APPROVED";
+
+  await prisma.auditLog.create({
+    data: {
+      actorId:    req.user!.sub,
+      actorName,
+      action:     approved ? "INSTRUCTOR_APPROVED" : "INSTRUCTOR_REJECTED",
+      targetType: "USER",
+      targetId:   String(targetId),
+      details:    `${target.name}: ${target.instructorStatus} → ${decision}`,
+    },
+  });
+
+  await notify({
+    recipientIds: targetId,
+    actorId:      req.user!.sub,
+    type:         approved ? "INSTRUCTOR_APPROVED" : "INSTRUCTOR_REJECTED",
+    message:      approved
+      ? "Your instructor account has been approved. You can now use instructor features."
+      : "Your instructor request was not approved. Contact your administrator.",
+    link:         "/dashboard",
+    refType:      "USER",
+    refId:        targetId,
+  });
+
+  res.json({ id: targetId, status: decision });
+}
+
+adminRouter.post("/api/admin/instructor-approvals/:id/approve", ...requireRole("ADMIN"), (req, res) =>
+  reviewInstructor(req, res, "APPROVED", ["PENDING", "REJECTED"]));
+
+adminRouter.post("/api/admin/instructor-approvals/:id/reject", ...requireRole("ADMIN"), (req, res) =>
+  reviewInstructor(req, res, "REJECTED", ["PENDING"]));
 
 // ── GET /api/admin/audit ──────────────────────────────────────────────────────
 // Audit log entries newest-first, paginated. Optional ?action= filter.

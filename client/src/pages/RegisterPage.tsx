@@ -1,7 +1,9 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { BusyLabel } from "../components/ui/BusyLabel";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import logoUrl from "../assets/logo_transparent.png";
+import { useMinWidth } from "../lib/useMinWidth";
 
 // ── Left-panel illustration: source connection diagram ────────────────────────
 function AuthIllustration() {
@@ -20,10 +22,9 @@ function AuthIllustration() {
       <path d="M54.5 113.5 C54.5 111.8 55.8 110.5 57.5 110.5 C59.2 110.5 60.5 111.8 60.5 113.5 C60.5 115 59.6 116.3 58.3 116.7 L58.3 119.5 L57.7 119.5 L57.7 116.7 C56.4 116.3 55.5 115 55.5 113.5 Z M58 111.5 C56.9 111.5 56 112.4 56 113.5 C56 114.6 56.9 115.5 58 115.5 C59.1 115.5 60 114.6 60 113.5 C60 112.4 59.1 111.5 58 111.5 Z" fill="white" opacity="0.7" />
 
       {/* Right node: FairTraze Docs */}
-      <circle cx="262" cy="110" r="28" fill="rgba(255,255,255,0.08)" stroke="rgba(196,181,253,0.3)" strokeWidth="1.5" strokeDasharray="4 3" />
+      <circle cx="262" cy="110" r="28" fill="rgba(255,255,255,0.08)" stroke="rgba(196,181,253,0.3)" strokeWidth="1.5" />
       <text x="262" y="103" textAnchor="middle" fontSize="7.5" fill="rgba(196,181,253,0.7)" fontFamily="sans-serif">FairTraze</text>
       <text x="262" y="113" textAnchor="middle" fontSize="7.5" fill="rgba(196,181,253,0.7)" fontFamily="sans-serif">Docs</text>
-      <text x="262" y="128" textAnchor="middle" fontSize="7" fill="rgba(196,181,253,0.5)" fontFamily="sans-serif">soon</text>
 
       {/* Connection lines */}
       <line x1="87" y1="110" x2="121" y2="110" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeDasharray="5 3" />
@@ -59,15 +60,18 @@ function AuthIllustration() {
 }
 
 export function RegisterPage() {
+  // The sample artwork is decorative and only fits the desktop side panel (lg and up).
+  const showArt = useMinWidth(1024);
   const { navigate } = useRouter();
   const { register, user, loading: authLoading } = useAuth();
 
   const [name,          setName]          = useState("");
   const [email,         setEmail]         = useState("");
-  const [role,          setRole]          = useState<"INSTRUCTOR" | "STUDENT">("INSTRUCTOR");
+  const [role,          setRole]          = useState<"" | "INSTRUCTOR" | "STUDENT">("");
   const [password,      setPassword]      = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error,         setError]         = useState<string | null>(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [submitting,    setSubmitting]    = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
   const [verificationRequired, setVerificationRequired] = useState(true);
@@ -94,7 +98,7 @@ export function RegisterPage() {
         <div className="w-full max-w-sm text-center">
           <div className="mb-8">
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-10 w-auto mx-auto mb-6" />
-            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Account created</h1>
+            <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Account created</h1>
           </div>
           {verificationRequired && (
             <div className="flex items-start gap-2.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3.5 py-3 text-left mb-5">
@@ -121,6 +125,11 @@ export function RegisterPage() {
     e.preventDefault();
     setError(null);
 
+    if (!privacyAccepted) {
+      setError("You must read and agree to the Privacy Notice to create an account.");
+      return;
+    }
+
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -133,7 +142,7 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const result = await register(email, password, name, role);
+      const result = await register(email, password, name, role as "INSTRUCTOR" | "STUDENT", privacyAccepted);
       setVerificationRequired(result.emailVerificationRequired);
       setJustRegistered(true);
     } catch (err) {
@@ -154,7 +163,7 @@ export function RegisterPage() {
   }
 
   const inputClass =
-    "w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
+    "w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
 
   return (
     <div className="min-h-screen flex bg-slate-50">
@@ -184,7 +193,7 @@ export function RegisterPage() {
 
         {/* Center: illustration + copy */}
         <div className="relative z-10 space-y-7">
-          <AuthIllustration />
+          {showArt && <AuthIllustration />}
           <div>
             <h2 className="font-display font-bold text-white text-2xl leading-tight mb-2">
               Connect your students.<br />See who contributes.
@@ -226,7 +235,7 @@ export function RegisterPage() {
 
           {/* Heading */}
           <div className="mb-7">
-            <h1 className="font-display font-bold text-slate-900 text-2xl mb-1">Create your account</h1>
+            <h1 className="font-display font-semibold text-slate-900 text-xl mb-1">Create your account</h1>
             <p className="text-slate-500 text-sm">Get started with FairTraze AI</p>
           </div>
 
@@ -234,8 +243,9 @@ export function RegisterPage() {
 
             {/* Full name */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Full name</label>
+              <label htmlFor="register-name" className="block text-xs font-semibold text-slate-700 mb-1.5">Full name</label>
               <input
+                id="register-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -248,8 +258,9 @@ export function RegisterPage() {
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional email</label>
+              <label htmlFor="register-email" className="block text-xs font-semibold text-slate-700 mb-1.5">Institutional email</label>
               <input
+                id="register-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -262,12 +273,15 @@ export function RegisterPage() {
 
             {/* Role */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Role</label>
+              <label htmlFor="register-role" className="block text-xs font-semibold text-slate-700 mb-1.5">Role</label>
               <select
+                id="register-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as "INSTRUCTOR" | "STUDENT")}
+                required
+                onChange={(e) => setRole(e.target.value as "" | "INSTRUCTOR" | "STUDENT")}
                 className={`${inputClass} cursor-pointer`}
               >
+                <option value="" disabled className="bg-white text-slate-500">Select your role</option>
                 <option value="INSTRUCTOR" className="bg-white text-slate-900">Instructor</option>
                 <option value="STUDENT"    className="bg-white text-slate-900">Student</option>
               </select>
@@ -275,11 +289,12 @@ export function RegisterPage() {
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="register-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Password
-                <span className="ml-1.5 text-slate-400 font-normal">(min. 8 characters)</span>
+                <span className="ml-1.5 text-slate-600 font-normal">(min. 8 characters)</span>
               </label>
               <input
+                id="register-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -292,10 +307,11 @@ export function RegisterPage() {
 
             {/* Confirm password */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="register-confirm-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Confirm password
               </label>
               <input
+                id="register-confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -305,6 +321,28 @@ export function RegisterPage() {
                 className={inputClass}
               />
             </div>
+
+            {/* Privacy consent (RA 10173) */}
+            <label className="flex min-h-10 items-start gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                checked={privacyAccepted}
+                onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              />
+              <span>
+                I have read and agree to the{" "}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-indigo-700 underline underline-offset-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  Privacy Notice
+                </a>
+                .
+              </span>
+            </label>
 
             {/* Error */}
             {error && (
@@ -319,15 +357,10 @@ export function RegisterPage() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !name || !email || !password || !confirmPassword}
+              disabled={submitting || !name || !email || !role || !password || !confirmPassword || !privacyAccepted}
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
             >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Creating account…
-                </span>
-              ) : "Create account"}
+              <BusyLabel busy={submitting} idle="Create account" busyText="Creating account…" />
             </button>
 
           </form>

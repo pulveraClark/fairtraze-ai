@@ -1,13 +1,18 @@
-import type { ProjectSummaryItem, TeamHealth } from "@shared/types";
+import { shortMemberNames } from "../lib/names";
+import { BusyLabel } from "./ui/BusyLabel";
+import { presentedHealth, visibleFlags } from "../lib/groupActivity";
+import { NoActivityPill } from "./NoActivityPill";
+import type { ProjectSummaryItem } from "@shared/types";
 import { ContributionMiniBar } from "./ContributionMiniBar";
 import { FlagTag } from "./FlagTag";
+import { StatusPill } from "./ui/StatusPill";
 import { useRouter } from "../router";
-
-const HEALTH_BADGE: Record<TeamHealth, string> = {
-  Healthy:         "bg-emerald-100 text-emerald-800 border border-emerald-300",
-  "Moderate Risk": "bg-amber-100 text-amber-800 border border-amber-300",
-  "High Risk":     "bg-red-100 text-red-800 border border-red-300",
-};
+import type { GroupTaskSummary } from "@shared/taskTypes";
+import { TaskCountLine } from "./TaskCountLine";
+import { BUTTON_PRIMARY_COMPACT, BUTTON_SECONDARY_COMPACT } from "./ui/styles";
+import { RULES_OUTDATED_INSTRUCTOR_NOTICE } from "@shared/scoringRules";
+import { REPO_CHANGED_NOTICE, REPO_NOT_LINKED_MESSAGE, REPO_NOT_LINKED_PILL, repoNotLinked } from "../lib/repoNotice";
+import { AnalyzedAgo } from "./AnalyzedAgo";
 
 interface Props {
   item: ProjectSummaryItem;
@@ -15,6 +20,8 @@ interface Props {
   analyzing: boolean;
   onManage?: (projectId: number) => void;
   onTasks?: (projectId: number) => void;
+  /** Task counts for this group (planning data); omitted where they are not loaded. */
+  tasks?: GroupTaskSummary;
   // Bulk-select mode (AssignmentPage) — omitted entirely outside that context,
   // so the checkbox never appears on pages that don't support bulk actions.
   selectable?: boolean;
@@ -27,9 +34,21 @@ function isMembershipStale(item: ProjectSummaryItem): boolean {
   return new Date(item.membershipChangedAt) > new Date(item.lastAnalyzedAt);
 }
 
-export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, selectable, selected, onToggleSelect }: Props) {
+function RepoPill() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+      {REPO_NOT_LINKED_PILL}
+    </span>
+  );
+}
+
+export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks, tasks, selectable, selected, onToggleSelect }: Props) {
   const { navigate } = useRouter();
   const stale = isMembershipStale(item);
+  const noRepo = repoNotLinked(item);
+  const memberLabels = shortMemberNames(item.memberShares.map((m) => m.studentName));
+  const health = presentedHealth(item);
+  const flags = visibleFlags(item);
 
   function openDetail() {
     navigate(`/project/${item.projectId}`);
@@ -42,7 +61,7 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
       onChange={() => onToggleSelect?.(item.projectId)}
       onClick={(e) => e.stopPropagation()}
       aria-label={`Select ${item.groupName}`}
-      className="shrink-0 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0 mt-0.5"
+      className="shrink-0 h-6 w-6 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0 mt-0.5"
     />
   );
 
@@ -54,21 +73,25 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             {checkbox}
             <div>
               <p className="text-sm font-semibold text-slate-600">{item.groupName}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+              <p className="text-xs text-slate-600 mt-0.5">{item.memberCount} members</p>
             </div>
           </div>
-          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
-            Not analyzed
-          </span>
+          {noRepo ? <RepoPill /> : (
+            <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+              Not analyzed
+            </span>
+          )}
         </div>
         <div className="h-3 rounded-full bg-slate-100 w-full" />
+        {tasks && <TaskCountLine tasks={tasks} />}
         <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
-          <p className="text-xs text-slate-400">No report yet</p>
-          <div className="flex items-center gap-3">
+          <p className="text-xs text-slate-600">No report yet</p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {onTasks && (
               <button
                 onClick={(e) => { e.stopPropagation(); onTasks(item.projectId); }}
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                className={BUTTON_SECONDARY_COMPACT}
+                title="Open this group's task board"
               >
                 Tasks
               </button>
@@ -76,16 +99,17 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             {onManage && (
               <button
                 onClick={(e) => { e.stopPropagation(); onManage(item.projectId); }}
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                className={BUTTON_SECONDARY_COMPACT}
+                title="Manage members, leader and roles"
               >
                 Manage
               </button>
             )}
             <button
               onClick={openDetail}
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+              className={BUTTON_PRIMARY_COMPACT}
             >
-              {onAnalyze ? "Analyze →" : "View →"}
+              {onAnalyze && !noRepo ? "Analyze →" : "View →"}
             </button>
           </div>
         </div>
@@ -109,39 +133,62 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">
               {item.groupName}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">{item.memberCount} members</p>
+            <p className="text-xs text-slate-600 mt-0.5">{item.memberCount} members</p>
           </div>
         </div>
-        {item.teamHealth && (
-          <span
-            className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${HEALTH_BADGE[item.teamHealth]}`}
-          >
-            {item.teamHealth}
-          </span>
+        {health === "no-activity" ? (
+          <NoActivityPill className="shrink-0" />
+        ) : (
+          item.teamHealth && (
+            <StatusPill kind="health" value={item.teamHealth} className="shrink-0" />
+          )
         )}
       </div>
+
+      {noRepo && <div><RepoPill /></div>}
 
       {/* Contribution mini bar */}
       <ContributionMiniBar memberShares={item.memberShares} />
 
       {/* Member legend — first 4, then overflow count */}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-        {item.memberShares.slice(0, 4).map((m) => (
-          <span key={m.studentName} className="text-xs text-slate-500">
-            {m.studentName.split(" ")[0]}: {(m.contributionShare * 100).toFixed(0)}%
+        {item.memberShares.slice(0, 4).map((m, i) => (
+          <span key={`${m.studentName}-${i}`} title={m.studentName} className="text-xs text-slate-500">
+            {memberLabels[i]}: {(m.contributionShare * 100).toFixed(0)}%
           </span>
         ))}
         {item.memberShares.length > 4 && (
-          <span className="text-xs text-slate-400">+{item.memberShares.length - 4} more</span>
+          <span className="text-xs text-slate-600">+{item.memberShares.length - 4} more</span>
         )}
       </div>
 
       {/* Flag chips */}
-      {item.flagsPresent.length > 0 && (
+      {flags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {item.flagsPresent.map((flag) => (
+          {flags.map((flag) => (
             <FlagTag key={flag} flag={flag} />
           ))}
+        </div>
+      )}
+
+      {/* Scored with older project settings */}
+      {(item.settingsOutdated || item.rulesOutdated) && !stale && (
+        <div
+          className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-xs text-amber-800 font-medium leading-snug">
+            {item.rulesOutdated ? RULES_OUTDATED_INSTRUCTOR_NOTICE : "Scored with older settings — re-analyze to apply"}
+          </p>
+          {onAnalyze && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAnalyze(item.projectId); }}
+              disabled={analyzing}
+              className="shrink-0 min-h-9 px-3 text-xs font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+            >
+              <BusyLabel busy={analyzing} idle="Re-analyze" busyText="Analyzing…" />
+            </button>
+          )}
         </div>
       )}
 
@@ -155,15 +202,15 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
             <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-[11px] text-amber-800 font-medium leading-snug">
-              Membership changed — re-analyze to update the report
+            <p className="text-xs text-amber-800 font-medium leading-snug">
+              {item.repoChanged ? REPO_CHANGED_NOTICE : "Membership changed — re-analyze to update the report"}
             </p>
           </div>
           {onAnalyze && (
             <button
               onClick={(e) => { e.stopPropagation(); onAnalyze(item.projectId); }}
               disabled={analyzing}
-              className="shrink-0 text-[11px] font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-40"
+              className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-40"
             >
               {analyzing ? "Analyzing…" : "Re-analyze →"}
             </button>
@@ -171,23 +218,24 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
         </div>
       )}
 
+      {tasks && <TaskCountLine tasks={tasks} />}
+
       {/* Footer: Gini + date + actions */}
-      <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 gap-2">
-        <div className="flex items-center gap-3 text-xs text-slate-400">
+      <div className="flex flex-wrap items-center justify-between mt-auto pt-2 border-t border-slate-100 gap-2">
+        <div className="flex items-center gap-3 text-xs text-slate-600">
           {item.gini !== null && (
             <span>
               Gini: <span className="font-semibold text-slate-600">{item.gini.toFixed(3)}</span>
             </span>
           )}
-          {item.lastAnalyzedAt && (
-            <span>{new Date(item.lastAnalyzedAt).toLocaleDateString()}</span>
-          )}
+          {item.lastAnalyzedAt && <AnalyzedAgo iso={item.lastAnalyzedAt} />}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {onTasks && (
             <button
               onClick={(e) => { e.stopPropagation(); onTasks(item.projectId); }}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              className={BUTTON_SECONDARY_COMPACT}
+              title="Open this group's task board"
             >
               Tasks
             </button>
@@ -195,7 +243,8 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           {onManage && (
             <button
               onClick={(e) => { e.stopPropagation(); onManage(item.projectId); }}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              className={BUTTON_SECONDARY_COMPACT}
+              title="Manage members, leader and roles"
             >
               Manage
             </button>
@@ -203,11 +252,11 @@ export function GroupSummaryCard({ item, onAnalyze, analyzing, onManage, onTasks
           {onAnalyze && (
             <button
               onClick={(e) => { e.stopPropagation(); onAnalyze?.(item.projectId); }}
-              disabled={analyzing}
-              className="text-xs text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
-              title="Re-analyze this project"
+              disabled={analyzing || noRepo}
+              className={BUTTON_SECONDARY_COMPACT}
+              title={noRepo ? REPO_NOT_LINKED_MESSAGE : "Run the analysis again for this group"}
             >
-              {analyzing ? "Analyzing…" : "Re-analyze"}
+              <BusyLabel busy={analyzing} idle="Re-analyze" busyText="Analyzing…" />
             </button>
           )}
         </div>

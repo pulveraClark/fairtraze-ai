@@ -5,11 +5,29 @@ import { afterAll, afterEach, vi } from "vitest";
 // test branch which we do want to exercise for real.
 vi.mock("../src/lib/gemini.js", () => ({
   generateFairnessNarrative: vi.fn().mockResolvedValue("Mocked fairness narrative for testing."),
+  // Varies with the inputs like the real hash, so "nothing changed" only holds when they really match.
+  narrativeInputHash: vi.fn((name: string, report: unknown, brief?: string | null) => JSON.stringify([name, report, brief ?? null])),
 }));
 
 vi.mock("../src/lib/github.js", () => ({
   fetchRepoStats: vi.fn().mockResolvedValue([]),
 }));
+
+// Task commit linking reads commit messages from GitHub; tests inject their own fetcher instead.
+vi.mock("../src/lib/githubCommitMessages.js", () => ({
+  COMMIT_MESSAGE_MAX_PAGES: 10,
+  fetchRepoCommitMessages: vi.fn().mockResolvedValue([]),
+}));
+
+// Repo link checks ask GitHub whether a repository exists; tests set the answer per case.
+vi.mock("../src/lib/githubRepoCheck.js", () => ({
+  checkRepoReachable: vi.fn().mockResolvedValue({ status: "ok" }),
+}));
+
+// Email features are on in tests no matter what server/.env says (a developer .env may set
+// EMAIL_ENABLED=false). The sender below is mocked, so no real email is ever sent. A test that needs
+// the switch off sets or deletes it itself (see emailEnabled.test.ts).
+process.env.EMAIL_ENABLED = "true";
 
 vi.mock("../src/lib/email.js", () => ({
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),

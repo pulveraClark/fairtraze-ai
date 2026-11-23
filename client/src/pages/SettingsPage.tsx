@@ -1,13 +1,13 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { useToast } from "../components/Toast";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { LoadingState } from "../components/ui/LoadingState";
+import { errorMessage } from "../lib/feedback";
+import { AppFooter } from "../components/AppFooter";
 import { useAuth } from "../context/AuthContext";
-import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
-
-function roleHome(role?: string): string {
-  if (role === "STUDENT") return "/student";
-  if (role === "ADMIN")   return "/admin";
-  return "/dashboard";
-}
+import { Avatar } from "../components/Avatar";
+import { ProfilePhotoControls } from "../components/ProfilePhotoControls";
+import { PrivacySettingsCard } from "../components/PrivacySettingsCard";
 
 interface FullProfile {
   id: number;
@@ -15,6 +15,7 @@ interface FullProfile {
   name: string;
   systemRole: string;
   githubUsername: string | null;
+  avatarUpdatedAt?: string | null;
   createdAt: string;
 }
 
@@ -25,27 +26,16 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_BADGE: Record<string, string> = {
-  INSTRUCTOR: "text-amber-400 border-amber-400/20 bg-amber-400/[0.06]",
-  ADMIN:      "text-amber-400 border-amber-400/20 bg-amber-400/[0.06]",
-  STUDENT:    "text-indigo-400 border-indigo-400/20 bg-indigo-400/[0.06]",
+  INSTRUCTOR: "text-amber-800 border-amber-400/20 bg-amber-400/[0.06]",
+  ADMIN:      "text-amber-800 border-amber-400/20 bg-amber-400/[0.06]",
+  STUDENT:    "text-indigo-700 border-indigo-400/20 bg-indigo-400/[0.06]",
 };
 
 const inputClass =
-  "w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors";
+  "w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors";
 
 const readonlyClass =
   "w-full rounded-lg bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-500 cursor-not-allowed select-none";
-
-function SuccessBanner({ msg }: { msg: string }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3.5 py-2.5">
-      <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-      </svg>
-      <p className="text-xs text-emerald-700 font-medium">{msg}</p>
-    </div>
-  );
-}
 
 function ErrorBanner({ msg }: { msg: string }) {
   return (
@@ -64,11 +54,14 @@ function EditProfileModal({
   token,
   onClose,
   onSaved,
+  focusGithub = false,
 }: {
   profile: FullProfile;
   token: string | null;
   onClose: () => void;
   onSaved: (updated: Partial<FullProfile>) => void;
+  /** Opened from the group setup card: put the cursor in the GitHub username field. */
+  focusGithub?: boolean;
 }) {
   const isStudent = profile.systemRole === "STUDENT";
   const [name, setName]                   = useState(profile.name);
@@ -100,7 +93,7 @@ function EditProfileModal({
       if (!res.ok) throw new Error(data.error ?? "Update failed");
       onSaved({ name: data.name, githubUsername: data.githubUsername ?? null });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setError(errorMessage(err, "Could not save your changes. Try again."));
     } finally {
       setSaving(false);
     }
@@ -112,9 +105,9 @@ function EditProfileModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Edit Profile</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Update your display name{isStudent ? " and GitHub username" : ""}</p>
+            <p className="text-xs text-slate-600 mt-0.5">Update your display name{isStudent ? " and GitHub username" : ""}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -126,28 +119,31 @@ function EditProfileModal({
             {error && <ErrorBanner msg={error} />}
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Full name</label>
+              <label htmlFor="settings-name" className="block text-xs font-medium text-slate-600 mb-1.5">Full name</label>
               <input
+                id="settings-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                autoFocus
+                autoFocus={!(focusGithub && isStudent)}
                 className={inputClass}
               />
             </div>
 
             {isStudent && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">GitHub username</label>
+                <label htmlFor="settings-github-username" className="block text-xs font-medium text-slate-600 mb-1.5">GitHub username</label>
                 <input
+                  id="settings-github-username"
+                  autoFocus={focusGithub}
                   type="text"
                   value={githubUsername}
                   onChange={(e) => setGithubUsername(e.target.value)}
                   placeholder="your-github-handle"
                   className={inputClass}
                 />
-                <p className="text-[11px] text-slate-400 mt-1">Used to match your commits in contribution reports.</p>
+                <p className="text-xs text-slate-600 mt-1">Used to match your commits in contribution reports.</p>
               </div>
             )}
           </div>
@@ -159,7 +155,7 @@ function EditProfileModal({
             </button>
             <button type="submit" disabled={saving || !name.trim()}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-50">
-              {saving ? "Saving…" : "Save changes"}
+              <BusyLabel busy={saving} idle="Save changes" busyText="Saving…" />
             </button>
           </div>
         </form>
@@ -204,7 +200,7 @@ function ChangePasswordModal({
       if (!res.ok) throw new Error(data.error ?? "Password update failed");
       onClose(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password update failed");
+      setError(errorMessage(err, "Could not change your password. Try again."));
     } finally {
       setSaving(false);
     }
@@ -216,9 +212,9 @@ function ChangePasswordModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Change Password</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Enter your current password to set a new one</p>
+            <p className="text-xs text-slate-600 mt-0.5">Enter your current password to set a new one</p>
           </div>
-          <button onClick={() => onClose()} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={() => onClose()} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -230,8 +226,9 @@ function ChangePasswordModal({
             {error && <ErrorBanner msg={error} />}
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Current password</label>
+              <label htmlFor="settings-current-password" className="block text-xs font-medium text-slate-600 mb-1.5">Current password</label>
               <input
+                id="settings-current-password"
                 type="password"
                 value={currentPw}
                 onChange={(e) => setCurrentPw(e.target.value)}
@@ -244,8 +241,9 @@ function ChangePasswordModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">New password</label>
+              <label htmlFor="settings-new-password" className="block text-xs font-medium text-slate-600 mb-1.5">New password</label>
               <input
+                id="settings-new-password"
                 type="password"
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
@@ -257,8 +255,9 @@ function ChangePasswordModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Confirm new password</label>
+              <label htmlFor="settings-confirm-password" className="block text-xs font-medium text-slate-600 mb-1.5">Confirm new password</label>
               <input
+                id="settings-confirm-password"
                 type="password"
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
@@ -277,7 +276,7 @@ function ChangePasswordModal({
             </button>
             <button type="submit" disabled={saving || !currentPw || !newPw || !confirmPw}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-50">
-              {saving ? "Updating…" : "Update password"}
+              <BusyLabel busy={saving} idle="Update password" busyText="Updating…" />
             </button>
           </div>
         </form>
@@ -288,16 +287,16 @@ function ChangePasswordModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function SettingsPage() {
-  const { user, token, refreshUser } = useAuth();
-  const { navigate } = useRouter();
+  const { token, refreshUser } = useAuth();
 
   const [profile, setProfile]     = useState<FullProfile | null>(null);
   const [loading, setLoading]     = useState(true);
   const [fetchErr, setFetchErr]   = useState<string | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // /settings?edit=github (the group setup card's link) opens the profile editor on the GitHub field.
+  const openGithubEdit = new URLSearchParams(window.location.search).get("edit") === "github";
+  const [showEditModal, setShowEditModal] = useState(openGithubEdit);
   const [showPwModal,   setShowPwModal]   = useState(false);
-  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-  const [pwSuccess,      setPwSuccess]      = useState<string | null>(null);
+  const { showSuccessToast } = useToast();
 
   useEffect(() => {
     if (!token) return;
@@ -314,31 +313,26 @@ export function SettingsPage() {
   async function handleProfileSaved(updated: Partial<FullProfile>) {
     setProfile((p) => p ? { ...p, ...updated } : p);
     setShowEditModal(false);
-    setProfileSuccess("Profile updated.");
+    showSuccessToast("Profile saved.");
     await refreshUser();
-    setTimeout(() => setProfileSuccess(null), 4000);
   }
 
   function handlePwModalClose(success?: boolean) {
     setShowPwModal(false);
-    if (success) {
-      setPwSuccess("Password updated successfully.");
-      setTimeout(() => setPwSuccess(null), 4000);
-    }
+    if (success) showSuccessToast("Password changed.");
   }
 
   const isStudent = profile?.systemRole === "STUDENT";
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {showEditModal && profile && (
         <EditProfileModal
           profile={profile}
           token={token}
           onClose={() => setShowEditModal(false)}
           onSaved={(u) => void handleProfileSaved(u)}
+          focusGithub={openGithubEdit}
         />
       )}
 
@@ -354,68 +348,39 @@ export function SettingsPage() {
         {/* Page heading */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Profile &amp; Settings</h1>
+            <h1 className="text-xl font-semibold text-slate-800">Profile &amp; Settings</h1>
             <p className="text-sm text-slate-500 mt-0.5">Manage your account details and password.</p>
           </div>
-          <button
-            onClick={() => navigate(roleHome(user?.systemRole))}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Dashboard
-          </button>
         </div>
 
         {fetchErr && <ErrorBanner msg={fetchErr} />}
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
-            <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            Loading profile…
+          <div className="flex justify-center py-16">
+            <LoadingState label="Loading profile…" />
           </div>
         )}
 
         {/* ── Account info ────────────────────────────────────────────────── */}
         {profile && (
           <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <div className="flex items-center gap-4 pb-5 mb-5 border-b border-slate-100">
-              <div className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center shrink-0 text-indigo-600 font-bold text-base select-none">
-                {profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
-              </div>
+            <div className="flex items-center gap-4">
+              <Avatar
+                userId={profile.id}
+                name={profile.name}
+                avatarUpdatedAt={profile.avatarUpdatedAt}
+                className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center shrink-0 text-indigo-900 font-bold text-base"
+              />
               <div className="min-w-0">
                 <p className="font-semibold text-slate-800 truncate">{profile.name}</p>
                 <p className="text-xs text-slate-500 truncate">{profile.email}</p>
-              </div>
-              <span className={`ml-auto shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ROLE_BADGE[profile.systemRole] ?? ROLE_BADGE.STUDENT}`}>
-                {ROLE_LABEL[profile.systemRole] ?? profile.systemRole}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-xs">
-              <div>
-                <p className="text-slate-400 mb-0.5">Email</p>
-                <p className="text-slate-700 font-medium truncate">{profile.email}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 mb-0.5">Role</p>
-                <p className="text-slate-700 font-medium">{ROLE_LABEL[profile.systemRole]}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 mb-0.5">Member since</p>
-                <p className="text-slate-700 font-medium">
-                  {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                <p className="text-xs text-slate-500">
+                  Member since {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                 </p>
               </div>
-              {isStudent && (
-                <div>
-                  <p className="text-slate-400 mb-0.5">GitHub username</p>
-                  <p className="text-slate-700 font-medium font-mono">
-                    {profile.githubUsername ? `@${profile.githubUsername}` : <span className="text-slate-300 font-sans">Not set</span>}
-                  </p>
-                </div>
-              )}
+              <span className={`ml-auto shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded border ${ROLE_BADGE[profile.systemRole] ?? ROLE_BADGE.STUDENT}`}>
+                {ROLE_LABEL[profile.systemRole] ?? profile.systemRole}
+              </span>
             </div>
           </div>
         )}
@@ -425,12 +390,12 @@ export function SettingsPage() {
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-sm font-semibold text-slate-700">Profile</h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-600 mt-0.5">
                 {isStudent ? "Your display name and GitHub username." : "Your display name shown across the platform."}
               </p>
             </div>
             <button
-              onClick={() => { setShowEditModal(true); setProfileSuccess(null); }}
+              onClick={() => { setShowEditModal(true); }}
               disabled={!profile}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-indigo-700 hover:border-indigo-300 text-xs font-semibold transition-colors disabled:opacity-40"
             >
@@ -441,23 +406,27 @@ export function SettingsPage() {
             </button>
           </div>
 
-          {profileSuccess && (
-            <div className="mt-4">
-              <SuccessBanner msg={profileSuccess} />
-            </div>
+          {profile && (
+            <ProfilePhotoControls
+              userId={profile.id}
+              name={profile.name}
+              avatarUpdatedAt={profile.avatarUpdatedAt ?? null}
+              onChanged={(v) => setProfile((p) => (p ? { ...p, avatarUpdatedAt: v } : p))}
+            />
           )}
+
 
           {profile && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <p className="text-[11px] text-slate-400 mb-1">Full name</p>
+                <p className="text-xs text-slate-600 mb-1">Full name</p>
                 <div className={readonlyClass}>{profile.name}</div>
               </div>
               {isStudent && (
                 <div>
-                  <p className="text-[11px] text-slate-400 mb-1">GitHub username</p>
+                  <p className="text-xs text-slate-600 mb-1">GitHub username</p>
                   <div className={`${readonlyClass} font-mono`}>
-                    {profile.githubUsername || <span className="text-slate-300 font-sans">Not set</span>}
+                    {profile.githubUsername || <span className="text-slate-600 font-sans">Not set</span>}
                   </div>
                 </div>
               )}
@@ -470,10 +439,10 @@ export function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-700">Password</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Change your login password.</p>
+              <p className="text-xs text-slate-600 mt-0.5">Change your login password.</p>
             </div>
             <button
-              onClick={() => { setShowPwModal(true); setPwSuccess(null); }}
+              onClick={() => { setShowPwModal(true); }}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-indigo-700 hover:border-indigo-300 text-xs font-semibold transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -482,33 +451,19 @@ export function SettingsPage() {
               Change password
             </button>
           </div>
-          {pwSuccess && (
-            <div className="mt-4">
-              <SuccessBanner msg={pwSuccess} />
-            </div>
-          )}
         </div>
 
+        {/* ── Privacy and data (RA 10173) ──────────────────────────────────── */}
+        <PrivacySettingsCard />
+
         {/* ── Read-only note ────────────────────────────────────────────────── */}
-        <p className="text-[11px] text-slate-400 px-1">
+        <p className="text-xs text-slate-600 px-1">
           Email and role are managed by your institution and cannot be changed here.
         </p>
 
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

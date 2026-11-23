@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./prisma.js";
-import { classifyAddedLines } from "@shared/lineClassifier.js";
+import { classifyAddedLines, LINE_TYPE_WEIGHTS } from "@shared/lineClassifier.js";
 import { getFileWeight, categorizeFile } from "@shared/fileWeights.js";
 import { classifyCommit, COMMIT_IMPACT } from "@shared/commitClassifier.js";
 
@@ -23,9 +23,22 @@ export interface GitHubContributorData {
   selfChurnRatio: number;
   commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
   fileTypeBreakdown: { source: number; test: number; docs: number; style: number; config: number; other: number };
+  // Distinct filenames touched across the sampled commits. Progress display only — analyze.ts's
+  // buildRawMembers copies named fields, so this never reaches RawMemberStats or scoring.
+  filesChanged?: number;
 }
 
-function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
+// Cumulative collection counts reported while fetchRepoStats runs. Counts only, never scores.
+// `member` is the contributor whose collection just finished; analyze.ts turns it into display
+// counts and per-day buckets and never forwards it as-is.
+export interface GitHubProgress {
+  contributors: number;
+  commits: number;
+  files: number;
+  member?: { login: string; commits: number; commitDates: string[] };
+}
+
+export function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   const match = repoUrl
     .replace(/\.git$/, "")
     .match(/(?:github\.com[/:]|^)([^/]+)\/([^/]+)$/);
@@ -50,6 +63,7 @@ interface GitHubContributorStat {
 
 interface GitHubCommitListItem {
   sha: string;
+  parents?: Array<{ sha: string }>;
   commit: {
     author: { date?: string } | null;
     committer: { date?: string } | null;
@@ -96,7 +110,13 @@ async function fetchContributorStats(
   );
 }
 
-// Returns commit dates AND SHAs (most-recent-first, all pages).
+// Returns commit dates AND SHAs (most-recent-first, all pages), excluding merge commits
+// (more than one parent). A merge's diff is taken against its first parent, so it repeats the
+// merged branch's work (already credited to whoever wrote it) and would be double-counted.
+// Single-parent squash/rebase merges are real authored commits and are kept. `parents` is part
+// of the list response, so this costs no extra API calls; filtering here means callers slice
+// their diff sample from real commits only. Manual conflict-resolution work inside a merge is
+// therefore not counted (documented limitation).
 async function fetchCommitShasAndDates(
   octokit: Octokit,
   owner: string,
@@ -115,6 +135,7 @@ async function fetchCommitShasAndDates(
 
     const commits = response.data as unknown as GitHubCommitListItem[];
     for (const commit of commits) {
+      if ((commit.parents?.length ?? 0) > 1) continue;
       const date =
         commit.commit?.committer?.date ?? commit.commit?.author?.date;
       if (date) dates.push(date);
@@ -187,7 +208,9 @@ export async function fetchCommitDiffs(
   selfChurnRatio: number;
   commitImpactBreakdown: { structural: number; functional: number; cosmetic: number; trivial: number };
   fileTypeBreakdown: { source: number; test: number; docs: number; style: number; config: number; other: number };
+  filesChanged: number;
 }> {
+  const distinctFiles = new Set<string>();
   let codeLinesAdded    = 0;
   let commentLinesAdded = 0;
   let blankLinesAdded   = 0;
@@ -218,6 +241,7 @@ export async function fetchCommitDiffs(
 
     for (const file of files) {
       const filename = file.filename;
+      distinctFiles.add(filename);
       const category = categorizeFile(filename);
       const weight   = getFileWeight(filename);
 
@@ -251,21 +275,27 @@ export async function fetchCommitDiffs(
       totalAdditionsForChurn += addedLines.length;
       fileAddedLines.set(filename, Math.max(0, priorAdded - selfDeleted) + addedLines.length);
 
-      // Weighted additions (file-type weight applied per line, multiplied by impact later)
-      commitWeightedRaw += addedLines.length * weight;
+      // Classify added lines once: feeds both the weighted signal and the display counts
+      const counts = addedLines.length > 0
+        ? classifyAddedLines(filename, addedLines)
+        : { code: 0, comment: 0, blank: 0 };
+
+      // Weighted additions: line type (code 1.0, comment 0.25, blank 0) x file-type weight,
+      // multiplied by commit impact later
+      commitWeightedRaw += (
+        counts.code    * LINE_TYPE_WEIGHTS.code +
+        counts.comment * LINE_TYPE_WEIGHTS.comment +
+        counts.blank   * LINE_TYPE_WEIGHTS.blank
+      ) * weight;
 
       // File-type breakdown (generated files contribute 0 weight and are excluded)
       if (category !== "generated" && category in fileTypeBreakdown) {
         (fileTypeBreakdown as Record<string, number>)[category] += addedLines.length;
       }
 
-      // Classify added lines for the meaningful-contribution signal
-      if (addedLines.length > 0) {
-        const counts = classifyAddedLines(filename, addedLines);
-        codeLinesAdded    += counts.code;
-        commentLinesAdded += counts.comment;
-        blankLinesAdded   += counts.blank;
-      }
+      codeLinesAdded    += counts.code;
+      commentLinesAdded += counts.comment;
+      blankLinesAdded   += counts.blank;
     }
 
     // Classify commit and apply impact multiplier to this commit's weighted additions
@@ -291,13 +321,15 @@ export async function fetchCommitDiffs(
     selfChurnRatio,
     commitImpactBreakdown,
     fileTypeBreakdown,
+    filesChanged: distinctFiles.size,
   };
 }
 
 export async function fetchRepoStats(
   repoUrl: string,
   githubToken: string,
-  requiredLogins: string[] = []
+  requiredLogins: string[] = [],
+  onProgress?: (progress: GitHubProgress) => void
 ): Promise<{ contributors: GitHubContributorData[] }> {
   const octokit = new Octokit({ auth: githubToken });
   const { owner, repo } = parseRepoUrl(repoUrl);
@@ -307,6 +339,21 @@ export async function fetchRepoStats(
 
   const contributors: GitHubContributorData[] = [];
   const processedLogins = new Set<string>();
+
+  // Running totals after each contributor completes. Never throws into the fetch path.
+  const reportProgress = (done: GitHubContributorData) => {
+    if (!onProgress) return;
+    try {
+      onProgress({
+        contributors: contributors.length,
+        commits:      contributors.reduce((s, c) => s + c.commits, 0),
+        files:        contributors.reduce((s, c) => s + (c.filesChanged ?? 0), 0),
+        member:       { login: done.githubUsername, commits: done.commits, commitDates: done.commitDates },
+      });
+    } catch {
+      // progress reporting is best-effort
+    }
+  };
 
   for (const contributor of contributorStats) {
     if (!contributor.author?.login) continue;
@@ -326,14 +373,16 @@ export async function fetchRepoStats(
     const shasToSample = shas.slice(0, COMMIT_DIFF_SAMPLE_CAP);
     const lineCounts = await fetchCommitDiffs(octokit, owner, repo, shasToSample);
 
-    contributors.push({
+    const entry: GitHubContributorData = {
       githubUsername: login,
       commits: contributor.total,
       additions,
       deletions,
       commitDates,
       ...lineCounts,
-    });
+    };
+    contributors.push(entry);
+    reportProgress(entry);
   }
 
   // For any required login the stats API didn't return, fetch directly.
@@ -364,14 +413,16 @@ export async function fetchRepoStats(
 
     console.log(`[github] "${login}" recovered: ${shas.length} commit(s) via direct fetch`);
 
-    contributors.push({
+    const recovered: GitHubContributorData = {
       githubUsername: login,
       commits: shas.length,
       additions,
       deletions: 0,
       commitDates,
       ...lineCounts,
-    });
+    };
+    contributors.push(recovered);
+    reportProgress(recovered);
   }
 
   return { contributors };

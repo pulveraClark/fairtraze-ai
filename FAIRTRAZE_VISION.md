@@ -94,7 +94,7 @@ Students interact with FairTraze AI to register their team and, for writing-base
 
 - **Group leader:** The first student to use an assignment join code creates the group, sets the group name, and connects the GitHub repository. They become the group's leader for administrative purposes — this is a structural designation only and carries no contribution credit.
 - **Group member:** Subsequent students use the same join code to join their existing group. Each student registers their own GitHub username from their account profile, ensuring that identity mapping is accurate and self-attributed.
-- Each student can view their own contribution report (their scores and flags only — not other members' data) and submit a short written dispute or note for the instructor to consider.
+- Each student can view their own contribution report (their scores and flags only — not other members' data on screen; the group leader additionally sees each member's share to distribute work fairly; and any member can print one group Contribution Evidence Report that lists every member's recorded share and flags; it never shows the Gini value, bands, team health, AI text, usernames, emails or commit and line counts) and submit a short written dispute or note for the instructor to consider.
 
 ### Admin *(implemented)*
 
@@ -151,7 +151,7 @@ Every time a student pushes code to a GitHub repository, Git records who made th
 The system does not simply count commits or lines of code naively. It applies several layers of adjustment to ensure the score reflects genuine, sustained contribution rather than superficial activity:
 
 - **Log-scaling commits** neutralises commit-spam. A student who makes 100 tiny commits gains far less advantage over a student who makes 50 substantial commits than the raw numbers would suggest.
-- **Meaningful-line counting** separates code from comments and blank lines. Comments count lightly (at 25% of a code line's weight), and blank lines count for nothing. This means reformatting a file to add blank lines cannot inflate a score.
+- **Line classification** separates code, comment and blank lines for display (the report shows each count). It also sets how much each line is worth in the score: code 1.0, comment 0.25, blank 0, then the file-type weight (generated files 0), the commit-impact class (cosmetic 0.5×, trivial 0.2×) and the self-churn discount, so padding with blank or comment lines gains little.
 - **File-type weighting** ensures that lines added to a generated lockfile (`package-lock.json`) or a configuration file contribute almost nothing, while lines added to actual source code contribute fully.
 - **Commit-impact classification** recognises that commits that add new files or touch many files at once are more structurally significant than a two-line cosmetic tweak.
 - **Self-churn penalty** discounts a student who writes and then deletes their own work in later commits, which otherwise inflates both their additions and deletions without representing lasting contribution.
@@ -179,7 +179,7 @@ The primary signal is **net retained text** — the text each member contributed
 
 Secondary signals include:
 - Characters and words inserted and deleted, with per-user attribution
-- Active editing days — how many distinct calendar days a student made edits
+- Active editing days — how many distinct days (Philippine time) a student wrote at least 30 characters that are still in the document
 - Edit-session timing — whether editing was spread across the project or concentrated near the deadline
 - Self-churn — writing text and then deleting it before it survives; penalised the same way as in the GitHub model
 
@@ -205,7 +205,7 @@ The GitHub and Docs scoring models are deliberately parallel:
 | GitHub signal | FairTraze Docs equivalent |
 |---|---|
 | Commits | Editing sessions |
-| Meaningful lines (code + 0.25 × comments) | Net retained text |
+| Lines added (file type × commit impact, self-churn discounted) | Net retained text |
 | Active days | Active editing days |
 | Deadline-driven flag | Deadline-driven flag (edit-timing distribution) |
 | Self-churn ratio | Self-churn ratio (own text later deleted) |
@@ -233,7 +233,7 @@ Each source is scored independently, producing a per-source **contribution share
 combinedShare = wGitHub × githubShare + wEditor × editorShare
 ```
 
-The default blend is **50% GitHub, 50% FairTraze Docs**. The instructor can adjust these weights per assignment — for example, setting 70% GitHub / 30% Docs for a coding-heavy project, or 30% GitHub / 70% Docs for a project where documentation is the primary deliverable.
+The default blend is **55% GitHub, 45% FairTraze Docs** (expert-survey values). The instructor can adjust these weights per assignment — for example, setting 70% GitHub / 30% Docs for a coding-heavy project, or 30% GitHub / 70% Docs for a project where documentation is the primary deliverable.
 
 The math-scores-AI-explains principle applies fully to combined scoring. The blending formula is deterministic; the AI only narrates the result.
 
@@ -359,7 +359,7 @@ The instructor is the single point of authority. They:
 
 ### Student view and dispute *(implemented)*
 
-Each student can view their own contribution report — their scores and flags only, not other members' data. If a student believes the analysis does not accurately reflect their contribution (for example, due to offline work not captured in digital traces, or a GitHub username mapping error), they can submit a short written note or dispute through the platform. The instructor is notified and retains final authority over the response.
+Each student can view their own contribution report — their scores and flags only, not other members' data, on screen (the group leader also sees each member's contribution share, flags and task counts so work can be rebalanced). The one place every member's share and flags appear to any member is the printable group Contribution Evidence Report, meant to be handed to the instructor; it never shows the Gini value, bands, team health, AI text, usernames, emails or commit and line counts. If a student believes the analysis does not accurately reflect their contribution (for example, due to offline work not captured in digital traces, or a GitHub username mapping error), they can submit a short written note or dispute through the platform. The instructor is notified and retains final authority over the response.
 
 ### Identity integrity
 
@@ -421,7 +421,7 @@ These features represent the longer-term direction of FairTraze AI. They have no
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  CLIENT — React + Vite + TypeScript + Tailwind + Recharts   │
+│  CLIENT — React + Vite + TypeScript + Tailwind              │
 │  Instructor dashboard, project detail pages, alerts UI       │
 └────────────────────────────┬────────────────────────────────┘
                              │  HTTP (REST)
@@ -493,7 +493,7 @@ For each contributor, `fetchCommitShasAndDates` paginates through all commits au
 
 #### Step 3 — Diff sampling
 
-`fetchCommitDiffs` processes the contributor's commits — capped at the 50 most recent — to stay within GitHub's rate limit (5,000 requests/hour). Commits are processed oldest-first so that self-churn tracking is chronologically correct. For each commit, the function:
+`fetchCommitDiffs` processes the contributor's commits — capped at the newest 100 (merge commits excluded) — to stay within GitHub's rate limit (5,000 requests/hour). Commits are processed oldest-first so that self-churn tracking is chronologically correct. For each commit, the function:
 
 1. Fetches the full commit detail including file patches
 2. For each changed file: parses the `+`-prefixed lines (added) and `-`-prefixed lines (deleted) from the patch
@@ -512,11 +512,13 @@ All scoring logic lives in `shared/src/scoring.ts`. Nothing outside this file co
 
 #### Line classification and weighting
 
+The scored line quantity is `effectiveAdditions = weightedAdditions × (1 − 0.5 × selfChurnRatio)`, where `weightedAdditions` is every added line × its line-type weight (code 1.0, comment 0.25, blank 0) × its file-type weight × the commit-impact multiplier (below). Each added line is classified as code, comment or blank, and the counts are also shown on the report:
+
 ```
-meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded
+meaningfulLines = codeLinesAdded + 0.25 × commentLinesAdded   (blank = 0)
 ```
 
-Blank lines contribute zero. Comments are counted at 25% of a code line to acknowledge that good documentation has value without allowing comment-heavy commits to dominate.
+`meaningfulLines` is shown on the report and used by `scoring.ts` as a fallback when `weightedAdditions` is absent; it uses the same line-type weights as the real pipeline.
 
 #### File-type weights
 
@@ -576,7 +578,7 @@ contributionShare = 0.4 × commitShare + 0.4 × linesShare + 0.2 × activeDaysSh
 
 Default weights: commits 40%, effective lines 40%, active days 20%. All three are configurable in `ScoringWeights`; the scoring function accepts a weights parameter.
 
-`activeDays` is the count of distinct calendar dates on which the member made at least one commit, derived from commit timestamps.
+`activeDays` is the count of distinct calendar days, in Philippine time (Asia/Manila), on which the member made at least one commit, derived from commit timestamps.
 
 #### Flag thresholds
 
@@ -615,10 +617,12 @@ The FairTraze Docs scoring model mirrors the GitHub model's structure. The four 
 The same `contributionShare` formula applies within the editor source, via `DOCUMENT_DEFAULT_WEIGHTS`:
 
 ```
-editorShare = 0.4 × retainedTextShare + 0.2 × sessionShare + 0.4 × activeDaysShare
+editorShare = 0.37 × retainedTextShare + 0.30 × sessionShare + 0.33 × activeDaysShare   (defaults; instructor-adjustable per project)
 ```
 
-Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — editor scoring deliberately weights active-days participation more heavily than session count.
+Images count a little: each counted image adds the equivalent of 100 characters to the retained-text signal only (an expert survey found 86% of instructors want images to count a little). Duplicate and very small images never count, credit stops after a per-project limit (3, 5, 10 or no limit; default 5), and images never add sessions or active days.
+
+Note this is not a literal 1:1 mirror of the GitHub weights (0.4/0.4/0.2) — retained text is the primary editor signal. An editor active day needs at least 30 characters written that day that are still in the final document (Philippine-time days).
 
 The editor is implemented using **TipTap** (rich-text editor framework) and **Yjs** (CRDT for real-time collaborative editing). The Yjs document tracks per-user operations with user attribution derived from the authenticated session.
 
@@ -669,7 +673,7 @@ Routes that require `INSTRUCTOR` role: all analysis, alert, assignment, class, a
 | Commit weight | 0.4 | `DEFAULT_WEIGHTS` in `scoring.ts` |
 | Lines weight | 0.4 | `DEFAULT_WEIGHTS` in `scoring.ts` |
 | Active-days weight | 0.2 | `DEFAULT_WEIGHTS` in `scoring.ts` |
-| Comment-to-code weight | 0.25× | `scoring.ts` (meaningfulLines formula) |
+| Comment-to-code weight | 0.25× (blank 0×) | `LINE_TYPE_WEIGHTS` in `lineClassifier.ts`, applied in `github.ts` (real runs) and `scoring.ts` (fallback) |
 | Free-rider threshold | 0.5× equal share | `FREE_RIDER_THRESHOLD` in `scoring.ts` |
 | Overload threshold | 1.75× equal share | `OVERLOAD_THRESHOLD` in `scoring.ts` |
 | Deadline-driven threshold | 0.60 lastPhaseRatio | `DEADLINE_DRIVEN_THRESHOLD` in `scoring.ts` |
@@ -679,7 +683,7 @@ Routes that require `INSTRUCTOR` role: all analysis, alert, assignment, class, a
 | Structural commit: min files touched | 5 | `STRUCTURAL_FILES_TOUCHED_THRESHOLD` in `commitClassifier.ts` |
 | Trivial commit: max total lines | 5 | `TRIVIAL_MAX_TOTAL_LINES` in `commitClassifier.ts` |
 | Self-churn penalty cap | 50% | `effectiveAdditions = ... × (1 − 0.5 × ratio)` in `scoring.ts` |
-| GitHub diff sample cap | 50 commits | `github.ts` |
+| GitHub diff sample cap | 100 commits | `github.ts` |
 | Combined scoring default blend | 50% / 50% | CLAUDE.md specification |
 
 ---

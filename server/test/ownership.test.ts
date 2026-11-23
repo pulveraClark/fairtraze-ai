@@ -69,11 +69,8 @@ describe("project ownership checks", () => {
     expect(res.body.error).toMatch(/report/i);
   });
 
-  it("documents the known gap: an assignment-less project is readable by ANY instructor", async () => {
-    // TODO in projects.ts explicitly acknowledges this: assignmentId === null
-    // projects are not scoped to an owner. This test pins down current
-    // behavior so a future fix is a deliberate, visible change, not a
-    // silent regression either way.
+  it("denies an assignment-less project to every instructor (it has no owner)", async () => {
+    // The old gap (any instructor could read it) was closed; see projectNoAssignmentAccess.test.ts.
     const { user: someInstructor } = await createUser({ systemRole: "INSTRUCTOR" });
     const project = await createProject({ assignmentId: null });
 
@@ -81,10 +78,7 @@ describe("project ownership checks", () => {
       .get(`/api/projects/${project.id}/report`)
       .set("Authorization", authHeaderFor(someInstructor));
 
-    // Reaches past the ownership check (403 would mean access was denied);
-    // 404 here means "no report found" for an otherwise-accessible project.
-    expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/report/i);
+    expect(res.status).toBe(403);
   });
 
   it("rejects unauthenticated requests to the report endpoint", async () => {

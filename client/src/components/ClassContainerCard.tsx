@@ -1,4 +1,6 @@
 import type { ProjectSummaryItem } from "@shared/types";
+import { isAtRiskGroup, presentedHealth } from "../lib/groupActivity";
+import { NoActivityRollup } from "./NoActivityRollup";
 import { GroupSummaryCard } from "./GroupSummaryCard";
 
 interface Props {
@@ -17,31 +19,24 @@ function parseLabel(label: string): { code: string; subjectName: string } {
   return { code: label.slice(0, sep), subjectName: label.slice(sep + 3) };
 }
 
-function isAtRisk(item: ProjectSummaryItem): boolean {
-  return (
-    item.isAnalyzed &&
-    (item.teamHealth === "High Risk" ||
-      item.teamHealth === "Moderate Risk" ||
-      item.flagsPresent.length > 0)
-  );
-}
 
 function getRollup(items: ProjectSummaryItem[]) {
   const analyzed = items.filter((i) => i.isAnalyzed);
   return {
     total:        items.length,
     unanalyzed:   items.filter((i) => !i.isAnalyzed).length,
-    healthy:      analyzed.filter((i) => i.teamHealth === "Healthy").length,
-    moderate:     analyzed.filter((i) => i.teamHealth === "Moderate Risk").length,
-    highRisk:     analyzed.filter((i) => i.teamHealth === "High Risk").length,
-    needsAttention: items.filter(isAtRisk).length,
+    healthy:      analyzed.filter((i) => presentedHealth(i) === "Healthy").length,
+    quiet:        analyzed.filter((i) => presentedHealth(i) === "no-activity").length,
+    moderate:     analyzed.filter((i) => presentedHealth(i) === "Moderate Risk").length,
+    highRisk:     analyzed.filter((i) => presentedHealth(i) === "High Risk").length,
+    needsAttention: items.filter(isAtRiskGroup).length,
   };
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 transition-transform duration-200 text-slate-400 ${expanded ? "rotate-180" : ""}`}
+      className={`w-4 h-4 transition-transform duration-200 text-slate-600 ${expanded ? "rotate-180" : ""}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -84,11 +79,11 @@ export function ClassContainerCard({
             </span>
             {subjectName && (
               <>
-                <span className="text-slate-300 text-xs select-none">—</span>
+                <span className="text-slate-600 text-xs select-none">—</span>
                 <span className="text-sm font-semibold text-slate-700">{subjectName}</span>
               </>
             )}
-            <span className="text-xs text-slate-400 ml-1">
+            <span className="text-xs text-slate-600 ml-1">
               · {rollup.total} group{rollup.total !== 1 ? "s" : ""}
             </span>
           </div>
@@ -96,36 +91,37 @@ export function ClassContainerCard({
           {/* Risk roll-up */}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {rollup.highRisk > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />
                 {rollup.highRisk} High Risk
               </span>
             )}
             {rollup.moderate > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />
                 {rollup.moderate} Moderate Risk
               </span>
             )}
             {rollup.healthy > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
                 {rollup.healthy} Healthy
               </span>
             )}
             {rollup.unanalyzed > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              <span className="inline-flex items-center gap-1 text-xs text-slate-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-slate-300 inline-block" />
                 {rollup.unanalyzed} Not analyzed
               </span>
             )}
           </div>
+          <NoActivityRollup count={rollup.quiet} className="mt-1" />
         </div>
 
         {/* Right side: attention badge + chevron */}
         <div className="flex items-center gap-3 shrink-0 pt-0.5">
           {hasAtRisk && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700 whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-xs font-semibold text-red-700 whitespace-nowrap">
               ⚠ {rollup.needsAttention} need{rollup.needsAttention !== 1 ? "" : "s"} attention
             </span>
           )}

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { AppFooter } from "../components/AppFooter";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
-import { timeAgo, alertMeta, alertLink } from "../hooks/useAlerts";
+import { timeAgo, alertMeta, alertLink, ALERTS_KEY } from "../hooks/useAlerts";
 import { roleHome } from "../lib/roleHome";
 import type { AlertItem } from "../hooks/useAlerts";
 
@@ -14,44 +16,43 @@ export function AlertsPage() {
   const { navigate } = useRouter();
   const { route: backRoute, label: backLabel } = roleHome(user?.systemRole);
 
-  const [alerts,      setAlerts]  = useState<AlertItem[]>([]);
-  const [unreadCount, setUnread]  = useState(0);
-  const [meta,        setMeta]    = useState<PageMeta>({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
-  const [page,        setPage]    = useState(1);
-  const [loading,     setLoading] = useState(true);
-  const [error,       setError]   = useState("");
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
 
-  const load = useCallback(() => {
-    if (!token) return;
-    setLoading(true);
-    setError("");
-    const params = new URLSearchParams({ page: String(page), pageSize: "20" });
-    fetch(`/api/alerts?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as {
-          alerts?: AlertItem[];
-          unreadCount?: number;
-          total?: number;
-          page?: number;
-          pageSize?: number;
-          totalPages?: number;
-          error?: string;
-        };
-        if (!r.ok) { setError(json.error ?? "Could not load alerts."); return; }
-        setAlerts(json.alerts ?? []);
-        setUnread(json.unreadCount ?? 0);
-        setMeta({
-          total:      json.total      ?? 0,
-          page:       json.page       ?? 1,
-          pageSize:   json.pageSize   ?? 20,
-          totalPages: json.totalPages ?? 1,
-        });
-      })
-      .catch(() => setError("Network error — could not load alerts."))
-      .finally(() => setLoading(false));
-  }, [token, page]);
+  // Explicit page view: fetched on mount/page change/manual refresh only — no interval.
+  const pageQuery = useQuery({
+    queryKey: [...ALERTS_KEY, "page", user?.id ?? null, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), pageSize: "20" });
+      const r = await fetch(`/api/alerts?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await r.json() as {
+        alerts?: AlertItem[];
+        unreadCount?: number;
+        total?: number;
+        page?: number;
+        pageSize?: number;
+        totalPages?: number;
+        error?: string;
+      };
+      if (!r.ok) throw new Error(json.error ?? "Could not load alerts.");
+      return json;
+    },
+    enabled: !!token && !!user,
+    staleTime: 0,
+    placeholderData: keepPreviousData,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const alerts      = pageQuery.data?.alerts ?? [];
+  const unreadCount = pageQuery.data?.unreadCount ?? 0;
+  const meta: PageMeta = {
+    total:      pageQuery.data?.total      ?? 0,
+    page:       pageQuery.data?.page       ?? 1,
+    pageSize:   pageQuery.data?.pageSize   ?? 20,
+    totalPages: pageQuery.data?.totalPages ?? 1,
+  };
+  const loading = pageQuery.isLoading;
+  const error   = pageQuery.isError ? pageQuery.error.message : "";
+  const load    = () => { void pageQuery.refetch(); };
 
   async function handleClick(alert: AlertItem) {
     if (!alert.read && token) {
@@ -59,8 +60,7 @@ export function AlertsPage() {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      setAlerts((prev) => prev.map((a) => (a.id === alert.id ? { ...a, read: true } : a)));
-      setUnread((prev) => Math.max(0, prev - 1));
+      void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
     }
     const link = alertLink(alert);
     if (link) navigate(link);
@@ -72,36 +72,30 @@ export function AlertsPage() {
       method:  "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    setUnread(0);
+    void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <button
-              onClick={() => navigate(backRoute)}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to {backLabel}
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: backLabel, href: backRoute },
+                { label: "Notifications" },
+              ]}
+            />
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900">Notifications</h1>
+              <h1 className="text-xl font-semibold text-slate-900">Notifications</h1>
               {unreadCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-[10px] font-semibold">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
                   {unreadCount} unread
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {user?.systemRole === "INSTRUCTOR" ? "Team health alerts and flag notifications" : "Updates about your groups and account"}
               {meta.total > 0 && ` · ${meta.total} total`}
             </p>
@@ -110,14 +104,14 @@ export function AlertsPage() {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                className="ft-hit rounded px-2 text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
               >
                 Mark all as read
               </button>
             )}
             <button
               onClick={load}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -129,7 +123,7 @@ export function AlertsPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-slate-400 text-sm">
+          <div className="flex items-center justify-center gap-2 py-20 text-slate-600 text-sm">
             <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
             Loading…
           </div>
@@ -139,7 +133,7 @@ export function AlertsPage() {
         {!loading && error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
             <p className="text-sm text-red-600 mb-2">{error}</p>
-            <button onClick={load} className="text-xs text-indigo-600 hover:underline">Retry</button>
+            <button onClick={load} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
           </div>
         )}
 
@@ -152,7 +146,7 @@ export function AlertsPage() {
               </svg>
             </div>
             <p className="text-base font-semibold text-slate-700">No notifications</p>
-            <p className="text-sm text-slate-400">You're all caught up</p>
+            <p className="text-sm text-slate-600">You're all caught up</p>
           </div>
         )}
 
@@ -175,16 +169,16 @@ export function AlertsPage() {
                       <span className={`mt-[9px] w-2 h-2 rounded-full shrink-0 ${!alert.read ? "bg-indigo-500" : "bg-transparent border border-slate-300"}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.light}`}>
+                          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${typeMeta.light}`}>
                             {typeMeta.label}
                           </span>
-                          <span className="text-xs text-slate-400">{timeAgo(alert.createdAt)}</span>
+                          <span className="text-xs text-slate-600">{timeAgo(alert.createdAt)}</span>
                         </div>
                         <p className={`text-sm leading-snug ${!alert.read ? "text-slate-800 font-semibold" : "text-slate-600"}`}>
                           {alert.message}
                         </p>
                         {alert.project?.groupName && (
-                          <p className="text-xs text-slate-400 mt-1 truncate">
+                          <p className="text-xs text-slate-600 mt-1 truncate">
                             {alert.project.groupName}
                             {alert.project.assignmentLabel ? ` · ${alert.project.assignmentLabel}` : ""}
                           </p>
@@ -212,18 +206,11 @@ export function AlertsPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            {user?.systemRole === "INSTRUCTOR"
+      <AppFooter>
+        {user?.systemRole === "INSTRUCTOR"
               ? "Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments."
               : "Notifications are informational and do not constitute grades or final assessments."}
-          </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      </AppFooter>
     </div>
   );
 }

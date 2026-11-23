@@ -1,15 +1,31 @@
-import { useRef, useState } from "react";
+import { AppFooter } from "../components/AppFooter";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { LoadingState } from "../components/ui/LoadingState";
+import { NETWORK_ERROR_TEXT } from "../lib/failureText";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
+import { InstructorApprovals } from "../components/InstructorApprovals";
+import { EdpCodeTool } from "../components/EdpCodeTool";
+import { DeletionRequests } from "../components/DeletionRequests";
+import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { AdminUserDetails } from "../components/AdminUserDetails";
+import { InfoTip } from "../components/ui/InfoTip";
+import { TIPS } from "../lib/helpText";
+import { useToast } from "../components/Toast";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { parseAdminUsersView, serializeAdminUsersView, defaultDir, hasActiveFilters, clearFilters } from "../lib/adminUsersUrl";
+import type { AdminUsersView, UserSort } from "../lib/adminUsersUrl";
 import {
+  adminUsersKey,
+  adminUsersFilterQuery,
   useAdminUsersQuery,
   useAdminOverviewQuery,
-  useAdminClassesQuery,
   useAdminDepartmentsQuery,
 } from "../hooks/useAdminQueries";
+import type { AdminUsersParams } from "../hooks/useAdminQueries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface UserRecord {
@@ -21,18 +37,8 @@ interface UserRecord {
   active:         boolean;
   lockedUntil:    string | null;
   createdAt:      string;
-}
-
-interface ClassSectionItem {
-  id:          number;
-  subjectCode: string;
-  subjectName: string;
-  edpCode:     string;
-  department:  { id: number; name: string; code: string } | null;
-  type:        string;
-  createdAt:   string;
-  instructor:  { id: number; name: string; email: string };
-  assignments: Array<{ id: number; title: string; _count: { projects: number } }>;
+  lastLoginAt?:   string | null;
+  deletedAt?:     string | null;
 }
 
 interface DepartmentItem {
@@ -43,16 +49,10 @@ interface DepartmentItem {
   _count:    { classSections: number };
 }
 
-interface OverviewData {
-  users:              { total: number; admins: number; instructors: number; students: number };
-  classSections:      number;
-  totalProjects:      number;
-  totalGroups:        number;
-  analyzedGroups:     number;
-  openDisputesCount:  number;
-}
-
 // ── Constants ─────────────────────────────────────────────────────────────────
+/** How long the Undo button stays after a deactivation. */
+const UNDO_WINDOW_MS = 10_000;
+
 const ROLE_BADGE: Record<string, string> = {
   ADMIN:      "text-violet-700 bg-violet-50 border-violet-200",
   INSTRUCTOR: "text-indigo-700 bg-indigo-50 border-indigo-200",
@@ -65,16 +65,23 @@ const ROLE_LABEL: Record<string, string> = {
   STUDENT:    "Student",
 };
 
-// ── Small reusable pieces ─────────────────────────────────────────────────────
-function DisabledBtn({ children }: { children: React.ReactNode }) {
+/** Column header that sorts the list: aria-sort on the th, a real button inside so it works from the keyboard. */
+function SortHeader({ label, sort, view, onSort, className = "" }: {
+  label: string; sort: UserSort; view: AdminUsersView; onSort: (s: UserSort) => void; className?: string;
+}) {
+  const active = view.sort === sort;
+  const ariaSort = active ? (view.dir === "asc" ? "ascending" : "descending") : "none";
   return (
-    <button
-      disabled
-      title="Coming soon"
-      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-semibold cursor-not-allowed border border-slate-200"
-    >
-      {children}
-    </button>
+    <th aria-sort={ariaSort} className={`px-5 py-1 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sort)}
+        className="inline-flex min-h-8 items-center gap-1 rounded uppercase tracking-widest hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      >
+        {label}
+        <span aria-hidden="true">{active ? (view.dir === "asc" ? "▲" : "▼") : ""}</span>
+      </button>
+    </th>
   );
 }
 
@@ -84,40 +91,182 @@ export function AdminPage() {
   const { navigate }     = useRouter();
 
   // ── User management state ──────────────────────────────────────────────────
-  const [search,         setSearch]         = useState("");
-  const [roleFilter,     setRoleFilter]     = useState("");
-  const [usersPage,      setUsersPage]      = useState(1);
-  const [toast,          setToast]          = useState<{ type: "success" | "error"; msg: string } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Filters, sort and page live in the URL (lib/adminUsersUrl.ts) so reload and the back button keep the view.
+  const [view,           setView]           = useState<AdminUsersView>(() => parseAdminUsersView(window.location.search));
+  const [searchInput,    setSearchInput]    = useState(view.q);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const updateView = (patch: Partial<AdminUsersView>) => setView((v) => ({ ...v, page: 1, ...patch }));
+  const toastApi = useToast();
+  const selfId = user?.id ?? -1;
+
+  // Export CSV: the same filters and sort as the list, all pages, built by the server (admin only).
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const { page: _page, ...filterParams } = usersQueryParams;
+      void _page;
+      const res = await fetch(`/api/admin/users/export.csv?${adminUsersFilterQuery(filterParams)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        showToast("error", json.error ?? "Could not export the list.");
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url;
+      a.download = `fairtraze-users-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("success", "Exported the current list.");
+    } catch {
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // Details panel: opened from the name button or by clicking the row (not from its own controls).
+  const [detailsUser, setDetailsUser] = useState<UserRecord | null>(null);
+  const [detailsOpener, setDetailsOpener] = useState<HTMLElement | null>(null);
+  function openDetails(u: UserRecord) {
+    setDetailsOpener(document.querySelector<HTMLElement>(`[data-open-details="${u.id}"]`));
+    setDetailsUser(u);
+  }
+
+  // Debounce the search box; the query only sees the settled value, and the
+  // page resets to 1 only when that settled value actually changes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setView((v) => (v.q === searchInput ? v : { ...v, q: searchInput, page: 1 }));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const next = serializeAdminUsersView(view, window.location.search);
+    if (next !== window.location.search) {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${next}${window.location.hash}`);
+    }
+  }, [view]);
+
+  // "/" jumps to the search box, unless the person is already typing or a dialog is open.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   function showToast(type: "success" | "error", msg: string) {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ type, msg });
-    toastTimer.current = setTimeout(() => setToast(null), 4000);
+    toastApi.showToast({ message: msg, tone: type });
   }
 
   const queryClient = useQueryClient();
-  const usersQueryParams = { page: usersPage, search, roleFilter };
+  const usersQueryParams: AdminUsersParams = {
+    page: view.page, search: view.q, roleFilter: view.role, status: view.status,
+    lastActive: view.lastActive, sort: view.sort, dir: view.dir, includeFormer: view.former,
+  };
   const usersQuery = useAdminUsersQuery(token, usersQueryParams);
   const displayedUsers = usersQuery.data?.users ?? [];
   const usersMeta = {
     total:      usersQuery.data?.total ?? 0,
+    formerCount: usersQuery.data?.formerCount ?? 0,
     totalPages: usersQuery.data?.totalPages ?? 1,
-    pageSize:   usersQuery.data?.pageSize ?? 20,
+    pageSize:   usersQuery.data?.pageSize ?? 10,
   };
   const usersLoading = usersQuery.isLoading;
   const usersError = usersQuery.isError
     ? (usersQuery.error instanceof Error ? usersQuery.error.message : "Could not load users.")
     : "";
-  const usersQueryKey = ["admin-users", usersQueryParams.page, usersQueryParams.search, usersQueryParams.roleFilter] as const;
+  const usersQueryKey = adminUsersKey(usersQueryParams);
+
+  // Bulk deactivate: only active accounts that are not the signed-in admin and not former members can be picked.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Accounts with a change in flight (role, status, unlock): their controls are disabled and show a busy label.
+  const [rowPending, setRowPending] = useState<Record<number, "role" | "status" | "unlock">>({});
+  const markRows = (ids: number[], kind: "role" | "status" | "unlock" | null) =>
+    setRowPending((prev) => {
+      const next = { ...prev };
+      for (const id of ids) { if (kind) next[id] = kind; else delete next[id]; }
+      return next;
+    });
+  useEffect(() => { setSelected(new Set()); }, [view]);
+  const canSelect = (u: UserRecord) => u.id !== selfId && !u.deletedAt && u.active;
+  const selectable = displayedUsers.filter(canSelect);
+  const selectedUsers = selectable.filter((u) => selected.has(u.id));
+  function toggleSelected(id: number) {
+    setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  }
+
+  async function bulkSetActive(ids: number[], active: boolean): Promise<number[] | null> {
+    try {
+      const res = await fetch("/api/admin/users/bulk-status", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ ids, active }),
+      });
+      const json = await res.json() as { updated?: number[]; error?: string };
+      if (!res.ok) { showToast("error", json.error ?? "Could not update the selected users."); return null; }
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      return json.updated ?? [];
+    } catch {
+      showToast("error", NETWORK_ERROR_TEXT);
+      return null;
+    }
+  }
+
+  async function performBulkDeactivate() {
+    setBulkBusy(true);
+    const updated = await bulkSetActive(selectedUsers.map((u) => u.id), false);
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    if (updated === null) return;
+    setSelected(new Set());
+    if (updated.length === 0) { showToast("error", "Nothing changed. Those accounts were already inactive."); return; }
+    toastApi.showToast({
+      message:     `${updated.length} ${updated.length === 1 ? "user" : "users"} deactivated.`,
+      actionLabel: "Undo",
+      durationMs:  UNDO_WINDOW_MS,
+      onAction:    () => {
+        markRows(updated, "status");
+        void bulkSetActive(updated, true).then((back) => {
+          markRows(updated, null);
+          if (back) showToast("success", `${back.length} ${back.length === 1 ? "user is" : "users are"} active again.`);
+        });
+      },
+    });
+  }
 
   function loadUsers() {
     void usersQuery.refetch();
   }
 
-  async function changeRole(u: UserRecord, newRole: string) {
+  const [roleChange, setRoleChange] = useState<{ user: UserRecord; newRole: string } | null>(null);
+
+  /** Asks first (ConfirmDialog below); the change itself runs in performRoleChange. */
+  function changeRole(u: UserRecord, newRole: string) {
     if (newRole === u.systemRole) return;
-    if (!window.confirm(`Change ${u.name}'s role from ${ROLE_LABEL[u.systemRole]} to ${ROLE_LABEL[newRole]}?`)) return;
+    if (u.id === selfId) { showToast("error", "You cannot change your own role. Ask another admin to do it."); return; }
+    setRoleChange({ user: u, newRole });
+  }
+
+  async function performRoleChange(u: UserRecord, newRole: string) {
+    markRows([u.id], "role");
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/role`, {
         method:  "PATCH",
@@ -131,31 +280,51 @@ export function AdminPage() {
       });
       showToast("success", `${u.name} is now ${ROLE_LABEL[json.systemRole]}.`);
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      markRows([u.id], null);
+      setRoleChange(null);
     }
   }
 
-  async function toggleStatus(u: UserRecord) {
-    const action = u.active ? "deactivate" : "activate";
-    if (!window.confirm(`${u.active ? "Deactivate" : "Activate"} ${u.name}?\n\n${u.active ? "They will not be able to log in until reactivated." : "They will be able to log in again."}`)) return;
+  /**
+   * Deactivating is instant and reversible: the toast offers Undo for 10 s (it just sets the account active
+   * again; deactivation revokes nothing else, so nothing needs restoring). Activating needs no undo.
+   */
+  async function setActive(u: UserRecord, active: boolean, isUndo = false) {
+    if (u.id === selfId) { showToast("error", "You cannot deactivate your own account."); return; }
+    markRows([u.id], "status");
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/status`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ active: !u.active }),
+        body:    JSON.stringify({ active }),
       });
       const json = await res.json() as UserRecord & { error?: string };
-      if (!res.ok) { showToast("error", json.error ?? `Could not ${action} user.`); return; }
+      if (!res.ok) { showToast("error", json.error ?? `Could not ${active ? "activate" : "deactivate"} user.`); return; }
       queryClient.setQueryData(usersQueryKey, (old: typeof usersQuery.data) => old && {
         ...old, users: old.users.map((x) => x.id === u.id ? { ...x, active: json.active } : x),
       });
-      showToast("success", `${u.name} ${json.active ? "activated" : "deactivated"}.`);
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      if (active) {
+        showToast("success", isUndo ? `${u.name} is active again.` : `${u.name} activated.`);
+      } else {
+        toastApi.showToast({
+          message:     `${u.name} deactivated.`,
+          actionLabel: "Undo",
+          durationMs:  UNDO_WINDOW_MS,
+          onAction:    () => { void setActive(u, true, true); },
+        });
+      }
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      markRows([u.id], null);
     }
   }
 
   async function unlockUser(u: UserRecord) {
+    markRows([u.id], "unlock");
     try {
       const res  = await fetch(`/api/admin/users/${u.id}/unlock`, {
         method:  "POST",
@@ -168,14 +337,17 @@ export function AdminPage() {
       });
       showToast("success", `${u.name}'s account unlocked.`);
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      markRows([u.id], null);
     }
   }
 
+  const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   async function deleteUser(u: UserRecord) {
-    if (!window.confirm(
-      `Permanently delete ${u.name} (${u.email})?\n\nThis will remove all their data — classes, groups, disputes, and alerts. This cannot be undone.`
-    )) return;
+    setDeleting(true);
     try {
       const res  = await fetch(`/api/admin/users/${u.id}`, {
         method:  "DELETE",
@@ -186,7 +358,10 @@ export function AdminPage() {
       showToast("success", json.message ?? `${u.name} deleted.`);
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -198,15 +373,6 @@ export function AdminPage() {
     ? (overviewQuery.error instanceof Error ? overviewQuery.error.message : "Could not load overview.")
     : "";
   function loadOverview() { void overviewQuery.refetch(); }
-
-  // ── Browse Classes state ───────────────────────────────────────────────────
-  const classesQuery = useAdminClassesQuery(token);
-  const classes = classesQuery.data ?? [];
-  const classesLoading = classesQuery.isLoading;
-  const classesError = classesQuery.isError
-    ? (classesQuery.error instanceof Error ? classesQuery.error.message : "Could not load classes.")
-    : "";
-  function loadClasses() { void classesQuery.refetch(); }
 
   // ── Departments state ──────────────────────────────────────────────────────
   const departmentsQuery = useAdminDepartmentsQuery(token);
@@ -236,26 +402,27 @@ export function AdminPage() {
       setDeptName(""); setDeptCode(""); setShowDeptForm(false);
       await departmentsQuery.refetch();
     } catch {
-      showToast("error", "Network error.");
+      showToast("error", NETWORK_ERROR_TEXT);
     } finally {
       setDeptSubmitting(false);
     }
   }
 
-  const selfId = user?.id ?? -1;
+  /** Clicking the active column flips the direction; a new column starts in its natural direction. */
+  function sortBy(sort: UserSort) {
+    updateView(view.sort === sort ? { dir: view.dir === "asc" ? "desc" : "asc" } : { sort, dir: defaultDir(sort) });
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8 space-y-8">
 
         {/* Page heading */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Admin Panel</h1>
+            <h1 className="text-xl font-semibold text-slate-800">Admin Panel</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              User management and institution overview.
+              User accounts and system settings.
             </p>
           </div>
           <button
@@ -277,58 +444,157 @@ export function AdminPage() {
             <div>
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">User Management</h2>
               {!usersLoading && !usersError && (
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {usersMeta.total} total
-                </p>
+                <div className="mt-0.5 flex items-center gap-3 flex-wrap">
+                  <p className="text-xs text-slate-600">
+                    {usersMeta.total} {usersMeta.total === 1 ? "user" : "users"}
+                  </p>
+                  <InfoTip label="About last active">{TIPS.adminLastActive}</InfoTip>
+                  {(usersMeta.formerCount > 0 || view.former) && (
+                    <label className="ft-hit inline-flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={view.former}
+                        onChange={(e) => updateView({ former: e.target.checked })}
+                      />
+                      Show former members ({usersMeta.formerCount})
+                    </label>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <input
+                ref={searchRef}
                 type="search"
-                placeholder="Search name or email…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setUsersPage(1); }}
-                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-52"
+                aria-label="Search users (press / to focus)"
+                placeholder="Search name or email…  ( / )"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 w-56 min-h-8"
               />
               <select
-                value={roleFilter}
-                onChange={(e) => { setRoleFilter(e.target.value); setUsersPage(1); }}
-                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
+                aria-label="Filter by role"
+                value={view.role}
+                onChange={(e) => updateView({ role: e.target.value as AdminUsersView["role"] })}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer min-h-8"
               >
                 <option value="">All roles</option>
                 <option value="ADMIN">Admin</option>
                 <option value="INSTRUCTOR">Instructor</option>
                 <option value="STUDENT">Student</option>
               </select>
+              <select
+                aria-label="Filter by status"
+                value={view.status}
+                onChange={(e) => updateView({ status: e.target.value as AdminUsersView["status"] })}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer min-h-8"
+              >
+                <option value="">Any status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <select
+                aria-label="Filter by last active"
+                value={view.lastActive}
+                onChange={(e) => updateView({ lastActive: e.target.value as AdminUsersView["lastActive"] })}
+                className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer min-h-8"
+              >
+                <option value="">Any last active</option>
+                <option value="7d">Active in last 7 days</option>
+                <option value="30d">Active in last 30 days</option>
+                <option value="never">Never signed in</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void exportCsv()}
+                disabled={exporting || usersLoading || usersMeta.total === 0}
+                title="Download the current filtered list as a CSV file"
+                className="min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                {exporting ? "Exporting…" : "Export CSV"}
+              </button>
               <button
                 onClick={loadUsers}
-                className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+                className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
               >
                 Refresh
               </button>
             </div>
           </div>
 
-          {/* Toast feedback */}
-          {toast && (
-            <div className={`px-6 py-2.5 text-xs font-medium border-b flex items-center gap-2 ${
-              toast.type === "success"
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-red-50 text-red-700 border-red-200"
-            }`}>
-              {toast.type === "success"
-                ? <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                : <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              }
-              {toast.msg}
+          {deleteTarget && (
+            <ConfirmDialog
+              title={`Delete ${deleteTarget.name}?`}
+              confirmLabel="Delete user"
+              busyLabel="Deleting…"
+              busy={deleting}
+              onConfirm={() => void deleteUser(deleteTarget)}
+              onCancel={() => setDeleteTarget(null)}
+            >
+              <p>{deleteTarget.email}</p>
+              <p className="mt-2">
+                The account is anonymised: their name, email, photo and sign-in are removed and cannot be recovered.
+                Their work stays in the reports it already appears in, shown as "Former member", so teammates' results do not change.
+              </p>
+              <p className="mt-2">
+                A group leader or an instructor who owns classes must be handed over first. This cannot be undone.
+              </p>
+            </ConfirmDialog>
+          )}
+
+          {roleChange && (
+            <ConfirmDialog
+              title={`Change ${roleChange.user.name}'s role?`}
+              confirmLabel="Change role"
+              busyLabel="Changing…"
+              busy={rowPending[roleChange.user.id] === "role"}
+              onConfirm={() => void performRoleChange(roleChange.user, roleChange.newRole)}
+              onCancel={() => setRoleChange(null)}
+            >
+              <p>From {ROLE_LABEL[roleChange.user.systemRole]} to {ROLE_LABEL[roleChange.newRole]}.</p>
+            </ConfirmDialog>
+          )}
+
+          {selectedUsers.length > 0 && (
+            <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-3 border-b border-indigo-200 bg-indigo-50 px-6 py-2">
+              <p className="text-sm font-semibold text-indigo-900" aria-live="polite">{selectedUsers.length} selected</p>
+              <button
+                type="button"
+                onClick={() => setBulkConfirm(true)}
+                className="min-h-8 rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-800 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
+              >
+                Deactivate
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="min-h-8 rounded-lg px-3 text-xs font-medium text-slate-800 hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Clear selection
+              </button>
             </div>
+          )}
+
+          {bulkConfirm && (
+            <ConfirmDialog
+              title={`Deactivate ${selectedUsers.length} ${selectedUsers.length === 1 ? "user" : "users"}?`}
+              confirmLabel="Deactivate"
+              busyLabel="Deactivating…"
+              busy={bulkBusy}
+              onConfirm={() => void performBulkDeactivate()}
+              onCancel={() => setBulkConfirm(false)}
+            >
+              <p>They will not be able to sign in until reactivated. You can undo this for 10 seconds afterwards.</p>
+              <ul className="mt-2 max-h-32 list-disc space-y-0.5 overflow-y-auto pl-5">
+                {selectedUsers.map((u) => <li key={u.id}>{u.name}</li>)}
+              </ul>
+            </ConfirmDialog>
           )}
 
           {/* Loading */}
           {usersLoading && (
-            <div className="flex items-center justify-center gap-2 py-14 text-slate-400 text-sm">
-              <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
-              Loading…
+            <div className="flex justify-center py-14">
+              <LoadingState label="Loading users…" />
             </div>
           )}
 
@@ -336,13 +602,40 @@ export function AdminPage() {
           {!usersLoading && usersError && (
             <div className="px-6 py-14 text-center space-y-2">
               <p className="text-sm text-red-600">{usersError}</p>
-              <button onClick={loadUsers} className="text-xs text-indigo-600 hover:underline">Retry</button>
+              <button onClick={loadUsers} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
             </div>
           )}
 
           {/* Empty */}
           {!usersLoading && !usersError && displayedUsers.length === 0 && (
-            <p className="px-6 py-14 text-center text-sm text-slate-400">No users match your filters.</p>
+            <div className="px-6 py-14 text-center">
+              {hasActiveFilters(view) ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-900">No users match these filters</p>
+                  <p className="mt-1 text-sm text-slate-700">Try a different search, or remove a filter.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setSearchInput(""); setView((v) => clearFilters(v)); }}
+                    className="mt-4 min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              ) : view.page > 1 ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-900">There is nothing on this page</p>
+                  <button
+                    type="button"
+                    onClick={() => setView((v) => ({ ...v, page: 1 }))}
+                    className="mt-4 min-h-8 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                  >
+                    Back to the first page
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-slate-700">No users yet.</p>
+              )}
+            </div>
           )}
 
           {/* Table */}
@@ -352,33 +645,79 @@ export function AdminPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Name / Email</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Role</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-widest hidden md:table-cell">Joined</th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Actions</th>
+                    <th className="w-10 pl-5 py-1">
+                      <label className="ft-hit inline-flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all active users on this page"
+                          disabled={selectable.length === 0}
+                          checked={selectable.length > 0 && selectedUsers.length === selectable.length}
+                          ref={(el) => { if (el) el.indeterminate = selectedUsers.length > 0 && selectedUsers.length < selectable.length; }}
+                          onChange={(e) => setSelected(e.target.checked ? new Set(selectable.map((u) => u.id)) : new Set())}
+                        />
+                      </label>
+                    </th>
+                    <SortHeader label="Name / Email" sort="name" view={view} onSort={sortBy} />
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Role</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest hidden sm:table-cell">GitHub</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-widest">Status</th>
+                    <SortHeader label="Joined" sort="joined" view={view} onSort={sortBy} className="hidden md:table-cell" />
+                    <SortHeader label="Last active" sort="lastActive" view={view} onSort={sortBy} className="hidden lg:table-cell" />
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {displayedUsers.map((u, i) => {
                     const isSelf = u.id === selfId;
                     const stripe = i % 2 === 0 ? "bg-white" : "bg-gray-50";
+                    const isFormer = !!u.deletedAt;
                     return (
-                      <tr key={u.id} className={`text-sm transition-colors hover:bg-slate-100 ${stripe} ${!u.active ? "opacity-50" : ""}`}>
+                      <tr
+                        key={u.id}
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest("button, select, input, a, label, [role='menu']")) return;
+                          openDetails(u);
+                        }}
+                        className={`cursor-pointer text-sm transition-colors hover:bg-slate-100 ${stripe} ${isFormer ? "text-slate-500" : !u.active ? "opacity-50" : ""}`}
+                      >
+
+                        {/* Select */}
+                        <td className="w-10 pl-5 py-3.5">
+                          <label
+                            className="ft-hit inline-flex items-center justify-center"
+                            title={canSelect(u) ? undefined : isSelf ? "You cannot deactivate yourself" : isFormer ? "Former members cannot be changed" : "Already inactive"}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${u.name}`}
+                              disabled={!canSelect(u)}
+                              checked={selected.has(u.id)}
+                              onChange={() => toggleSelected(u.id)}
+                            />
+                          </label>
+                        </td>
 
                         {/* Name / Email */}
                         <td className="px-5 py-3.5 min-w-[180px]">
-                          <p className="font-medium text-slate-800 leading-tight">{u.name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{u.email}</p>
+                          <p className="font-medium text-slate-800 leading-tight">
+                            <button
+                              type="button"
+                              data-open-details={u.id}
+                              onClick={() => openDetails(u)}
+                              className="min-h-6 rounded text-left font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            >
+                              {u.name}
+                            </button>
+                          </p>
+                          <p className="text-xs text-slate-600 mt-0.5">{u.email}</p>
                           {isSelf && (
-                            <span className="text-xs text-indigo-500 font-semibold">you</span>
+                            <span className="text-xs text-indigo-700 font-semibold">you</span>
                           )}
                         </td>
 
                         {/* Role */}
                         <td className="px-5 py-3.5">
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ROLE_BADGE[u.systemRole]}`}>
+                          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${ROLE_BADGE[u.systemRole]}`}>
                             {u.systemRole}
                           </span>
                         </td>
@@ -387,22 +726,28 @@ export function AdminPage() {
                         <td className="px-5 py-3.5 hidden sm:table-cell">
                           {u.githubUsername
                             ? <span className="text-xs font-mono text-slate-600">{u.githubUsername}</span>
-                            : <span className="text-xs text-slate-300">—</span>}
+                            : <span className="text-xs text-slate-600">—</span>}
                         </td>
 
                         {/* Status */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                              u.active
-                                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                                : "text-slate-500 bg-slate-100 border-slate-200"
-                            }`}>
-                              {u.active ? "Active" : "Inactive"}
-                            </span>
+                            {isFormer ? (
+                              <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-slate-600 bg-slate-100 border-slate-300">
+                                Deleted account
+                              </span>
+                            ) : (
+                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
+                                u.active
+                                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                  : "text-slate-500 bg-slate-100 border-slate-200"
+                              }`}>
+                                {u.active ? "Active" : "Inactive"}
+                              </span>
+                            )}
                             {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
                               <span
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
+                                className="text-xs font-bold px-1.5 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200"
                                 title="Too many failed login attempts — auto-unlocks after a cooldown, or unlock now below"
                               >
                                 Locked
@@ -413,22 +758,30 @@ export function AdminPage() {
 
                         {/* Joined */}
                         <td className="px-5 py-3.5 hidden md:table-cell">
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-600">
                             {new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        </td>
+
+                        {/* Last active */}
+                        <td className="px-5 py-3.5 hidden lg:table-cell">
+                          <span className="text-xs text-slate-600">
+                            {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Never"}
                           </span>
                         </td>
 
                         {/* Actions */}
                         <td className="px-5 py-3.5">
-                          {isSelf ? (
-                            <span className="text-xs text-slate-300 block text-right">—</span>
+                          {isSelf || isFormer ? (
+                            <span className="text-xs text-slate-600 block text-right">—</span>
                           ) : (
                             <div className="flex items-center justify-end gap-2 flex-wrap">
                               {/* Role select */}
                               <select
                                 value={u.systemRole}
-                                onChange={(e) => { void changeRole(u, e.target.value); }}
-                                className="text-xs rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
+                                onChange={(e) => changeRole(u, e.target.value)}
+                                disabled={!!rowPending[u.id]}
+                                className="text-xs disabled:opacity-60 rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 cursor-pointer"
                                 title="Change role"
                               >
                                 <option value="ADMIN">Admin</option>
@@ -438,38 +791,38 @@ export function AdminPage() {
 
                               {/* Activate / Deactivate */}
                               <button
-                                onClick={() => { void toggleStatus(u); }}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                onClick={() => void setActive(u, !u.active)}
+                                disabled={!!rowPending[u.id]}
+                                className={`text-xs disabled:opacity-60 px-2.5 py-1 rounded-lg border font-medium transition-colors ${
                                   u.active
-                                    ? "border-slate-200 text-slate-500 hover:border-red-200 hover:text-red-600 hover:bg-red-50"
-                                    : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:text-emerald-600 hover:bg-emerald-50"
+                                    ? "border-slate-200 text-slate-700 hover:border-red-200 hover:text-red-700 hover:bg-red-50"
+                                    : "border-slate-200 text-slate-700 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50"
                                 }`}
                                 title={u.active ? "Deactivate account" : "Activate account"}
                               >
-                                {u.active ? "Deactivate" : "Activate"}
+                                <BusyLabel
+                                  busy={rowPending[u.id] === "status"}
+                                  idle={u.active ? "Deactivate" : "Activate"}
+                                  busyText={u.active ? "Deactivating…" : "Activating…"}
+                                />
                               </button>
 
                               {/* Unlock */}
                               {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
                                 <button
                                   onClick={() => { void unlockUser(u); }}
-                                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-amber-200 hover:text-amber-600 hover:bg-amber-50 font-medium transition-colors"
+                                  disabled={!!rowPending[u.id]}
+                                  className="text-xs disabled:opacity-60 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:border-amber-200 hover:text-amber-800 hover:bg-amber-50 font-medium transition-colors"
                                   title="Clear login lockout now"
                                 >
-                                  Unlock
+                                  <BusyLabel busy={rowPending[u.id] === "unlock"} idle="Unlock" busyText="Unlocking…" />
                                 </button>
                               )}
 
-                              {/* Delete */}
-                              <button
-                                onClick={() => { void deleteUser(u); }}
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                title="Delete user permanently"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                              <OverflowMenu
+                                label={`More actions for ${u.name}`}
+                                items={[{ label: "Delete user…", tone: "danger", onSelect: () => setDeleteTarget(u) }]}
+                              />
                             </div>
                           )}
                         </td>
@@ -481,11 +834,11 @@ export function AdminPage() {
             </div>
             <div className="px-6 pb-4">
               <PaginationBar
-                page={usersPage}
+                page={view.page}
                 totalPages={usersMeta.totalPages}
                 total={usersMeta.total}
                 pageSize={usersMeta.pageSize}
-                onPage={setUsersPage}
+                onPage={(page) => setView((v) => ({ ...v, page }))}
                 label="users"
               />
             </div>
@@ -497,11 +850,11 @@ export function AdminPage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
-              Institution Overview
+              Accounts overview
             </h2>
             <button
               onClick={loadOverview}
-              className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 font-medium transition-colors"
             >
               Refresh
             </button>
@@ -509,8 +862,8 @@ export function AdminPage() {
 
           {/* Stat cards */}
           {overviewLoading && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 text-center animate-pulse">
                   <div className="h-7 bg-slate-100 rounded mb-2" />
                   <div className="h-3 bg-slate-100 rounded w-2/3 mx-auto" />
@@ -522,108 +875,27 @@ export function AdminPage() {
           {!overviewLoading && overviewError && (
             <div className="bg-white border border-red-200 rounded-xl p-6 text-center">
               <p className="text-sm text-red-600 mb-2">{overviewError}</p>
-              <button onClick={loadOverview} className="text-xs text-indigo-600 hover:underline">Retry</button>
+              <button onClick={loadOverview} className="ft-hit rounded px-2 text-xs text-indigo-600 hover:underline">Retry</button>
             </div>
           )}
 
           {!overviewLoading && !overviewError && overview && (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
-                  { label: "Instructors", value: overview.users.instructors, textCls: "text-indigo-600", borderCls: "border-indigo-200" },
-                  { label: "Students",    value: overview.users.students,    textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Classes",     value: overview.classSections,     textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Projects",    value: overview.totalProjects,     textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Groups",      value: overview.totalGroups,       textCls: "text-slate-700",  borderCls: "border-slate-200"  },
-                  { label: "Analyzed",    value: overview.analyzedGroups,    textCls: "text-emerald-600", borderCls: "border-emerald-200" },
+                  { label: "Admins",      value: overview.users.admins,      textCls: "text-violet-700",  borderCls: "border-violet-200" },
+                  { label: "Instructors", value: overview.users.instructors, textCls: "text-indigo-700",  borderCls: "border-indigo-200" },
+                  { label: "Students",    value: overview.users.students,    textCls: "text-slate-700",   borderCls: "border-slate-200"  },
+                  { label: "Active",      value: overview.users.active,      textCls: "text-emerald-700", borderCls: "border-emerald-200" },
+                  { label: "Inactive",    value: overview.users.inactive,    textCls: "text-slate-700",   borderCls: "border-slate-200"  },
                 ].map(({ label, value, textCls, borderCls }) => (
                   <div key={label} className={`bg-white border ${borderCls} rounded-xl p-4 text-center`}>
                     <p className={`text-3xl font-bold ${textCls}`}>{value}</p>
-                    <p className="text-xs text-slate-500 mt-1">{label}</p>
+                    <p className="text-xs text-slate-600 mt-1">{label}</p>
                   </div>
                 ))}
               </div>
-
-              {overview.openDisputesCount > 0 && (
-                <p className="text-xs text-amber-600 mt-3 px-1">
-                  {overview.openDisputesCount} open dispute{overview.openDisputesCount !== 1 ? "s" : ""} institution-wide
-                </p>
-              )}
             </>
-          )}
-        </section>
-
-        {/* ── Browse Classes ───────────────────────────────────────────────────── */}
-        <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Browse Classes</h2>
-              {!classesLoading && !classesError && (
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {classes.length} class section{classes.length !== 1 ? "s" : ""} across all instructors
-                </p>
-              )}
-            </div>
-            <button onClick={loadClasses} className="text-xs text-slate-400 hover:text-slate-700 font-medium transition-colors">
-              Refresh
-            </button>
-          </div>
-
-          {classesLoading && (
-            <div className="flex items-center justify-center gap-2 py-14 text-slate-400 text-sm">
-              <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
-              Loading…
-            </div>
-          )}
-
-          {!classesLoading && classesError && (
-            <div className="px-6 py-10 text-center">
-              <p className="text-sm text-red-600 mb-2">{classesError}</p>
-              <button onClick={loadClasses} className="text-xs text-indigo-600 hover:underline">Retry</button>
-            </div>
-          )}
-
-          {!classesLoading && !classesError && classes.length === 0 && (
-            <p className="px-6 py-14 text-center text-sm text-slate-400">No class sections found.</p>
-          )}
-
-          {!classesLoading && !classesError && classes.length > 0 && (
-            <div className="divide-y divide-slate-50">
-              {classes.map((cls) => (
-                <div
-                  key={cls.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(`/class/${cls.id}`)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/class/${cls.id}`); }}
-                  className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-indigo-600">{cls.subjectCode}</span>
-                      {cls.edpCode && (
-                        <span className="text-xs text-indigo-400 font-mono">EDP {cls.edpCode}</span>
-                      )}
-                      <span className="text-xs font-semibold text-slate-800">{cls.subjectName}</span>
-                      {cls.department && (
-                        <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">{cls.department.code}</span>
-                      )}
-                      <span className="text-xs text-slate-400 font-mono">{cls.type.charAt(0) + cls.type.slice(1).toLowerCase()}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-slate-400">{cls.instructor.name}</span>
-                      <span className="text-xs text-slate-300">·</span>
-                      <span className="text-xs text-slate-400">
-                        {cls.assignments.length} assignment{cls.assignments.length !== 1 ? "s" : ""}
-                        {" · "}
-                        {cls.assignments.reduce((s, a) => s + a._count.projects, 0)} group{cls.assignments.reduce((s, a) => s + a._count.projects, 0) !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-xs text-indigo-500 font-medium">View →</span>
-                </div>
-              ))}
-            </div>
           )}
         </section>
 
@@ -632,8 +904,8 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">
             Hierarchy Management
           </h2>
-          <p className="text-xs text-slate-400 mb-5">
-            Create and manage departments and instructors.
+          <p className="text-xs text-slate-600 mb-5">
+            Create departments, approve new instructor accounts and fix EDP codes.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="border border-slate-200 rounded-lg p-4">
@@ -641,12 +913,12 @@ export function AdminPage() {
                 <p className="text-xs font-semibold text-slate-600">Departments</p>
                 <button
                   onClick={() => setShowDeptForm((v) => !v)}
-                  className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  className="ft-hit rounded px-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
                 >
                   {showDeptForm ? "Cancel" : "+ New"}
                 </button>
               </div>
-              <p className="text-xs text-slate-400 mb-3">Instructors pick from this list when creating a class section.</p>
+              <p className="text-xs text-slate-600 mb-3">Instructors pick from this list when creating a class section.</p>
 
               {showDeptForm && (
                 <form onSubmit={(e) => void createDepartment(e)} className="space-y-2 mb-3">
@@ -655,72 +927,52 @@ export function AdminPage() {
                     value={deptName}
                     onChange={(e) => setDeptName(e.target.value)}
                     placeholder="e.g. College of Computer Studies"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                   <input
                     required
                     value={deptCode}
                     onChange={(e) => setDeptCode(e.target.value)}
                     placeholder="e.g. CCS"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                   <button
                     type="submit"
                     disabled={deptSubmitting || !deptName.trim() || !deptCode.trim()}
-                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+                    className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
                   >
                     {deptSubmitting ? "Creating…" : "Create"}
                   </button>
                 </form>
               )}
 
-              {departmentsLoading && <p className="text-[11px] text-slate-400">Loading…</p>}
-              {!departmentsLoading && departmentsError && <p className="text-[11px] text-red-600">{departmentsError}</p>}
+              {departmentsLoading && <LoadingState label="Loading departments…" />}
+              {!departmentsLoading && departmentsError && <p className="text-xs text-red-600">{departmentsError}</p>}
               {!departmentsLoading && !departmentsError && departments.length === 0 && (
-                <p className="text-[11px] text-slate-400">No departments yet.</p>
+                <p className="text-xs text-slate-600">No departments yet.</p>
               )}
               {!departmentsLoading && !departmentsError && departments.length > 0 && (
                 <ul className="space-y-1 max-h-32 overflow-y-auto">
                   {departments.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between text-[11px]">
+                    <li key={d.id} className="flex items-center justify-between text-xs">
                       <span className="text-slate-700 truncate">{d.name}</span>
-                      <span className="text-slate-400 font-mono ml-2 shrink-0">{d.code}</span>
+                      <span className="text-slate-600 font-mono ml-2 shrink-0">{d.code}</span>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Instructors</p>
-              <p className="text-xs text-slate-400 mb-3">Invite instructors and assign them to departments.</p>
-              <DisabledBtn>Invite Instructor</DisabledBtn>
-            </div>
-            <div className="border border-dashed border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Reports</p>
-              <p className="text-xs text-slate-400 mb-3">Export aggregated fairness data across the institution.</p>
-              <DisabledBtn>Export Reports</DisabledBtn>
-            </div>
+            <InstructorApprovals onToast={showToast} />
+            <EdpCodeTool onToast={showToast} />
+            <DeletionRequests onToast={showToast} />
           </div>
-          <p className="text-[11px] text-slate-400 mt-4">
-            Departments are live. Instructor invitations and report export remain disabled in this preview.
-          </p>
         </section>
 
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AdminUserDetails user={detailsUser} onClose={() => setDetailsUser(null)} restoreFocusTo={detailsOpener} />
+
+      <AppFooter />
     </div>
   );
 }

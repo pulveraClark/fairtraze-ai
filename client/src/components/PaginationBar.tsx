@@ -24,7 +24,7 @@ export function PaginationBar({ page, totalPages, total, pageSize, onPage, label
 
   return (
     <div className={`flex items-center justify-between gap-4 px-1 pt-3 mt-1 border-t ${dark ? "border-slate-800" : "border-slate-100"}`}>
-      <p className={`text-xs ${dark ? "text-slate-500" : "text-slate-400"}`}>
+      <p className={`text-xs ${dark ? "text-slate-400" : "text-slate-600"}`}>
         {start}–{end} of {total} {label}
       </p>
       <div className="flex items-center gap-1.5">

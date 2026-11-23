@@ -5,6 +5,8 @@ import type {
 } from "@shared/types.js";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
+import { studentNarrative, NO_TEAM_COMMENT } from "../src/lib/studentNarrative.js";
+import { checkTone } from "../src/lib/aiReview/toneGuard.js";
 import {
   createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership,
 } from "./factories.js";
@@ -81,12 +83,15 @@ async function setup(sourceType: "GITHUB" | "EDITOR" | "COMBINED") {
   const project = await createProject({ assignmentId: assignment.id });
   const { user: studentA } = await createUser({ systemRole: "STUDENT" });
   const { user: studentB } = await createUser({ systemRole: "STUDENT" });
-  await createMembership(studentA.id, project.id, "LEADER");
-  await createMembership(studentB.id, project.id, "MEMBER");
+  // studentA is a regular MEMBER (privacy assertions below); studentB is the LEADER, who
+  // legitimately also receives the whitelisted `team` view (covered at the bottom).
+  await createMembership(studentA.id, project.id, "MEMBER");
+  await createMembership(studentB.id, project.id, "LEADER");
   return { instructor, project, studentA, studentB };
 }
 
-describe("GET /api/student/group/:projectId — contribution matching and privacy", () => {
+describe("GET /api/student/group/:projectId — contribution matching and privacy (caller studentA is a regular member)", () => {
+  // INT-020
   it("GITHUB: matches by githubUsername and leaks no other member's data", async () => {
     const { project, studentA, studentB } = await setup("GITHUB");
     await prisma.user.update({ where: { id: studentA.id }, data: { githubUsername: "alice-gh" } });
@@ -114,7 +119,6 @@ describe("GET /api/student/group/:projectId — contribution matching and privac
       .set("Authorization", authHeaderFor(studentB));
     expect(resB.status).toBe(200);
     expect(resB.body.report.myContribution.contributionShare).toBe(0.3);
-    expect(collectValuesByKey(resB.body, "contributionShare")).toEqual([0.3]);
   });
 
   it("GITHUB: a member missing from the report (no matching githubUsername) gets myContribution: null", async () => {
@@ -165,6 +169,7 @@ describe("GET /api/student/group/:projectId — contribution matching and privac
     expect(resB.body.report.myContribution).toBeNull();
   });
 
+  // INT-015
   it("COMBINED: matches by userId, passes through a null nested github without crashing, and leaks no other member's data", async () => {
     const { project, studentA, studentB } = await setup("COMBINED");
 
@@ -191,4 +196,158 @@ describe("GET /api/student/group/:projectId — contribution matching and privac
     expect(collectValuesByKey(resA.body, "githubUsername")).not.toContain("bob-gh");
     expect(collectValuesByKey(resA.body, "userId")).not.toContain(studentB.id);
   });
+});
+
+describe("GET /api/student/group/:projectId — leader team view", () => {
+  // INT-020
+  // INT-028
+  it("leader receives every member's share, GitHub/Docs split, flags and task counts", async () => {
+    const { project, studentA, studentB } = await setup("COMBINED"); // A = member, B = leader
+    await saveReport(project.id, teamReport([
+      combinedScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.7,
+        githubContributionShare: 0.8, documentContributionShare: 0.6, flags: ["overload"] }),
+      combinedScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.3,
+        githubContributionShare: 0.2, documentContributionShare: 0.4 }),
+    ]));
+    await prisma.task.createMany({ data: [
+      { projectId: project.id, number: 1, title: "t1", assignedToUserId: studentA.id, createdByUserId: studentB.id, done: true, status: "DONE" },
+      { projectId: project.id, number: 2, title: "t2", assignedToUserId: studentA.id, createdByUserId: studentB.id, done: false },
+    ] });
+
+    const res = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));
+    expect(res.status).toBe(200);
+    const team = res.body.report.team as Array<Record<string, unknown>>;
+    expect(team).toHaveLength(2);
+    const alice = team.find((t) => t.userId === studentA.id)!;
+    expect(alice).toMatchObject({
+      contributionShare: 0.7, githubContributionShare: 0.8, documentContributionShare: 0.6,
+      flags: ["overload"], tasks: { open: 1, done: 1 }, isLeader: false,
+    });
+    expect(team.find((t) => t.userId === studentB.id)).toMatchObject({ isLeader: true, contributionShare: 0.3 });
+    // Whitelist: nothing instructor-only or identifying beyond name leaks.
+    expect(Object.keys(alice).sort()).toEqual([
+      "avatarUpdatedAt", "contributionShare", "documentContributionShare", "flags", "functionalRoles",
+      "githubContributionShare", "hasAvatar", "isLeader", "name", "tasks", "userId",
+    ]);
+    expect(JSON.stringify(res.body)).not.toMatch(/dispute|instructorNote|email/i);
+  });
+
+  it("leader sees a member missing from the report with null shares (GITHUB)", async () => {
+    const { project, studentA, studentB } = await setup("GITHUB");
+    await prisma.user.update({ where: { id: studentB.id }, data: { githubUsername: "bob-gh" } });
+    await saveReport(project.id, teamReport([
+      scoredMember({ studentName: "Bob", githubUsername: "bob-gh", contributionShare: 1 }),
+    ]));
+    const res = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));
+    const team = res.body.report.team as Array<{ userId: number; contributionShare: number | null }>;
+    expect(team.find((t) => t.userId === studentA.id)!.contributionShare).toBeNull();
+    expect(team.find((t) => t.userId === studentB.id)!.contributionShare).toBe(1);
+  });
+
+  // INT-028
+  it("a regular member's response has no team key and no teammate values", async () => {
+    const { project, studentA, studentB } = await setup("EDITOR");
+    await saveReport(project.id, teamReport([
+      documentScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.6 }),
+      documentScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.4 }),
+    ]));
+    const res = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentA));
+    expect(res.status).toBe(200);
+    expect(res.body.report.team).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain("Bob");
+    expect(collectValuesByKey(res.body, "contributionShare")).toEqual([0.6]);
+  });
+
+  it("a non-member (even another group's leader) gets 403", async () => {
+    const { project } = await setup("EDITOR");
+    const { project: other } = await setup("EDITOR");
+    const { user: outsider } = await createUser({ systemRole: "STUDENT" });
+    await createMembership(outsider.id, other.id, "LEADER");
+    const res = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(outsider));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("GET /api/student/group/:projectId — team-level AI explanation (leader only)", () => {
+  const TEXT = "The team shares the work fairly evenly. The Gini coefficient is 0.12, so contribution is spread evenly.\n\nAlice made most commits.";
+  const SHOWN = "The team shares the work fairly evenly.\n\nAlice made most commits.";
+
+  it("the leader gets the explanation without the sentence that states the Gini value; a member gets none of it", async () => {
+    const { project, studentA, studentB } = await setup("EDITOR"); // A = member, B = leader
+    // The accounts carry the names the stored report and text use, so no display-time swap applies here.
+    await prisma.user.update({ where: { id: studentA.id }, data: { name: "Alice" } });
+    await prisma.user.update({ where: { id: studentB.id }, data: { name: "Bob" } });
+    const report = teamReport([
+      documentScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.6 }),
+      documentScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.4 }),
+    ]);
+    await prisma.report.create({
+      data: { projectId: project.id, gini: report.gini, teamHealth: report.teamHealth, content: JSON.stringify({ report, narrative: TEXT, narrativeOutdated: true }) },
+    });
+
+    const asLeader = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));
+    expect(asLeader.body.report.narrative).toBe(SHOWN);
+    expect(asLeader.body.report.narrativeOutdated).toBe(true);
+    expect(asLeader.body.report.narrative).not.toMatch(/gini/i);
+
+    const asMember = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentA));
+    expect(asMember.body.report.narrative).toBeUndefined();
+    expect(JSON.stringify(asMember.body)).not.toContain("Alice made most commits");
+  });
+
+  it("a member renamed after the report was saved is shown to the leader under the current name", async () => {
+    const { project, studentA, studentB } = await setup("EDITOR");
+    await prisma.user.update({ where: { id: studentA.id }, data: { name: "Alicia" } });
+    await prisma.user.update({ where: { id: studentB.id }, data: { name: "Bob" } });
+    const report = teamReport([
+      documentScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.6 }),
+      documentScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.4 }),
+    ]);
+    await prisma.report.create({
+      data: { projectId: project.id, gini: report.gini, teamHealth: report.teamHealth, content: JSON.stringify({ report, narrative: TEXT }) },
+    });
+
+    const asLeader = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));
+    expect(asLeader.status).toBe(200);
+    expect(asLeader.body.report.narrative).toBe("The team shares the work fairly evenly.\n\nAlicia made most commits.");
+    expect(asLeader.body.report.narrative).not.toContain("Alice");
+  });
+
+  it("studentNarrative drops every sentence that states a team measure and keeps clean ones", () => {
+    const drop = [
+      "Gini is 0.31.",
+      "The inequality score is 0.31.",
+      "Work concentration is high.",
+      "The coefficient looks low.",
+      "The team is in the 0.4 band.",
+      "The team index is 3.",
+      "Contribution index of 12 was reached.",
+      "Spread is 0.31 overall.",
+    ];
+    for (const sentence of drop) expect(studentNarrative(`Everyone contributed. ${sentence} Alice made most commits.`), sentence).toBe("Everyone contributed. Alice made most commits.");
+    expect(studentNarrative("Alice added the login page.")).toBe("Alice added the login page.");
+    expect(studentNarrative(TEXT)).toBe(SHOWN);
+  });
+
+  it("keeps ordinary words that only look close: index.html, a husband, a band name", () => {
+    expect(studentNarrative("Alice edited index.html and the Band page.")).toBe("Alice edited index.html and the Band page.");
+  });
+
+  it("returns null (the AI block is hidden) when nothing clean is left, and when there was no text", () => {
+    expect(NO_TEAM_COMMENT).toBe("The AI has no extra comment on the team this time.");
+    expect(studentNarrative("Gini is 0.31. The inequality score is 0.31. Work concentration is high.")).toBeNull();
+    expect(studentNarrative("The Gini coefficient is 0.3.")).toBeNull();
+    expect(studentNarrative(null)).toBeNull();
+    expect(studentNarrative("   ")).toBeNull();
+  });
+
+  it("a member's own findings never carry the Gini value, a band or the team index; code words stay allowed", () => {
+    for (const bad of ["Gini is 0.31.", "The inequality score is 0.31.", "In the 0.4 band.", "Moved into band 3.", "The team index is 3.", "The index of 12 rose."]) {
+      expect(checkTone(bad).ok, bad).toBe(false);
+    }
+    for (const fine of ["Added a coefficient field to the calculator.", "Fixed the load concentration formula.", "Added index.html and fixed two form errors.", "Fixed 2 index pages."]) {
+      expect(checkTone(fine).ok, fine).toBe(true);
+    }
+  });
+
 });

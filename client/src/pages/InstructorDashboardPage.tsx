@@ -1,13 +1,22 @@
-import { useEffect, useState } from "react";
+import { groupsNeedAttention } from "../lib/attentionLabel";
+import { useToast } from "../components/Toast";
+import { NoActivityHeaderPill } from "../components/NoActivityRollup";
+import { AppFooter } from "../components/AppFooter";
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { useEffect, useRef, useState } from "react";
 import type { ProjectSummaryItem } from "@shared/types";
-import { AppTopBar } from "../components/AppTopBar";
+import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
 import { ClassCard, parseClassLabel, classAtRiskCount } from "../components/ClassCard";
 import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
+import { SEMESTERS, SEMESTER_LABEL, isValidSchoolYear, termOf, type Semester } from "@shared/schoolTerm";
+import { CopyInviteLinkButton } from "../components/CopyInviteLinkButton";
+import { joinInviteUrl } from "../lib/joinInvite";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectsSummaryQuery, useClassesListQuery } from "../hooks/useSharedQueries";
+import { analysisBodyText, NETWORK_ERROR_TEXT } from "../lib/failureText";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface LifecycleAssignment {
@@ -46,7 +55,8 @@ function normalizeCode(code: string): string {
 
 function riskScore(item: ProjectSummaryItem): number {
   if (!item.isAnalyzed) return 10;
-  const hasFlags = item.flagsPresent.length > 0;
+  if (presentedHealth(item) === "no-activity") return 6; // after real health, before not analyzed
+  const hasFlags = visibleFlags(item).length > 0;
   if (item.teamHealth === "High Risk")     return hasFlags ? 0 : 1;
   if (item.teamHealth === "Moderate Risk") return hasFlags ? 2 : 3;
   return hasFlags ? 4 : 5;
@@ -91,6 +101,7 @@ function CreateClassModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { showSuccessToast } = useToast();
   const [subjectCode, setSubjectCode] = useState("");
   const [subjectName, setSubjectName] = useState("");
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
@@ -98,6 +109,9 @@ function CreateClassModal({
   const [departmentId, setDepartmentId] = useState<number | "">("");
   const [edpCode, setEdpCode]         = useState("");
   const [classType, setClassType]     = useState<"LECTURE" | "LABORATORY">("LECTURE");
+  // Prefilled from today's date (Aug-Dec 1st, Jan-May 2nd, Jun-Jul Summer); the instructor can change it.
+  const [schoolYear, setSchoolYear]   = useState(() => termOf(new Date()).schoolYear);
+  const [semester, setSemester]       = useState<Semester>(() => termOf(new Date()).semester);
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
   // After creation: show the generated class join code before closing
@@ -125,6 +139,10 @@ function CreateClassModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!subjectCode.trim() || !subjectName.trim() || !edpCode.trim() || !departmentId) return;
+    if (!isValidSchoolYear(schoolYear.trim())) {
+      setError("Write the school year like 2026-2027.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -137,18 +155,21 @@ function CreateClassModal({
           departmentId,
           edpCode:      edpCode.trim(),
           type:         classType,
+          schoolYear:   schoolYear.trim(),
+          semester,
         }),
       });
       if (res.ok) {
         const data = (await res.json()) as { joinCode?: string };
         setCreatedCode(data.joinCode ?? null);
         onCreated();
+        showSuccessToast("Class created.");
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Failed to create class section");
       }
     } catch {
-      setError("Network error — is the server running?");
+      setError(NETWORK_ERROR_TEXT);
     } finally {
       setSubmitting(false);
     }
@@ -173,11 +194,11 @@ function CreateClassModal({
             <h2 className="text-sm font-semibold text-slate-800">
               {createdCode ? "Class section created" : "Create Class Section"}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               {createdCode ? "Share the class join code with your students" : "Add a new subject to your dashboard"}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-700 transition-colors p-1 rounded" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -221,7 +242,7 @@ function CreateClassModal({
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mt-2">
+              <p className="text-xs text-slate-600 mt-2">
                 Students enter this code once to enroll in the class. They can then create or join groups for each project.
               </p>
             </div>
@@ -231,13 +252,14 @@ function CreateClassModal({
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Scan to join instantly</label>
               <div className="flex flex-col items-center gap-2.5 py-5 px-4 bg-slate-50 border border-slate-100 rounded-xl">
                 <QRCodeSVG
-                  value={`${window.location.origin}/join?code=${encodeURIComponent(createdCode)}`}
+                  value={joinInviteUrl(createdCode)}
                   size={148}
                   level="M"
                   bgColor="#f8fafc"
                   fgColor="#312e81"
                 />
-                <p className="text-xs text-slate-400 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
+                <CopyInviteLinkButton code={createdCode} />
+                <p className="text-xs text-slate-600 font-medium text-center">Students can scan this QR code with their phone camera to enroll directly — no need to type the code.</p>
               </div>
             </div>
 
@@ -264,7 +286,7 @@ function CreateClassModal({
                     value={subjectCode}
                     onChange={(e) => setSubjectCode(e.target.value)}
                     placeholder="e.g. CC-APPSDEV22"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                 </div>
                 <div>
@@ -274,7 +296,7 @@ function CreateClassModal({
                     value={edpCode}
                     onChange={(e) => setEdpCode(e.target.value)}
                     placeholder="e.g. 31400"
-                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                 </div>
               </div>
@@ -285,7 +307,7 @@ function CreateClassModal({
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
                   placeholder="e.g. Applications Development"
-                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -301,7 +323,7 @@ function CreateClassModal({
                       value={departmentId}
                       onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : "")}
                       disabled={departmentsLoading}
-                      className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-600"
                     >
                       <option value="" disabled>{departmentsLoading ? "Loading…" : "Select a department"}</option>
                       {departments.map((d) => (
@@ -309,6 +331,31 @@ function CreateClassModal({
                       ))}
                     </select>
                   )}
+                </div>
+                <div className="col-span-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="class-school-year" className="block text-xs font-medium text-slate-500 mb-1.5">School year</label>
+                    <input
+                      id="class-school-year"
+                      required
+                      inputMode="numeric"
+                      value={schoolYear}
+                      onChange={(e) => setSchoolYear(e.target.value)}
+                      placeholder="2026-2027"
+                      className="w-full min-h-10 rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-500 tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="class-semester" className="block text-xs font-medium text-slate-500 mb-1.5">Semester</label>
+                    <select
+                      id="class-semester"
+                      value={semester}
+                      onChange={(e) => setSemester(e.target.value as Semester)}
+                      className="w-full min-h-10 rounded-lg bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    >
+                      {SEMESTERS.map((s) => <option key={s} value={s}>{SEMESTER_LABEL[s]}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Type</label>
@@ -329,7 +376,7 @@ function CreateClassModal({
               <button
                 type="submit"
                 disabled={submitting || !subjectCode.trim() || !subjectName.trim() || !edpCode.trim() || !departmentId}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
               >
                 {submitting ? (
                   <>
@@ -396,7 +443,7 @@ function ConfirmDialog({
                 onChange={(e) => setTypedValue(e.target.value)}
                 placeholder={typeToConfirm}
                 autoFocus
-                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+                className="w-full rounded-lg bg-white border border-slate-200 px-3.5 py-2 text-sm text-slate-800 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
               />
             </div>
           )}
@@ -415,7 +462,7 @@ function ConfirmDialog({
           <button
             onClick={onConfirm}
             disabled={busy || !canConfirm}
-            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition-colors"
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-600 text-white text-sm font-semibold transition-colors"
           >
             {busy ? (
               <span className="flex items-center gap-2">
@@ -434,11 +481,14 @@ function ConfirmDialog({
 export function InstructorDashboardPage() {
   const { navigate }    = useRouter();
   const { token }       = useAuth();
+  const { showSuccessToast } = useToast();
 
   const [sortMode, setSortMode]       = useState<SortMode>("risk");
   const [filterMode, setFilterMode]   = useState<FilterMode>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [analyzing, setAnalyzing]     = useState<Set<number>>(new Set());
+  const [analyzeNotice, setAnalyzeNotice] = useState<string | null>(null);
+  const analyzingRef = useRef<Set<number>>(new Set());
   const [showClassModal, setShowClassModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LifecycleClass | null>(null);
   const [deleting, setDeleting]         = useState(false);
@@ -470,6 +520,7 @@ export function InstructorDashboardPage() {
       });
       if (res.ok) {
         setDeleteTarget(null);
+        showSuccessToast("Class deleted.");
         await queryClient.invalidateQueries({ queryKey: ["classes-list"] });
         await queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
       } else {
@@ -477,21 +528,36 @@ export function InstructorDashboardPage() {
         setDeleteError(data.error ?? "Failed to delete class section");
       }
     } catch {
-      setDeleteError("Network error — is the server running?");
+      setDeleteError(NETWORK_ERROR_TEXT);
     } finally {
       setDeleting(false);
     }
   }
 
   async function handleReanalyze(projectId: number) {
+    if (analyzingRef.current.has(projectId)) return; // already running: ignore a second click
+    analyzingRef.current.add(projectId);
     setAnalyzing((prev) => new Set(prev).add(projectId));
+    setAnalyzeNotice(null);
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, {
+      const res = await fetch(`/api/projects/${projectId}/analyze`, {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        // Say what happened and what to do, instead of the button just stopping.
+        const body = (await res.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
+        const name = summary.find((s) => s.projectId === projectId)?.groupName ?? `Project ${projectId}`;
+        setAnalyzeNotice(`${name}: ${analysisBodyText(body)}`);
+      } else {
+        showSuccessToast("Analysis updated.");
+      }
       await summaryQuery.refetch();
+    } catch {
+      const name = summary.find((s) => s.projectId === projectId)?.groupName ?? `Project ${projectId}`;
+      setAnalyzeNotice(`${name}: ${NETWORK_ERROR_TEXT}`);
     } finally {
+      analyzingRef.current.delete(projectId);
       setAnalyzing((prev) => {
         const next = new Set(prev);
         next.delete(projectId);
@@ -510,9 +576,8 @@ export function InstructorDashboardPage() {
   }
 
   // Global at-risk count
-  const atRiskCount = summary.filter(
-    (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || i.flagsPresent.length > 0)
-  ).length;
+  const atRiskCount = summary.filter(isAtRiskGroup).length;
+  const quietCount  = noActivityCount(summary);
 
   const isSearchMode = searchQuery.trim().length > 0;
   const isAtRiskMode = !isSearchMode && filterMode === "at-risk";
@@ -521,9 +586,7 @@ export function InstructorDashboardPage() {
   const sortedClasses = sortClasses(classes, sortMode, getItemsForClass);
 
   const atRiskGroups = sortGroups(
-    summary.filter(
-      (i) => i.isAnalyzed && (i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || i.flagsPresent.length > 0)
-    ),
+    summary.filter(isAtRiskGroup),
     sortMode
   );
 
@@ -571,15 +634,13 @@ export function InstructorDashboardPage() {
           />
         );
       })()}
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Instructor Dashboard</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              Group contribution overview · GitHub analysis
+            <h1 className="text-xl font-semibold text-slate-900">Instructor Dashboard</h1>
+            <p className="text-sm text-slate-600 mt-0.5">
+              Group contribution overview · GitHub and FairTraze Docs
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -602,14 +663,22 @@ export function InstructorDashboardPage() {
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
+                {groupsNeedAttention(atRiskCount)}
               </button>
             )}
+            <NoActivityHeaderPill count={quietCount} />
           </div>
         </div>
       </div>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {analyzeNotice && (
+          <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-normal text-amber-900">
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{analyzeNotice}</span>
+            <button type="button" onClick={() => setAnalyzeNotice(null)} aria-label="Dismiss" className="ft-hit shrink-0 rounded px-2 text-amber-900 hover:bg-amber-100">&times;</button>
+          </div>
+        )}
 
         {/* Search bar */}
         <div className="relative mb-4">
@@ -622,10 +691,10 @@ export function InstructorDashboardPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search subjects or groups…"
-            className="w-full sm:w-80 pl-8 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors"
+            className="w-full sm:w-80 pl-8 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs leading-none" aria-label="Clear search">
+            <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-600 text-xs leading-none" aria-label="Clear search">
               ✕
             </button>
           )}
@@ -660,7 +729,7 @@ export function InstructorDashboardPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading dashboard…
           </div>
@@ -682,7 +751,7 @@ export function InstructorDashboardPage() {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-700">No classes yet</p>
-                <p className="text-xs text-slate-400 mt-1">Create your first class section to get started.</p>
+                <p className="text-xs text-slate-600 mt-1">Create your first class section to get started.</p>
               </div>
               <button
                 onClick={() => setShowClassModal(true)}
@@ -699,6 +768,7 @@ export function InstructorDashboardPage() {
               {sortedClasses.map((cls) => (
                 <ClassCard
                   key={cls.id}
+                  classId={cls.id}
                   assignmentLabel={`${cls.subjectCode} — ${cls.subjectName}`}
                   items={getItemsForClass(cls)}
                   onClick={() => navigate(`/class/${cls.id}`)}
@@ -723,7 +793,7 @@ export function InstructorDashboardPage() {
               </button>
             </div>
             {atRiskGroups.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 text-sm">
+              <div className="text-center py-16 text-slate-600 text-sm">
                 No at-risk groups found.{" "}
                 <button onClick={() => setFilterMode("all")} className="underline hover:text-slate-600">Show all classes</button>
               </div>
@@ -731,7 +801,7 @@ export function InstructorDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {atRiskGroups.map((item) => (
                   <div key={item.projectId}>
-                    <p className="text-[11px] font-mono font-semibold text-slate-400 mb-1.5 truncate">
+                    <p className="text-xs font-mono font-semibold text-slate-600 mb-1.5 truncate">
                       {parseClassLabel(item.assignmentLabel).code}
                     </p>
                     <GroupSummaryCard item={item} onAnalyze={handleReanalyze} analyzing={analyzing.has(item.projectId)} />
@@ -746,7 +816,7 @@ export function InstructorDashboardPage() {
         {!loading && !loadError && isSearchMode && (
           <>
             {matchedClasses.length === 0 && matchedGroups.length === 0 && (
-              <div className="text-center py-16 text-slate-400 text-sm">
+              <div className="text-center py-16 text-slate-600 text-sm">
                 No subjects or groups match <span className="font-medium text-slate-600">"{searchQuery}"</span>.{" "}
                 <button onClick={() => setSearchQuery("")} className="underline hover:text-slate-600">Clear search</button>
               </div>
@@ -766,20 +836,22 @@ export function InstructorDashboardPage() {
                         className="w-full flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-sm transition-all text-left"
                       >
                         <div className="shrink-0 w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-indigo-600 leading-none text-center px-0.5">
+                          <span className="text-xs font-bold text-indigo-600 leading-none text-center px-0.5">
                             {cls.subjectCode.slice(0, 4)}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 font-mono">{cls.subjectCode}</p>
+                          <p className="text-sm font-semibold text-slate-800 font-mono">
+                            <ClassCodeLabel subjectCode={cls.subjectCode} edpCode={cls.edpCode} edpClassName="font-normal text-slate-500" />
+                          </p>
                           <p className="text-xs text-slate-500 truncate">{cls.subjectName}</p>
                         </div>
-                        <span className="shrink-0 text-xs text-slate-400">
+                        <span className="shrink-0 text-xs text-slate-600">
                           {items.length} group{items.length !== 1 ? "s" : ""}
                         </span>
                         {atRisk > 0 && (
-                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700 whitespace-nowrap">
-                            ⚠ {atRisk} at risk
+                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-xs font-semibold text-red-700 whitespace-nowrap">
+                            ⚠ {groupsNeedAttention(atRisk)}
                           </span>
                         )}
                         <svg className="shrink-0 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -804,19 +876,9 @@ export function InstructorDashboardPage() {
             )}
           </>
         )}
-
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

@@ -1,9 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
+import { assignmentScoringConfig, scoringConfigBodySchema, validateConfigSums, saveAssignmentScoringConfig } from "../lib/scoringConfig.js";
 import { prisma } from "../lib/prisma.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertOwnsClass, assertOwnsAssignment } from "../lib/ownership.js";
 import { generateUniqueJoinCode } from "../lib/joinCode.js";
+import { BRIEF_DESCRIPTION_MAX, attachmentMetaFor } from "../lib/briefAttachments.js";
+import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
+import { notifyProjectChanged } from "../lib/projectChangeNotice.js";
+import type { ChangeKind } from "../lib/projectChangeText.js";
 
 export const assignmentsRouter = Router();
 
@@ -13,7 +18,27 @@ const createAssignmentSchema = z.object({
   deadline:       z.string({ required_error: "Deadline is required" }).datetime({ offset: true, message: "Deadline is required" }),
   maxGroupSize:   z.number().int().positive().default(5),
   sourceType:     z.enum(["GITHUB", "EDITOR", "COMBINED"]),
+  description:    z.string().max(BRIEF_DESCRIPTION_MAX, `Instructions must be ${BRIEF_DESCRIPTION_MAX} characters or fewer`).optional(),
 });
+
+// Instructions are required when a project is created or saved (the AI review reads them). Old
+// projects with empty instructions are untouched until someone edits them.
+const INSTRUCTIONS_REQUIRED_CREATE = "Write the project instructions. The AI review uses them to check the group's work.";
+const INSTRUCTIONS_REQUIRED_EDIT = "Add instructions as text, or keep a PDF or image. The AI review uses them to check the group's work.";
+
+// sourceType is deliberately not editable: changing it would invalidate existing groups, roles and reports.
+const updateAssignmentSchema = z.object({
+  title:        z.string().trim().min(1).optional(),
+  deadline:     z.string().datetime({ offset: true }).optional(),
+  maxGroupSize: z.number().int().positive().max(20).optional(),
+  description:  z.string().max(BRIEF_DESCRIPTION_MAX, `Instructions must be ${BRIEF_DESCRIPTION_MAX} characters or fewer`).nullable().optional(),
+});
+
+/** Plain text only: trim, and store empty as null. Rendering escapes it; nothing here is HTML. */
+function normalizeDescription(v: string | null | undefined): string | null {
+  const t = (v ?? "").trim();
+  return t ? t : null;
+}
 
 const idParam = z.coerce.number().int().positive();
 
@@ -26,7 +51,12 @@ assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (
     return;
   }
 
-  const { classSectionId, title, deadline, maxGroupSize, sourceType } = result.data;
+  const { classSectionId, title, deadline, maxGroupSize, sourceType, description } = result.data;
+
+  if (!normalizeDescription(description)) {
+    res.status(400).json({ error: INSTRUCTIONS_REQUIRED_CREATE });
+    return;
+  }
 
   const cls = await assertOwnsClass(req, res, classSectionId);
   if (!cls) return;
@@ -41,10 +71,77 @@ assignmentsRouter.post("/api/assignments", ...requireRole("INSTRUCTOR"), async (
       maxGroupSize,
       sourceType,
       joinCode,
+      description:  normalizeDescription(description),
     },
   });
 
   res.status(201).json(assignment);
+});
+
+// PATCH /api/assignments/:id — edit title/deadline/maxGroupSize/description
+assignmentsRouter.patch("/api/assignments/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid assignment id" });
+    return;
+  }
+  const parsed = updateAssignmentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input", details: parsed.error.flatten() });
+    return;
+  }
+  const assignment = await assertOwnsAssignment(req, res, idResult.data);
+  if (!assignment) return;
+
+  const { title, deadline, maxGroupSize, description } = parsed.data;
+
+  if (maxGroupSize !== undefined) {
+    const groups = await prisma.project.findMany({
+      where:  { assignmentId: assignment.id },
+      select: { _count: { select: { members: true, groupMemberships: true } } },
+    });
+    const largest = groups.reduce((m, g) => Math.max(m, g._count.members, g._count.groupMemberships), 0);
+    if (maxGroupSize < largest) {
+      res.status(400).json({
+        error: `Max group size can't be lower than your largest existing group (${largest} member${largest === 1 ? "" : "s"}).`,
+      });
+      return;
+    }
+  }
+
+  // Only when this save touches the instructions: empty text is fine while a PDF/image is still
+  // attached (older file-only projects). The edit form also checks the files it is about to remove.
+  if (description !== undefined && !normalizeDescription(description)) {
+    const files = await prisma.projectAttachment.count({ where: { assignmentId: assignment.id } });
+    if (files === 0) {
+      res.status(400).json({ error: INSTRUCTIONS_REQUIRED_EDIT });
+      return;
+    }
+  }
+
+  // What this save actually changes (the form may resend unchanged values). Only real differences
+  // notify the group's members.
+  const changed: ChangeKind[] = [];
+  if (description !== undefined && normalizeDescription(description) !== normalizeDescription(assignment.description)) changed.push("text");
+  if (deadline !== undefined && new Date(deadline).getTime() !== assignment.deadline?.getTime()) changed.push("deadline");
+  if (title !== undefined && title !== assignment.title) changed.push("name");
+  if (maxGroupSize !== undefined && maxGroupSize !== assignment.maxGroupSize) changed.push("groupSize");
+
+  const updated = await prisma.assignment.update({
+    where: { id: assignment.id },
+    data: {
+      ...(title !== undefined ? { title } : {}),
+      ...(deadline !== undefined ? { deadline: new Date(deadline) } : {}),
+      ...(maxGroupSize !== undefined ? { maxGroupSize } : {}),
+      ...(description !== undefined ? { description: normalizeDescription(description) } : {}),
+    },
+  });
+  await notifyProjectChanged(assignment.id, changed, {
+    title: updated.title,
+    deadline: updated.deadline,
+    maxGroupSize: updated.maxGroupSize,
+  });
+  res.json(updated);
 });
 
 // DELETE /api/assignments/:id — delete the assignment and all descendants in dependency order
@@ -80,7 +177,7 @@ assignmentsRouter.delete("/api/assignments/:id", ...requireRole("INSTRUCTOR"), a
 });
 
 // GET /api/assignments/:id — one assignment with its groups (ownership-verified; ADMIN bypasses ownership)
-assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMIN"), async (req, res) => {
+assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR"), async (req, res) => {
   const idResult = idParam.safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid assignment id" });
@@ -93,8 +190,9 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
   const projects = await prisma.project.findMany({
     where:   { assignmentId: assignment.id },
     orderBy: { id: "asc" },
-    include: { members: true, reports: { orderBy: { generatedAt: "desc" }, take: 1 } },
+    include: { members: true, reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 } },
   });
+  const attachments = (await attachmentMetaFor([assignment.id])).get(assignment.id) ?? [];
 
   res.json({
     assignment: {
@@ -105,6 +203,9 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
       sourceType:    assignment.sourceType,
       createdAt:     assignment.createdAt,
       classSectionId: assignment.classSectionId,
+      description:   assignment.description,
+      scoringConfig: assignmentScoringConfig(assignment),
+      attachments,
     },
     groups: projects.map((p) => ({
       id:              p.id,
@@ -115,4 +216,30 @@ assignmentsRouter.get("/api/assignments/:id", ...requireRole("INSTRUCTOR", "ADMI
       isAnalyzed:      p.reports.length > 0,
     })),
   });
+});
+
+// PATCH /api/assignments/:id/scoring-config — project-level scoring settings, applied to every group.
+// Owning instructor only (ADMIN may read via GET but not edit). Saving unchanged values is a no-op
+// and does not mark any group stale.
+assignmentsRouter.patch("/api/assignments/:id/scoring-config", ...requireRole("INSTRUCTOR"), async (req, res) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid assignment id" });
+    return;
+  }
+  const parsed = scoringConfigBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid config", details: parsed.error.flatten() });
+    return;
+  }
+  const sumError = validateConfigSums(parsed.data);
+  if (sumError) {
+    res.status(400).json({ error: sumError });
+    return;
+  }
+  const assignment = await assertOwnsAssignment(req, res, idResult.data);
+  if (!assignment) return;
+
+  const config = await saveAssignmentScoringConfig(prisma, assignment, parsed.data);
+  res.json({ config });
 });

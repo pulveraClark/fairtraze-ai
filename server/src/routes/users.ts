@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
+import { syncMemberGithubUsername } from "../lib/memberSync.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export const usersRouter = Router();
@@ -31,6 +32,7 @@ usersRouter.patch("/api/users/me", requireAuth, async (req, res) => {
     return;
   }
 
+  const before = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true, githubUsername: true } });
   const updated = await prisma.user.update({
     where: { id: req.user!.sub },
     data:  {
@@ -38,6 +40,10 @@ usersRouter.patch("/api/users/me", requireAuth, async (req, res) => {
       ...(githubUsername !== undefined   ? { githubUsername } : {}),
     },
   });
+
+  if (before && githubUsername !== undefined && (before.githubUsername ?? "") !== (updated.githubUsername ?? "")) {
+    await syncMemberGithubUsername(updated.id, before, updated.githubUsername);
+  }
 
   res.json({
     id:             updated.id,

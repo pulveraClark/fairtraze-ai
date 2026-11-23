@@ -2,64 +2,22 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { removeMemberRowFor } from "../lib/memberSync.js";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { defaultFunctionalRoles } from "../lib/roles.js";
 import { notify, resolveNotifications } from "../lib/notify.js";
+import { loadGroup, isInstructorOf, canManage } from "../lib/groupAccess.js";
+import { checkRepoUrl, sameRepo } from "@shared/repoUrl.js";
+import { checkRepoReachable } from "../lib/githubRepoCheck.js";
+import { REPO_CHANGED_ACTION } from "../lib/repoChange.js";
 
 export const groupsRouter = Router();
 
 const idParam = z.coerce.number().int().positive();
 
-// ── Shared loader ─────────────────────────────────────────────────────────────
-export async function loadGroup(projectId: number) {
-  return prisma.project.findUnique({
-    where: { id: projectId },
-    include: {
-      assignment: {
-        select: {
-          maxGroupSize:  true,
-          sourceType:    true,
-          classSectionId: true,
-          classSection:  { select: { instructorId: true } },
-        },
-      },
-      groupMemberships: {
-        include: {
-          user: { select: { id: true, name: true, email: true, githubUsername: true } },
-        },
-        orderBy: { joinedAt: "asc" },
-      },
-    },
-  });
-}
-
-// ── Auth helpers ──────────────────────────────────────────────────────────────
-
-export function isInstructorOf(
-  req: Request,
-  project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>
-): boolean {
-  return (
-    (req.user!.role === "INSTRUCTOR" || req.user!.role === "ADMIN") &&
-    project.assignment?.classSection.instructorId === req.user!.sub
-  );
-}
-
-export function leaderMembership(
-  req: Request,
-  project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>
-) {
-  return project.groupMemberships.find(
-    (m) => m.userId === req.user!.sub && m.role === "LEADER"
-  );
-}
-
-function canManage(
-  req: Request,
-  project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>
-): boolean {
-  return isInstructorOf(req, project) || !!leaderMembership(req, project);
-}
+// loadGroup / isInstructorOf / leaderMembership / canManage live in lib/groupAccess.ts; re-exported
+// so existing importers (documents.ts) keep working.
+export { loadGroup, isInstructorOf, leaderMembership } from "../lib/groupAccess.js";
 
 function groupLabel(project: { id: number; groupName: string }): string {
   return project.groupName.trim() || `Group ${project.id}`;
@@ -102,12 +60,13 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     return;
   }
 
-  const isAdmin  = req.user!.role === "ADMIN";
   const isMember = project.groupMemberships.some((m) => m.userId === req.user!.sub);
-  if (!isAdmin && !isMember && !isInstructorOf(req, project)) {
+  if (!isMember && !isInstructorOf(req, project)) {
     res.status(403).json({ error: "You do not have access to this group." });
     return;
   }
+
+  const seesEmails = isInstructorOf(req, project);
 
   res.json({
     id:          project.id,
@@ -118,12 +77,125 @@ groupsRouter.get("/api/groups/:id", requireAuth, async (req: Request, res: Respo
     members: project.groupMemberships.map((m) => ({
       userId:          m.user.id,
       name:            m.user.name,
-      email:           m.user.email,
+      // Email is for the owning instructor only; teammates see display names and GitHub usernames.
+      ...(seesEmails ? { email: m.user.email } : {}),
       githubUsername:  m.user.githubUsername,
       role:            m.role,
       functionalRoles: JSON.parse(m.functionalRoles) as string[],
       joinedAt:        m.joinedAt.toISOString(),
     })),
+  });
+});
+
+// What to tell the student when the repository check fails; each ends with the one thing to do next.
+const REPO_NOT_FOUND_MESSAGE =
+  "We couldn't find that repository, or it is private. Make the repository public, or ask your instructor how to share it.";
+
+// PUT /api/groups/:id/repo — link or change the group's GitHub repository.
+// Any member may add the FIRST link; once one is linked only the leader may change it. The instructor
+// is view-only. Every link/change is audit-logged and tells the rest of the group. A change after a
+// report exists marks that report outdated through the existing membershipChangedAt marker.
+groupsRouter.put("/api/groups/:id/repo", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const userId = req.user!.sub;
+  const membership = project.groupMemberships.find((m) => m.userId === userId);
+  if (!membership) {
+    res.status(403).json({ error: "Only members of this group can link its repository." });
+    return;
+  }
+  if (project.assignment?.sourceType === "EDITOR") {
+    res.status(400).json({ error: "This project uses FairTraze Docs only, so its groups have no GitHub repository." });
+    return;
+  }
+  if (project.repoUrl && membership.role !== "LEADER") {
+    res.status(403).json({ error: "Only the group leader can change the repository once it is linked." });
+    return;
+  }
+
+  const body = z.object({ repoUrl: z.string() }).safeParse(req.body);
+  const checked = checkRepoUrl(body.success ? body.data.repoUrl : "");
+  if (!checked.ok) { res.status(400).json({ code: "REPO_FORMAT", error: checked.message }); return; }
+
+  // Same repository again: nothing to save, nothing to log, no report marked outdated.
+  if (sameRepo(project.repoUrl, checked.url)) { res.json({ repoUrl: project.repoUrl, changed: false }); return; }
+
+  const reach = await checkRepoReachable(checked.owner, checked.repo, process.env.GITHUB_TOKEN);
+  if (reach.status === "not-found") { res.status(422).json({ code: "REPO_NOT_FOUND", error: REPO_NOT_FOUND_MESSAGE }); return; }
+  if (reach.status === "rate-limited") { res.status(429).json({ code: "REPO_CHECK_BUSY", error: "GitHub is busy right now. Wait a minute, then try again." }); return; }
+  if (reach.status === "no-token") { res.status(503).json({ code: "REPO_CHECK_UNAVAILABLE", error: "Repository checks are not available right now. Try again later, or ask your instructor." }); return; }
+  if (reach.status === "unreachable") { res.status(502).json({ code: "REPO_CHECK_FAILED", error: "We couldn't reach GitHub. Check your connection and try again." }); return; }
+
+  const previous = project.repoUrl;
+  const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const hasReport = !!previous && (await prisma.report.count({ where: { projectId: project.id } })) > 0;
+
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { repoUrl: checked.url, ...(hasReport ? { membershipChangedAt: new Date() } : {}) },
+  });
+  await prisma.auditLog.create({
+    data: {
+      actorId:    userId,
+      actorName:  actor?.name ?? `User ${userId}`,
+      action:     previous ? REPO_CHANGED_ACTION : "GROUP_REPO_LINKED",
+      targetType: "GROUP",
+      targetId:   String(project.id),
+      details:    previous ? `${previous} -> ${checked.url}` : checked.url,
+    },
+  });
+
+  const label = groupLabel(project);
+  const who = actor?.name ?? "A member";
+  const message = previous
+    ? `${who} changed the GitHub repository of ${label}`
+    : `${who} linked the GitHub repository of ${label}`;
+  const common = { actorId: userId, type: "GROUP_REPO_CHANGED" as const, message, projectId: project.id, refType: "GROUP_REPO", refId: project.id, collapse: true };
+  await notify({ ...common, recipientIds: project.groupMemberships.map((m) => m.userId), link: `/student/group/${project.id}` });
+  // The instructor hears about a change, not about the first link; their link opens the instructor page.
+  if (previous && project.assignment) {
+    await notify({ ...common, recipientIds: project.assignment.classSection.instructorId, link: `/project/${project.id}` });
+  }
+
+  res.json({ repoUrl: checked.url, changed: true });
+});
+
+// GET /api/groups/:id/setup — what the "Set up your group" card needs, for members only.
+// Display only. Unlinked members are named by display name; their username and email are never sent
+// (GET /api/groups/:id already shows members to each other, but this card needs nothing more).
+groupsRouter.get("/api/groups/:id/setup", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  const me = project.groupMemberships.find((m) => m.userId === req.user!.sub);
+  if (!me) { res.status(403).json({ error: "Only members of this group can see its setup." }); return; }
+
+  // Docs-only groups never need a repository or GitHub usernames.
+  const needsRepo = project.assignment?.sourceType !== "EDITOR";
+  const repoLinked = !!project.repoUrl;
+  const isLeader = me.role === "LEADER";
+  const unlinked = project.groupMemberships.filter((m) => !m.user.githubUsername?.trim());
+
+  res.json({
+    needsRepo,
+    repoUrl: project.repoUrl,
+    repoLinked,
+    isLeader,
+    canLinkRepo: needsRepo && !repoLinked,
+    canChangeRepo: needsRepo && repoLinked && isLeader,
+    viewerHasGithubUsername: !!me.user.githubUsername?.trim(),
+    usernames: {
+      linked: project.groupMemberships.length - unlinked.length,
+      total: project.groupMemberships.length,
+      missingNames: unlinked.map((m) => m.user.name),
+    },
   });
 });
 
@@ -500,226 +572,7 @@ groupsRouter.post("/api/groups/role-suggestions/:id/decline", requireAuth, async
   res.json({ message: "Role suggestion declined." });
 });
 
-// ── Tasks ─────────────────────────────────────────────────────────────────────
-// Leader/instructor-assigned checklist items for deliverables GitHub and the
-// Collaborative Editor can't see (a poster, a physical prototype, a
-// presentation). Purely informational — never read by shared/src/scoring.ts,
-// never affects contributionShare/flags/Gini. See buildTaskSummary in
-// projects.ts for how completion is surfaced on the report instead.
-
-function serializeTask(task: {
-  id: number; projectId: number; title: string; description: string | null;
-  assignedToUserId: number | null; createdByUserId: number; done: boolean;
-  completedAt: Date | null; createdAt: Date;
-}) {
-  return {
-    id:               task.id,
-    projectId:        task.projectId,
-    title:            task.title,
-    description:      task.description,
-    assignedToUserId: task.assignedToUserId,
-    createdByUserId:  task.createdByUserId,
-    done:             task.done,
-    completedAt:      task.completedAt ? task.completedAt.toISOString() : null,
-    createdAt:        task.createdAt.toISOString(),
-  };
-}
-
-// POST /api/groups/:id/tasks — create a task (leader or instructor only)
-groupsRouter.post("/api/groups/:id/tasks", requireAuth, async (req: Request, res: Response) => {
-  const idResult = idParam.safeParse(req.params.id);
-  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
-
-  const bodyResult = z.object({
-    title:            z.string().trim().min(1).max(200),
-    description:      z.string().trim().max(2000).optional(),
-    assignedToUserId: idParam.optional(),
-  }).safeParse(req.body);
-  if (!bodyResult.success) {
-    res.status(400).json({ error: "title is required (max 200 chars); assignedToUserId must be a valid id if provided" });
-    return;
-  }
-
-  const projectId = idResult.data;
-  const project = await loadGroup(projectId);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  if (!canManage(req, project)) {
-    res.status(403).json({ error: "Only the group leader or instructor can create tasks." });
-    return;
-  }
-
-  const { assignedToUserId } = bodyResult.data;
-  if (assignedToUserId !== undefined && !project.groupMemberships.some((m) => m.userId === assignedToUserId)) {
-    res.status(400).json({ error: "assignedToUserId must be a member of this group." });
-    return;
-  }
-
-  const task = await prisma.task.create({
-    data: {
-      projectId,
-      title:            bodyResult.data.title,
-      description:      bodyResult.data.description ?? null,
-      assignedToUserId: assignedToUserId ?? null,
-      createdByUserId:  req.user!.sub,
-    },
-  });
-
-  if (task.assignedToUserId != null) {
-    await notify({
-      recipientIds: task.assignedToUserId,
-      actorId:      req.user!.sub,
-      type:         "TASK_ASSIGNED",
-      message:      `You were assigned a task: ${task.title}`,
-      link:         `/student/group/${projectId}`,
-      projectId,
-      refType:      "TASK",
-      refId:        task.id,
-    });
-  }
-
-  res.status(201).json(serializeTask(task));
-});
-
-// GET /api/groups/:id/tasks — list tasks (any member or instructor)
-groupsRouter.get("/api/groups/:id/tasks", requireAuth, async (req: Request, res: Response) => {
-  const idResult = idParam.safeParse(req.params.id);
-  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
-
-  const project = await loadGroup(idResult.data);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  const isAdmin  = req.user!.role === "ADMIN";
-  const isMember = project.groupMemberships.some((m) => m.userId === req.user!.sub);
-  if (!isAdmin && !isMember && !isInstructorOf(req, project)) {
-    res.status(403).json({ error: "You do not have access to this group." });
-    return;
-  }
-
-  const tasks = await prisma.task.findMany({
-    where:   { projectId: idResult.data },
-    orderBy: { createdAt: "asc" },
-  });
-
-  res.json({ tasks: tasks.map(serializeTask) });
-});
-
-// PUT /api/groups/:id/tasks/:taskId — edit title/description/assignee (leader or instructor only)
-groupsRouter.put("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
-  const idResult     = idParam.safeParse(req.params.id);
-  const taskIdResult = idParam.safeParse(req.params.taskId);
-  if (!idResult.success || !taskIdResult.success) { res.status(400).json({ error: "Invalid id" }); return; }
-
-  const bodyResult = z.object({
-    title:            z.string().trim().min(1).max(200).optional(),
-    description:      z.string().trim().max(2000).nullable().optional(),
-    assignedToUserId: idParam.nullable().optional(),
-  }).safeParse(req.body);
-  if (!bodyResult.success) { res.status(400).json({ error: "Invalid task update" }); return; }
-
-  const project = await loadGroup(idResult.data);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  const task = await prisma.task.findUnique({ where: { id: taskIdResult.data } });
-  if (!task || task.projectId !== idResult.data) {
-    res.status(404).json({ error: "Task not found." });
-    return;
-  }
-
-  if (!canManage(req, project)) {
-    res.status(403).json({ error: "Only the group leader or instructor can edit tasks." });
-    return;
-  }
-
-  const { assignedToUserId } = bodyResult.data;
-  if (assignedToUserId != null && !project.groupMemberships.some((m) => m.userId === assignedToUserId)) {
-    res.status(400).json({ error: "assignedToUserId must be a member of this group." });
-    return;
-  }
-
-  const updated = await prisma.task.update({
-    where: { id: task.id },
-    data: {
-      ...(bodyResult.data.title !== undefined ? { title: bodyResult.data.title } : {}),
-      ...(bodyResult.data.description !== undefined ? { description: bodyResult.data.description } : {}),
-      ...(assignedToUserId !== undefined ? { assignedToUserId } : {}),
-    },
-  });
-
-  // Only a genuine (re)assignment to someone new notifies; clearing or keeping the assignee does not.
-  if (assignedToUserId != null && assignedToUserId !== task.assignedToUserId) {
-    await notify({
-      recipientIds: assignedToUserId,
-      actorId:      req.user!.sub,
-      type:         "TASK_ASSIGNED",
-      message:      `You were assigned a task: ${updated.title}`,
-      link:         `/student/group/${project.id}`,
-      projectId:    project.id,
-      refType:      "TASK",
-      refId:        updated.id,
-    });
-  }
-
-  res.json(serializeTask(updated));
-});
-
-// PATCH /api/groups/:id/tasks/:taskId — toggle completion (the assignee, or leader/instructor override)
-groupsRouter.patch("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
-  const idResult     = idParam.safeParse(req.params.id);
-  const taskIdResult = idParam.safeParse(req.params.taskId);
-  if (!idResult.success || !taskIdResult.success) { res.status(400).json({ error: "Invalid id" }); return; }
-
-  const bodyResult = z.object({ done: z.boolean() }).safeParse(req.body);
-  if (!bodyResult.success) { res.status(400).json({ error: "done must be a boolean" }); return; }
-
-  const project = await loadGroup(idResult.data);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  const task = await prisma.task.findUnique({ where: { id: taskIdResult.data } });
-  if (!task || task.projectId !== idResult.data) {
-    res.status(404).json({ error: "Task not found." });
-    return;
-  }
-
-  const isAssignee = task.assignedToUserId === req.user!.sub;
-  if (!isAssignee && !canManage(req, project)) {
-    res.status(403).json({ error: "Only the assigned member, group leader, or instructor can update this task's status." });
-    return;
-  }
-
-  const { done } = bodyResult.data;
-  const updated = await prisma.task.update({
-    where: { id: task.id },
-    data:  { done, completedAt: done ? new Date() : null },
-  });
-
-  res.json(serializeTask(updated));
-});
-
-// DELETE /api/groups/:id/tasks/:taskId — delete a task (leader or instructor only)
-groupsRouter.delete("/api/groups/:id/tasks/:taskId", requireAuth, async (req: Request, res: Response) => {
-  const idResult     = idParam.safeParse(req.params.id);
-  const taskIdResult = idParam.safeParse(req.params.taskId);
-  if (!idResult.success || !taskIdResult.success) { res.status(400).json({ error: "Invalid id" }); return; }
-
-  const project = await loadGroup(idResult.data);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  const task = await prisma.task.findUnique({ where: { id: taskIdResult.data } });
-  if (!task || task.projectId !== idResult.data) {
-    res.status(404).json({ error: "Task not found." });
-    return;
-  }
-
-  if (!canManage(req, project)) {
-    res.status(403).json({ error: "Only the group leader or instructor can delete tasks." });
-    return;
-  }
-
-  await prisma.task.delete({ where: { id: task.id } });
-
-  res.json({ message: "Task deleted." });
-});
+// Tasks live in routes/tasks.ts.
 
 // DELETE /api/groups/:id/members/:userId — remove a member (leader/instructor) or leave (self)
 groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: Request, res: Response) => {
@@ -777,13 +630,8 @@ groupsRouter.delete("/api/groups/:id/members/:userId", requireAuth, async (req: 
     }),
   ]);
 
-  // Remove the corresponding analysis Member row (matched by githubUsername + projectId)
-  const targetGitHub = targetMembership.user.githubUsername;
-  if (targetGitHub) {
-    await prisma.member.deleteMany({
-      where: { projectId, githubUsername: targetGitHub },
-    });
-  }
+  // Remove the corresponding legacy Member row, also for a user with no GitHub username.
+  await removeMemberRowFor(prisma, projectId, targetMembership.user);
 
   if (selfRemove) {
     // The leader can't self-leave (blocked above), so the leader is always a different user.
@@ -848,13 +696,6 @@ groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), r
     return;
   }
 
-  // GitHub username required for GitHub / Combined assignments
-  const needsGitHub = project.assignment.sourceType === "GITHUB" || project.assignment.sourceType === "COMBINED";
-  if (needsGitHub && !user?.githubUsername) {
-    res.status(400).json({ error: "Set your GitHub username in Settings before requesting to join this group." });
-    return;
-  }
-
   // Already a member of a group in this assignment?
   const alreadyIn = await prisma.groupMembership.findFirst({
     where: { userId, project: { assignmentId: project.assignmentId } },
@@ -864,30 +705,49 @@ groupsRouter.post("/api/groups/:projectId/request", ...requireRole("STUDENT"), r
     return;
   }
 
-  // Already have a PENDING request for any group in this assignment?
-  const pendingExists = await prisma.groupJoinRequest.findFirst({
-    where: {
-      userId,
-      status: "PENDING",
-      project: { assignmentId: project.assignmentId },
-    },
+  // Check-then-create runs under a per-(user, assignment) advisory lock, so two quick clicks (or two tabs)
+  // cannot both pass the duplicate check. A repeat request for the same group returns the one that exists.
+  const assignmentId = project.assignmentId;
+  const maxGroupSize = project.assignment.maxGroupSize;
+  const outcome = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${userId}::int, ${assignmentId}::int)`;
+
+    const pending = await tx.groupJoinRequest.findFirst({
+      where:   { userId, status: "PENDING", project: { assignmentId } },
+      orderBy: { id: "asc" },
+    });
+    if (pending?.projectId === projectId) return { kind: "existing" as const, request: pending };
+    if (pending) return { kind: "other-group" as const };
+
+    if (project.members.length >= maxGroupSize) return { kind: "full" as const };
+
+    const created = await tx.groupJoinRequest.create({ data: { userId, projectId, status: "PENDING" } });
+    return { kind: "created" as const, request: created };
   });
-  if (pendingExists) {
+
+  if (outcome.kind === "other-group") {
     res.status(409).json({
       error: "You already have a pending request for this project. Wait for a response before requesting another group.",
     });
     return;
   }
-
-  // Block if group is already full
-  if (project.members.length >= project.assignment.maxGroupSize) {
+  if (outcome.kind === "full") {
     res.status(409).json({ error: "This group is full." });
     return;
   }
 
-  const joinRequest = await prisma.groupJoinRequest.create({
-    data: { userId, projectId, status: "PENDING" },
-  });
+  const joinRequest = outcome.request;
+  if (outcome.kind === "existing") {
+    res.status(200).json({
+      id:        joinRequest.id,
+      projectId: project.id,
+      groupName: project.groupName || `Group ${project.id}`,
+      status:    "PENDING",
+      createdAt: joinRequest.createdAt.toISOString(),
+      existing:  true,
+    });
+    return;
+  }
 
   // Tell the group's leader — the message carries only the requester's name.
   await notify({
@@ -952,34 +812,23 @@ groupsRouter.get("/api/groups/:projectId/requests", requireAuth, async (req: Req
   });
 });
 
-// POST /api/groups/requests/:id/accept — accept a join request (leader or instructor)
-groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Request, res: Response) => {
-  const idResult = idParam.safeParse(req.params.id);
-  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+type PendingJoinRequest = {
+  id: number;
+  userId: number;
+  projectId: number;
+  user: { id: number; name: string; githubUsername: string | null };
+};
 
-  const joinReq = await prisma.groupJoinRequest.findUnique({
-    where:   { id: idResult.data },
-    include: { user: { select: { id: true, name: true, githubUsername: true } } },
-  });
-  if (!joinReq) { res.status(404).json({ error: "Request not found." }); return; }
-  if (joinReq.status !== "PENDING") {
-    res.status(409).json({ error: "This request has already been resolved." });
-    return;
-  }
-
-  const project = await loadGroup(joinReq.projectId);
-  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
-
-  if (!canManage(req, project)) {
-    res.status(403).json({ error: "Only the group leader or instructor can accept join requests." });
-    return;
-  }
-
-  if (project.groupMemberships.length >= (project.assignment?.maxGroupSize ?? Infinity)) {
-    res.status(409).json({ error: "This group is full. Cannot accept the request." });
-    return;
-  }
-
+/**
+ * Adds the requester to the group and resolves the request. The one place join-request acceptance happens,
+ * so the single "Accept" and "Accept all" follow identical rules. The caller has already checked permission,
+ * that the request is PENDING, and that the group has room.
+ */
+async function acceptJoinRequest(
+  joinReq: PendingJoinRequest,
+  project: NonNullable<Awaited<ReturnType<typeof loadGroup>>>,
+  actorId: number,
+): Promise<void> {
   await prisma.$transaction([
     prisma.groupMembership.create({
       data: {
@@ -1010,14 +859,87 @@ groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Re
   await resolveNotifications({ type: "JOIN_REQUEST_RECEIVED", refType: "JOIN_REQUEST", refId: joinReq.id });
   await notify({
     recipientIds: joinReq.userId,
-    actorId:      req.user!.sub,
+    actorId,
     type:         "JOIN_REQUEST_ACCEPTED",
     message:      `Your request to join ${project.groupName || `Group ${project.id}`} was accepted`,
     link:         `/student/group/${project.id}`,
     projectId:    project.id,
   });
+}
+
+// POST /api/groups/requests/:id/accept — accept a join request (leader or instructor)
+groupsRouter.post("/api/groups/requests/:id/accept", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid request id" }); return; }
+
+  const joinReq = await prisma.groupJoinRequest.findUnique({
+    where:   { id: idResult.data },
+    include: { user: { select: { id: true, name: true, githubUsername: true } } },
+  });
+  if (!joinReq) { res.status(404).json({ error: "Request not found." }); return; }
+  if (joinReq.status !== "PENDING") {
+    res.status(409).json({ error: "This request has already been resolved." });
+    return;
+  }
+
+  const project = await loadGroup(joinReq.projectId);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can accept join requests." });
+    return;
+  }
+
+  if (project.groupMemberships.length >= (project.assignment?.maxGroupSize ?? Infinity)) {
+    res.status(409).json({ error: "This group is full. Cannot accept the request." });
+    return;
+  }
+
+  await acceptJoinRequest(joinReq, project, req.user!.sub);
 
   res.json({ message: "Request accepted. Member added to the group." });
+});
+
+// POST /api/groups/:projectId/requests/accept-all — accept every pending request that fits (leader or instructor).
+// Oldest first, up to the group's member limit; the rest stay pending. Returns how many were accepted / left.
+groupsRouter.post("/api/groups/:projectId/requests/accept-all", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.projectId);
+  if (!idResult.success) { res.status(400).json({ error: "Invalid group id" }); return; }
+
+  const project = await loadGroup(idResult.data);
+  if (!project) { res.status(404).json({ error: "Group not found." }); return; }
+
+  if (!canManage(req, project)) {
+    res.status(403).json({ error: "Only the group leader or instructor can accept join requests." });
+    return;
+  }
+
+  const pending = await prisma.groupJoinRequest.findMany({
+    where:   { projectId: project.id, status: "PENDING" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    include: { user: { select: { id: true, name: true, githubUsername: true } } },
+  });
+  if (pending.length === 0) {
+    res.status(409).json({ error: "There are no pending requests." });
+    return;
+  }
+
+  const max = project.assignment?.maxGroupSize ?? Infinity;
+  let members = project.groupMemberships.length;
+  if (members >= max) {
+    res.status(409).json({ error: "This group is full. Cannot accept the requests." });
+    return;
+  }
+
+  let accepted = 0;
+  for (const joinReq of pending) {
+    if (members >= max) break;
+    await acceptJoinRequest(joinReq, project, req.user!.sub);
+    members += 1;
+    accepted += 1;
+  }
+
+  res.json({ accepted, skipped: pending.length - accepted });
 });
 
 // POST /api/groups/requests/:id/decline — decline a join request (leader or instructor)

@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { AppFooter } from "../components/AppFooter";
+import { classFullLabel } from "../lib/classLabel";
+import { useEffect, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { disputeKeys } from "../hooks/useGroupQueries";
+import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { PaginationBar } from "../components/PaginationBar";
 import { FlagTag } from "../components/FlagTag";
 import { useToast } from "../components/Toast";
@@ -73,6 +78,15 @@ function ResolveModal({
 
   useEffect(() => { textareaRef.current?.focus(); }, []);
 
+  // Opening the response window marks the note "Seen" for the student. Automatic, idempotent on the
+  // server, silent on failure: the instructor never has to do or see anything extra.
+  useEffect(() => {
+    void fetch(`/api/disputes/${dispute.id}/seen`, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => { /* display-only; ignore */ });
+  }, [dispute.id, token]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!response.trim()) { setError("Please provide a response."); return; }
@@ -99,7 +113,7 @@ function ResolveModal({
   const context = [
     dispute.project.groupName || `Group ${dispute.project.id}`,
     dispute.project.assignment?.title,
-    cs ? (cs.edpCode ? `${cs.subjectCode} (${cs.edpCode})` : cs.subjectCode) : undefined,
+    cs ? classFullLabel(cs) : undefined,
   ].filter(Boolean).join(" · ");
 
   return (
@@ -108,9 +122,9 @@ function ResolveModal({
         <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Respond to dispute</h2>
-            <p className="text-xs text-slate-400 mt-0.5">{dispute.memberName} · {context}</p>
+            <p className="text-xs text-slate-600 mt-0.5">{dispute.memberName} · {context}</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-700 transition-colors" aria-label="Close">
+          <button onClick={onClose} className="p-1 rounded text-slate-600 hover:text-slate-700 transition-colors" aria-label="Close">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -118,7 +132,7 @@ function ResolveModal({
         </div>
 
         <div className="px-6 pt-5">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Student's note</p>
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-2">Student's note</p>
           <p className="text-base text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
             {dispute.reason}
           </p>
@@ -126,7 +140,7 @@ function ResolveModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Resolution</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-2">Resolution</p>
             <div className="flex gap-3">
               {(["RESOLVED", "DISMISSED"] as const).map((opt) => (
                 <label key={opt} className="flex items-center gap-2 cursor-pointer">
@@ -141,10 +155,10 @@ function ResolveModal({
           </div>
 
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Your response</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-2">Your response</p>
             <textarea ref={textareaRef} value={response} onChange={(e) => setResponse(e.target.value)}
               placeholder="Provide context or a decision for the student…" rows={4} maxLength={2000}
-              className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400" />
+              className="w-full rounded-lg bg-white border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400" />
           </div>
 
           {error && <p className="text-xs text-red-600">{error}</p>}
@@ -169,14 +183,11 @@ function ResolveModal({
 type StatusFilter = "open" | "all";
 
 export function DisputesPage() {
-  const { token }    = useAuth();
-  const { navigate } = useRouter();
+  const { token, user } = useAuth();
+  const { navigate }    = useRouter();
+  const queryClient     = useQueryClient();
+  const uid             = user?.id ?? null;
 
-  const [disputes,      setDisputes]      = useState<DisputeItem[]>([]);
-  const [openCount,     setOpenCount]     = useState(0);
-  const [meta,          setMeta]          = useState<PageMeta>({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
-  const [loading,       setLoading]       = useState(true);
-  const [error,         setError]         = useState("");
   const [filter,        setFilter]        = useState<StatusFilter>("open");
   const [classSectionId, setClassSectionId] = useState<number | "">("");
   const [page,          setPage]          = useState(1);
@@ -187,50 +198,51 @@ export function DisputesPage() {
   const classesQuery = useClassesListQuery<ClassOption>(token);
   const classOptions = classesQuery.data ?? [];
 
-  const load = useCallback(() => {
-    if (!token) return;
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(page), pageSize: "20", status: filter });
-    if (classSectionId) params.set("classSectionId", String(classSectionId));
-    fetch(`/api/disputes?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (r) => {
-        const json = await r.json() as { disputes: DisputeItem[]; openCount: number; total?: number; page?: number; pageSize?: number; totalPages?: number; error?: string };
-        if (!r.ok) { setError(json.error ?? "Could not load disputes."); return; }
-        setDisputes(json.disputes ?? []);
-        setOpenCount(json.openCount ?? 0);
-        setMeta({ total: json.total ?? 0, page: json.page ?? 1, pageSize: json.pageSize ?? 20, totalPages: json.totalPages ?? 1 });
-      })
-      .catch(() => setError("Network error — could not load disputes."))
-      .finally(() => setLoading(false));
-  }, [token, filter, classSectionId, page]);
+  type DisputesResponse = { disputes: DisputeItem[]; openCount: number; total?: number; page?: number; pageSize?: number; totalPages?: number };
+  const listQuery = useQuery({
+    queryKey: disputeKeys.list(uid, { page, filter, classSectionId }),
+    queryFn: async (): Promise<DisputesResponse> => {
+      const params = new URLSearchParams({ page: String(page), pageSize: "20", status: filter });
+      if (classSectionId) params.set("classSectionId", String(classSectionId));
+      const r = await fetch(`/api/disputes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await r.json() as DisputesResponse & { error?: string };
+      if (!r.ok) throw new Error(json.error ?? "Could not load disputes.");
+      return json;
+    },
+    enabled: !!token && uid !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+  });
+  // A new dispute filed (instructor alert) changes the unread count → refresh the list.
+  useInvalidateOnAlertCount([disputeKeys.all(uid)]);
 
-  useEffect(() => { load(); }, [load]);
+  const data      = listQuery.data;
+  const disputes  = data?.disputes ?? [];
+  const openCount = data?.openCount ?? 0;
+  const meta: PageMeta = { total: data?.total ?? 0, page: data?.page ?? 1, pageSize: data?.pageSize ?? 20, totalPages: data?.totalPages ?? 1 };
+  const loading   = listQuery.isLoading || listQuery.isPlaceholderData; // spinner on filter/page change, as before
+  const error     = listQuery.isError
+    ? (listQuery.error instanceof TypeError ? "Network error — could not load disputes." : listQuery.error.message)
+    : "";
+  const load = () => { void listQuery.refetch(); };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {/* Page header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <button onClick={() => navigate("/dashboard")} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Dashboard
-            </button>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900">Disputes</h1>
+              <h1 className="text-xl font-semibold text-slate-900">Disputes</h1>
               {openCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
                   {openCount} open
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-400">Student-raised score disputes awaiting your review</p>
+            <p className="text-sm text-slate-600">Student-raised score disputes awaiting your review</p>
           </div>
-          <button onClick={load} className="text-xs text-slate-400 hover:text-slate-700 transition-colors font-medium">Refresh</button>
+          <button onClick={load} className="ft-hit rounded px-2 text-xs text-slate-600 hover:text-slate-700 transition-colors font-medium">Refresh</button>
         </div>
       </div>
 
@@ -243,7 +255,7 @@ export function DisputesPage() {
             {(["open", "all"] as StatusFilter[]).map((f) => (
               <button key={f} onClick={() => { setFilter(f); setPage(1); }}
                 className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
-                  filter === f ? "border-indigo-500 text-indigo-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                  filter === f ? "border-indigo-500 text-indigo-600" : "border-transparent text-slate-600 hover:text-slate-600"
                 }`}
               >
                 {f === "open" ? `Open${openCount > 0 ? ` (${openCount})` : ""}` : "All"}
@@ -253,16 +265,16 @@ export function DisputesPage() {
 
           {/* Class filter */}
           {classOptions.length > 0 && (
-            <div className="mb-px">
+            <div className="mb-px w-full min-w-0 sm:w-auto">
               <select
                 value={classSectionId}
                 onChange={(e) => { setClassSectionId(e.target.value === "" ? "" : Number(e.target.value)); setPage(1); }}
-                className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer"
+                className="w-full max-w-full min-w-0 truncate text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 sm:w-auto focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer"
               >
                 <option value="">All classes</option>
                 {classOptions.map((cs) => (
                   <option key={cs.id} value={cs.id}>
-                    {cs.edpCode ? `${cs.subjectCode} (${cs.edpCode})` : cs.subjectCode} — {cs.subjectName}
+                    {classFullLabel(cs)} — {cs.subjectName}
                   </option>
                 ))}
               </select>
@@ -272,7 +284,7 @@ export function DisputesPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-20 text-slate-400 text-sm gap-2">
+          <div className="flex items-center justify-center py-20 text-slate-600 text-sm gap-2">
             <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin" />
             Loading…
           </div>
@@ -297,7 +309,7 @@ export function DisputesPage() {
             <p className="text-base font-semibold text-slate-700">
               {filter === "open" ? "No open disputes" : "No disputes yet"}
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {filter === "open" ? "All disputes have been resolved." : "Students haven't raised any disputes."}
             </p>
           </div>
@@ -319,10 +331,10 @@ export function DisputesPage() {
                       <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-800">{d.memberName}</span>
-                          <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_STYLE[d.status]}`}>
+                          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_STYLE[d.status]}`}>
                             {d.status}
                           </span>
-                          <span className="text-xs text-slate-400">{timeAgo(d.createdAt)}</span>
+                          <span className="text-xs text-slate-600">{timeAgo(d.createdAt)}</span>
                         </div>
 
                         {d.disputedFlags.length > 0 && (
@@ -333,22 +345,25 @@ export function DisputesPage() {
 
                         <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500">
                           {cs && (
-                            <span className="font-mono font-semibold text-slate-700">
-                              {cs.subjectCode}{cs.edpCode && <span className="text-slate-400 font-normal"> ({cs.edpCode})</span>}
-                            </span>
+                            <ClassCodeLabel
+                              subjectCode={cs.subjectCode}
+                              edpCode={cs.edpCode}
+                              className="font-mono font-semibold text-slate-700"
+                              edpClassName="text-slate-500 font-normal"
+                            />
                           )}
-                          {cs && <span className="text-slate-300">·</span>}
+                          {cs && <span className="text-slate-600">·</span>}
                           {asgn && <span>{asgn.title}</span>}
-                          {asgn && <span className="text-slate-300">·</span>}
+                          {asgn && <span className="text-slate-600">·</span>}
                           <span>{d.project.groupName || `Group ${d.project.id}`}</span>
-                          {cs && <><span className="text-slate-300">·</span><span className="text-slate-400">{cs.subjectName}</span></>}
+                          {cs && <><span className="text-slate-600">·</span><span className="text-slate-600">{cs.subjectName}</span></>}
                         </div>
 
                         <p className="text-base text-slate-700 leading-relaxed">{d.reason}</p>
 
                         {d.instructorResponse && (
                           <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">Your response</p>
+                            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-1">Your response</p>
                             <p className="text-xs text-slate-600 leading-relaxed">{d.instructorResponse}</p>
                           </div>
                         )}
@@ -361,7 +376,7 @@ export function DisputesPage() {
                             </button>
                           )}
                           <button onClick={() => navigate(`/project/${d.project.id}`)}
-                            className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors font-medium">
+                            className="ft-hit rounded px-2 text-xs text-indigo-700 hover:text-indigo-900 transition-colors font-medium">
                             View group report →
                           </button>
                         </div>
@@ -385,23 +400,14 @@ export function DisputesPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AppFooter />
 
       {resolving && token && (
         <ResolveModal
           dispute={resolving}
           token={token}
           onClose={() => setResolving(null)}
-          onResolved={() => { setResolving(null); load(); }}
+          onResolved={() => { setResolving(null); void queryClient.invalidateQueries({ queryKey: disputeKeys.all(uid) }); }}
         />
       )}
     </div>

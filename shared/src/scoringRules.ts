@@ -1,0 +1,27 @@
+// Version of the deterministic scoring rules a report was computed with. Bump it whenever a change
+// to scoring would make an existing report's numbers differ from a fresh analysis, so every older
+// report is shown as outdated (read-time comparison; nothing is recomputed or rewritten).
+//   1 = original rules (every added line equal; Docs 0.4/0.2/0.4; UTC session-start days)
+//   2 = line type x file type x commit impact; Docs 0.6/0.2/0.2; Docs active day needs
+//       MIN_ACTIVE_DAY_RETAINED_CHARS retained characters; active days are Asia/Manila days
+//   3 = expert-survey (AHP) defaults: Docs 0.37/0.30/0.33 (instructor-adjustable per project),
+//       GitHub/Docs blend 0.55/0.45; counted images add 100 characters each to the Docs
+//       retained-text term (per-project limit 3/5/10/none, default 5); Docs sessions count only
+//       when characters were typed (delete-only and image-only sessions earn no session credit);
+//       text a teammate removed and the same member put back exactly (undo, or moved) returns to
+//       its original owners instead of being credited to the member who put it back;
+//       version 3 not yet released
+//   4 = Combined reports: when one source (GitHub or Docs) has no activity from anyone, the active
+//       source carries the whole blend (effective weight 1, the other 0) so shares add up to 100%
+//       and flags compare a real share with 1/N; both active or both quiet keeps the blend
+export const SCORING_RULES_VERSION = 4;
+
+/** True when a stored report was scored with older rules. A missing version means version 1. */
+export function isRulesOutdated(stored: { scoringRulesVersion?: number } | null | undefined): boolean {
+  if (!stored) return false;
+  return (stored.scoringRulesVersion ?? 1) < SCORING_RULES_VERSION;
+}
+
+export const RULES_OUTDATED_INSTRUCTOR_NOTICE = "Scoring was updated. Re-analyze to apply the new rules.";
+export const RULES_OUTDATED_STUDENT_NOTICE =
+  "This report uses older scoring rules. It updates when your instructor re-analyzes.";

@@ -3,11 +3,12 @@ import type * as YTypes from "yjs";
 import { EditEventType, EditType as PrismaEditType, EditSource } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { Y } from "./yjsCjs.js";
-import { wsUserId } from "./connectionRegistry.js";
+import { readOnlyWs, wsUserId } from "./connectionRegistry.js";
 import { computeAuthorshipMap } from "./authorshipMap.js";
 import { broadcastAuthorship } from "./authorshipBroadcast.js";
 import { classifyEdit } from "@shared/editClassifier.js";
 import type { EditType } from "@shared/editClassifier.js";
+import { ImageDecodeCache, currentImages, writeImageRegistry, type NewImageRecord } from "./imageRegistry.js";
 
 const FLUSH_DEBOUNCE_MS = 1500;
 const SESSION_IDLE_MS = 30 * 60 * 1000;
@@ -76,6 +77,12 @@ interface RoomState {
   documentId: number | null;
   lastText: string;
   lastImageCount: number;
+  // Image credit registry (imageRegistry.ts). lastImageHashes is the set of image contents in the
+  // document after the previous update; it is re-seeded by EVERY update, including the persisted-state
+  // restore (no user origin), so images already in the saved document are never registered as new.
+  lastImageHashes: Set<string>;
+  imageCache: ImageDecodeCache;
+  pendingImages: NewImageRecord[]; // new image contents waiting for documentId / the next flush
   pendingEvents: PendingEvent[];
   closedSessions: ClosedSession[];
   sessions: Map<number, SessionState>; // userId -> active in-memory session
@@ -90,14 +97,22 @@ interface RoomState {
 // replacing it here is correct, not a race to guard against.
 const rooms = new Map<string, RoomState>();
 
-// Walks the Yjs XML tree and concatenates only real document text — Y.XmlText content via
-// `.toString()`. This walk only ever touches `ydoc.getXmlFragment("default")`, the exact shared
+// Walks the Yjs XML tree and concatenates only real document text — each Y.XmlText's string
+// inserts via `.toDelta()`, attributes ignored. NOT `.toString()`: that wraps marked runs in
+// XML tags (`<bold>…</bold>`), which inflated offsets past what the client's text-node walk
+// (authorshipHighlight.ts plainTextRangeToPMRange) sees and turned bare mark toggles into
+// phantom INSERT/DELETE events. Embeds (non-string inserts) contribute nothing, same as image
+// nodes. No separator between blocks — matches the client's offset model. This walk only ever touches `ydoc.getXmlFragment("default")`, the exact shared
 // type `Collaboration.configure({document: ydoc})` syncs as document content. It never touches
 // `provider.awareness` (a completely separate wire message type), which is where
 // CollaborationCursor's name/color labels live — so cursor decorations can never leak in here.
-function extractPlainText(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText): string {
+export function extractPlainText(node: YTypes.XmlFragment | YTypes.XmlElement | YTypes.XmlText): string {
   if (node instanceof Y.XmlText) {
-    return node.toString();
+    let text = "";
+    for (const op of node.toDelta() as { insert?: unknown }[]) {
+      if (typeof op.insert === "string") text += op.insert;
+    }
+    return text;
   }
   let out = "";
   for (const child of node.toArray()) {
@@ -215,6 +230,11 @@ async function flushRoom(room: string): Promise<void> {
   }
   const documentId = state.documentId;
 
+  // Image registry rows (insert-if-missing). Never throws, so it cannot hold up the event flush.
+  const newImages = state.pendingImages;
+  state.pendingImages = [];
+  await writeImageRegistry(documentId, newImages);
+
   const events = state.pendingEvents;
   state.pendingEvents = [];
   const closed = state.closedSessions;
@@ -312,12 +332,20 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     documentId: null,
     lastText: extractPlainText(fragment),
     lastImageCount: countImageNodes(fragment),
+    lastImageHashes: new Set(),
+    imageCache: new ImageDecodeCache(),
+    pendingImages: [],
     pendingEvents: [],
     closedSessions: [],
     sessions: new Map(),
     flushTimer: null,
   };
   rooms.set(room, state);
+  try {
+    state.lastImageHashes = new Set(currentImages(fragment, state.imageCache).keys());
+  } catch {
+    // Seeding is best effort; the restore update re-seeds it.
+  }
 
   ydoc.on("update", (_update: Uint8Array, origin: unknown) => {
     // lastText is kept in sync with every update regardless of origin — including the
@@ -337,6 +365,21 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     const imageDelta = newImageCount - state.lastImageCount;
     state.lastImageCount = newImageCount;
 
+    // Image credit registry: which image contents are new in the document since the last update.
+    // Resynced on every update (restore included) like lastText, so only an attributable update
+    // can register anything. Wrapped so a failure here can never reach the collab listener.
+    let freshImages: NewImageRecord[] = [];
+    try {
+      const current = currentImages(fragment, state.imageCache);
+      const previous = state.lastImageHashes;
+      state.lastImageHashes = new Set(current.keys());
+      for (const [hash, decoded] of current) {
+        if (!previous.has(hash)) freshImages.push({ ...decoded, ownerUserId: -1 });
+      }
+    } catch {
+      freshImages = [];
+    }
+
     // y-websocket sets `origin` to the raw ws connection for every update that arrived over
     // the wire from that connection (verified against y-websocket/y-protocols source). Updates
     // applied locally with no origin (persisted-state restore, legacy-content migration) are
@@ -344,12 +387,19 @@ export async function attachAuthorshipTracking(room: string, groupId: number, yd
     let userId: number | undefined;
     let source: EditSource = EditSource.LIVE;
     if (origin instanceof WebSocket) {
-      userId = wsUserId.get(origin);
+      // A read-only connection (instructor/admin, not a group member) never owns text. The gate in
+      // readOnlyGate.ts already drops its writes; this keeps any that slipped through unattributed.
+      userId = readOnlyWs.has(origin) ? undefined : wsUserId.get(origin);
     } else if (isImportOrigin(origin)) {
       userId = origin.userId;
       source = EditSource.IMPORT;
     }
     if (userId === undefined) return;
+
+    if (freshImages.length > 0) {
+      for (const img of freshImages) state.pendingImages.push({ ...img, ownerUserId: userId });
+      scheduleFlush(room);
+    }
 
     // insertedImages only counts net-new image nodes (imageDelta > 0); a net decrease (an image
     // deleted) is never subtracted from a session's running total — same "gross, not net of

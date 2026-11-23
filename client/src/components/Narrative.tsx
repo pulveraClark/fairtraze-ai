@@ -1,109 +1,336 @@
-import { useState } from "react";
+import { aiFooterLine } from "../lib/aiFooter";
+import { useEffect, useId, useState } from "react";
+import type { TeamHealth } from "@shared/types";
 import ReactMarkdown from "react-markdown";
-import type { NarrativeResponse } from "@shared/types";
+import { BUTTON_SECONDARY, CARD } from "./ui/styles";
+import { SkeletonLines, Spinner } from "./ui/Spinner";
+import { InfoTip } from "./ui/InfoTip";
+import { TIPS, helpLink } from "../lib/helpText";
+import { NARRATIVE_OUTDATED_TEXT } from "../lib/analysisFreshness";
+import { AI_SLOW_TEXT, AI_WRITING_HINT, WORK_SUMMARY_STATUS_TEXT, aiAddressedLine, aiButtonLabel, formatBasedOn, briefStatusLine, reviewStatusLine, workSummaryState } from "../lib/aiReview";
+import { SparkleIcon } from "./ui/AiBadge";
+import { BriefCheckCard, CheckHeaderActions, RequirementActions, RequirementTextLink, ViewInstructionsLink, type InstructionsAccess } from "./BriefCheckCard";
+import { STALE_ROW_NOTE, marksByKey, staleMarks } from "../lib/requirementMarks";
+import { FOCUS_LIGHT } from "./ui";
 import { useAuth } from "../context/AuthContext";
+import { openAttachmentByName, type BriefAttachment, type OpenFileResult } from "../lib/briefAttachments";
+import { useRequirementMarks } from "../hooks/useRequirementMarks";
+import { coveredProofTitle, groupTitle, healthSentence, instructionsSummary, lookGroups, needsLookCountText } from "../lib/aiSummary";
+import { RefreshFailedNote } from "./RefreshFailedNote";
+import { InstructorInstructionsModal } from "./InstructorInstructionsModal";
+import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
+import type { AiBriefCheck } from "../lib/aiReview";
+import type { UseAiReview } from "../hooks/useAiReview";
+import { useGenerateAiReport, type AiReportGenerator } from "../hooks/useGenerateAiReport";
+import { flagWordsForInstructor } from "@shared/flagWording";
 
 interface Props {
   narrative: string | null;
+  /** An automatic run changed the results after this text was written. */
+  outdated?: boolean;
   projectId: number;
   onNarrativeGenerated: (text: string) => void;
+  /** AI findings on each member for this group. When on, the Generate button also writes them. */
+  review?: UseAiReview;
+  /** Shared with the member details window so both buttons are the same action. Built here when absent. */
+  generator?: AiReportGenerator;
+  /** When the analysis the explanation is based on ran (ISO). Shown in the footer. */
+  basedOnAt?: string | null;
+  /** Linked repository, for the project instructions check's "Open the repository" link. */
+  repoUrl?: string | null;
+  /** The group's source type: hides the Docs link for a GitHub-only group. */
+  sourceType?: string | null;
+  /** The page that shows (and edits) the project instructions. */
+  instructionsHref?: string;
+  /** The assignment whose instructions open in a window over the report (loaded only when opened). */
+  instructionsAssignmentId?: number;
+  /** The code-computed team health; null/absent hides the health line (for example, no recorded activity). */
+  teamHealth?: TeamHealth | null;
 }
 
-export function Narrative({ narrative, projectId, onNarrativeGenerated }: Props) {
-  const { token } = useAuth();
-  const [generating, setGenerating] = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+const ROW_BTN = `flex min-h-11 min-w-0 flex-1 basis-56 items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-50 ${FOCUS_LIGHT}`;
 
-  async function generate(regenerate = false) {
-    setGenerating(true);
-    setError(null);
-    try {
-      const url = `/api/projects/${projectId}/narrative${regenerate ? "?regenerate=true" : ""}`;
-      const res = await fetch(url, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = (await res.json()) as Partial<NarrativeResponse> & { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Could not generate explanation.");
-      } else if (data.narrative) {
-        onNarrativeGenerated(data.narrative);
-      }
-    } catch {
-      setError("Network error — could not reach the server.");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
+/** A 44px collapsed row with a ▸ marker; `actions` sit on its right (a link or tip can't live inside the button). */
+function Disclosure({ title, open, onToggle, buttonRef, actions, children }: {
+  title: string; open: boolean; onToggle: () => void; buttonRef?: React.Ref<HTMLButtonElement>; actions?: React.ReactNode; children: React.ReactNode;
+}) {
+  const id = useId();
   return (
-    <div className="bg-white border border-slate-200 border-l-4 border-l-purple-400 rounded-xl shadow-sm p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-slate-700">Explainable Fairness Report</h2>
-        {narrative && !generating && (
-          <button
-            type="button"
-            onClick={() => generate(true)}
-            className="text-xs text-slate-400 hover:text-indigo-600 transition-colors"
-          >
-            Regenerate
-          </button>
+    <div>
+      <div className="flex flex-wrap items-center gap-x-2 rounded-lg border border-slate-200 bg-white pr-2">
+        <button type="button" ref={buttonRef} aria-expanded={open} aria-controls={id} onClick={onToggle} className={ROW_BTN}>
+          <span aria-hidden="true" className={`shrink-0 text-slate-700 transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
+        </button>
+        {actions && <div className="ml-auto flex shrink-0 items-center gap-x-2 pl-8 sm:pl-0">{actions}</div>}
+      </div>
+      {open && <div id={id}>{children}</div>}
+    </div>
+  );
+}
+
+type CardProps = Parameters<typeof BriefCheckCard>[0];
+
+/** Instructions line, "Needs a look" and the check row. Reads the instructor's marks once and shares them. */
+function InstructionsSection({ projectId, assignmentId, check, failedNote, onNeedCount, ...card }: {
+  projectId: number;
+  /** Tells the card header how many items need a look (null when the section is not shown). */
+  onNeedCount?: (n: number | null) => void;
+  /** The assignment whose attachments "Open file" opens (instructor route, read when the link is clicked). */
+  assignmentId?: number; check: AiBriefCheck; failedNote: React.ReactNode;
+} & Omit<CardProps, "check" | "marks" | "instructor" | "embedded" | "onOpenFile">) {
+  const { token } = useAuth();
+  const marks = useRequirementMarks(projectId, token, "instructor");
+  // "Open file" opens the attached PDF or image itself through the existing attachment route; the list is read on click.
+  const onOpenFile = assignmentId && token
+    ? async (filename: string): Promise<OpenFileResult> => {
+        try {
+          const res = await fetch(`/api/assignments/${assignmentId}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (!res.ok) return "failed";
+          const json = (await res.json()) as { assignment: { attachments?: BriefAttachment[] } };
+          return openAttachmentByName(assignmentId, json.assignment.attachments ?? [], filename, token);
+        } catch {
+          return "failed";
+        }
+      }
+    : undefined;
+  const [open, setOpen] = useState(false);
+  const summary = instructionsSummary(check.requirements, marks.marks);
+  const needCount = check.nothingRead ? 0 : summary.look.length;
+  useEffect(() => {
+    onNeedCount?.(needCount);
+    return () => onNeedCount?.(null);
+  }, [needCount, onNeedCount]);
+  const unavailable = !!failedNote;
+  const actions = <CheckHeaderActions sources={check.sources} instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} />;
+  if (check.nothingRead) {
+    return (
+      <div className="mt-3 space-y-2">
+        {failedNote}
+        <Disclosure title="Project instructions check · nothing could be read" open={open} onToggle={() => setOpen((v) => !v)} actions={actions}>
+          <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
+        </Disclosure>
+      </div>
+    );
+  }
+  if (summary.total === 0) return null;
+  const access: InstructionsAccess = { instructionsHref: card.instructionsHref, onViewInstructions: card.onViewInstructions, openFile: onOpenFile };
+  const keyMarks = marksByKey(marks.marks);
+  // An older mark whose sentence changed, on a requirement that is still in the check: the row says "check again".
+  const liveKeys = new Set(check.requirements.map((r) => r.key).filter(Boolean));
+  const staleKeys = new Set(staleMarks(marks.marks).filter((m) => liveKeys.has(m.requirementKey)).map((m) => m.requirementKey));
+  const groups = lookGroups(summary.look);
+  return (
+    <>
+      {unavailable && <p className="mt-3 text-sm font-medium leading-normal text-slate-900">Instructions check unavailable. Last good result kept.</p>}
+      {summary.look.length > 0 && (
+        <section aria-label="Needs a look" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="space-y-3">
+            {groups.map((g) => {
+              const title = groupTitle(g.kind, g.items.length, summary.total);
+              return (
+                <section key={g.kind} aria-label={title}>
+                  <div className="flex items-center justify-between gap-x-3">
+                    <h3 className="min-w-0 text-xs font-semibold text-amber-950">{title}</h3>
+                    <ViewInstructionsLink instructionsHref={card.instructionsHref} onViewInstructions={card.onViewInstructions} label={title} />
+                  </div>
+                  <ul className="space-y-2">
+                    {g.items.map((i) => (
+                      <li key={i.req.key ?? i.text} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <div className="min-w-0 flex-1 basis-56"><RequirementTextLink r={i.req} access={access} /></div>
+                        <RequirementActions r={i.req} access={access} marks={marks} keyMarks={i.req.key ? keyMarks.get(i.req.key) : undefined} textIsLink rowLayout />
+                        {!i.req.sourceQuote && i.req.sourceFile && (
+                          <p className="basis-full text-xs leading-normal text-slate-800 [overflow-wrap:anywhere]">From attached file: {i.req.sourceFile}</p>
+                        )}
+                        {i.req.key && staleKeys.has(i.req.key) && (
+                          <p className="basis-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs leading-normal text-amber-950">{STALE_ROW_NOTE}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      <div className="mt-3 space-y-2">
+        {failedNote}
+        {summary.found > 0 && (
+          <Disclosure title={coveredProofTitle(summary.found)} open={open} onToggle={() => setOpen((v) => !v)} actions={actions}>
+            <BriefCheckCard check={check} instructor marks={marks} embedded onOpenFile={onOpenFile} {...card} />
+          </Disclosure>
         )}
       </div>
+    </>
+  );
+}
 
-      {/* No narrative yet */}
-      {!narrative && !generating && (
-        <div className="flex flex-col items-center py-8 gap-3 text-center">
-          <p className="text-sm text-slate-500">
-            The computed scores are ready. Generate an AI explanation when you need it.
+export function Narrative({ narrative, outdated = false, projectId, onNarrativeGenerated, review, generator, basedOnAt, repoUrl, sourceType, instructionsHref, instructionsAssignmentId, teamHealth }: Props) {
+  // The sentence to mark in the instructions window; null while it is closed.
+  const [viewing, setViewing] = useState<{ quote?: string } | null>(null);
+  const [needCount, setNeedCount] = useState<number | null>(null);
+  const own = useGenerateAiReport(projectId, review, onNarrativeGenerated);
+  const { generating, error, warning, generate, busy, slow, upToDate } = generator ?? own;
+  const anyError = error ?? review?.error ?? null;
+
+  const summaryState = review?.data?.canGenerate ? workSummaryState(review.data) : null;
+  // "Some AI findings show changed files only..." now sits with the member findings, not in this card.
+  const statusLine = review?.data?.status === "PARTIAL" ? null : reviewStatusLine(review?.data ?? null);
+  const addressedLine = aiAddressedLine(review?.data ?? null);
+  const briefLine = briefStatusLine(review?.data ?? null);
+  const briefCheck = review?.data?.enabled ? review.data.briefCheck : undefined;
+  // Instructor only: the server says exactly when the project has no written instructions and no file.
+  const noInstructions = !!review?.data?.enabled && !!review.data.canGenerate && review.data.hasInstructions === false;
+
+  const when = formatBasedOn(basedOnAt);
+
+  return (
+    <section aria-labelledby="narrative-title" className={`${CARD} min-w-0 border-l-4 border-l-purple-600 p-4`}>
+      {/* Header: the one AI button now lives in Member contributions */}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+        <h2 id="narrative-title" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold text-slate-900">
+          <span className="text-indigo-800"><SparkleIcon /></span>
+          AI findings
+          {needCount !== null && needCount > 0 && (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-950">{needsLookCountText(needCount)}</span>
+          )}
+        </h2>
+        <p className="flex min-w-0 flex-wrap items-center gap-1 text-sm leading-normal text-slate-700">
+          Scores computed by formula · explained by AI
+          <InfoTip label="About the AI findings" helpHref={helpLink("ai")}>{TIPS.narrative}</InfoTip>
+        </p>
+      </div>
+
+      {/* Work-summary status: one calm line each, only when there is something to say */}
+      {summaryState === "running" && !generating ? (
+        // Page opened while a run was going. (A run started here shows the one block further down.)
+        // Not a live region: the one in Member contributions announces the change.
+        <div className="mb-3 min-h-24">
+          <p className="flex items-center gap-2 text-sm leading-normal text-slate-700">
+            <Spinner className="text-indigo-700" />
+            {WORK_SUMMARY_STATUS_TEXT.running}
           </p>
+          <p className="mt-1 text-xs leading-normal text-slate-700">{slow ? AI_SLOW_TEXT : AI_WRITING_HINT}</p>
+          <SkeletonLines className="mt-3" />
+        </div>
+      ) : (
+        summaryState && summaryState !== "running" && WORK_SUMMARY_STATUS_TEXT[summaryState] && (
+          <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{WORK_SUMMARY_STATUS_TEXT[summaryState]}</p>
+        )
+      )}
+      {anyError && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-red-800">
+          <span className="min-w-0 [overflow-wrap:anywhere]">{anyError}</span>
           <button
             type="button"
-            onClick={() => generate(false)}
-            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            onClick={() => void generate(!!narrative)}
+            disabled={busy && !slow}
+            className={`${BUTTON_SECONDARY} min-h-10`}
           >
-            Generate explanation
+            Try again
           </button>
-          {error && (
-            <p className="text-xs text-red-600 max-w-sm">{error}</p>
-          )}
+        </div>
+      )}
+      {warning && !anyError && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{warning}</p>}
+      {review?.data?.enabled && review.data.refreshFailed?.findings && (
+        <RefreshFailedNote
+          note={review.data.refreshFailed.findings}
+          onTryAgain={review.data.canGenerate ? () => void generate(!!narrative) : undefined}
+          busy={busy && !slow}
+        />
+      )}
+      {upToDate && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{upToDate}</p>}
+      {statusLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{statusLine}</p>}
+      {addressedLine && <p className="mb-3 text-sm leading-normal text-slate-700">{addressedLine}</p>}
+      {briefLine && <p role="status" className="mb-3 text-sm leading-normal text-slate-700">{briefLine}</p>}
+
+      {/* Health sentence: computed by code, so it shows even when the AI text is missing. The health pill itself
+          lives once, in the summary bar above, so it is not repeated here. */}
+      {teamHealth && (
+        <p className="mb-1 text-sm leading-normal text-slate-900">{healthSentence(teamHealth)}</p>
+      )}
+
+      {/* No narrative yet */}
+      {!narrative && !generating && summaryState !== "running" && (
+        <div className="flex flex-col gap-2 py-2">
+          <p className="text-sm leading-normal text-slate-700">
+            No AI findings yet. Use the {aiButtonLabel(false, false)} button in Member contributions above.
+          </p>
         </div>
       )}
 
       {/* Loading */}
       {generating && (
-        <div className="flex items-center gap-3 py-8 text-slate-500 text-sm">
-          <svg
-            className="animate-spin w-4 h-4 text-indigo-500 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <span>Generating AI explanation…</span>
+        <div className="min-h-24 py-2 text-sm text-slate-700">
+          <p className="flex items-center gap-3">
+            <Spinner className="text-indigo-700" />
+            <span>Generating AI findings…</span>
+          </p>
+          <p className="mt-1 text-xs leading-normal text-slate-700">{slow ? AI_SLOW_TEXT : AI_WRITING_HINT}</p>
+          <SkeletonLines className="mt-3" />
         </div>
       )}
 
-      {/* Narrative */}
+      {/* The AI explanation, inline. The note about changed results sits above it. */}
       {narrative && !generating && (
-        <>
-          <div className="text-slate-600 text-base leading-relaxed [&_strong]:font-semibold [&_strong]:text-slate-800 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-100">
-            <ReactMarkdown>{narrative}</ReactMarkdown>
-          </div>
-          {error && (
-            <p className="mt-3 text-xs text-red-600">{error}</p>
+        <div className="mt-3 space-y-3">
+          {outdated && (
+            <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium leading-normal text-amber-950">
+              {NARRATIVE_OUTDATED_TEXT}
+            </p>
           )}
-          <p className="mt-4 text-xs text-slate-400 italic">
-            Generated by Gemini · Informational only — does not assign grades or replace instructor judgment.
-          </p>
-        </>
+          <div className="text-sm leading-relaxed text-slate-800 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_p]:mb-0 [&_p]:mt-3 [&_p:first-child]:mt-0 [&_p:not(:first-child)]:pt-3 [&_p:not(:first-child)]:border-t [&_p:not(:first-child)]:border-slate-200">
+            <ReactMarkdown>{flagWordsForInstructor(narrative)}</ReactMarkdown>
+          </div>
+        </div>
       )}
-    </div>
+      {narrative && !generating && (
+        <p className="mt-4 text-sm italic leading-normal text-slate-700">
+          {aiFooterLine(when)}
+        </p>
+      )}
+      {/* Needs a look and the covered check row, after the explanation */}
+      {briefCheck && !generating && (
+        <InstructionsSection
+          projectId={projectId}
+          assignmentId={instructionsAssignmentId}
+          check={briefCheck}
+          failedNote={
+            review?.data?.refreshFailed?.brief ? (
+              <RefreshFailedNote
+                note={review.data.refreshFailed.brief}
+                onTryAgain={review.data.canGenerate ? () => void generate(!!narrative) : undefined}
+                busy={busy && !slow}
+              />
+            ) : null
+          }
+          repoUrl={repoUrl}
+          sourceType={sourceType}
+          instructionsHref={instructionsHref}
+          onNeedCount={setNeedCount}
+          onViewInstructions={instructionsAssignmentId ? (quote) => setViewing({ quote }) : undefined}
+        />
+      )}
+
+      {viewing && instructionsAssignmentId && (
+        <InstructorInstructionsModal
+          assignmentId={instructionsAssignmentId}
+          quote={viewing.quote}
+          editHref={instructionsHref}
+          onClose={() => setViewing(null)}
+        />
+      )}
+      {noInstructions && !briefCheck && !generating && (
+        <p className="mt-4 flex flex-wrap items-center gap-x-2 text-sm leading-normal text-slate-700">
+          <span>{NO_INSTRUCTIONS_LINE}</span>
+          {instructionsHref && (
+            <a href={instructionsHref} className="inline-flex min-h-10 items-center font-medium text-blue-800 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+              Add the instructions
+            </a>
+          )}
+        </p>
+      )}
+    </section>
   );
 }

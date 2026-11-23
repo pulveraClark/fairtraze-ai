@@ -4,17 +4,21 @@ import { useRouter } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { UserMenu } from "../components/UserMenu";
 import logoUrl from "../assets/logo_transparent.png";
+import { flagLabel } from "../lib/flagLabel";
 
 // ── Static preview data ───────────────────────────────────────────────────────
-const PREVIEW_MEMBERS = [
-  { name: "Member A", pct: 36, flag: "overload"   as const },
-  { name: "Member B", pct: 26, flag: null },
-  { name: "Member C", pct: 25, flag: null },
-  { name: "Member D", pct: 13, flag: "free-rider" as const },
+export const PREVIEW_MEMBERS = [
+  { name: "Member A", pct: 46, flag: "overload"   as const },
+  { name: "Member B", pct: 22, flag: null },
+  { name: "Member C", pct: 22, flag: null },
+  { name: "Member D", pct: 10, flag: "free-rider" as const },
 ] as const;
 
-const AI_NARRATIVE_TEXT =
-  "Member A's contribution share (36%) is well above the team's equal share, indicating a workload concentration. Member D's share (13%) falls significantly below the expected minimum…";
+export const AI_NARRATIVE_TEXT =
+  "Member A's share (46%) is well above an equal split, so the work is concentrated. Member D's share (10%) is well below it. The scores come from the math; this text only explains them.";
+
+export const REQUIREMENTS_CHECK_TEXT =
+  "5 of 6 covered. Missing: README. Quotes checked word for word.";
 
 // ── Count-up stat number (animates 0 → value once it enters the viewport) ─────
 function AnimatedPercent({ value }: { value: number }) {
@@ -41,17 +45,23 @@ function AnimatedPercent({ value }: { value: number }) {
 }
 
 // ── Typewriter effect for the AI narrative text (loops while on-screen) ───────
-function TypewriterNarrative({ text }: { text: string }) {
+function TypewriterNarrative({ text, onDone, onRestart }: { text: string; onDone?: () => void; onRestart?: () => void }) {
   const ref = useRef<HTMLParagraphElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-40px" });
   const shouldReduceMotion = useReducedMotion();
   const [displayLength, setDisplayLength] = useState(shouldReduceMotion ? text.length : 0);
   const [isTyping, setIsTyping] = useState(!shouldReduceMotion);
+  // Keep the latest callback in a ref so it never restarts the typing effect.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const onRestartRef = useRef(onRestart);
+  onRestartRef.current = onRestart;
 
   useEffect(() => {
     if (shouldReduceMotion) {
       setDisplayLength(text.length);
       setIsTyping(false);
+      onDoneRef.current?.();
       return;
     }
     if (!isInView) return;
@@ -63,12 +73,14 @@ function TypewriterNarrative({ text }: { text: string }) {
       let charIndex = 0;
       setDisplayLength(0);
       setIsTyping(true);
+      onRestartRef.current?.();
       typeInterval = setInterval(() => {
         charIndex += 1;
         setDisplayLength(charIndex);
         if (charIndex >= text.length) {
           clearInterval(typeInterval);
           setIsTyping(false);
+          onDoneRef.current?.();
           restartTimeout = setTimeout(startTyping, 3500);
         }
       }, 35);
@@ -83,9 +95,13 @@ function TypewriterNarrative({ text }: { text: string }) {
   }, [isInView, shouldReduceMotion, text]);
 
   return (
-    <p ref={ref} className="text-xs text-indigo-950/80 leading-relaxed font-medium">
-      {text.slice(0, displayLength)}
-      {isTyping && <span className="inline-block animate-pulse">|</span>}
+    <p ref={ref} className="relative text-xs text-indigo-950/80 leading-relaxed font-medium">
+      {/* Invisible full text reserves the finished height; same <p> text classes, so lines wrap identically */}
+      <span aria-hidden="true" className="invisible block">{text}</span>
+      <span className="absolute inset-0">
+        {text.slice(0, displayLength)}
+        {isTyping && <span className="inline-block animate-pulse">|</span>}
+      </span>
     </p>
   );
 }
@@ -93,6 +109,8 @@ function TypewriterNarrative({ text }: { text: string }) {
 // ── Hero product mockup (light-mode card) ─────────────────────────────────────
 function ProductPreview() {
   const shouldReduceMotion = useReducedMotion();
+  // Requirements check shows after the narrative has typed (at once with reduced motion).
+  const [typingDone, setTypingDone] = useState(!!shouldReduceMotion);
   return (
     <div className="relative w-full max-w-[560px] mx-auto">
       {/* Soft indigo halo behind the card */}
@@ -109,7 +127,7 @@ function ProductPreview() {
       >
 
         {/* Floating chip — GitHub */}
-        <div className="absolute -top-4 left-3 z-20 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.09)] border border-slate-100 rounded-full px-3 py-1.5 flex items-center gap-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+        <div className="absolute -top-4 left-3 z-20 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.09)] border border-slate-100 rounded-full px-3 py-1.5 flex items-center gap-2 text-xs font-semibold text-slate-700 whitespace-nowrap">
           <svg className="w-3.5 h-3.5 text-slate-800 shrink-0" fill="currentColor" viewBox="0 0 24 24">
             <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
           </svg>
@@ -117,7 +135,7 @@ function ProductPreview() {
         </div>
 
         {/* Floating chip — members scored */}
-        <div className="absolute -bottom-4 right-6 z-20 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.09)] border border-slate-100 rounded-full px-3 py-1.5 flex items-center gap-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+        <div className="absolute -bottom-4 right-6 z-20 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.09)] border border-slate-100 rounded-full px-3 py-1.5 flex items-center gap-2 text-xs font-semibold text-slate-700 whitespace-nowrap">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
           4 members scored
         </div>
@@ -125,75 +143,57 @@ function ProductPreview() {
         {/* The card */}
         <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-[0_20px_60px_-10px_rgba(99,102,241,0.12),0_8px_24px_-4px_rgba(0,0,0,0.07)]">
 
-          {/* Faux browser chrome */}
-          <div className="bg-slate-50 px-5 py-3 flex items-center justify-between border-b border-slate-200">
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-            </div>
-            <div className="flex-1 max-w-[200px] mx-4 bg-white rounded border border-slate-200 py-1 text-center">
-              <span className="text-[10px] text-slate-400 font-mono">app.fairtraze.ai/report/cs101</span>
-            </div>
-            <div className="w-10" />
+          {/* Card header */}
+          <div className="bg-slate-50 px-5 py-3 flex items-center justify-between gap-3 border-b border-slate-200">
+            <p className="text-sm font-bold text-slate-900">Example report</p>
+            <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-1 whitespace-nowrap">
+              Instructor view
+            </span>
           </div>
 
           {/* Card content */}
           <div className="flex flex-col sm:flex-row p-6 gap-6">
 
-            {/* Left: team health + bars */}
-            <div className="flex-1 space-y-5">
-              <div className="pb-4 border-b border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-3">Team Health</p>
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
-                    Moderate Risk
-                  </span>
-                  <span className="text-slate-500 text-sm">
-                    Gini: <span className="font-bold text-slate-800">0.21</span>
-                  </span>
-                </div>
-              </div>
-
+            {/* Left: contribution bars */}
+            <div className="flex-1 min-w-0 space-y-5">
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.15em] mb-4">Contribution Share</p>
                 <div className="space-y-3">
-                  {PREVIEW_MEMBERS.map(({ name, pct, flag }) => (
-                    <div key={name} className="flex items-center gap-3">
-                      <span className="text-xs text-slate-700 w-16 shrink-0 font-semibold">{name}</span>
-                      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            flag === "free-rider" ? "bg-red-400" :
-                            flag === "overload"   ? "bg-amber-500" :
-                            "bg-indigo-500"
-                          }`}
-                          style={{ width: `${pct * 2.6}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800 w-8 text-right shrink-0">
-                        <AnimatedPercent value={pct} />
-                      </span>
-                      {flag ? (
-                        <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide shrink-0 ${
-                          flag === "free-rider"
-                            ? "bg-red-50 text-red-600 border border-red-200"
-                            : "bg-amber-50 text-amber-600 border border-amber-200"
-                        }`}>
-                          {flag}
+                  {PREVIEW_MEMBERS.map(({ name, pct, flag }) => {
+                    const low = !!flag && flagLabel(flag) === "Low contribution";
+                    return (
+                    <div key={name}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-700 flex-1 whitespace-nowrap font-semibold">{name}</span>
+                        <span className="text-xs font-bold text-slate-800 w-9 text-right shrink-0 tabular-nums">
+                          <AnimatedPercent value={pct} />
                         </span>
-                      ) : (
-                        <span className="w-16 shrink-0" />
-                      )}
+                        <span className="w-32 shrink-0 flex justify-end">
+                          {flag && (
+                            <span className={`py-0.5 rounded-md font-bold uppercase whitespace-nowrap ${
+                              low ? "text-[11px] px-1.5 tracking-normal" : "text-xs px-2 tracking-wide"
+                            } ${
+                              flag === "free-rider"
+                                ? "bg-red-50 text-red-600 border border-red-200"
+                                : "bg-amber-50 text-amber-600 border border-amber-200"
+                            }`}>
+                              {flagLabel(flag)}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
             {/* Right: AI narrative panel */}
-            <div className="w-full sm:w-60 shrink-0">
+            <div className="w-full sm:w-52 shrink-0">
               <div className="h-full rounded-xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100/60 p-5 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 rounded-md bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-600/20">
@@ -201,13 +201,26 @@ function ProductPreview() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
-                  <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">AI Narrative</p>
+                  <p className="text-xs font-bold text-indigo-700">AI explains and reviews</p>
                 </div>
-                <TypewriterNarrative text={AI_NARRATIVE_TEXT} />
+                <TypewriterNarrative text={AI_NARRATIVE_TEXT} onDone={() => setTypingDone(true)} onRestart={() => setTypingDone(false)} />
+                <div
+                  aria-hidden={!typingDone}
+                  className={`mt-4 rounded-lg bg-white border border-indigo-100 p-3 ${
+                    shouldReduceMotion ? "" : typingDone ? "transition-opacity duration-300" : "duration-0"
+                  } ${typingDone ? "opacity-100 visible" : "opacity-0 invisible"}`}
+                >
+                  <p className="text-xs font-bold text-slate-800 mb-1">Requirements check</p>
+                  <p className="text-xs text-slate-700 leading-relaxed">{REQUIREMENTS_CHECK_TEXT}</p>
+                </div>
               </div>
             </div>
 
           </div>
+
+          <p className="px-6 py-3 border-t border-slate-100 bg-slate-50 text-xs text-slate-600">
+            Scores come from the math. The instructor decides what to do.
+          </p>
         </div>
       </motion.div>
     </div>
@@ -266,7 +279,7 @@ export function LandingPage() {
   }, [authLoading, user, dashboardPath, navigate]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="ft-legacy-scale min-h-screen bg-white overflow-x-clip">
 
       {/* ══════════════════════════════════════════════════════
           NAV — sticky, white, clean
@@ -277,12 +290,12 @@ export function LandingPage() {
           {/* Wordmark */}
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2.5 group shrink-0"
+            className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 rounded flex items-center gap-2.5 group shrink-0"
           >
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-9 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
               FAIR <span className="text-indigo-600">TRAZE</span>{" "}
-              <span className="font-medium text-slate-400">AI</span>
+              <span className="font-medium text-slate-600">AI</span>
             </span>
           </button>
 
@@ -294,7 +307,7 @@ export function LandingPage() {
                 <motion.button
                   {...ctaHover}
                   onClick={() => navigate(dashboardPath)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
+                  className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
                 >
                   Go to Dashboard
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -308,14 +321,14 @@ export function LandingPage() {
               <>
                 <button
                   onClick={() => navigate("/login")}
-                  className="text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all px-4 py-2 rounded-lg"
+                  className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all px-4 py-2 rounded-lg"
                 >
                   Sign in
                 </button>
                 <motion.button
                   {...ctaHover}
                   onClick={() => navigate("/register")}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
+                  className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-600/20 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-[0.98]"
                 >
                   Get Started
                 </motion.button>
@@ -366,9 +379,9 @@ export function LandingPage() {
                 {...fadeUp(0.15)}
                 className="text-slate-600 leading-relaxed font-medium text-base sm:text-lg mb-8 max-w-lg"
               >
-                Collect digital collaboration traces from GitHub and the FairTraze Editor.
-                Score contributions deterministically. Get an evidence-based fairness report —
-                so you can assess individual work with confidence.
+                Collect collaboration traces from GitHub and the FairTraze Editor. The math scores
+                each member. The AI explains the numbers and checks the team's work against your
+                project requirements. You decide.
               </motion.p>
 
               {/* CTAs */}
@@ -377,7 +390,7 @@ export function LandingPage() {
                   <motion.button
                     {...ctaHover}
                     onClick={() => navigate(dashboardPath)}
-                    className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
+                    className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
                   >
                     Go to Dashboard
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -389,7 +402,7 @@ export function LandingPage() {
                     <motion.button
                       {...ctaHover}
                       onClick={() => navigate("/login")}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
+                      className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-[0_0_28px_rgba(99,102,241,0.55)] active:scale-[0.98] transition-all"
                     >
                       Sign In
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -400,7 +413,7 @@ export function LandingPage() {
                       onClick={() => {
                         document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
                       }}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 hover:text-indigo-700 hover:bg-indigo-50/50 active:scale-[0.98] transition-all"
+                      className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 hover:text-indigo-700 hover:bg-indigo-50/50 active:scale-[0.98] transition-all"
                     >
                       How it works
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -415,10 +428,10 @@ export function LandingPage() {
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-8 pt-7 border-t border-slate-100">
                 {[
                   "100% deterministic scoring",
-                  "Evidence-based fairness reports",
-                  "Supports instructor judgment",
+                  "Every quote checked word for word",
+                  "The instructor decides",
                 ].map((fact) => (
-                  <p key={fact} className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                  <p key={fact} className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -459,9 +472,9 @@ export function LandingPage() {
               <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-display font-extrabold text-lg mb-5 group-hover:scale-105 transition-transform shadow-sm shadow-indigo-600/25">
                 1
               </div>
-              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Connect Your Sources</h3>
+              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Connect your sources</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                Link a GitHub repository for your project. Students connect with a join code — no manual roster entry.
+                Link a GitHub repository and add the project instructions. Students join with a code. No manual roster.
               </p>
             </motion.div>
 
@@ -470,9 +483,9 @@ export function LandingPage() {
               <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-display font-extrabold text-lg mb-5 group-hover:scale-105 transition-transform shadow-sm shadow-indigo-600/25">
                 2
               </div>
-              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Scores Computed Automatically</h3>
+              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Scores computed automatically</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                Deterministic math — commits, meaningful lines of code, and active days — combined into a transparent contribution share for every member. No AI guesswork in the numbers.
+                Deterministic math: commits, meaningful lines and active days from GitHub, and retained writing from FairTraze Docs. No AI guesswork in the numbers.
               </p>
             </motion.div>
 
@@ -481,9 +494,9 @@ export function LandingPage() {
               <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-display font-extrabold text-lg mb-5 group-hover:scale-105 transition-transform shadow-sm shadow-indigo-600/25">
                 3
               </div>
-              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Get an Explainable Report</h3>
+              <h3 className="font-display font-bold text-slate-900 text-lg mb-2">Get an explainable report</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                AI writes a plain-language narrative explaining the already-computed numbers, flags imbalances, and surfaces evidence for your review. Outputs support judgment — they never assign grades.
+                AI explains the finished numbers and checks the team's work (code and documents) against the requirements, with quotes checked word for word. It never assigns grades.
               </p>
             </motion.div>
 
@@ -525,11 +538,11 @@ export function LandingPage() {
               </div>
               <h3 className="font-display font-bold text-slate-900 text-xl mb-2">GitHub</h3>
               <p className="text-slate-500 text-sm leading-relaxed mb-5">
-                Analyze commits, diff patches, and activity patterns. Meaningful-line detection separates code from comments and blanks. Significance scoring weights production source files over config and generated files.
+                Analyze commits, diff patches, and activity patterns. Significance scoring weights each added line by file type (production source over config and generated files) and by commit impact, and discounts lines a member later deletes themselves.
               </p>
               <div className="flex flex-wrap gap-2">
                 {["Commits", "Diffs", "Active days", "Contribution share"].map((tag) => (
-                  <span key={tag} className="text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
+                  <span key={tag} className="text-xs font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
                     {tag}
                   </span>
                 ))}
@@ -556,18 +569,39 @@ export function LandingPage() {
               </p>
               <div className="flex flex-wrap gap-2">
                 {["Net retained text", "Edit sessions", "Edit-type classification", ".docx import"].map((tag) => (
-                  <span key={tag} className="text-[11px] font-semibold text-indigo-700/70 bg-indigo-100/60 rounded-full px-2.5 py-1">
+                  <span key={tag} className="text-xs font-semibold text-indigo-700/70 bg-indigo-100/60 rounded-full px-2.5 py-1">
                     {tag}
                   </span>
                 ))}
               </div>
             </motion.div>
           </div>
+
+          {/* Also included */}
+          <div className="max-w-3xl mx-auto mt-10">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-600 mb-4 text-center">Also included</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h4 className="font-display font-bold text-slate-900 text-base">Evidence you can verify</h4>
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 shrink-0">NEW</span>
+                </div>
+                <p className="text-slate-600 text-sm leading-relaxed">Every printed report carries an ID. The instructor can enter it later to confirm the numbers are the ones that were saved.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h4 className="font-display font-bold text-slate-900 text-base">Task board for planning</h4>
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 shrink-0">NEW</span>
+                </div>
+                <p className="text-slate-600 text-sm leading-relaxed">Teams plan their work in one place. Tasks help the team organize and never change a score.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          PRINCIPLE BANNER — "The math scores. The AI explains."
+          PRINCIPLE BANNER
       ══════════════════════════════════════════════════════ */}
       <section className="py-16 sm:py-24 px-6 sm:px-8 bg-indigo-600 relative overflow-hidden">
         {/* Subtle decorative circles */}
@@ -575,23 +609,23 @@ export function LandingPage() {
         <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-white/5 pointer-events-none" />
 
         <div className="relative max-w-3xl mx-auto text-center">
-          <p className="text-indigo-300 text-xs font-bold uppercase tracking-[0.2em] mb-4">Core Principle</p>
+          <p className="text-white text-xs font-bold uppercase tracking-[0.2em] mb-4">Core Principle</p>
           <h2
             className="font-display font-extrabold text-white leading-tight mb-5"
             style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}
           >
-            The math scores.<br />The AI explains.
+            The math scores.<br />The AI explains and reviews.<br />The instructor decides.
           </h2>
-          <p className="text-indigo-200 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto mb-8">
-            All contribution scores, flags, and the Gini coefficient are computed deterministically in code —
-            no AI guesswork involved. Gemini writes the plain-language narrative only after the numbers are
-            finalized. Outputs support instructor judgment; they never assign grades.
+          <p className="text-indigo-50 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto mb-8">
+            All contribution scores, flags and the Gini coefficient are computed in code. The AI only
+            explains the finished numbers and points out gaps in the team's work, and it cannot change
+            any of them. Outputs support instructor judgment; they never assign grades.
           </p>
           {!dashboardPath && (
             <motion.button
               {...ctaHover}
               onClick={() => navigate("/register")}
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-indigo-700 bg-white hover:bg-indigo-50 rounded-xl shadow-sm hover:shadow-[0_0_28px_rgba(199,210,254,0.7)] active:scale-[0.98] transition-all"
+              className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-indigo-700 bg-white hover:bg-indigo-50 rounded-xl shadow-sm hover:shadow-[0_0_28px_rgba(199,210,254,0.7)] active:scale-[0.98] transition-all"
             >
               Get Started Free
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -611,25 +645,33 @@ export function LandingPage() {
           {/* Wordmark */}
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 group shrink-0"
+            className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 rounded flex items-center gap-2 group shrink-0"
           >
             <img src={logoUrl} alt="FAIR TRAZE AI" className="h-7 w-auto" />
             <span className="font-display font-bold text-slate-900 text-sm tracking-tight">
               FAIR <span className="text-indigo-600">TRAZE</span>{" "}
-              <span className="text-slate-400 font-medium">AI</span>
+              <span className="text-slate-600 font-medium">AI</span>
             </span>
           </button>
 
-          <p className="text-xs text-slate-400 text-center max-w-sm leading-relaxed">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
+          <p className="text-xs text-slate-600 text-center max-w-sm leading-relaxed">
+            Outputs are evidence to support instructor judgment. They are not grades or final assessments. The instructor decides.
           </p>
 
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-indigo-600 transition-colors font-semibold shrink-0"
-          >
-            System Overview →
-          </button>
+          <div className="flex items-center gap-5 shrink-0">
+            <button
+              onClick={() => navigate("/privacy")}
+              className="min-h-9 cursor-pointer text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              Privacy Notice
+            </button>
+            <button
+              onClick={() => navigate("/overview")}
+              className="min-h-9 cursor-pointer text-xs text-slate-600 hover:text-indigo-600 transition-colors font-semibold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              System Overview →
+            </button>
+          </div>
 
         </div>
       </footer>

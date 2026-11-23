@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { gini, computeTeamReport } from "./scoring";
-import { classifyAddedLines } from "./lineClassifier";
+import { classifyAddedLines, weightedAddedLines, LINE_TYPE_WEIGHTS } from "./lineClassifier";
 import { getFileWeight } from "./fileWeights";
 import { classifyCommit } from "./commitClassifier";
 import type { RawMemberStats } from "./types";
@@ -132,6 +132,43 @@ describe("classifyAddedLines", () => {
     expect(result.comment).toBe(2);
     expect(result.blank).toBe(2);
     expect(result.code + result.comment + result.blank).toBe(lines.length);
+  });
+});
+
+// ── line-type weighting (code 1.0, comment 0.25, blank 0) ─────────────────────
+
+describe("weightedAddedLines (line type weighting)", () => {
+  it("exposes the manuscript weights", () => {
+    expect(LINE_TYPE_WEIGHTS).toEqual({ code: 1, comment: 0.25, blank: 0 });
+  });
+
+  it("counts code at 1.0, comments at 0.25 and blank lines at 0", () => {
+    const lines = ["const a = 1;", "// note", "", "   ", "const b = 2;"];
+    // 2 code + 1 comment * 0.25 + 2 blank * 0
+    expect(weightedAddedLines("main.ts", lines)).toBe(2.25);
+  });
+
+  it("comment and blank lines reduce the weighted total versus the same number of code lines", () => {
+    const allCode = Array.from({ length: 10 }, () => "x();");
+    const mixed = [...Array.from({ length: 4 }, () => "x();"), ...Array.from({ length: 3 }, () => "// c"), ...Array.from({ length: 3 }, () => "")];
+    expect(weightedAddedLines("a.ts", allCode)).toBe(10);
+    expect(weightedAddedLines("a.ts", mixed)).toBe(4.75);
+  });
+
+  it("100 blank lines are worth nothing", () => {
+    expect(weightedAddedLines("a.py", Array.from({ length: 100 }, () => ""))).toBe(0);
+  });
+
+  it("scoring fallback (meaningfulLines) uses the same weights, so comment lines lower linesShare", () => {
+    const date = "2024-01-10T10:00:00Z";
+    const mk = (u: string, code: number, comment: number): RawMemberStats => ({
+      studentName: u, githubUsername: u, commits: 5, additions: code + comment, deletions: 0,
+      commitDates: [date], codeLinesAdded: code, commentLinesAdded: comment, blankLinesAdded: 0,
+    });
+    // A: 100 code = 100; B: 100 comment = 25  -> A 0.8, B 0.2
+    const report = computeTeamReport([mk("a", 100, 0), mk("b", 0, 100)]);
+    expect(report.members.find((m) => m.githubUsername === "a")!.linesShare).toBeCloseTo(0.8, 3);
+    expect(report.members.find((m) => m.githubUsername === "b")!.linesShare).toBeCloseTo(0.2, 3);
   });
 });
 

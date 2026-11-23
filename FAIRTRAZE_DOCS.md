@@ -353,7 +353,7 @@ combinedContributionShare =
   + wDocs    × documentContributionShare
 ```
 
-**Default blend:** `wGitHub = 0.5`, `wDocs = 0.5` (50/50).
+**Default blend:** `wGitHub = 0.55`, `wDocs = 0.45` (expert-survey (AHP) defaults; the instructor can change them per project).
 
 The blend weights are set by the instructor per assignment and must sum to 1.0. All flags, Gini coefficient, and team-health label are computed from `combinedContributionShare`. This ensures that the fairness assessment reflects the complete contribution picture.
 
@@ -855,13 +855,13 @@ Four new software modules are required to implement FairTraze Docs. Each has a d
 **UC-S-D2: View own document contribution summary (Phase C)**
 - **Actor:** Student
 - **Trigger:** Student navigates to their personal dashboard.
-- **Flow:** The student sees their own document metrics: edit sessions, active editing days, net retained text percentage, and their document contribution share. They do not see other members' individual metrics.
+- **Flow:** The student sees their own document metrics: edit sessions, active editing days, net retained text percentage, and their document contribution share. On screen, regular members do not see other members' individual metrics; the group leader sees each member's share, flags and task counts to distribute work fairly. Any member can print one group Contribution Evidence Report with every member's share and flags (never the Gini value, bands or team health).
 - **Result:** The student has a factual self-assessment of their document contribution.
 
 **UC-S-D3: View own combined contribution (Phase C, COMBINED assignments)**
 - **Actor:** Student
 - **Trigger:** Student views the combined contribution report for their group.
-- **Flow:** The student sees their `combinedContributionShare` and its breakdown (GitHub share + document share at the configured weights). They do not see teammates' individual scores.
+- **Flow:** The student sees their `combinedContributionShare` and its breakdown (GitHub share + document share at the configured weights). On screen, regular members do not see teammates' individual scores; the group leader sees each member's combined share, GitHub/Docs split, flags and task counts to distribute work fairly. Any member can print one group Contribution Evidence Report with every member's share and flags (never the Gini value, bands or team health).
 - **Result:** The student understands how their combined contribution is assessed.
 
 **UC-S-D4: Dispute a document or combined contribution assessment (Phase C)**
@@ -889,7 +889,7 @@ Four new software modules are required to implement FairTraze Docs. Each has a d
 **UC-I-D3: Configure the source blend weight**
 - **Actor:** Instructor
 - **Trigger:** Instructor creates or edits an assignment.
-- **Flow:** A slider or input pair lets the instructor set `wGitHub` and `wDocs` (constrained to sum to 1.0). The current selection is shown (e.g., "70% GitHub, 30% Docs"). The default is 50/50. The instructor saves the assignment.
+- **Flow:** A slider or input pair lets the instructor set `wGitHub` and `wDocs` (constrained to sum to 1.0). The current selection is shown (e.g., "70% GitHub, 30% Docs"). The default is 55/45. The instructor saves the assignment.
 - **Result:** All subsequent analyses for this assignment use the configured weights.
 
 **UC-I-D4: View the group document as context**
@@ -1017,9 +1017,11 @@ A student can see:
 - Their own metrics: net retained text %, edit sessions, active editing days, self-churn ratio.
 - Any flags applied to their own combined score.
 
-A student cannot see:
+On screen, a student cannot see:
 - Another member's individual `documentContributionShare` or metric breakdown.
 - Another member's flag status.
+
+The one exception is the printable group Contribution Evidence Report, which any member can print: it lists every member's recorded share and flags, and nothing else from the list above.
 - The full team-level Gini coefficient or team-health label (those are instructor-facing).
 
 ### Instructor Visibility
@@ -1033,7 +1035,7 @@ An instructor can see:
 
 ### Group Leader (Coordination View)
 
-The group leader has access to a **participation status view** — a lightweight summary showing whether each member has opened the document and whether they have made any edit sessions. This is a binary presence indicator (has participated / has not participated), not a full metric breakdown. The purpose is coordination: the leader can see if a member has not opened the document at all and follow up. The leader does not see specific scores or character counts for teammates.
+The group leader has access to a **participation status view** — a lightweight summary showing whether each member has opened the document and whether they have made any edit sessions. This is a binary presence indicator (has participated / has not participated), not a full metric breakdown. The purpose is coordination: the leader can see if a member has not opened the document at all and follow up. Separately, on the student group page the leader also sees each member's contribution share, GitHub/Docs split, flags and open/done task counts (not raw character counts).
 
 ---
 
@@ -1128,6 +1130,18 @@ The concurrent-edit attribution rule (Section 15) is deterministic but produces 
 **Example edge case:** Anna and Ben both select a badly written sentence and begin rewriting it simultaneously. Yjs resolves this by keeping one member's rewrite and discarding the other's, based on the CRDT timestamp. The winning member gets credit for the surviving text; the losing member's work is discarded at the CRDT level and does not appear in the event log as retained characters. Their effort was real; the system cannot see it.
 
 **Mitigation:** This edge case is unlikely to dominate any member's score in practice — it affects individual sentences during simultaneous edits. However, it is a known measurement gap. The instructor can view the document and read the edit history to investigate specific cases.
+
+### 3b. Text Removed by a Teammate, then Put Back (ownership return)
+
+When a member removes text that belonged to a teammate and then inserts exactly that text again (for example with undo, or by cutting it and pasting it elsewhere), the characters go back to the people who wrote them. They are not credited to the member who put them back, and they are not counted as that member's inserted text. This is decided only by plain counting on the edit log at analysis time (`replayEditEvents`, `server/src/collab/editReplay.ts`); the live editor and the capture are unchanged, and the document colors and the score use the same replay.
+
+The rule is deliberately narrow: exact text match, at least 20 characters, within 24 hours of the removal, once per removal, only for the same member who removed it, and only the characters that were someone else's (the member's own characters in the same text stay theirs). A member remembers at most 200 removals; past that the oldest is forgotten and its text is counted as new, as before. Cutting and pasting your own text is unchanged.
+
+**Still open (documented limits):**
+- **Edited paste-back.** If the text is changed even by one character when it is put back, it counts as new writing by the person who put it back.
+- **Plain copy.** Copying a teammate's text without removing it, and pasting the copy, is new writing by the person who pasted. The system cannot tell a copy from typing; the instructor judges that.
+- **Another member puts it back.** Only the member who removed the text gets the exact-match handling; if a third member inserts the same text, they are credited.
+- **Older events.** Events recorded before the removed and inserted text were stored have no text to match and keep the old behavior.
 
 ### 4. Edit-Type Classification Accuracy
 

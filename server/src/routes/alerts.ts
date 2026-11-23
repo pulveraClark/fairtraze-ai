@@ -56,6 +56,17 @@ alertsRouter.get("/api/alerts", requireAuth, async (req, res) => {
   res.json({ ...base, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
 });
 
+// ── GET /api/alerts/unread-count ──────────────────────────────────────────────
+// Lightweight bell poll: one indexed COUNT, no list, no join, no prune.
+// Registered before the /:id routes so "unread-count" is never parsed as an id.
+
+alertsRouter.get("/api/alerts/unread-count", requireAuth, async (req, res) => {
+  const unreadCount = await prisma.alert.count({
+    where: { recipientId: req.user!.sub, read: false },
+  });
+  res.json({ unreadCount });
+});
+
 // ── POST /api/alerts/read-all ─────────────────────────────────────────────────
 // Mark every unread notification for this user as read.
 // Must come BEFORE /:id/read so Express doesn't treat "read-all" as an id.

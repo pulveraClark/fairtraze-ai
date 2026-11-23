@@ -3,13 +3,34 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { docs } from "y-websocket/bin/utils";
 import { prisma } from "../lib/prisma.js";
+import { documentHasPreFixEvents, getAuthorshipFixAt } from "../lib/authorshipFix.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loadGroup, isInstructorOf, leaderMembership } from "./groups.js";
-import { computeAuthorshipMap } from "../collab/authorshipMap.js";
+import { loadGroupShared } from "../lib/groupAccess.js";
+import { getAuthorshipMapCached } from "../lib/authorshipMapCache.js";
 import { parseDocxToChunks, importDocxIntoRoom, DocxImportPartialFailureError } from "../collab/docxImport.js";
 import { readDocumentStructure, buildDocxBuffer, type ExportComment } from "../collab/documentExport.js";
+import { extractHeadings } from "../lib/documentHeadings.js";
 import { cancelPendingPersist } from "../collab/persistence.js";
 import { findDocumentTemplate } from "@shared/documentTemplates.js";
+import {
+  DEFAULT_MARGIN_PRESET,
+  DEFAULT_PAGE_ORIENTATION,
+  DEFAULT_PAGE_SIZE,
+  HF_SLOT_MAX_CHARS,
+  MARGIN_PRESET_KEYS,
+  PAGE_ORIENTATIONS,
+  PAGE_SIZE_KEYS,
+  isMarginPreset,
+  isPageOrientation,
+  isPageSizeKey,
+  resolveMargins,
+  sanitizeHeaderFooterText,
+  validateMargins,
+} from "@shared/pageSizes.js";
+import type { MarginPresetKey, MarginsIn, PageOrientation, PageSizeKey } from "@shared/pageSizes.js";
+import type { Document as DocumentRow } from "@prisma/client";
+import type { DocLayout } from "../collab/documentExport.js";
 
 export const documentsRouter = Router();
 
@@ -20,6 +41,38 @@ const idParam = z.coerce.number().int().positive();
 const contentBody = z.object({
   content: z.object({ type: z.literal("doc") }).passthrough(),
 });
+
+type PageSetupRow = Pick<
+  DocumentRow,
+  | "pageSize" | "orientation" | "marginPreset"
+  | "marginTop" | "marginBottom" | "marginLeft" | "marginRight"
+  | "headerLeft" | "headerCenter" | "headerRight"
+  | "footerLeft" | "footerCenter" | "footerRight"
+>;
+const PAGE_SETUP_SELECT = {
+  pageSize: true, orientation: true, marginPreset: true,
+  marginTop: true, marginBottom: true, marginLeft: true, marginRight: true,
+  headerLeft: true, headerCenter: true, headerRight: true,
+  footerLeft: true, footerCenter: true, footerRight: true,
+} as const;
+
+/** The document's page setup as the API returns it; stored values are re-validated on the way out. */
+export function pageSetupOf(row: PageSetupRow | null): DocLayout {
+  const marginPreset: MarginPresetKey = row && isMarginPreset(row.marginPreset) ? row.marginPreset : DEFAULT_MARGIN_PRESET;
+  // The stored numbers are the effective margins (presets write their own); a preset's own values
+  // win if the row ever disagrees, so a stale column can never show a wrong "Normal".
+  const stored: MarginsIn | null = row
+    ? { top: row.marginTop, bottom: row.marginBottom, left: row.marginLeft, right: row.marginRight }
+    : null;
+  return {
+    pageSize: row && isPageSizeKey(row.pageSize) ? row.pageSize : DEFAULT_PAGE_SIZE,
+    orientation: row && isPageOrientation(row.orientation) ? row.orientation : DEFAULT_PAGE_ORIENTATION,
+    marginPreset,
+    margins: resolveMargins(marginPreset, stored),
+    header: { left: row?.headerLeft ?? "", center: row?.headerCenter ?? "", right: row?.headerRight ?? "" },
+    footer: { left: row?.footerLeft ?? "", center: row?.footerCenter ?? "", right: row?.footerRight ?? "" },
+  };
+}
 
 export function isMemberOf(
   req: Request,
@@ -58,7 +111,242 @@ documentsRouter.get("/api/groups/:id/document", requireAuth, async (req: Request
   res.json({
     content:   JSON.parse(doc.content) as unknown,
     updatedAt: doc.updatedAt.toISOString(),
+    pageSize:  isPageSizeKey(doc.pageSize) ? doc.pageSize : DEFAULT_PAGE_SIZE,
+    pageSetup: pageSetupOf(doc),
   });
+});
+
+// GET /api/groups/:id/document/page-size — just the paper size, for cheap polling so a size change
+// made by one collaborator reaches the others without touching the collab sockets. Read-only and
+// never creates a Document row (no row yet = the default).
+documentsRouter.get("/api/groups/:id/document/page-size", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+  const doc = await prisma.document.findUnique({ where: { groupId: idResult.data }, select: { pageSize: true } });
+  res.json({ pageSize: doc && isPageSizeKey(doc.pageSize) ? doc.pageSize : DEFAULT_PAGE_SIZE });
+});
+
+const pageSizeBody = z.object({ pageSize: z.enum(PAGE_SIZE_KEYS) });
+
+/** Validates the page setup as it WILL be after a change (same rules as the dialog). Null when fine. */
+function setupError(next: {
+  pageSize: PageSizeKey;
+  orientation: PageOrientation;
+  margins: MarginsIn;
+  header: { left: string; center: string; right: string };
+  footer: { left: string; center: string; right: string };
+}): string | null {
+  return validateMargins({
+    size: next.pageSize,
+    orientation: next.orientation,
+    margins: next.margins,
+    hasHeader: !!(next.header.left || next.header.center || next.header.right),
+    hasFooter: !!(next.footer.left || next.footer.center || next.footer.right),
+  });
+}
+
+// PATCH /api/groups/:id/document/page-size — set the document's paper size. Any GROUP MEMBER may
+// change it (the setting is shared by all collaborators); the instructor's view is read-only.
+// Deliberately a plain column write on Document: no Yjs/getYDoc() access, no EditEvent/EditSession,
+// no Alert, and no Project.membershipChangedAt/scoringConfigChangedAt bump — page layout can never
+// mark an analysis outdated or touch authorship.
+documentsRouter.patch("/api/groups/:id/document/page-size", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  const body = pageSizeBody.safeParse(req.body);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: "pageSize must be one of: " + PAGE_SIZE_KEYS.join(", ") });
+    return;
+  }
+  const projectId = idResult.data;
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project)) {
+    res.status(403).json({ error: "Only group members can change the page size." });
+    return;
+  }
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Page size is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+  // Never create the row here: a Document row existing is what makes the client skip the template
+  // picker (GET /document/status), so only the editor's own flow may bring it into existence.
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true, ...PAGE_SETUP_SELECT } });
+  if (!existing) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+  const current = pageSetupOf(existing);
+  const err = setupError({ ...current, pageSize: body.data.pageSize });
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+  const doc = await prisma.document.update({
+    where:  { id: existing.id },
+    data:   { pageSize: body.data.pageSize },
+    select: { pageSize: true },
+  });
+  res.json({ pageSize: doc.pageSize });
+});
+
+// GET /api/groups/:id/document/page-setup — the whole page setup (paper, orientation, margins and the
+// header/footer text) in one cheap read, for polling so a change by one collaborator reaches the
+// others without touching the collab sockets. Read-only for everyone allowed to see the document and
+// never creates a Document row (no row yet = the defaults).
+documentsRouter.get("/api/groups/:id/document/page-setup", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+  const row = await prisma.document.findUnique({ where: { groupId: idResult.data }, select: PAGE_SETUP_SELECT });
+  res.json(pageSetupOf(row));
+});
+
+// Control characters are stripped first, then the length is checked (never silently truncated).
+const hfSlot = z
+  .string()
+  .transform(sanitizeHeaderFooterText)
+  .pipe(z.string().max(HF_SLOT_MAX_CHARS, `Each header/footer box holds at most ${HF_SLOT_MAX_CHARS} characters.`));
+const hfBand = z.object({ left: hfSlot.optional(), center: hfSlot.optional(), right: hfSlot.optional() }).strict();
+
+// Margins are inches. Range and step are enforced by validateMargins (one source of truth shared
+// with the dialog) so the error message is the one the user already saw.
+const marginNum = z.number().finite();
+
+const pageSetupBody = z
+  .object({
+    pageSize: z.enum(PAGE_SIZE_KEYS).optional(),
+    orientation: z.enum(PAGE_ORIENTATIONS).optional(),
+    marginPreset: z.enum(MARGIN_PRESET_KEYS).optional(),
+    marginTop: marginNum.optional(),
+    marginBottom: marginNum.optional(),
+    marginLeft: marginNum.optional(),
+    marginRight: marginNum.optional(),
+    header: hfBand.optional(),
+    footer: hfBand.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: "Send at least one setting to change." });
+
+// PATCH /api/groups/:id/document/page-setup — change any subset of the page setup (a header/footer
+// object may name any subset of left/center/right; the rest is kept). Same rules as page-size: any
+// GROUP MEMBER may change it, the instructor's view is read-only, EDITOR/COMBINED assignments only,
+// and the Document row is never created here. A plain column write: no Yjs/getYDoc() access, no
+// EditEvent/EditSession, no Alert, no membershipChangedAt/scoringConfigChangedAt bump - page layout
+// can never mark an analysis outdated or touch authorship.
+documentsRouter.patch("/api/groups/:id/document/page-setup", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const body = pageSetupBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.issues[0]?.message ?? "Invalid page setup." });
+    return;
+  }
+  const projectId = idResult.data;
+  const project = await loadGroup(projectId);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project)) {
+    res.status(403).json({ error: "Only group members can change the page setup." });
+    return;
+  }
+  if (project.assignment?.sourceType !== "EDITOR" && project.assignment?.sourceType !== "COMBINED") {
+    res.status(403).json({ error: "Page setup is only available for EDITOR or COMBINED assignments." });
+    return;
+  }
+  const existing = await prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true, ...PAGE_SETUP_SELECT } });
+  if (!existing) {
+    res.status(404).json({ error: "This group hasn't started their document yet." });
+    return;
+  }
+  const b = body.data;
+
+  // Margins. A named preset writes its own four numbers (any numbers sent with it are ignored).
+  // CUSTOM, or numbers sent without a preset, mean CUSTOM: the numbers sent replace the stored ones
+  // one by one. Everything is validated as the final result, so a change that makes the page too
+  // small (orientation, header/footer, paper) is refused with the dialog's own message.
+  const current = pageSetupOf(existing);
+  const sentNumbers = [b.marginTop, b.marginBottom, b.marginLeft, b.marginRight].some((v) => v !== undefined);
+  let marginPreset: MarginPresetKey = current.marginPreset;
+  let margins: MarginsIn = current.margins;
+  if (b.marginPreset !== undefined && b.marginPreset !== "CUSTOM") {
+    marginPreset = b.marginPreset;
+    margins = resolveMargins(marginPreset);
+  } else if (b.marginPreset === "CUSTOM" || sentNumbers) {
+    marginPreset = "CUSTOM";
+    margins = {
+      top: b.marginTop ?? current.margins.top,
+      bottom: b.marginBottom ?? current.margins.bottom,
+      left: b.marginLeft ?? current.margins.left,
+      right: b.marginRight ?? current.margins.right,
+    };
+  }
+  const next = {
+    pageSize: b.pageSize ?? current.pageSize,
+    orientation: b.orientation ?? current.orientation,
+    margins,
+    header: { left: b.header?.left ?? current.header.left, center: b.header?.center ?? current.header.center, right: b.header?.right ?? current.header.right },
+    footer: { left: b.footer?.left ?? current.footer.left, center: b.footer?.center ?? current.footer.center, right: b.footer?.right ?? current.footer.right },
+  };
+  const err = setupError(next);
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+  const marginsChanged = b.marginPreset !== undefined || sentNumbers;
+
+  const doc = await prisma.document.update({
+    where: { id: existing.id },
+    data: {
+      ...(b.pageSize !== undefined ? { pageSize: b.pageSize } : {}),
+      ...(b.orientation !== undefined ? { orientation: b.orientation } : {}),
+      ...(marginsChanged
+        ? { marginPreset, marginTop: margins.top, marginBottom: margins.bottom, marginLeft: margins.left, marginRight: margins.right }
+        : {}),
+      ...(b.header?.left !== undefined ? { headerLeft: b.header.left } : {}),
+      ...(b.header?.center !== undefined ? { headerCenter: b.header.center } : {}),
+      ...(b.header?.right !== undefined ? { headerRight: b.header.right } : {}),
+      ...(b.footer?.left !== undefined ? { footerLeft: b.footer.left } : {}),
+      ...(b.footer?.center !== undefined ? { footerCenter: b.footer.center } : {}),
+      ...(b.footer?.right !== undefined ? { footerRight: b.footer.right } : {}),
+    },
+    select: PAGE_SETUP_SELECT,
+  });
+  res.json(pageSetupOf(doc));
 });
 
 // A document is safely resettable (the leader can pick a different starting template) only when
@@ -69,12 +357,13 @@ documentsRouter.get("/api/groups/:id/document", requireAuth, async (req: Request
 // would under-detect "real content exists" and a reset would silently cascade-delete that
 // discussion. Recomputed fresh on every call — never cached, never trusted from the client.
 async function isDocumentResettable(documentId: number): Promise<boolean> {
-  const [editEventCount, editSessionCount, commentCount] = await Promise.all([
-    prisma.editEvent.count({ where: { documentId } }),
-    prisma.editSession.count({ where: { documentId } }),
-    prisma.comment.count({ where: { documentId } }),
+  // Existence checks (stop at the first row) instead of counting every row; same boolean.
+  const [anyEvent, anySession, anyComment] = await Promise.all([
+    prisma.editEvent.findFirst({ where: { documentId }, select: { id: true } }),
+    prisma.editSession.findFirst({ where: { documentId }, select: { id: true } }),
+    prisma.comment.findFirst({ where: { documentId }, select: { id: true } }),
   ]);
-  return editEventCount === 0 && editSessionCount === 0 && commentCount === 0;
+  return anyEvent === null && anySession === null && anyComment === null;
 }
 
 // GET /api/groups/:id/document/status — whether a Document row exists yet, WITHOUT creating one
@@ -90,7 +379,11 @@ documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: 
   }
   const projectId = idResult.data;
 
-  const project = await loadGroup(projectId);
+  // The document id is read alongside the group (read-only, id only); the 404 and 403 checks still decide first.
+  const [project, doc] = await Promise.all([
+    loadGroupShared(projectId),
+    prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
+  ]);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
@@ -101,7 +394,6 @@ documentsRouter.get("/api/groups/:id/document/status", requireAuth, async (req: 
     return;
   }
 
-  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
   const resettable = doc ? await isDocumentResettable(doc.id) : false;
   res.json({ exists: !!doc, resettable });
 });
@@ -298,7 +590,11 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
   }
   const projectId = idResult.data;
 
-  const project = await loadGroup(projectId);
+  // The document id is read alongside the group (read-only, id only); the checks below still decide first.
+  const [project, doc] = await Promise.all([
+    loadGroupShared(projectId),
+    prisma.document.findUnique({ where: { groupId: projectId }, select: { id: true } }),
+  ]);
   if (!project) {
     res.status(404).json({ error: "Group not found." });
     return;
@@ -314,14 +610,18 @@ documentsRouter.get("/api/groups/:id/document/authorship", requireAuth, async (r
     return;
   }
 
-  const doc = await prisma.document.findUnique({ where: { groupId: projectId } });
   if (!doc) {
-    res.json({ spans: [], users: [] });
+    res.json({ spans: [], users: [], docsDataApproximate: false });
     return;
   }
 
-  const map = await computeAuthorshipMap(doc.id);
-  res.json(map);
+  // Memoised per document and latest event id; never older than the newest event (lib/authorshipMapCache.ts).
+  const map = await getAuthorshipMapCached(doc.id);
+  res.json({
+    ...map,
+    docsDataApproximate: await documentHasPreFixEvents(doc.id),
+    docsDataFixedAt: getAuthorshipFixAt().toISOString(),
+  });
 });
 
 // GET /api/groups/:id/document/export — download the document's current content as a file.
@@ -382,7 +682,7 @@ documentsRouter.get("/api/groups/:id/document/export", requireAuth, async (req: 
   let buffer: Buffer;
   try {
     const blocks = readDocumentStructure({ content: doc.content, yjsState: doc.yjsState });
-    buffer = await buildDocxBuffer(blocks, comments);
+    buffer = await buildDocxBuffer(blocks, comments, pageSetupOf(doc));
   } catch (err) {
     console.error(`[documents] export failed for group ${projectId}`, err);
     res.status(500).json({ error: "Export failed unexpectedly." });
@@ -393,6 +693,41 @@ documentsRouter.get("/api/groups/:id/document/export", requireAuth, async (req: 
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   res.setHeader("Content-Disposition", `attachment; filename="${safeName}.docx"`);
   res.send(buffer);
+});
+
+// GET /api/groups/:id/document/headings — H1/H2 heading texts in order, for the Tasks "linked
+// heading" picker. Strictly read-only: decodes the persisted Document.yjsState into a scratch doc
+// (lib/documentHeadings.ts); never creates the Document row, never calls getYDoc(), writes nothing.
+// Readable by group members, the owning instructor and admins (like the document itself).
+documentsRouter.get("/api/groups/:id/document/headings", requireAuth, async (req: Request, res: Response) => {
+  const idResult = idParam.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid group id" });
+    return;
+  }
+  const project = await loadGroup(idResult.data);
+  if (!project) {
+    res.status(404).json({ error: "Group not found." });
+    return;
+  }
+  if (!isMemberOf(req, project) && !isInstructorOf(req, project)) {
+    res.status(403).json({ error: "You do not have access to this document." });
+    return;
+  }
+  const sourceType = project.assignment?.sourceType;
+  const doc = sourceType === "EDITOR" || sourceType === "COMBINED"
+    ? await prisma.document.findUnique({ where: { groupId: project.id }, select: { content: true, yjsState: true } })
+    : null;
+  let headings: ReturnType<typeof extractHeadings> = [];
+  if (doc) {
+    try {
+      headings = extractHeadings(doc);
+    } catch (err) {
+      console.error(`[documents] heading extraction failed for group ${project.id}`, err);
+    }
+  }
+  res.set("Cache-Control", "private, no-cache");
+  res.json({ headings });
 });
 
 // GET /api/groups/:id/document/snapshots — list the group's document revision history, newest
@@ -483,7 +818,8 @@ documentsRouter.get("/api/groups/:id/document/snapshots/:snapshotId", requireAut
   }
 
   try {
-    const blocks = readDocumentStructure({ content: "", yjsState: snapshot.yjsState });
+    // Images appear as a small "[image]" line; their data is never sent (a version stays light).
+    const blocks = readDocumentStructure({ content: "", yjsState: snapshot.yjsState }, { imagePlaceholders: true });
     res.json({ id: snapshot.id, createdAt: snapshot.createdAt, reportId: snapshot.reportId, blocks });
   } catch (err) {
     console.error(`[documents] snapshot reconstruction failed for group ${projectId}, snapshot ${snapshotId}`, err);

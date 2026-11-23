@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "../lib/apiBase";
+import { clearAvatarCache } from "../components/Avatar";
+import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice";
 
 export interface AuthUser {
   id: number;
@@ -10,13 +13,23 @@ export interface AuthUser {
   githubUsername?: string | null;
   emailVerified?: boolean;
   emailVerificationRequired?: boolean;
+  /** False when the server runs with EMAIL_ENABLED=false (no email features). */
+  emailEnabled?: boolean;
+  /** Only meaningful for INSTRUCTOR accounts; anyone else is effectively APPROVED. */
+  instructorStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  /** Version of the optional profile photo; null/absent = initials fallback. */
+  avatarUpdatedAt?: string | null;
+  /** Privacy Notice version the user accepted (null = never). */
+  consentVersion?: string | null;
+  /** True until the user accepts the current Privacy Notice version. */
+  consentRequired?: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  register: (email: string, password: string, name: string, role?: string) => Promise<AuthUser & { emailVerificationRequired: boolean }>;
+  register: (email: string, password: string, name: string, role?: string, privacyAccepted?: boolean) => Promise<AuthUser & { emailVerificationRequired: boolean }>;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   refreshUser: () => Promise<AuthUser | null>;
@@ -108,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<AuthUser | null>(null);
   const [token, setToken]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Keep the module-level fetch interceptor in sync with this instance's state.
   useEffect(() => {
@@ -116,12 +130,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSessionExpired = () => {
       setToken(null);
       setUser(null);
+      // Don't let the next account see this one's cached data.
+      queryClient.clear();
     };
     return () => {
       onTokenRefreshed = null;
       onSessionExpired = null;
     };
-  }, []);
+  }, [queryClient]);
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -149,17 +165,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser);
   }
 
-  async function register(email: string, password: string, name: string, role?: string): Promise<AuthUser & { emailVerificationRequired: boolean }> {
+  async function register(email: string, password: string, name: string, role?: string, privacyAccepted = false): Promise<AuthUser & { emailVerificationRequired: boolean }> {
     const res = await fetch("/api/auth/register", {
       method:      "POST",
       headers:     { "Content-Type": "application/json" },
       credentials: "include",
-      body:        JSON.stringify({ email, password, name, ...(role ? { role } : {}) }),
+      body:        JSON.stringify({
+        email, password, name,
+        ...(role ? { role } : {}),
+        ...(privacyAccepted ? { acceptPrivacy: true, privacyVersion: PRIVACY_NOTICE_VERSION } : {}),
+      }),
     });
-    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
+    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; emailEnabled?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Registration failed (${res.status})`);
-    storeSession(data.token!, data.user!);
-    return { ...data.user!, emailVerificationRequired: data.emailVerificationRequired ?? true };
+    const registered = { ...data.user!, emailEnabled: data.emailEnabled };
+    storeSession(data.token!, registered);
+    return { ...registered, emailVerificationRequired: data.emailVerificationRequired ?? true };
   }
 
   async function login(email: string, password: string): Promise<AuthUser> {
@@ -169,9 +190,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       credentials: "include",
       body:        JSON.stringify({ email, password }),
     });
-    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; error?: string };
+    const data = (await res.json()) as { token?: string; user?: AuthUser; emailVerificationRequired?: boolean; emailEnabled?: boolean; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Login failed (${res.status})`);
-    const user = { ...data.user!, emailVerificationRequired: data.emailVerificationRequired };
+    const user = { ...data.user!, emailVerificationRequired: data.emailVerificationRequired, emailEnabled: data.emailEnabled };
     storeSession(data.token!, user);
     return user;
   }
@@ -200,6 +221,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
+    // Drop every cached query so the next account on this browser starts clean.
+    queryClient.clear();
+    clearAvatarCache();
   }
 
   return (
@@ -207,6 +231,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+/** Like useAuth, but returns null outside an <AuthProvider> (display-only consumers such as Avatar). */
+export function useAuthOptional(): AuthContextValue | null {
+  return useContext(AuthContext);
 }
 
 export function useAuth(): AuthContextValue {

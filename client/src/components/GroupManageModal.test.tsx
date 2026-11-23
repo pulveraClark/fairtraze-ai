@@ -1,0 +1,205 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RouterProvider } from "../router";
+import { GroupManageModal } from "./GroupManageModal";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const q: { requests: any[]; suggestions: any[] } = { requests: [], suggestions: [] };
+
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({ token: "t", user: { id: 1, name: "Ana Cruz", systemRole: "STUDENT" } }),
+}));
+vi.mock("./Toast", () => ({ useToast: () => ({ showSuccessToast: vi.fn(), showError: vi.fn(), showToast: vi.fn() }) }));
+vi.mock("../hooks/useGroupQueries", () => ({
+  groupKeys: { manage: () => ["m"], all: () => ["a"], requests: () => ["r"], roleSuggestions: () => ["s"] },
+  useGroupManageQuery: () => ({
+    data: {
+      id: 1, groupName: "Group 1", repoUrl: "", sourceType: "COMBINED", maxGroupSize: null,
+      members: [
+        { userId: 1, name: "Ana Cruz", githubUsername: null, role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "" },
+        { userId: 2, name: "Ben Lim", githubUsername: null, role: "MEMBER", functionalRoles: ["DEVELOPER"], joinedAt: "" },
+      ],
+    },
+    isLoading: false, error: null,
+  }),
+  useGroupRequestsQuery: () => ({ data: q.requests, isLoading: false, error: null }),
+  useRoleSuggestionsQuery: () => ({ data: q.suggestions, isLoading: false, error: null }),
+}));
+
+function renderModal(onClose: () => void = () => {}) {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RouterProvider><GroupManageModal projectId={1} isInstructor={false} onClose={onClose} onChanged={() => {}} /></RouterProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("GroupManageModal leader change wording (I33)", () => {
+  beforeEach(() => { q.requests = []; q.suggestions = []; });
+
+  // INS-11
+  it("calls it 'Change leader' everywhere and has no 'Reassign to leave'", async () => {
+    renderModal();
+    expect(screen.queryByText(/reassign/i)).toBeNull();
+    const buttons = screen.getAllByRole("button", { name: /change leader/i });
+    expect(buttons).toHaveLength(1);
+    await userEvent.click(buttons[0]);
+    expect(screen.getByRole("heading", { name: "Change leader" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("radio"));
+    await userEvent.click(screen.getByRole("button", { name: /^continue/i }));
+    expect(screen.getByRole("button", { name: "Confirm leader change" })).toBeTruthy();
+    expect(screen.queryByText(/reassign/i)).toBeNull();
+  });
+});
+
+describe("GroupManageModal request sections", () => {
+  beforeEach(() => { q.requests = []; q.suggestions = []; });
+
+  it("always shows both headings; empty ones say so and show no count badge", () => {
+    renderModal();
+    expect(screen.getByRole("heading", { name: "Join requests" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Role requests" })).toBeTruthy();
+    expect(screen.getByText("No join requests waiting.")).toBeTruthy();
+    expect(screen.getByText("No role requests waiting.")).toBeTruthy();
+    expect(screen.queryByText("Pending")).toBeNull();
+  });
+
+  it("shows counts and marks each waiting item with the word Pending", () => {
+    q.requests = [{ id: 1, student: { id: 5, name: "Cy Tan", email: "c@x.t", githubUsername: null }, status: "PENDING", createdAt: "" }];
+    q.suggestions = [
+      { id: 2, user: { id: 2, name: "Ben Lim", email: "b@x.t" }, suggestedRoles: ["DOCUMENTATION"], status: "PENDING", createdAt: "" },
+      { id: 3, user: { id: 2, name: "Ben Lim", email: "b@x.t" }, suggestedRoles: ["DEVELOPER", "DOCUMENTATION"], status: "PENDING", createdAt: "" },
+    ];
+    renderModal();
+    expect(screen.getByText("Cy Tan")).toBeTruthy();
+    expect(screen.getAllByText("Pending")).toHaveLength(3);
+    expect(screen.queryByText("No join requests waiting.")).toBeNull();
+    expect(screen.queryByText("No role requests waiting.")).toBeNull();
+  });
+});
+
+describe("GroupManageModal dialog semantics", () => {
+  it("is a modal dialog with a trapped focus, Esc to close, and focus back on the opener", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const { rerender } = render(<button type="button">Manage Group</button>);
+    const opener = screen.getByRole("button", { name: "Manage Group" });
+    opener.focus();
+    rerender(
+      <>
+        <button type="button">Manage Group</button>
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider><GroupManageModal projectId={1} isInstructor={false} onClose={onClose} onChanged={() => {}} /></RouterProvider>
+        </QueryClientProvider>
+      </>,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveAccessibleName(/members|manage/i);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    for (let i = 0; i < 40; i++) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    rerender(<button type="button">Manage Group</button>);
+    expect(screen.getByRole("button", { name: "Manage Group" })).toHaveFocus();
+  });
+
+  it("the close button is at least 40px (ui/Modal), not the old 24px icon", () => {
+    renderModal();
+    expect(screen.getByRole("button", { name: "Close" }).className).toContain("h-10");
+  });
+});
+
+describe("GroupManageModal Accept all", () => {
+  const req = (id: number, name: string) => ({ id, student: { id: 10 + id, name, email: "", githubUsername: null }, status: "PENDING", createdAt: "" });
+  beforeEach(() => { q.suggestions = []; });
+
+  it("is hidden for a single request and shown for two or more", () => {
+    q.requests = [req(1, "Cara")];
+    const { unmount } = renderModal();
+    expect(screen.queryByRole("button", { name: "Accept all" })).toBeNull();
+    unmount();
+    q.requests = [req(1, "Cara"), req(2, "Dan")];
+    renderModal();
+    expect(screen.getByRole("button", { name: "Accept all" })).toBeTruthy();
+  });
+
+  // LDR-02
+  // INT-010
+  it("asks 'Accept 2 requests?' first, and only then calls the server", async () => {
+    const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ accepted: 2, skipped: 0 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    q.requests = [req(1, "Cara"), req(2, "Dan")];
+    renderModal();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept all" }));
+    expect(screen.getByText("Accept 2 requests?")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept 2" }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/groups/1/requests/accept-all");
+    vi.unstubAllGlobals();
+  });
+});
+
+// ── Live-site case LDR-03: change a member's role, remove a member ───────────
+describe("GroupManageModal leader actions", () => {
+  beforeEach(() => { q.requests = []; q.suggestions = []; });
+
+  const writeCalls = (m: ReturnType<typeof vi.fn>) =>
+    m.mock.calls.filter(([, i]) => ["PUT", "DELETE", "POST"].includes((i as RequestInit | undefined)?.method ?? "GET"));
+
+  it("LDR-03: the leader adds a role to a member and the change is sent to the server for that member", async () => {
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (String(url).includes("/functional-roles") ? { functionalRoles: ["DEVELOPER", "DOCUMENTATION"] } : {}),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    // Rows are in member order: Ana (leader) first, Ben second.
+    await userEvent.click(screen.getAllByRole("button", { name: "+ Documentation" })[1]);
+    await vi.waitFor(() => expect(writeCalls(fetchMock)).toHaveLength(1));
+    const [url, init] = writeCalls(fetchMock)[0];
+    expect(String(url)).toBe("/api/groups/1/members/2/functional-roles");
+    expect((init as RequestInit).method).toBe("PUT");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ functionalRoles: ["DEVELOPER", "DOCUMENTATION"] });
+    vi.unstubAllGlobals();
+  });
+
+  it("LDR-03: a member's only role cannot be removed; the message says so and nothing is sent", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    await userEvent.click(screen.getAllByRole("button", { name: "✓ Developer" })[1]);
+    expect(await screen.findByText("At least one role must be assigned.")).toBeTruthy();
+    expect(writeCalls(fetchMock)).toHaveLength(0);
+    vi.unstubAllGlobals();
+  });
+
+  // INT-017
+  it("LDR-03: Remove asks first; Cancel keeps the member, and confirming deletes that member", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderModal();
+    // The leader's own row has no Remove; only the other member does.
+    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(screen.getByText(/Are you sure you want to remove/)).toBeTruthy();
+    expect(screen.getByText("Ben Lim", { selector: "strong" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(writeCalls(fetchMock)).toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Ben Lim" }));
+    await vi.waitFor(() => expect(writeCalls(fetchMock)).toHaveLength(1));
+    const [url, init] = writeCalls(fetchMock)[0];
+    expect(String(url)).toBe("/api/groups/1/members/2");
+    expect((init as RequestInit).method).toBe("DELETE");
+    vi.unstubAllGlobals();
+  });
+});

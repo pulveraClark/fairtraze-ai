@@ -1,0 +1,437 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GET /api/student/group/:projectId: full body is unchanged > COMBINED: leader 1`] = `
+{
+  "assignment": {
+    "attachments": [
+      {
+        "filename": "brief.png",
+        "id": "<id>",
+        "kind": "IMAGE",
+        "mime": "image/png",
+        "order": 0,
+        "size": 3,
+      },
+    ],
+    "deadline": null,
+    "description": "Build it.",
+    "id": "<id>",
+    "sourceType": "COMBINED",
+    "title": "Test Assignment",
+  },
+  "autoUpdateFailed": false,
+  "classSection": {
+    "department": {
+      "code": "TEST",
+      "id": "<id>",
+      "name": "Test Department",
+    },
+    "edpCode": "<edpCode>",
+    "id": "<id>",
+    "subjectCode": "CC-TEST",
+    "subjectName": "Test Subject",
+  },
+  "docsDataApproximate": true,
+  "docsDataFixedAt": "2026-10-08T00:00:00.000Z",
+  "hasReport": true,
+  "membership": {
+    "functionalRoles": [
+      "DEVELOPER",
+    ],
+    "joinedAt": "<joinedAt>",
+    "role": "LEADER",
+    "roleSuggestion": null,
+  },
+  "pendingCounts": {
+    "joinRequests": 1,
+    "roleRequests": 1,
+  },
+  "project": {
+    "groupName": "Group Eq",
+    "id": "<id>",
+    "repoUrl": "https://github.com/example/repo",
+  },
+  "report": {
+    "analyzedAt": "2026-11-12T00:00:00.000Z",
+    "dataConfidence": "low",
+    "deadlineWindowBasis": "activity-span",
+    "evenness": "very-uneven",
+    "memberCount": 2,
+    "myContribution": {
+      "contributionShare": 0.7,
+      "document": {
+        "activeDays": 2,
+        "importedRetainedChars": 0,
+        "insertedImageCount": 0,
+        "retainedChars": 400,
+        "selfChurnRatio": 0.1,
+        "sessionCount": 3,
+        "totalInsertedChars": 500,
+      },
+      "documentContributionShare": 0.30000000000000004,
+      "flags": [
+        "overload",
+      ],
+      "github": {
+        "activeDays": 3,
+        "additions": 100,
+        "blankLinesAdded": 10,
+        "commentLinesAdded": 10,
+        "commits": 10,
+        "deletions": 10,
+      },
+      "githubContributionShare": 0.7,
+      "wDocs": 0.45,
+      "wGitHub": 0.55,
+    },
+    "narrative": null,
+    "narrativeOutdated": false,
+    "noActivity": false,
+    "quietSource": null,
+    "team": [
+      {
+        "avatarUpdatedAt": null,
+        "contributionShare": 0.7,
+        "documentContributionShare": 0.30000000000000004,
+        "flags": [
+          "overload",
+        ],
+        "functionalRoles": [
+          "DEVELOPER",
+        ],
+        "githubContributionShare": 0.7,
+        "hasAvatar": false,
+        "isLeader": true,
+        "name": "Lead",
+        "tasks": {
+          "done": 0,
+          "open": 0,
+        },
+        "userId": "<userId>",
+      },
+      {
+        "avatarUpdatedAt": null,
+        "contributionShare": 0.3,
+        "documentContributionShare": 0.7,
+        "flags": [
+          "free-rider",
+        ],
+        "functionalRoles": [
+          "DEVELOPER",
+        ],
+        "githubContributionShare": 0.3,
+        "hasAvatar": false,
+        "isLeader": false,
+        "name": "Mem",
+        "tasks": {
+          "done": 1,
+          "open": 1,
+        },
+        "userId": "<userId>",
+      },
+    ],
+    "trigger": "manual",
+  },
+  "rulesOutdated": false,
+  "scoringRulesVersion": 4,
+}
+`;
+
+exports[`GET /api/student/group/:projectId: full body is unchanged > COMBINED: member 1`] = `
+{
+  "assignment": {
+    "attachments": [
+      {
+        "filename": "brief.png",
+        "id": "<id>",
+        "kind": "IMAGE",
+        "mime": "image/png",
+        "order": 0,
+        "size": 3,
+      },
+    ],
+    "deadline": null,
+    "description": "Build it.",
+    "id": "<id>",
+    "sourceType": "COMBINED",
+    "title": "Test Assignment",
+  },
+  "autoUpdateFailed": false,
+  "classSection": {
+    "department": {
+      "code": "TEST",
+      "id": "<id>",
+      "name": "Test Department",
+    },
+    "edpCode": "<edpCode>",
+    "id": "<id>",
+    "subjectCode": "CC-TEST",
+    "subjectName": "Test Subject",
+  },
+  "docsDataApproximate": true,
+  "docsDataFixedAt": "2026-10-08T00:00:00.000Z",
+  "hasReport": true,
+  "membership": {
+    "functionalRoles": [
+      "DEVELOPER",
+    ],
+    "joinedAt": "<joinedAt>",
+    "role": "MEMBER",
+    "roleSuggestion": {
+      "createdAt": "<createdAt>",
+      "id": "<id>",
+      "status": "PENDING",
+      "suggestedRoles": [
+        "DOCUMENTATION",
+      ],
+    },
+  },
+  "project": {
+    "groupName": "Group Eq",
+    "id": "<id>",
+    "repoUrl": "https://github.com/example/repo",
+  },
+  "report": {
+    "analyzedAt": "2026-11-12T00:00:00.000Z",
+    "dataConfidence": "low",
+    "deadlineWindowBasis": "activity-span",
+    "evenness": "very-uneven",
+    "memberCount": 2,
+    "myContribution": {
+      "contributionShare": 0.3,
+      "document": {
+        "activeDays": 2,
+        "importedRetainedChars": 0,
+        "insertedImageCount": 0,
+        "retainedChars": 400,
+        "selfChurnRatio": 0.1,
+        "sessionCount": 3,
+        "totalInsertedChars": 500,
+      },
+      "documentContributionShare": 0.7,
+      "flags": [
+        "free-rider",
+      ],
+      "github": {
+        "activeDays": 3,
+        "additions": 100,
+        "blankLinesAdded": 10,
+        "commentLinesAdded": 10,
+        "commits": 10,
+        "deletions": 10,
+      },
+      "githubContributionShare": 0.3,
+      "wDocs": 0.45,
+      "wGitHub": 0.55,
+    },
+    "noActivity": false,
+    "quietSource": null,
+    "trigger": "manual",
+  },
+  "rulesOutdated": false,
+  "scoringRulesVersion": 4,
+}
+`;
+
+exports[`GET /api/student/group/:projectId: full body is unchanged > GITHUB: leader 1`] = `
+{
+  "assignment": {
+    "attachments": [
+      {
+        "filename": "brief.png",
+        "id": "<id>",
+        "kind": "IMAGE",
+        "mime": "image/png",
+        "order": 0,
+        "size": 3,
+      },
+    ],
+    "deadline": null,
+    "description": "Build it.",
+    "id": "<id>",
+    "sourceType": "GITHUB",
+    "title": "Test Assignment",
+  },
+  "autoUpdateFailed": false,
+  "classSection": {
+    "department": {
+      "code": "TEST",
+      "id": "<id>",
+      "name": "Test Department",
+    },
+    "edpCode": "<edpCode>",
+    "id": "<id>",
+    "subjectCode": "CC-TEST",
+    "subjectName": "Test Subject",
+  },
+  "docsDataApproximate": false,
+  "docsDataFixedAt": "2026-10-08T00:00:00.000Z",
+  "hasReport": true,
+  "membership": {
+    "functionalRoles": [
+      "DEVELOPER",
+    ],
+    "joinedAt": "<joinedAt>",
+    "role": "LEADER",
+    "roleSuggestion": null,
+  },
+  "pendingCounts": {
+    "joinRequests": 1,
+    "roleRequests": 1,
+  },
+  "project": {
+    "groupName": "Group Eq",
+    "id": "<id>",
+    "repoUrl": "https://github.com/example/repo",
+  },
+  "report": {
+    "analyzedAt": "2026-11-12T00:00:00.000Z",
+    "dataConfidence": "low",
+    "deadlineWindowBasis": "activity-span",
+    "evenness": "very-uneven",
+    "memberCount": 2,
+    "myContribution": {
+      "activeDays": 3,
+      "additions": 100,
+      "blankLinesAdded": 10,
+      "commentLinesAdded": 10,
+      "commits": 10,
+      "contributionShare": 0.7,
+      "deletions": 10,
+      "flags": [
+        "overload",
+      ],
+    },
+    "narrative": null,
+    "narrativeOutdated": false,
+    "noActivity": false,
+    "quietSource": null,
+    "team": [
+      {
+        "avatarUpdatedAt": null,
+        "contributionShare": 0.7,
+        "documentContributionShare": null,
+        "flags": [
+          "overload",
+        ],
+        "functionalRoles": [
+          "DEVELOPER",
+        ],
+        "githubContributionShare": null,
+        "hasAvatar": false,
+        "isLeader": true,
+        "name": "Lead",
+        "tasks": {
+          "done": 0,
+          "open": 0,
+        },
+        "userId": "<userId>",
+      },
+      {
+        "avatarUpdatedAt": null,
+        "contributionShare": 0.3,
+        "documentContributionShare": null,
+        "flags": [
+          "free-rider",
+        ],
+        "functionalRoles": [
+          "DEVELOPER",
+        ],
+        "githubContributionShare": null,
+        "hasAvatar": false,
+        "isLeader": false,
+        "name": "Mem",
+        "tasks": {
+          "done": 1,
+          "open": 1,
+        },
+        "userId": "<userId>",
+      },
+    ],
+    "trigger": "manual",
+  },
+  "rulesOutdated": false,
+  "scoringRulesVersion": 4,
+}
+`;
+
+exports[`GET /api/student/group/:projectId: full body is unchanged > GITHUB: member 1`] = `
+{
+  "assignment": {
+    "attachments": [
+      {
+        "filename": "brief.png",
+        "id": "<id>",
+        "kind": "IMAGE",
+        "mime": "image/png",
+        "order": 0,
+        "size": 3,
+      },
+    ],
+    "deadline": null,
+    "description": "Build it.",
+    "id": "<id>",
+    "sourceType": "GITHUB",
+    "title": "Test Assignment",
+  },
+  "autoUpdateFailed": false,
+  "classSection": {
+    "department": {
+      "code": "TEST",
+      "id": "<id>",
+      "name": "Test Department",
+    },
+    "edpCode": "<edpCode>",
+    "id": "<id>",
+    "subjectCode": "CC-TEST",
+    "subjectName": "Test Subject",
+  },
+  "docsDataApproximate": false,
+  "docsDataFixedAt": "2026-10-08T00:00:00.000Z",
+  "hasReport": true,
+  "membership": {
+    "functionalRoles": [
+      "DEVELOPER",
+    ],
+    "joinedAt": "<joinedAt>",
+    "role": "MEMBER",
+    "roleSuggestion": {
+      "createdAt": "<createdAt>",
+      "id": "<id>",
+      "status": "PENDING",
+      "suggestedRoles": [
+        "DOCUMENTATION",
+      ],
+    },
+  },
+  "project": {
+    "groupName": "Group Eq",
+    "id": "<id>",
+    "repoUrl": "https://github.com/example/repo",
+  },
+  "report": {
+    "analyzedAt": "2026-11-12T00:00:00.000Z",
+    "dataConfidence": "low",
+    "deadlineWindowBasis": "activity-span",
+    "evenness": "very-uneven",
+    "memberCount": 2,
+    "myContribution": {
+      "activeDays": 3,
+      "additions": 100,
+      "blankLinesAdded": 10,
+      "commentLinesAdded": 10,
+      "commits": 10,
+      "contributionShare": 0.3,
+      "deletions": 10,
+      "flags": [
+        "free-rider",
+      ],
+    },
+    "noActivity": false,
+    "quietSource": null,
+    "trigger": "manual",
+  },
+  "rulesOutdated": false,
+  "scoringRulesVersion": 4,
+}
+`;

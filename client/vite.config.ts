@@ -10,6 +10,8 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "../shared/src"),
     },
   },
+  // The PDF writer runs in a module Web Worker (src/lib/pdf/pdfWorker.ts).
+  worker: { format: "es" },
   server: {
     port: 5173,
     proxy: {

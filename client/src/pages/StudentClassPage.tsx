@@ -1,14 +1,29 @@
-import { useEffect, useState } from "react";
+import { ClassCodeLabel } from "../components/ClassCodeLabel";
+import { AppFooter } from "../components/AppFooter";
+import { AnalyzedAgo } from "../components/AnalyzedAgo";
+import { classCrumb } from "../lib/classLabel";
+import { studentHealthLabel } from "../lib/studentDisplay";
+import { useState } from "react";
+import { NoActivityPill } from "../components/NoActivityPill";
+import { BriefModal } from "../components/BriefCard";
+import type { BriefAttachment } from "../lib/briefAttachments";
+import { useQueryClient } from "@tanstack/react-query";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
+import { ApiError, classKeys, groupKeys, useClassProjectsQuery } from "../hooks/useGroupQueries";
+import { useInvalidateOnAlertCount } from "../hooks/useInvalidateOnAlertCount";
 import { useRouter } from "../router";
-import { AppTopBar } from "../components/AppTopBar";
 import { GroupManageModal } from "../components/GroupManageModal";
+import { useAction } from "../hooks/useAction";
+import { useToast } from "../components/Toast";
+import { BusyLabel } from "../components/ui/BusyLabel";
+import { ensureOk, errorMessage } from "../lib/feedback";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HEALTH_BADGE: Record<string, string> = {
-  "Healthy":       "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "Moderate Risk": "text-amber-700 bg-amber-50 border-amber-200",
-  "High Risk":     "text-red-700 bg-red-50 border-red-200",
+  "even":          "text-emerald-700 bg-emerald-50 border-emerald-200",
+  "a-bit-uneven":  "text-amber-700 bg-amber-50 border-amber-200",
+  "very-uneven":   "text-red-700 bg-red-50 border-red-200",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -21,10 +36,10 @@ const SOURCE_LABEL: Record<string, string> = {
 interface MyGroup {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   role: "LEADER" | "MEMBER";
   pendingRequestCount: number;
-  report: { gini: number | null; teamHealth: string | null; generatedAt: string } | null;
+  report: { evenness: string | null; generatedAt: string; noActivity?: boolean } | null;
 }
 
 interface MyRequest {
@@ -49,6 +64,8 @@ interface AssignmentDetail {
   deadline: string | null;
   sourceType: string;
   maxGroupSize: number;
+  description: string | null;
+  attachments: BriefAttachment[];
   myGroup: MyGroup | null;
   myRequest: MyRequest | null;
   groups: AvailableGroup[];
@@ -76,12 +93,12 @@ function JoinCodeBadge({ code }: { code: string }) {
   }
   return (
     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-      <span className="text-xs text-slate-400 shrink-0">Class code:</span>
-      <span className="font-mono font-bold text-[11px] text-indigo-700 tracking-wider select-all">{code}</span>
+      <span className="text-xs text-slate-600 shrink-0">Class code:</span>
+      <span className="font-mono font-bold text-xs text-indigo-700 tracking-wider select-all">{code}</span>
       <button
         onClick={() => void handleCopy()}
         title={copied ? "Copied!" : "Copy class join code"}
-        className={`p-0.5 rounded transition-colors ${copied ? "text-emerald-600" : "text-slate-300 hover:text-indigo-500"}`}
+        className={`ft-hit rounded transition-colors ${copied ? "text-emerald-700" : "text-slate-500 hover:text-indigo-600"}`}
       >
         {copied ? (
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -98,98 +115,75 @@ function JoinCodeBadge({ code }: { code: string }) {
 }
 
 // ── Project card — shows one assignment with create/join or group view ─────────
-function ProjectCard({
+export function ProjectCard({
   asgn,
   token,
-  user,
   onNavigate,
   onManage,
   onChanged,
-  refreshUser,
 }: {
   asgn: AssignmentDetail;
   token: string | null;
-  user: { githubUsername?: string | null } | null;
   onNavigate: (projectId: number, tab?: string) => void;
   onManage:   (projectId: number) => void;
   onChanged:  () => void;
-  refreshUser: () => Promise<{ githubUsername?: string | null } | null>;
 }) {
   const [mode, setMode]             = useState<"idle" | "create" | "join">("idle");
+  const [showBrief, setShowBrief]   = useState(false);
   const [groupName, setGroupName]   = useState("");
-  const [repoUrl, setRepoUrl]       = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { busy: submitting, run } = useAction();
   const [error, setError]           = useState("");
 
-  const needsGitHub = asgn.sourceType === "GITHUB" || asgn.sourceType === "COMBINED";
-  const noGithub    = needsGitHub && !user?.githubUsername;
   const isPending   = asgn.myRequest?.status === "PENDING";
+  // The class payload already lists every group with its leader's name, so no extra field is needed.
+  const requestLeaderName =
+    asgn.groups.find((g) => g.id === asgn.myRequest?.projectId)?.leaderName ?? "the group leader";
 
   async function handleCreate() {
     if (!groupName.trim()) { setError("Enter a group name."); return; }
-    if (needsGitHub && !repoUrl.trim()) { setError("Enter the GitHub repository URL."); return; }
-    const fresh = await refreshUser();
-    const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
-    if (needsGitHub && !githubUsername) {
-      setError("Add your GitHub username in Settings before creating a group.");
-      return;
-    }
-    setSubmitting(true);
     setError("");
-    try {
-      const res = await fetch("/api/join/create-group", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim(), repoUrl: repoUrl.trim() }),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not create group."); return; }
-      onChanged();
-    } finally {
-      setSubmitting(false);
-    }
+    await run(() => fetch("/api/join/create-group", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ assignmentId: asgn.id, groupName: groupName.trim() }),
+    }), {
+      success: "Group created.",
+      error: "Could not create the group. Try again.",
+      onError: setError,
+      onSuccess: () => onChanged(),
+    });
   }
 
   async function handleRequest() {
     if (!selectedId) { setError("Select a group to request."); return; }
-    const fresh = await refreshUser();
-    const githubUsername = fresh?.githubUsername ?? user?.githubUsername;
-    if (needsGitHub && !githubUsername) {
-      setError("Add your GitHub username in Settings before requesting to join a group.");
-      return;
-    }
-    setSubmitting(true);
     setError("");
-    try {
-      const res = await fetch(`/api/groups/${selectedId}/request`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({}),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not send request."); return; }
-      onChanged();
-    } finally {
-      setSubmitting(false);
-    }
+    // No toast: the card turns into "Request sent ✓, waiting for ... to approve".
+    await run(() => fetch(`/api/groups/${selectedId}/request`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({}),
+    }), {
+      success: null,
+      error: "Could not send the request. Try again.",
+      onError: setError,
+      onSuccess: () => onChanged(),
+    });
   }
 
   async function handleCancelRequest() {
     if (!asgn.myRequest) return;
-    setSubmitting(true);
+    const requestId = asgn.myRequest.id;
     setError("");
-    try {
-      const res = await fetch(`/api/groups/requests/${asgn.myRequest.id}/cancel`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Could not cancel request."); return; }
-      onChanged();
-    } finally {
-      setSubmitting(false);
-    }
+    await run(() => fetch(`/api/groups/requests/${requestId}/cancel`, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }), {
+      success: "Request cancelled.",
+      error: "Could not cancel the request. Try again.",
+      onError: setError,
+      onSuccess: () => onChanged(),
+    });
   }
 
   function fmtDeadline(iso: string | null): string {
@@ -205,16 +199,41 @@ function ProjectCard({
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-slate-800 leading-snug">{asgn.title}</h3>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
                 {SOURCE_LABEL[asgn.sourceType] ?? asgn.sourceType}
               </span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-600">
                 {fmtDeadline(asgn.deadline)}
               </span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-600">
                 Max {asgn.maxGroupSize} per group
               </span>
             </div>
+            {(asgn.description || asgn.attachments.length > 0) && (
+              <div className="mt-2 flex items-center gap-2 min-w-0">
+                <p className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                  {asgn.description
+                    ? asgn.description.replace(/\s+/g, " ")
+                    : `${asgn.attachments.length} attachment${asgn.attachments.length === 1 ? "" : "s"}`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowBrief(true)}
+                  className="min-h-9 shrink-0 rounded-lg px-2 text-sm font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  View the instructions
+                </button>
+              </div>
+            )}
+            {showBrief && (
+              <BriefModal
+                assignmentId={asgn.id}
+                title={asgn.title}
+                description={asgn.description}
+                attachments={asgn.attachments}
+                onClose={() => setShowBrief(false)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -227,7 +246,7 @@ function ProjectCard({
           return (
             <div className="space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                   g.role === "LEADER"
                     ? "text-indigo-700 bg-indigo-50 border-indigo-200"
                     : "text-slate-500 bg-white border-slate-200"
@@ -235,43 +254,36 @@ function ProjectCard({
                   {g.role === "LEADER" ? "Leader" : "Member"}
                 </span>
                 <span className="text-sm font-semibold text-slate-700">{g.groupName}</span>
-                {g.report?.teamHealth && (
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.teamHealth] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
-                    {g.report.teamHealth}
+                {g.report?.noActivity ? (
+                  <NoActivityPill />
+                ) : g.report?.evenness && (
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${HEALTH_BADGE[g.report.evenness] ?? "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                    {studentHealthLabel(g.report.evenness)}
                   </span>
                 )}
               </div>
 
               {!g.report && (
-                <p className="text-[11px] text-slate-400 italic">No analysis yet — awaiting instructor.</p>
+                <p className="text-xs text-slate-600 italic">No analysis yet — awaiting instructor.</p>
+              )}
+              {g.report && (
+                <p className="text-xs text-slate-700"><AnalyzedAgo iso={g.report.generatedAt} /></p>
               )}
 
-              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                {g.role === "LEADER" && (
-                  <button
-                    onClick={() => onManage(g.id)}
-                    className="relative inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
-                  >
-                    Manage group
-                    {g.pendingRequestCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold px-1 leading-none">
-                        {g.pendingRequestCount}
-                      </span>
-                    )}
-                  </button>
-                )}
+              <div className="flex items-center gap-3 pt-1 flex-wrap">
                 <button
                   onClick={() => onNavigate(g.id)}
                   className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
                 >
-                  View report →
+                  Open group →
                 </button>
-                {(asgn.sourceType === "EDITOR" || asgn.sourceType === "COMBINED") && (
+                {/* Shown only when the leader has something to act on; otherwise Manage Group lives on the group page. */}
+                {g.role === "LEADER" && g.pendingRequestCount > 0 && (
                   <button
-                    onClick={() => onNavigate(g.id, "document")}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:text-violet-800 transition-colors border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
+                    onClick={() => onManage(g.id)}
+                    className="text-sm font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
                   >
-                    FairTraze Docs
+                    {g.pendingRequestCount} join request{g.pendingRequestCount === 1 ? "" : "s"} waiting
                   </button>
                 )}
               </div>
@@ -287,22 +299,22 @@ function ProjectCard({
                 </svg>
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-amber-800">
-                  Request pending — {asgn.myRequest!.groupName}
+                <p className="text-xs font-semibold text-amber-800" role="status">
+                  Request sent ✓, waiting for {requestLeaderName} to approve
                 </p>
-                <p className="text-[11px] text-amber-700 mt-0.5">
-                  Waiting for the group leader to respond. You will be notified when your request is accepted or declined.
+                <p className="text-xs text-amber-800 mt-0.5">
+                  {asgn.myRequest!.groupName}. You will be notified when your request is accepted or declined.
                 </p>
                 <button
                   onClick={handleCancelRequest}
                   disabled={submitting}
-                  className="mt-2 text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
+                  className="mt-2 text-xs font-semibold text-amber-700 hover:text-amber-900 underline disabled:opacity-50"
                 >
-                  Cancel request
+                  <BusyLabel busy={submitting} idle="Cancel request" busyText="Cancelling…" />
                 </button>
               </div>
             </div>
-            {error && <p className="text-[11px] text-red-600">{error}</p>}
+            {error && <p className="text-xs text-red-600">{error}</p>}
           </div>
         ) : (
           /* Student has no group yet — show create/join UI */
@@ -313,17 +325,9 @@ function ProjectCard({
                 <svg className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-[11px] text-red-700">
+                <p className="text-xs text-red-700">
                   Your request to join <strong>{asgn.myRequest.groupName}</strong> was declined. You can request another group.
                 </p>
-              </div>
-            )}
-
-            {/* GitHub warning if needed */}
-            {noGithub && mode !== "idle" && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 leading-relaxed">
-                <strong>GitHub username required for this project.</strong>{" "}
-                <a href="/settings" className="underline font-semibold hover:text-amber-900">Add it in Settings</a> first.
               </div>
             )}
 
@@ -348,7 +352,7 @@ function ProjectCard({
                   </button>
                 )}
                 {asgn.groups.length === 0 && (
-                  <p className="text-[11px] text-slate-400 italic">No groups yet — be the first to create one.</p>
+                  <p className="text-xs text-slate-600 italic">No groups yet — be the first to create one.</p>
                 )}
               </div>
             )}
@@ -361,34 +365,26 @@ function ProjectCard({
                   onChange={(e) => { setGroupName(e.target.value); setError(""); }}
                   placeholder="Group name — e.g. Group 1"
                   disabled={submitting}
-                  className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
-                {needsGitHub && (
-                  <input
-                    value={repoUrl}
-                    onChange={(e) => { setRepoUrl(e.target.value); setError(""); }}
-                    placeholder="GitHub repo URL — e.g. github.com/org/repo"
-                    disabled={submitting}
-                    className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                )}
-                {error && <p className="text-xs text-red-600">{error}</p>}
+                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleCreate()}
-                    disabled={submitting || noGithub}
-                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    disabled={submitting}
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Creating…" : "Create Group"}
+                    <BusyLabel busy={submitting} idle="Create Group" busyText="Creating…" />
                   </button>
                   <button
-                    onClick={() => { setMode("idle"); setError(""); setGroupName(""); setRepoUrl(""); }}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                    onClick={() => { setMode("idle"); setError(""); setGroupName(""); }}
+                    disabled={submitting}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors disabled:cursor-not-allowed disabled:text-slate-600"
                   >
                     Cancel
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   Leadership is administrative only — it grants no contribution credit.
                 </p>
               </div>
@@ -398,7 +394,7 @@ function ProjectCard({
             {mode === "join" && (
               <div className="space-y-2">
                 {asgn.groups.filter((g) => !g.isFull).length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">All groups are full.</p>
+                  <p className="text-xs text-slate-600 italic">All groups are full.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {asgn.groups.map((g) => (
@@ -423,32 +419,33 @@ function ProjectCard({
                         />
                         <span className="flex-1 min-w-0">
                           <span className="text-xs font-medium text-slate-700">{g.groupName}</span>
-                          <span className="text-[11px] text-slate-400 ml-2">
+                          <span className="text-xs text-slate-600 ml-2">
                             {g.memberCount} / {asgn.maxGroupSize} members
                           </span>
                         </span>
-                        <span className="text-xs text-slate-400 shrink-0">
+                        <span className="text-xs text-slate-600 shrink-0">
                           {g.isFull ? "Full" : g.leaderName ? `Leader: ${g.leaderName}` : ""}
                         </span>
                       </label>
                     ))}
                   </div>
                 )}
-                {error && <p className="text-xs text-red-600">{error}</p>}
-                <p className="text-xs text-slate-400">
+                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+                <p className="text-xs text-slate-600">
                   The group leader must approve your request before you are added.
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => void handleRequest()}
-                    disabled={submitting || !selectedId || noGithub}
-                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    disabled={submitting || !selectedId}
+                    className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Sending…" : "Send Request"}
+                    <BusyLabel busy={submitting} idle="Send Request" busyText="Sending…" />
                   </button>
                   <button
                     onClick={() => { setMode("idle"); setError(""); setSelectedId(null); }}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                    disabled={submitting}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition-colors disabled:cursor-not-allowed disabled:text-slate-600"
                   >
                     Cancel
                   </button>
@@ -466,33 +463,32 @@ function ProjectCard({
 interface Props { classId: number }
 
 export function StudentClassPage({ classId }: Props) {
-  const { user, token, refreshUser } = useAuth();
+  const { user, token } = useAuth();
   const { navigate }                 = useRouter();
 
-  const [detail, setDetail]           = useState<ClassDetail | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState("");
-  const [refreshKey, setRefreshKey]   = useState(0);
+  const queryClient = useQueryClient();
+  const uid         = user?.id ?? null;
+
+  // Refetches on tab return (classmates' new groups raise no alert for students) and when the
+  // unread count changes (join accepted/declined, removal, leader change…).
+  const classQuery = useClassProjectsQuery<ClassDetail>(classId);
+  useInvalidateOnAlertCount([classKeys.all(uid), groupKeys.all(uid)]);
+  const detail  = classQuery.data ?? null;
+  const loading = classQuery.isLoading;
+  const error   = detail || !classQuery.error
+    ? ""
+    : classQuery.error instanceof ApiError ? classQuery.error.message : "Network error — is the server running?";
   const [managingProjectId, setManagingProjectId] = useState<number | null>(null);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const { showSuccessToast } = useToast();
   const [leaveLoading, setLeaveLoading]     = useState(false);
   const [leaveError, setLeaveError]         = useState("");
 
-  useEffect(() => {
-    if (!token) { setLoading(false); return; }
-    setLoading(true);
-    setError("");
-    fetch(`/api/student/classes/${classId}/projects`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        const data = (await res.json()) as ClassDetail & { error?: string };
-        if (!res.ok) { setError(data.error ?? "Could not load class."); return; }
-        setDetail(data);
-      })
-      .catch(() => setError("Network error — is the server running?"))
-      .finally(() => setLoading(false));
-  }, [token, classId, refreshKey]);
+  /** After the user's own mutation (create/join/cancel/manage): refresh class and group data. */
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: classKeys.all(uid) });
+    void queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
+  };
 
   async function handleLeaveClass() {
     setLeaveLoading(true);
@@ -502,11 +498,11 @@ export function StudentClassPage({ classId }: Props) {
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setLeaveError(data.error ?? "Could not leave class."); return; }
+      await ensureOk(res, "Could not leave the class. Try again.");
       navigate("/student");
-    } catch {
-      setLeaveError("Network error — could not leave class.");
+      showSuccessToast("You left the class."); // the toast provider sits above the routes, so it survives this
+    } catch (err) {
+      setLeaveError(errorMessage(err, "Could not leave the class. Try again."));
     } finally {
       setLeaveLoading(false);
     }
@@ -517,14 +513,12 @@ export function StudentClassPage({ classId }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <AppTopBar />
-
       {managingProjectId !== null && (
         <GroupManageModal
           projectId={managingProjectId}
           isInstructor={false}
           onClose={() => setManagingProjectId(null)}
-          onChanged={() => setRefreshKey((k) => k + 1)}
+          onChanged={refresh}
         />
       )}
 
@@ -533,7 +527,7 @@ export function StudentClassPage({ classId }: Props) {
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200">
             <div className="px-6 py-5 border-b border-slate-100">
               <h2 className="text-sm font-semibold text-slate-800">Leave class?</h2>
-              {cls && <p className="text-xs text-slate-400 mt-0.5">{cls.subjectName}</p>}
+              {cls && <p className="text-xs text-slate-600 mt-0.5">{cls.subjectName}</p>}
             </div>
             <div className="p-6 space-y-4">
               <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 leading-relaxed">
@@ -555,7 +549,7 @@ export function StudentClassPage({ classId }: Props) {
                   disabled={leaveLoading}
                   className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
                 >
-                  {leaveLoading ? "Leaving…" : "Leave class"}
+                  <BusyLabel busy={leaveLoading} idle="Leave class" busyText="Leaving…" />
                 </button>
               </div>
             </div>
@@ -567,33 +561,32 @@ export function StudentClassPage({ classId }: Props) {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
-            <button
-              onClick={() => navigate("/student")}
-              className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Dashboard
-            </button>
+            <Breadcrumbs
+              items={[
+                { label: "Dashboard", href: "/student" },
+                classCrumb(cls),
+              ]}
+            />
             <div className="min-w-0">
               {cls ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-900">{cls.subjectName}</h1>
-                  <span className="text-xs font-mono font-bold text-indigo-600">
-                    {cls.subjectCode}
-                    {cls.edpCode && <span className="font-semibold text-indigo-400"> · EDP {cls.edpCode}</span>}
-                  </span>
+                  <h1 className="text-xl font-semibold text-slate-900">{cls.subjectName}</h1>
+                  <ClassCodeLabel
+                    subjectCode={cls.subjectCode}
+                    edpCode={cls.edpCode}
+                    className="text-xs font-mono font-bold text-indigo-600"
+                    edpClassName="font-semibold text-indigo-700"
+                  />
                   {cls.department && (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                       {cls.department.code}
                     </span>
                   )}
                 </div>
               ) : (
-                <h1 className="text-xl font-bold text-slate-400">{loading ? "Loading…" : "Class"}</h1>
+                <h1 className="text-xl font-semibold text-slate-600">{loading ? "Loading…" : "Class"}</h1>
               )}
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-600 mt-0.5">
                 {assignments.length} project{assignments.length !== 1 ? "s" : ""}
                 {" · "}
                 {assignments.filter((a) => a.myGroup !== null).length} joined
@@ -606,7 +599,7 @@ export function StudentClassPage({ classId }: Props) {
             {cls?.joinCode && <JoinCodeBadge code={cls.joinCode} />}
             <button
               onClick={() => setShowLeaveModal(true)}
-              className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+              className="ft-hit rounded px-2 text-xs text-red-700 hover:text-red-900 font-medium transition-colors"
             >
               Leave class
             </button>
@@ -617,7 +610,7 @@ export function StudentClassPage({ classId }: Props) {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 sm:px-8 py-8">
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading projects…
           </div>
@@ -638,7 +631,7 @@ export function StudentClassPage({ classId }: Props) {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-700">No projects yet</p>
-              <p className="text-xs text-slate-400 mt-1">Your instructor hasn't created any projects for this class.</p>
+              <p className="text-xs text-slate-600 mt-1">Your instructor hasn't created any projects for this class.</p>
             </div>
           </div>
         )}
@@ -654,11 +647,9 @@ export function StudentClassPage({ classId }: Props) {
                   key={asgn.id}
                   asgn={asgn}
                   token={token}
-                  user={user}
                   onNavigate={(projectId, tab) => navigate(`/student/group/${projectId}${tab ? `?tab=${tab}` : ""}`)}
                   onManage={(projectId) => setManagingProjectId(projectId)}
-                  onChanged={() => setRefreshKey((k) => k + 1)}
-                  refreshUser={refreshUser}
+                  onChanged={refresh}
                 />
               ))}
             </div>
@@ -666,19 +657,7 @@ export function StudentClassPage({ classId }: Props) {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button
-            onClick={() => navigate("/overview")}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

@@ -1,0 +1,266 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RouterProvider } from "../../router";
+import { AppShell } from "./AppShell";
+import { ToastProvider } from "../Toast";
+import * as AuthContextModule from "../../context/AuthContext";
+
+vi.mock("../../context/AuthContext", async () => {
+  const actual = await vi.importActual<typeof AuthContextModule>("../../context/AuthContext");
+  return { ...actual, useAuth: vi.fn() };
+});
+const mockUseAuth = vi.mocked(AuthContextModule.useAuth);
+
+function signInAs(systemRole: "ADMIN" | "INSTRUCTOR" | "STUDENT") {
+  mockUseAuth.mockReturnValue({
+    user: { id: 1, email: "a@example.com", name: "Alex Doe", systemRole },
+    token: "t",
+    loading: false,
+    register: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    refreshUser: vi.fn(),
+  });
+}
+
+const classList = [
+  { id: 1, subjectCode: "CS101", subjectName: "Intro", assignments: [{ id: 11, title: "Alpha Project" }] },
+  { id: 2, subjectCode: "CS202", subjectName: "Systems", assignments: [{ id: 22, title: "Beta Project" }] },
+];
+const summary = [
+  { projectId: 5, groupName: "Group Alpha", classId: 1, assignmentId: 11 },
+  { projectId: 6, groupName: "Group Beta", classId: 2, assignmentId: 22 },
+];
+
+function renderShell() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <RouterProvider><ToastProvider><AppShell><main>page body</main></AppShell></ToastProvider></RouterProvider>
+    </QueryClientProvider>
+  );
+}
+
+let mockOpenDisputes = 0;
+let mockUnread = 3;
+
+beforeEach(() => {
+  mockOpenDisputes = 0;
+  mockUnread = 3;
+  window.localStorage.clear();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => {
+        if (url === "/api/alerts/unread-count") return { unreadCount: mockUnread };
+        if (url === "/api/disputes/open-count") return { openCount: mockOpenDisputes };
+        if (url === "/api/classes") return { classes: classList };
+        if (url === "/api/projects/summary") return { summary };
+        if (url === "/api/student/classes") return { classes: [] };
+        return {};
+      },
+    }))
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+describe("AppShell sidebar (instructor)", () => {
+  it("auto-expands only the active class and lets others toggle with aria-expanded", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/class/1");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    expect(await within(nav).findByRole("link", { name: "Alpha Project" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Beta Project" })).toBeNull();
+    // Groups show only inside their project.
+    expect(within(nav).queryByRole("link", { name: "Group Alpha" })).toBeNull();
+
+    const toggle = within(nav).getByRole("button", { name: "Expand Systems" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(toggle);
+    expect(within(nav).getByRole("button", { name: "Collapse Systems" }).getAttribute("aria-expanded")).toBe("true");
+    expect(await within(nav).findByRole("link", { name: "Beta Project" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Group Beta" })).toBeNull();
+  });
+
+  it("shows a project's groups only under the project you are inside", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/project/5");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    expect(await within(nav).findByRole("link", { name: "Group Alpha" })).toBeTruthy();
+    expect(within(nav).getByRole("link", { name: "Alpha Project" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Group Beta" })).toBeNull();
+  });
+
+  // INS-12
+  it("collapses to an icon rail with labelled controls and remembers the choice per user", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(window.localStorage.getItem("ft_sidebar_collapsed:1")).toBe("1");
+    expect(within(nav).getByRole("link", { name: "Disputes" })).toBeTruthy();
+    expect(await within(nav).findByRole("button", { name: /Notifications, 3 unread/ })).toBeTruthy();
+    // The tree is hidden in the rail.
+    expect(within(nav).queryByRole("button", { name: /Expand Intro/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
+  });
+
+  // UX-01 (drawer only: no-sideways-scroll and the Manage button are live checks in a real browser)
+  it("opens the mobile drawer from the menu button and closes it with Escape, returning focus", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+
+    const menuButton = screen.getByRole("button", { name: /Open navigation menu/ });
+    await userEvent.click(menuButton);
+    const dialog = screen.getByRole("dialog", { name: "Main navigation" });
+    expect(within(dialog).getByRole("link", { name: /Notifications/ })).toBeTruthy();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Main navigation" })).toBeNull();
+    expect(document.activeElement).toBe(menuButton);
+  });
+});
+
+describe("AppShell sidebar: Verify report", () => {
+  it("opens a dialog from the instructor's sidebar item, Escape closes it and focus returns", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    const item = within(nav).getByRole("button", { name: "Verify report" });
+    await userEvent.click(item);
+    const dialog = screen.getByRole("dialog", { name: "Verify report" });
+    expect(within(dialog).getByLabelText("Report ID on the student's printout")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeTruthy();
+
+    await userEvent.type(within(dialog).getByLabelText("Report ID on the student's printout"), "ft-1");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Verify report" })).toBeNull();
+    expect(document.activeElement).toBe(item);
+
+    // Reopening starts empty.
+    await userEvent.click(item);
+    expect((screen.getByLabelText("Report ID on the student's printout") as HTMLInputElement).value).toBe("");
+  });
+
+  it("is still reachable by name in the collapsed rail", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    expect(within(nav).getByRole("button", { name: "Verify report" })).toBeTruthy();
+  });
+
+  it("is not shown to students or admins", () => {
+    for (const role of ["STUDENT", "ADMIN"] as const) {
+      signInAs(role);
+      window.history.pushState({}, "", role === "ADMIN" ? "/admin" : "/student");
+      const { unmount } = renderShell();
+      expect(screen.queryByRole("button", { name: "Verify report" })).toBeNull();
+      unmount();
+    }
+  });
+});
+
+describe("AppShell sidebar: open disputes badge", () => {
+  // DSP-02
+  // INT-025
+  it("shows the count on Disputes with one accessible name, expanded and collapsed", async () => {
+    mockOpenDisputes = 4;
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    const link = await within(nav).findByRole("link", { name: "Disputes, 4 open" });
+    expect(Array.from(link.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "4")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const rail = await within(nav).findByRole("link", { name: "Disputes, 4 open" });
+    expect(Array.from(rail.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "4")).toBe(true);
+  });
+
+  it("is hidden at 0 and reads 99+ above 99", async () => {
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    const first = renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    expect(await within(nav).findByRole("link", { name: "Disputes" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: /open$/ })).toBeNull();
+    first.unmount();
+
+    mockOpenDisputes = 120;
+    renderShell();
+    const link = await screen.findByRole("link", { name: "Disputes, 120 open" });
+    expect(link.textContent).toContain("99+");
+  });
+
+  it("students never see it and never request the count", async () => {
+    mockOpenDisputes = 5;
+    signInAs("STUDENT");
+    window.history.pushState({}, "", "/student");
+    renderShell();
+    await screen.findAllByRole("navigation", { name: "Main" });
+    expect(screen.queryByRole("link", { name: /open$/ })).toBeNull();
+    expect(fetch).not.toHaveBeenCalledWith("/api/disputes/open-count", expect.anything());
+  });
+});
+
+describe("AppShell sidebar: unread notifications badge", () => {
+  // INS-12
+  it("INS-12: the Notifications count shows as a number when expanded and collapsed, hidden at 0, 99+ above 99", async () => {
+    mockUnread = 3;
+    signInAs("INSTRUCTOR");
+    window.history.pushState({}, "", "/dashboard");
+    const first = renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+
+    const expanded = await within(nav).findByRole("button", { name: "Notifications, 3 unread" });
+    expect(Array.from(expanded.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "3")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const rail = await within(nav).findByRole("button", { name: "Notifications, 3 unread" });
+    expect(Array.from(rail.querySelectorAll('[aria-hidden="true"]')).some((n) => n.textContent === "3")).toBe(true);
+    first.unmount();
+
+    window.localStorage.clear();
+    mockUnread = 0;
+    const second = renderShell();
+    const nav0 = screen.getAllByRole("navigation", { name: "Main" })[0];
+    const none = await within(nav0).findByRole("button", { name: "Notifications" });
+    expect(none.querySelector('[aria-hidden="true"].rounded-full')).toBeNull();
+    second.unmount();
+
+    mockUnread = 120;
+    renderShell();
+    const many = await screen.findByRole("button", { name: "Notifications, 120 unread" });
+    expect(many.textContent).toContain("99+");
+  });
+});
+
+describe("AppShell sidebar (admin)", () => {
+  it("shows flat links and no classes tree", async () => {
+    signInAs("ADMIN");
+    window.history.pushState({}, "", "/admin");
+    renderShell();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    expect(within(nav).getByRole("link", { name: "Audit log" })).toBeTruthy();
+    expect(within(nav).queryByText("Classes")).toBeNull();
+    expect(fetch).not.toHaveBeenCalledWith("/api/classes", expect.anything());
+  });
+});

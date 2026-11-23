@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useToast } from "../components/Toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { POLL_30S } from "./pollingOptions";
 
 export type AlertType =
   | "HIGH_RISK"
@@ -20,7 +23,16 @@ export type AlertType =
   | "ROLE_SUGGESTION_RESOLVED"
   | "GROUP_CREATED"
   | "DEPARTMENT_CREATED"
-  | "USER_REGISTERED";
+  | "USER_REGISTERED"
+  | "INSTRUCTOR_APPROVED"
+  | "INSTRUCTOR_REJECTED"
+  | "TASK_MENTIONED"
+  | "TASK_COMMENTED"
+  | "TASK_STATUS_CHANGED"
+  | "TASK_IN_REVIEW"
+  | "TASK_DUE_SOON"
+  | "TASK_OVERDUE"
+  | "PROJECT_UPDATED";
 
 export interface AlertItem {
   id: number;
@@ -66,7 +78,7 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   JOIN_REQUEST_ACCEPTED: { label: "Request Accepted", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
   JOIN_REQUEST_DECLINED: { label: "Request Declined", color: "text-slate-300 bg-slate-500/10 border-slate-500/30",    light: "text-slate-700 bg-slate-100 border-slate-200" },
   TASK_ASSIGNED:         { label: "Task",            color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
-  DISPUTE_RESPONDED:     { label: "Review Response", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
+  DISPUTE_RESPONDED:     { label: "Note reply", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
   ACCOUNT_LOCKED:        { label: "Account Locked",  color: "text-red-400 bg-red-500/10 border-red-500/30",          light: "text-red-700 bg-red-50 border-red-200" },
   COMMENT_REPLY:           { label: "Comment Reply", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
   REPORT_READY:            { label: "Report Ready", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
@@ -77,6 +89,15 @@ export const ALERT_TYPE_META: Record<AlertType, AlertTypeMeta> = {
   GROUP_CREATED:           { label: "New Group", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
   DEPARTMENT_CREATED:      { label: "New Department", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
   USER_REGISTERED:         { label: "New Instructor", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", light: "text-amber-700 bg-amber-50 border-amber-200" },
+  INSTRUCTOR_APPROVED:     { label: "Account Approved", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30", light: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  INSTRUCTOR_REJECTED:     { label: "Request Not Approved", color: "text-slate-300 bg-slate-500/10 border-slate-500/30", light: "text-slate-700 bg-slate-100 border-slate-200" },
+  TASK_MENTIONED:          { label: "Mention", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+  TASK_COMMENTED:          { label: "Task Comment", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
+  TASK_STATUS_CHANGED:     { label: "Task Update", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", light: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+  TASK_IN_REVIEW:          { label: "In Review", color: "text-violet-400 bg-violet-500/10 border-violet-500/30", light: "text-violet-700 bg-violet-50 border-violet-200" },
+  TASK_DUE_SOON:           { label: "Due Soon", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", light: "text-amber-700 bg-amber-50 border-amber-200" },
+  TASK_OVERDUE:            { label: "Overdue", color: "text-red-400 bg-red-500/10 border-red-500/30", light: "text-red-700 bg-red-50 border-red-200" },
+  PROJECT_UPDATED:         { label: "Project update", color: "text-sky-400 bg-sky-500/10 border-sky-500/30", light: "text-sky-700 bg-sky-50 border-sky-200" },
 };
 
 const FALLBACK_META: AlertTypeMeta = {
@@ -113,56 +134,112 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function useAlerts(): UseAlertsReturn {
-  const { token } = useAuth();
-  const [alerts, setAlerts]       = useState<AlertItem[]>([]);
-  const [unreadCount, setUnread]  = useState(0);
-  const [loading, setLoading]     = useState(false);
+/**
+ * Query-key prefix for every alert query; invalidating ["alerts"] refreshes the
+ * bell count, the dropdown list and the full notifications page together.
+ */
+export const ALERTS_KEY = ["alerts"] as const;
 
-  const load = useCallback(() => {
-    if (!token) return;
-    setLoading(true);
-    fetch("/api/alerts", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data: { alerts: AlertItem[]; unreadCount: number }) => {
-        setAlerts(data.alerts ?? []);
-        setUnread(data.unreadCount ?? 0);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token]);
+/**
+ * Shared options for the unread-count query. The bell and useInvalidateOnAlertCount both
+ * use these, so they dedupe into one request even on pages where the bell isn't mounted.
+ */
+export function unreadCountQueryOptions(token: string | null, userId: number | null) {
+  return {
+    queryKey: [...ALERTS_KEY, "unread-count", userId],
+    queryFn: async () => {
+      const res = await fetch("/api/alerts/unread-count", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Could not load unread count.");
+      const data = (await res.json()) as { unreadCount?: number };
+      return data.unreadCount ?? 0;
+    },
+    enabled: !!token && userId !== null,
+    ...POLL_30S,
+  };
+}
 
-  // Initial load + 60 s poll
+/**
+ * Bell state. The unread count is polled (30 s, foreground tabs only) from the
+ * count-only endpoint; the full list is fetched only while the dropdown is open.
+ * The sidebar bell, the mobile menu badge and useInvalidateOnAlertCount share one count query (same key → one request).
+ */
+const ALERTS_ERROR_TEXT = "Could not update your notifications. Try again.";
+
+export function useAlerts(options: { listEnabled?: boolean } = {}): UseAlertsReturn {
+  const { listEnabled = false } = options;
+  const { token, user } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? null;
+
+  const countQuery = useQuery(unreadCountQueryOptions(token, userId));
+  const unreadCount = countQuery.data ?? 0;
+
+  const listQuery = useQuery({
+    queryKey: [...ALERTS_KEY, "list", userId],
+    queryFn: async () => {
+      const res = await fetch("/api/alerts", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Could not load alerts.");
+      const data = (await res.json()) as { alerts?: AlertItem[] };
+      return data.alerts ?? [];
+    },
+    enabled: !!token && userId !== null && listEnabled,
+    staleTime: 0, // always refetch when the dropdown opens
+  });
+
+  // New notifications arrived while the dropdown is open → refresh its list.
+  const prevCount = useRef<number | undefined>(undefined);
   useEffect(() => {
-    load();
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
-  }, [load]);
+    if (countQuery.data === undefined) return;
+    if (prevCount.current !== undefined && prevCount.current !== countQuery.data && listEnabled) {
+      void queryClient.invalidateQueries({ queryKey: [...ALERTS_KEY, "list"] });
+    }
+    prevCount.current = countQuery.data;
+  }, [countQuery.data, listEnabled, queryClient]);
+
+  const { showError } = useToast();
 
   const markRead = useCallback(
     async (id: number) => {
       if (!token) return;
-      await fetch(`/api/alerts/${id}/read`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
-      setUnread((prev) => Math.max(0, prev - 1));
+      // Success is silent on purpose (the unread count drops); a failure is not.
+      try {
+        const res = await fetch(`/api/alerts/${id}/read`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("rejected");
+      } catch {
+        showError(ALERTS_ERROR_TEXT);
+      }
+      void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
     },
-    [token]
+    [token, queryClient, showError]
   );
 
   const markAllRead = useCallback(async () => {
     if (!token) return;
-    await fetch("/api/alerts/read-all", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    setUnread(0);
-  }, [token]);
+    try {
+      const res = await fetch("/api/alerts/read-all", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("rejected");
+    } catch {
+      showError(ALERTS_ERROR_TEXT);
+    }
+    void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
+  }, [token, queryClient, showError]);
 
-  return { alerts, unreadCount, loading, markRead, markAllRead, refresh: load };
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ALERTS_KEY });
+  }, [queryClient]);
+
+  return {
+    alerts: listQuery.data ?? [],
+    unreadCount,
+    loading: listQuery.isFetching,
+    markRead,
+    markAllRead,
+    refresh,
+  };
 }

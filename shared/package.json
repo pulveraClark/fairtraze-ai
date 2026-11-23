@@ -9,11 +9,19 @@
     ".": "./src/types.ts",
     "./scoring": "./src/scoring.ts",
     "./documentScoring": "./src/documentScoring.ts",
+    "./imageCredit": "./src/imageCredit.ts",
     "./documentTemplates": "./src/documentTemplates.ts",
+    "./analysisDay": "./src/analysisDay.ts",
+    "./scoringRules": "./src/scoringRules.ts",
     "./lineClassifier": "./src/lineClassifier.ts",
     "./fileWeights": "./src/fileWeights.ts",
     "./commitClassifier": "./src/commitClassifier.ts",
-    "./editClassifier": "./src/editClassifier.ts"
+    "./editClassifier": "./src/editClassifier.ts",
+    "./pageSizes": "./src/pageSizes.ts",
+    "./linkUrl": "./src/linkUrl.ts",
+    "./repoUrl": "./src/repoUrl.ts",
+    "./collabVersion": "./src/collabVersion.ts",
+    "./taskTypes": "./src/taskTypes.ts"
   },
   "scripts": {
     "test": "vitest run"

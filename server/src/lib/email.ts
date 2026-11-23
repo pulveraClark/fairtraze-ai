@@ -1,9 +1,8 @@
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "FairTraze AI <onboarding@resend.dev>";
+import { isEmailEnabled } from "./emailConfig.js";
+import { sendMail } from "./mail.js";
 
 export async function sendPasswordResetEmail(to: string, name: string, resetLink: string): Promise<void> {
+  if (!isEmailEnabled()) return;
   const text = `Hi ${name},
 
 We received a request to reset the password for your FAIR TRAZE AI account (${to}).
@@ -34,25 +33,18 @@ This link expires in 30 minutes. If you didn't request this, you can safely igno
     </div>
   `;
 
-  await resend.emails.send({
-    from: FROM_ADDRESS,
+  await sendMail({
     to,
+    toName: name,
     subject: "Reset your FAIR TRAZE AI password",
     text,
     html,
   });
 }
 
-export async function sendVerificationEmail(to: string, name: string, verifyLink: string): Promise<void> {
-  // Resend's sandbox mode (no verified sending domain) only delivers to the
-  // account owner's own verified address — the same limitation already hit
-  // with password reset. Logging the raw link here keeps other test/demo
-  // accounts verifiable in development regardless of whether delivery
-  // actually succeeded; production behavior is unaffected.
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[email] verification link for ${to}: ${verifyLink}`);
-  }
-
+/** Resolves true when the message was handed to the provider, false when mail is off or not configured. */
+export async function sendVerificationEmail(to: string, name: string, verifyLink: string): Promise<boolean> {
+  if (!isEmailEnabled()) return false;
   const text = `Hi ${name},
 
 Welcome to FAIR TRAZE AI! Please verify your email address (${to}) to unlock full access.
@@ -83,9 +75,9 @@ This link expires in 24 hours. If you didn't create this account, you can safely
     </div>
   `;
 
-  await resend.emails.send({
-    from: FROM_ADDRESS,
+  return sendMail({
     to,
+    toName: name,
     subject: "Verify your FAIR TRAZE AI email",
     text,
     html,

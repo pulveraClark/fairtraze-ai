@@ -1,0 +1,442 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { CombinedScoredMember, DocumentScoredMember, ScoredMember, ScoringThresholds } from "@shared/types";
+import { MemberDrawer } from "./MemberDrawer";
+import { MemberContributionList } from "./MemberContributionList";
+
+const thresholds: ScoringThresholds = { freeRider: 0.5, overload: 1.75, deadlineDriven: 0.6 };
+
+const gh: ScoredMember = {
+  studentName: "Member A", githubUsername: "a", commits: 12, additions: 400, deletions: 50, churn: 450, activeDays: 5,
+  lastPhaseRatio: 0.7, commitShare: 0.3, linesShare: 0.3, activeDaysShare: 0.3, contributionShare: 0.4,
+  codeLinesAdded: 380, commentLinesAdded: 20, blankLinesAdded: 0, codeToCommentRatio: 19,
+  weightedAdditions: 350, selfChurnRatio: 0.1,
+  commitImpactBreakdown: { structural: 0, functional: 12, cosmetic: 0, trivial: 0 },
+  fileTypeBreakdown: { source: 380, test: 0, docs: 0, style: 0, config: 0, other: 0 },
+  flags: ["deadline-driven"],
+};
+
+const doc: DocumentScoredMember = {
+  studentName: "Member B", userId: 2, githubUsername: "", sessionCount: 4, totalInsertedChars: 5000, totalDeletedChars: 500,
+  retainedChars: 4000, effectiveRetainedChars: 3900, churn: 5500, activeDays: 3, lastPhaseRatio: 0.2,
+  sessionShare: 0.2, retainedTextShare: 0.2, activeDaysShare: 0.2, contributionShare: 0.2, selfChurnRatio: 0.05,
+  weightedRetainedChars: 3800, editTypeBreakdown: { substantive: 3, revision: 1, formatting: 0, trivial: 0 },
+  flags: [], importedRetainedChars: 0, importNote: null, insertedImageCount: 0,
+};
+
+const baseProps = { onClose: () => {}, source: "github" as const, thresholds, deadlineBasis: "activity-span" as const, memberCount: 3 };
+
+describe("Low contribution reason line", () => {
+  it("MemberDrawer: one Low contribution pill with the reason as visible text, no tooltip button", () => {
+    render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["free-rider", "overload"] }} />);
+    expect(screen.getByText("Low contribution")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /student wording/i })).toBeNull();
+    expect(screen.getAllByTestId("flag-reason").map((e) => e.textContent)).toEqual(["Below half of an equal share (16.7% for 3 members)"]);
+  });
+
+  it("MemberDrawer: inactive reads No recorded activity; both keys collapse to one pill", () => {
+    render(<MemberDrawer {...baseProps} member={{ ...gh, flags: ["inactive", "free-rider"] }} />);
+    expect(screen.getAllByText("Low contribution")).toHaveLength(1);
+    expect(screen.getByTestId("flag-reason")).toHaveTextContent("No recorded activity");
+  });
+
+  it("MemberContributionList: the row shows the pill and the reason under it", () => {
+    render(<MemberContributionList members={[{ ...gh, flags: ["free-rider"] }, { ...gh, studentName: "Member B", flags: ["inactive"] }]} onOpen={vi.fn()} thresholds={thresholds} />);
+    expect(screen.getAllByText("Low contribution")).toHaveLength(2);
+    expect(screen.getByText("Below half of an equal share (25% for 2 members)")).toBeInTheDocument();
+    expect(screen.getByText("No recorded activity")).toBeInTheDocument();
+    expect(screen.queryByText(/free-rider|inactive/i)).toBeNull();
+  });
+});
+
+describe("MemberDrawer", () => {
+  beforeEach(() => { try { window.localStorage.clear(); } catch { /* ignore */ } });
+
+  const ghMixed: ScoredMember = {
+    ...gh,
+    additions: 500, weightedAdditions: 350.4,
+    commitImpactBreakdown: { structural: 1, functional: 3, cosmetic: 0, trivial: 0 }, commits: 4,
+    fileTypeBreakdown: { source: 380, test: 40, docs: 20, style: 0, config: 20, other: 0 },
+  };
+
+  it("shows share, the equal-share line, the stored-rule flag text and the score-driver summary, but no bar caption", () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    expect(screen.getByText("40.0%")).toBeInTheDocument();
+    expect(screen.queryByText(/percentage points/)).not.toBeInTheDocument();
+    expect(screen.getByText("Equal share for 3 members: 33.3%")).toBeInTheDocument();
+    expect(screen.queryByText(/Line = equal share/)).not.toBeInTheDocument();
+    expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
+    expect(screen.getByText(/More than 60%/)).toBeInTheDocument();
+    expect(screen.getByText("Mostly source code")).toBeInTheDocument();
+    expect(screen.getByText(/83% of added lines.*4 commits analyzed, 1 structural/)).toBeInTheDocument();
+    expect(screen.queryByText(/Activity over time/)).not.toBeInTheDocument();
+  });
+
+  it("says 'Mostly small edits' in plain words and keeps the counts in a tooltip (I32)", () => {
+    const small = { ...doc, sessionCount: 1, retainedChars: 132, editTypeBreakdown: { substantive: 0, revision: 0, formatting: 0, trivial: 132 } };
+    render(<MemberDrawer {...baseProps} source="document" member={small} />);
+    const lead = screen.getByText("Mostly small edits");
+    expect(lead).toBeInTheDocument();
+    expect(screen.queryByText(/Mostly trivial/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/132 of 132/)).not.toBeInTheDocument();
+    expect(lead.parentElement).toHaveAttribute("title", expect.stringContaining("132 of 132 recorded edits"));
+  });
+
+  it("shows the flag name only when thresholds are missing", () => {
+    render(<MemberDrawer {...baseProps} member={gh} thresholds={null} />);
+    expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
+    expect(screen.queryByText(/How this flag is defined/)).not.toBeInTheDocument();
+  });
+
+  it("uses real aria-expanded buttons: Where the work went open, others closed, keyboard toggles", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    const where = screen.getByRole("button", { name: /Where the work went/ });
+    const impact = screen.getByRole("button", { name: /Commit impact/ });
+    const raw = screen.getByRole("button", { name: /Raw numbers/ });
+    expect(where).toHaveAttribute("aria-expanded", "true");
+    expect(impact).toHaveAttribute("aria-expanded", "false");
+    expect(raw).toHaveAttribute("aria-expanded", "false");
+    impact.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(impact).toHaveAttribute("aria-expanded", "true");
+    await userEvent.keyboard(" ");
+    expect(impact).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("lists file types with lines and weight labels, with the exact multiplier in the tooltip", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} onOpenScoringSettings={() => {}} />);
+    expect(screen.getByRole("img", { name: /Source code 83%/ })).toBeInTheDocument();
+    const sourceRow = screen.getByText("Source code", { selector: "td span" }).closest("tr")!;
+    expect(within(sourceRow).getByText("380")).toBeInTheDocument();
+    expect(within(sourceRow).getByText("High")).toBeInTheDocument();
+    const configRow = screen.getByText("Config").closest("tr")!;
+    expect(within(configRow).getByText("Low")).toBeInTheDocument();
+    await userEvent.click(within(configRow).getByRole("button", { name: /About the weight for Config/ }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("0.3× per line.");
+    expect(screen.getByText(/Generated files such as lock files are not counted \(0\.0×\)/)).toBeInTheDocument();
+  });
+
+  it("Escape closes an open tooltip only; a second Escape closes the drawer", async () => {
+    const onClose = vi.fn();
+    render(<MemberDrawer {...baseProps} onClose={onClose} member={ghMixed} />);
+    const tip = screen.getByRole("button", { name: /About the weight for Config/ });
+    await userEvent.click(tip);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape closes a hover-only tooltip without closing the drawer, even with focus elsewhere", async () => {
+    const onClose = vi.fn();
+    render(<MemberDrawer {...baseProps} onClose={onClose} member={ghMixed} />);
+    await userEvent.hover(screen.getByRole("button", { name: /About the weight for Config/ }));
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    (document.activeElement as HTMLElement | null)?.blur();
+    screen.getByRole("button", { name: /Where the work went/ }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("opens Scoring settings from the weights link", async () => {
+    const onOpen = vi.fn();
+    render(<MemberDrawer {...baseProps} member={ghMixed} onOpenScoringSettings={onOpen} />);
+    await userEvent.click(screen.getByRole("button", { name: /How weights work/ }));
+    expect(onOpen).toHaveBeenCalled();
+  });
+
+  it("remembers the Where the work went state, and survives storage throwing", async () => {
+    const { unmount } = render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Where the work went/ }));
+    unmount();
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    expect(screen.getByRole("button", { name: /Where the work went/ })).toHaveAttribute("aria-expanded", "false");
+    cleanup();
+
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    const btn = screen.getByRole("button", { name: /Where the work went/ });
+    expect(btn).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(btn);
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+    get.mockRestore();
+    set.mockRestore();
+  });
+
+  it("shows commit impact counts with multipliers and self-churn", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    expect(screen.getByText("1.5×")).toBeInTheDocument();
+    expect(screen.getByText("Self-churn")).toBeInTheDocument();
+    expect(screen.getByText("10.0%")).toBeInTheDocument();
+    expect(screen.getByText(/Commit counts are log-scaled/)).toBeInTheDocument();
+  });
+
+  it("uses the analyzed-commit basis in the summary and explains a differing Raw commits total", async () => {
+    const mismatch: ScoredMember = {
+      ...ghMixed, commits: 4, commitImpactBreakdown: { structural: 6, functional: 1, cosmetic: 0, trivial: 0 },
+    };
+    render(<MemberDrawer {...baseProps} member={mismatch} />);
+    expect(screen.getByText(/7 commits analyzed, 6 structural/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    expect(screen.getByText(/commits? analyzed$/, { selector: "p" })).toHaveTextContent("7 commits analyzed");
+    await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
+    expect(screen.getByText(/total from GitHub's contributor statistics/)).toBeInTheDocument();
+  });
+
+  it("does not show the commit-total note when the totals agree", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
+    expect(screen.queryByText(/total from GitHub's contributor statistics/)).not.toBeInTheDocument();
+  });
+
+  it("notes that merge commits are excluded from Commit impact", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    expect(screen.getByText("Merge commits are excluded because they repeat teammates' work.")).toBeInTheDocument();
+  });
+
+  it("labels the two sections differently", () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} />);
+    expect(screen.getByText("File types changed and how much each counts")).toBeInTheDocument();
+    expect(screen.getByText("How meaningful each commit was, regardless of file type")).toBeInTheDocument();
+  });
+
+  it("explains each commit-impact category from the classifier rules, and Escape closes only the tip", async () => {
+    const onClose = vi.fn();
+    render(<MemberDrawer {...baseProps} onClose={onClose} member={ghMixed} />);
+    await userEvent.click(screen.getByRole("button", { name: /Commit impact/ }));
+    const expected: Array<[string, RegExp]> = [
+      ["Structural", /2 or more new files, or touches 5 or more files.*1\.5×/],
+      ["Functional", /source or test files.*1\.0×/],
+      ["Cosmetic", /under 20 lines.*0\.5×/],
+      ["Trivial", /5 lines or fewer.*0\.2×/],
+    ];
+    for (const [label, re] of expected) {
+      await userEvent.click(screen.getByRole("button", { name: `About ${label} commits` }));
+      expect(screen.getByRole("tooltip")).toHaveTextContent(re);
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    }
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows raw next to weighted lines; the generated-files message now lives in 'How this was counted'", async () => {
+    render(<MemberDrawer {...baseProps} member={ghMixed} rulesVersion={2} />);
+    await userEvent.click(screen.getByRole("button", { name: /Raw numbers/ }));
+    expect(screen.getByText("500 raw · 350.4 weighted")).toBeInTheDocument();
+    expect(screen.getByText("Lines deleted")).toBeInTheDocument();
+    expect(screen.getByText("Share of activity in the final third")).toBeInTheDocument();
+    expect(screen.getByText("70.0%", { selector: "dd" })).toBeInTheDocument();
+    expect(screen.queryByText(/include generated files such as lock files/)).not.toBeInTheDocument();
+    // Closed by default; opening it shows the moved message, the rules version and the outside-work line.
+    const counted = screen.getByRole("button", { name: /How this was counted/ });
+    expect(counted).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(counted);
+    expect(screen.getByText(/Auto-generated files \(for example lock files\)/)).toBeInTheDocument();
+    expect(screen.getByText("Scoring rules v2.")).toBeInTheDocument();
+    expect(screen.getByText("Work outside GitHub and FairTraze Docs is not counted.")).toBeInTheDocument();
+  });
+
+  it("hides the breakdown sections instead of showing 'Not available' for older reports (R7)", () => {
+    const old = { ...gh, fileTypeBreakdown: { source: 0, test: 0, docs: 0, style: 0, config: 0, other: 0 } };
+    render(<MemberDrawer {...baseProps} member={old} />);
+    expect(screen.queryByText(/Not available/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Where the work went/ })).toBeNull();
+  });
+
+  it("shows 'Images: X counted of Y added' (no thresholds) when the report records counted images", () => {
+    const withImages = { ...doc, insertedImageCount: 4, countedImageCount: 2 };
+    render(<MemberDrawer {...baseProps} source="document" member={withImages} />);
+    expect(screen.getByText(/2 counted of 4 added/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\bKB\b|\bpx\b|pixel/i);
+  });
+
+  describe("'added in one go' line (instructor only)", () => {
+    it("shows one calm line with the date and opens the history; no danger styling, no flag", async () => {
+      const onOpen = vi.fn();
+      render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} onOpenDocumentHistory={onOpen} />);
+      const line = screen.getByTestId("one-go-line");
+      expect(line).toHaveTextContent("Worth a look: a large part of this member's text was added in one go on Nov 10. Please compare snapshots in the document history.");
+      // No danger colour. (The small (i) info tip is the shared HoverTip, not a warning icon.)
+      expect(line.outerHTML).not.toMatch(/(text|bg|border)-(red|rose)-/);
+      expect(document.body.textContent).not.toMatch(/pasted|cheat|suspicious/i);
+      await userEvent.click(within(line).getByRole("button", { name: "Open document history" }));
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+    it("is absent when the member is not listed, when there is no list (older server), and for GitHub-only", () => {
+      const { rerender } = render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 99, day: "2026-11-10" }]} />);
+      expect(screen.queryByTestId("one-go-line")).toBeNull();
+      rerender(<MemberDrawer {...baseProps} source="document" member={doc} />);
+      expect(screen.queryByTestId("one-go-line")).toBeNull();
+      rerender(<MemberDrawer {...baseProps} source="github" member={gh} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} />);
+      expect(screen.queryByTestId("one-go-line")).toBeNull();
+    });
+    it("the history button sits on its own row on a narrow screen and beside the text from sm up", () => {
+      render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} onOpenDocumentHistory={vi.fn()} />);
+      const button = within(screen.getByTestId("one-go-line")).getByRole("button", { name: "Open document history" });
+      expect(button.parentElement!.className).toMatch(/basis-full/);
+      expect(button.parentElement!.className).toMatch(/sm:basis-auto/);
+      expect(button.className).toMatch(/w-full/);
+    });
+    it("shows no history button when the history is not reachable", () => {
+      render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} />);
+      expect(screen.getByTestId("one-go-line")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Open document history" })).toBeNull();
+    });
+  });
+
+  it("shows a single 'Not used in this project' line for GITHUB projects", () => {
+    render(<MemberDrawer {...baseProps} member={gh} />);
+    expect(screen.getByText(/Not used in this project/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /FairTraze Docs activity/ })).not.toBeInTheDocument();
+  });
+
+  it("for a Docs-only member hides the GitHub sections and shows Docs details with disclosures", async () => {
+    const withExtras = { ...doc, importedRetainedChars: 1200, importNote: "x", insertedImageCount: 2 };
+    render(<MemberDrawer {...baseProps} source="document" member={withExtras} />);
+    expect(screen.queryByRole("button", { name: /Where the work went/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Commit impact/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Raw numbers/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/1,200 characters imported from \.docx/)).toBeInTheDocument();
+    expect(screen.getByText(/2 images inserted/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /FairTraze Docs activity/ }));
+    expect(screen.getByText("Editing sessions")).toBeInTheDocument();
+    expect(screen.getByText("Churn (characters)")).toBeInTheDocument();
+    expect(screen.getByText("Weighted retained characters")).toBeInTheDocument();
+    expect(screen.getByText("Substantive (1.0×)")).toBeInTheDocument();
+    expect(screen.getByText("Trivial (0.1×)")).toBeInTheDocument();
+    expect(screen.getByText("Share of activity in the final third")).toBeInTheDocument();
+    expect(screen.getByText("No flags")).toBeInTheDocument();
+  });
+
+  it("explains each Docs edit-significance category from the editor classifier rules", async () => {
+    render(<MemberDrawer {...baseProps} source="document" member={doc} />);
+    await userEvent.click(screen.getByRole("button", { name: /FairTraze Docs activity/ }));
+    const expected: Array<[string, RegExp]> = [
+      ["Substantive", /30\+ characters.*1\.0×/],
+      ["Revision", /under 30 characters.*0\.7×/],
+      ["Formatting", /0\.5–1\.5× the length.*0\.3×/],
+      ["Trivial", /4 characters or fewer.*0\.1×/],
+    ];
+    for (const [label, re] of expected) {
+      await userEvent.click(screen.getByRole("button", { name: `About ${label} edits` }));
+      expect(screen.getByRole("tooltip")).toHaveTextContent(re);
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    }
+  });
+
+  describe("share bars", () => {
+    const both: CombinedScoredMember = {
+      studentName: "Member D", userId: 4, githubUsername: "d", githubContributionShare: 0.6, documentContributionShare: 0.25,
+      wGitHub: 0.5, wDocs: 0.5, contributionShare: 0.425, lastPhaseRatio: 0.1, flags: [], github: ghMixed, document: doc,
+    };
+    const bars = () => screen.getAllByTestId("share-bar");
+
+    it("draws a decorative bar under GitHub and Docs share only, filled to the displayed value, text unchanged", () => {
+      render(<MemberDrawer {...baseProps} source="combined" member={both} />);
+      expect(screen.getByText("60.0%")).toBeInTheDocument();
+      expect(screen.getByText("25.0%")).toBeInTheDocument();
+      expect(bars()).toHaveLength(2);
+      bars().forEach((b) => expect(b).toHaveAttribute("aria-hidden", "true"));
+      const fills = screen.getAllByTestId("share-bar-fill");
+      expect(fills[0]).toHaveStyle({ width: "60%" });
+      expect(fills[1]).toHaveStyle({ width: "25%" });
+      expect(screen.getByText("GitHub share").closest("div")).toContainElement(bars()[0]);
+      expect(screen.getByText("Docs share").closest("div")).toContainElement(bars()[1]);
+      expect(screen.getByText("Blend weights (GitHub / Docs)").closest("div")!.querySelector('[data-testid="share-bar"]')).toBeNull();
+      expect(screen.getByText("50% / 50%")).toBeInTheDocument();
+    });
+
+    it("puts a tick at the equal share with a caption that shows the value", () => {
+      render(<MemberDrawer {...baseProps} source="combined" member={both} />);
+      const ticks = screen.getAllByTestId("share-bar-tick");
+      expect(ticks).toHaveLength(2);
+      ticks.forEach((t) => {
+        expect(t.style.left).toBe(`${100 / 3}%`);
+        expect(t.className).toContain("-translate-x-1/2");
+      });
+      expect(screen.getAllByText("Line = equal share (33.3%)")).toHaveLength(1);
+    });
+
+    it("omits the tick and caption when group size is unknown", () => {
+      render(<MemberDrawer {...baseProps} memberCount={0} source="combined" member={both} />);
+      expect(bars()).toHaveLength(2);
+      expect(screen.queryByTestId("share-bar-tick")).not.toBeInTheDocument();
+      expect(screen.queryByText(/equal share/i)).not.toBeInTheDocument();
+    });
+
+    it("says 'member' for a group of one", () => {
+      render(<MemberDrawer {...baseProps} memberCount={1} source="combined" member={both} />);
+      expect(screen.getByText("Equal share for 1 member: 100.0%")).toBeInTheDocument();
+    });
+
+    it("keeps the fill and tick within 0-100%", () => {
+      const extreme = { ...both, githubContributionShare: 1.2, documentContributionShare: 0 };
+      render(<MemberDrawer {...baseProps} memberCount={1} source="combined" member={extreme} />);
+      const fills = screen.getAllByTestId("share-bar-fill");
+      expect(fills[0]).toHaveStyle({ width: "100%" });
+      expect(fills[1]).toHaveStyle({ width: "0%" });
+      screen.getAllByTestId("share-bar-tick").forEach((t) => expect(t.style.left).toBe("100%"));
+    });
+  });
+
+  it("handles a combined member with a missing Docs side", async () => {
+    const combined: CombinedScoredMember = {
+      studentName: "Member C", userId: 3, githubUsername: "c", githubContributionShare: 0.5, documentContributionShare: 0,
+      wGitHub: 0.5, wDocs: 0.5, contributionShare: 0.25, lastPhaseRatio: 0.1, flags: [], github: ghMixed, document: null,
+    };
+    render(<MemberDrawer {...baseProps} source="combined" member={combined} />);
+    expect(screen.getByText("Blend weights (GitHub / Docs)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /FairTraze Docs activity/ })).toBeNull();
+    expect(screen.queryByText(/Not available/)).toBeNull();
+  });
+});
+
+describe("MemberContributionList", () => {
+  // RPT-01
+  it("renders one 44px+ row per member with share, flag text and an equal-share marker, and opens details", async () => {
+    const onOpen = vi.fn();
+    render(<MemberContributionList members={[gh, { ...doc } as never]} onOpen={onOpen} />);
+    // The header's (?) explains the marker; the rows are the other buttons.
+    const rows = screen.getAllByRole("button").filter((b) => b.getAttribute("aria-label") !== "About the equal-share marker");
+    expect(rows).toHaveLength(2);
+    rows.forEach((b) => expect(b.className).toContain("min-h-10"));
+    expect(screen.getByText("Deadline-driven")).toBeInTheDocument();
+    expect(screen.getByText("No flags")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "About the equal-share marker" }));
+    expect(screen.getByRole("group", { name: "About the equal-share marker" })).toHaveTextContent(/equal split of the work \(50% each\)/);
+    expect(screen.getByRole("group", { name: "About the equal-share marker" })).toHaveTextContent("Everyone on the roster counts, including members with no recorded activity.");
+    await userEvent.click(rows[0]);
+    expect(onOpen).toHaveBeenCalledWith(gh, expect.any(HTMLElement));
+  });
+});
+
+describe("DSP-06: reviewed outcome badge on the flag", () => {
+  const flagged = { ...gh, flags: ["free-rider" as const] };
+
+  // INT-027
+  it("DSP-06: an accepted dispute shows 'Reviewed: accepted' next to that flag", () => {
+    const outcomes = new Map([[flagged.studentName, new Map([["free-rider", "RESOLVED" as const]])]]);
+    render(<MemberContributionList members={[flagged]} resolvedFlagOutcomes={outcomes} onOpen={() => {}} />);
+    expect(screen.getByText("Reviewed: accepted")).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed: upheld")).toBeNull();
+  });
+
+  // INT-027
+  it("DSP-06: a dismissed dispute shows 'Reviewed: upheld', and no badge appears without an outcome", () => {
+    const outcomes = new Map([[flagged.studentName, new Map([["free-rider", "DISMISSED" as const]])]]);
+    const { unmount } = render(<MemberContributionList members={[flagged]} resolvedFlagOutcomes={outcomes} onOpen={() => {}} />);
+    expect(screen.getByText("Reviewed: upheld")).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed: accepted")).toBeNull();
+    unmount();
+    render(<MemberContributionList members={[flagged]} onOpen={() => {}} />);
+    expect(screen.queryByText(/Reviewed:/)).toBeNull();
+  });
+});

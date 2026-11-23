@@ -130,7 +130,9 @@ function DocBlockNode({ block }: { block: DocBlock }) {
       return <>{renderBlockList([block])}</>;
     case "table":
       return (
-        <table className="w-full border-collapse border border-slate-200 my-3 text-sm">
+        // Scrolls sideways inside its own box so a wide table never widens the page (375px).
+        <div className="my-3 max-w-full overflow-x-auto" tabIndex={0} role="region" aria-label="Table (scrolls sideways)">
+        <table className="w-full min-w-max border-collapse border border-slate-200 text-sm">
           <tbody>
             {block.rows.map((row, rowIdx) => (
               <tr key={rowIdx}>
@@ -151,6 +153,7 @@ function DocBlockNode({ block }: { block: DocBlock }) {
             ))}
           </tbody>
         </table>
+        </div>
       );
   }
 }
@@ -160,7 +163,7 @@ function DocBlockNode({ block }: { block: DocBlock }) {
 // anywhere — there is no editing capability to disable because none exists.
 export function DocBlockRenderer({ blocks }: { blocks: DocBlock[] }) {
   if (blocks.length === 0) {
-    return <p className="text-sm text-slate-400 italic">This snapshot has no content.</p>;
+    return <p className="text-sm text-slate-600 italic">This snapshot has no content.</p>;
   }
   return <div>{renderBlockList(blocks)}</div>;
 }

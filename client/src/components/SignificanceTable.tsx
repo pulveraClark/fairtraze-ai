@@ -73,7 +73,7 @@ export function SignificanceTable({ members }: Props) {
                   </td>
                   <td className="px-6 py-3 text-right tabular-nums">
                     {allZero ? (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-600">—</span>
                     ) : (
                       <span
                         className={

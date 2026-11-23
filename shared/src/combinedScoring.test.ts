@@ -43,7 +43,14 @@ describe("computeCombinedTeamReport", () => {
     const githubScored   = computeTeamReport(githubRaw).members;
     const documentScored = computeDocumentTeamReport(documentRaw).members;
 
-    const report = computeCombinedTeamReport(roster, githubRaw, githubScored, documentRaw, documentScored);
+    // The default blend is now 0.55 / 0.45: a code-only and a docs-only member get exactly those shares.
+    const withDefault = computeCombinedTeamReport(roster, githubRaw, githubScored, documentRaw, documentScored);
+    expect(withDefault.members.find((m) => m.userId === 1)!.contributionShare).toBeCloseTo(0.55, 3);
+    expect(withDefault.members.find((m) => m.userId === 2)!.contributionShare).toBeCloseTo(0.45, 3);
+
+    const report = computeCombinedTeamReport(
+      roster, githubRaw, githubScored, documentRaw, documentScored, { wGitHub: 0.5, wDocs: 0.5 },
+    );
 
     const anna = report.members.find((m) => m.userId === 1)!;
     const ben  = report.members.find((m) => m.userId === 2)!;
@@ -53,7 +60,7 @@ describe("computeCombinedTeamReport", () => {
     expect(ben.githubContributionShare).toBeCloseTo(0, 3);
     expect(ben.documentContributionShare).toBeCloseTo(1, 3);
 
-    // Neither is penalized to zero for the source they didn't touch — default 50/50 blend
+    // Neither is penalized to zero for the source they didn't touch — explicit 50/50 blend
     expect(anna.contributionShare).toBeCloseTo(0.5, 3);
     expect(ben.contributionShare).toBeCloseTo(0.5, 3);
 
@@ -220,6 +227,105 @@ describe("computeCombinedTeamReport", () => {
     const total = report.members.reduce((s, m) => s + m.contributionShare, 0);
     expect(total).toBeCloseTo(1, 2);
     expect(report.memberCount).toBe(3);
+  });
+
+  describe("one quiet source", () => {
+    const roster3: CombinedRosterMember[] = [
+      { userId: 1, studentName: "Anna", githubUsername: "anna" },
+      { userId: 2, studentName: "Ben", githubUsername: "ben" },
+      { userId: 3, studentName: "Carlos", githubUsername: "carlos" },
+    ];
+    const ghRows = () => [
+      gh("Anna", "anna", { commits: 10, codeLinesAdded: 200, commitDates: ["2024-01-01T12:00:00Z", "2024-01-02T12:00:00Z"] }),
+      gh("Ben", "ben", { commits: 5, codeLinesAdded: 100, commitDates: ["2024-01-02T12:00:00Z"] }),
+      gh("Carlos", "carlos", { commits: 2, codeLinesAdded: 50, commitDates: ["2024-01-02T12:00:00Z"] }),
+    ];
+    const docRows = () => [
+      doc("Anna", 1, "anna", { sessionCount: 2, retainedChars: 300, totalInsertedChars: 300, sessionDates: ["2024-01-01T12:00:00Z", "2024-01-02T12:00:00Z"] }),
+      doc("Ben", 2, "ben", { sessionCount: 1, retainedChars: 200, totalInsertedChars: 200, sessionDates: ["2024-01-02T12:00:00Z"] }),
+      doc("Carlos", 3, "carlos", { sessionCount: 1, retainedChars: 100, totalInsertedChars: 100, sessionDates: ["2024-01-02T12:00:00Z"] }),
+    ];
+    const run = (githubRaw: RawMemberStats[], documentRaw: RawDocumentMemberStats[], blend?: { wGitHub: number; wDocs: number }) =>
+      computeCombinedTeamReport(
+        roster3, githubRaw, computeTeamReport(githubRaw).members, documentRaw, computeDocumentTeamReport(documentRaw).members, blend,
+      );
+    const sum = (r: ReturnType<typeof run>) => r.members.reduce((s, m) => s + m.contributionShare, 0);
+
+    it("GitHub-only group: shares sum to 1 and equal the GitHub shares", () => {
+      const report = run(ghRows(), roster3.map((r) => doc(r.studentName, r.userId, r.githubUsername)));
+      expect(sum(report)).toBeCloseTo(1, 2);
+      for (const m of report.members) {
+        expect(m.contributionShare).toBeCloseTo(m.githubContributionShare, 3);
+        expect(m.wGitHub).toBe(1);
+        expect(m.wDocs).toBe(0);
+      }
+    });
+
+    it("Docs-only group: shares sum to 1 and equal the Docs shares", () => {
+      const report = run(roster3.map((r) => gh(r.studentName, r.githubUsername)), docRows());
+      expect(sum(report)).toBeCloseTo(1, 2);
+      for (const m of report.members) {
+        expect(m.contributionShare).toBeCloseTo(m.documentContributionShare, 3);
+        expect(m.wGitHub).toBe(0);
+        expect(m.wDocs).toBe(1);
+      }
+    });
+
+    it("custom 70/30 blend with Docs quiet: GitHub still gets weight 1 and shares sum to 1", () => {
+      const report = run(ghRows(), roster3.map((r) => doc(r.studentName, r.userId, r.githubUsername)), { wGitHub: 0.7, wDocs: 0.3 });
+      expect(sum(report)).toBeCloseTo(1, 2);
+      for (const m of report.members) {
+        expect(m.wGitHub).toBe(1);
+        expect(m.wDocs).toBe(0);
+      }
+    });
+
+    it("custom 70/30 blend with GitHub quiet: Docs still gets weight 1 and shares sum to 1", () => {
+      const report = run(roster3.map((r) => gh(r.studentName, r.githubUsername)), docRows(), { wGitHub: 0.7, wDocs: 0.3 });
+      expect(sum(report)).toBeCloseTo(1, 2);
+      for (const m of report.members) {
+        expect(m.wGitHub).toBe(0);
+        expect(m.wDocs).toBe(1);
+      }
+    });
+
+    it("both sources active: the instructor's blend is kept", () => {
+      const report = run(ghRows(), docRows(), { wGitHub: 0.7, wDocs: 0.3 });
+      for (const m of report.members) {
+        expect(m.wGitHub).toBe(0.7);
+        expect(m.wDocs).toBe(0.3);
+      }
+      expect(sum(report)).toBeCloseTo(1, 2);
+    });
+
+    it("both sources quiet: unchanged (default weights, all shares 0)", () => {
+      const report = run(
+        roster3.map((r) => gh(r.studentName, r.githubUsername)),
+        roster3.map((r) => doc(r.studentName, r.userId, r.githubUsername)),
+      );
+      expect(report.members.every((m) => m.contributionShare === 0)).toBe(true);
+      expect(report.members.every((m) => m.wGitHub === 0.55 && m.wDocs === 0.45)).toBe(true);
+    });
+  });
+
+  it("4 members, GitHub only, no Docs: shares are the GitHub shares and only the lowest member is Low contribution", () => {
+    const names = ["Anna", "Ben", "Carlos", "Dana"];
+    const roster: CombinedRosterMember[] = names.map((n, i) => ({ userId: i + 1, studentName: n, githubUsername: n.toLowerCase() }));
+    const day = (d: number) => `2024-01-0${d}T12:00:00Z`;
+    const githubRaw = [
+      gh("Anna", "anna", { commits: 100, codeLinesAdded: 400, commitDates: [day(1), day(2), day(3), day(4)] }),
+      gh("Ben", "ben", { commits: 60, codeLinesAdded: 300, commitDates: [day(1), day(2), day(3)] }),
+      gh("Carlos", "carlos", { commits: 30, codeLinesAdded: 200, commitDates: [day(1), day(2)] }),
+      gh("Dana", "dana", { commits: 5, codeLinesAdded: 100, commitDates: [day(1)] }),
+    ];
+    const documentRaw = roster.map((r) => doc(r.studentName, r.userId, r.githubUsername));
+    const githubScored = computeTeamReport(githubRaw).members;
+    const report = computeCombinedTeamReport(roster, githubRaw, githubScored, documentRaw, computeDocumentTeamReport(documentRaw).members);
+
+    report.members.forEach((m, i) => expect(m.contributionShare).toBeCloseTo(githubScored[i].contributionShare, 3));
+    expect(report.members.reduce((s, m) => s + m.contributionShare, 0)).toBeCloseTo(1, 2);
+    // equalShare 0.25: free-rider line 0.125, overload line 0.4375
+    expect(report.members.map((m) => m.flags)).toEqual([[], [], [], ["free-rider"]]);
   });
 
   it("returns the empty-team shape when the roster is empty", () => {

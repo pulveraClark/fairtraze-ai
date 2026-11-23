@@ -1,7 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { planAcceptAll } from "../lib/acceptAll";
 import { useRouter } from "../router";
 import { useToast } from "./Toast";
+import { useAction } from "../hooks/useAction";
+import { BusyLabel } from "./ui/BusyLabel";
+import { SlowNote } from "./ui/LoadingState";
+import { ensureOk } from "../lib/feedback";
+import {
+  groupKeys, useGroupManageQuery, useGroupRequestsQuery, useRoleSuggestionsQuery,
+} from "../hooks/useGroupQueries";
+import { InfoTip } from "./ui/InfoTip";
+import { Modal } from "./ui/Modal";
+import { TIPS, helpLink } from "../lib/helpText";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type FunctionalRole = "DEVELOPER" | "DOCUMENTATION";
@@ -27,14 +39,15 @@ interface RoleSuggestion {
 }
 
 const ROLE_META: Record<FunctionalRole, { label: string; activeClass: string; inactiveClass: string }> = {
-  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600" },
-  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-400 hover:border-teal-300 hover:text-teal-600" },
+  DEVELOPER:     { label: "Developer",     activeClass: "bg-indigo-50 border-indigo-300 text-indigo-700",  inactiveClass: "bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600" },
+  DOCUMENTATION: { label: "Documentation", activeClass: "bg-teal-50 border-teal-300 text-teal-700",        inactiveClass: "bg-white border-slate-200 text-slate-600 hover:border-teal-300 hover:text-teal-600" },
 };
 
 interface GroupMember {
   userId: number;
   name: string;
-  email: string;
+  /** Only sent to the instructor/admin; students never receive teammates' emails. */
+  email?: string;
   githubUsername: string | null;
   role: "LEADER" | "MEMBER";
   functionalRoles: FunctionalRole[];
@@ -44,7 +57,7 @@ interface GroupMember {
 interface GroupDetail {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   sourceType: "GITHUB" | "EDITOR" | "COMBINED" | null;
   maxGroupSize: number | null;
   members: GroupMember[];
@@ -55,7 +68,8 @@ type Step =
   | "reassign-select"
   | { type: "confirm-reassign"; userId: number; name: string }
   | { type: "confirm-remove";   userId: number; name: string }
-  | { type: "confirm-disband" };
+  | { type: "confirm-disband" }
+  | { type: "confirm-accept-all" };
 
 interface Props {
   projectId: number;
@@ -69,7 +83,7 @@ function Initials({ name, leader }: { name: string; leader: boolean }) {
   const ini = name.split(" ").map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
   return (
     <span
-      className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold select-none ${
+      className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold select-none ${
         leader
           ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
           : "bg-slate-100 text-slate-600 border border-slate-200"
@@ -85,212 +99,165 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const { user, token } = useAuth();
   const { navigate }    = useRouter();
   const { showSuccessToast } = useToast();
+  const action = useAction();      // every button in the list/confirm steps (one action at a time)
+  const nameAction = useAction();  // the rename field has its own busy state
 
-  const [group, setGroup]       = useState<GroupDetail | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [fetchErr, setFetchErr] = useState("");
+  const queryClient = useQueryClient();
+  const currentUserId = user?.id ?? 0;
+  const uid = user?.id ?? null;
+
   const [step, setStep]         = useState<Step>("list");
-  const [busy, setBusy]         = useState(false);
+  const busy = action.busy;
+  const [pending, setPending]  = useState<string | null>(null);
   const [actionErr, setActionErr] = useState("");
   const [reassignTarget, setReassignTarget] = useState<number | null>(null);
   const [roleBusy, setRoleBusy] = useState<number | null>(null);
   const [roleErr, setRoleErr]   = useState("");
-  const [requests, setRequests]           = useState<JoinRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
-  const [requestsErr, setRequestsErr]     = useState("");
-  const [roleSuggestions, setRoleSuggestions]       = useState<RoleSuggestion[]>([]);
-  const [roleSuggestionsLoading, setRoleSuggestionsLoading] = useState(false);
-  const [roleSuggestionsErr, setRoleSuggestionsErr] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft]     = useState("");
-  const [nameBusy, setNameBusy]       = useState(false);
+  const nameBusy = nameAction.busy;
   const [nameErr, setNameErr]         = useState("");
 
-  const currentUserId = user?.id ?? 0;
+  // The modal is mounted only while open, so these queries only run while it is open.
+  const groupQuery = useGroupManageQuery<GroupDetail>(projectId);
+  const group      = groupQuery.data ?? null;
+  const loading    = groupQuery.isLoading;
+  const fetchErr   = group || !groupQuery.error ? "" : groupQuery.error.message || "Could not load group.";
 
-  async function fetchRequests() {
-    setRequestsLoading(true);
-    setRequestsErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { requests?: JoinRequest[]; error?: string };
-      if (!res.ok) { setRequestsErr(data.error ?? "Could not load requests."); return; }
-      setRequests(data.requests ?? []);
-    } catch {
-      setRequestsErr("Network error — could not load requests.");
-    } finally {
-      setRequestsLoading(false);
-    }
-  }
+  const myMem      = group?.members.find((m) => m.userId === currentUserId);
+  const canSeeQueues = !!group && (myMem?.role === "LEADER" || isInstructor);
+  const requestsQuery    = useGroupRequestsQuery<JoinRequest>(projectId, canSeeQueues);
+  const suggestionsQuery = useRoleSuggestionsQuery<RoleSuggestion>(projectId, canSeeQueues);
+  const requests              = requestsQuery.data ?? [];
+  const requestsErr           = requestsQuery.data ? "" : requestsQuery.error?.message ?? "";
+  const roleSuggestions       = suggestionsQuery.data ?? [];
+  const roleSuggestionsErr    = suggestionsQuery.data ? "" : suggestionsQuery.error?.message ?? "";
 
-  async function fetchRoleSuggestions() {
-    setRoleSuggestionsLoading(true);
-    setRoleSuggestionsErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/role-suggestions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { suggestions?: RoleSuggestion[]; error?: string };
-      if (!res.ok) { setRoleSuggestionsErr(data.error ?? "Could not load role suggestions."); return; }
-      setRoleSuggestions(data.suggestions ?? []);
-    } catch {
-      setRoleSuggestionsErr("Network error — could not load role suggestions.");
-    } finally {
-      setRoleSuggestionsLoading(false);
-    }
-  }
-
-  async function fetchGroup() {
-    setLoading(true);
-    setFetchErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string } & Partial<GroupDetail>;
-      if (!res.ok) { setFetchErr(data.error ?? "Could not load group."); return; }
-      const groupData = data as GroupDetail;
-      setGroup(groupData);
-      // Fetch pending requests and role suggestions if this user is leader or instructor
-      const myMem    = groupData.members.find((m) => m.userId === currentUserId);
-      const isLeader = myMem?.role === "LEADER";
-      if (isLeader || isInstructor) {
-        void fetchRequests();
-        void fetchRoleSuggestions();
-      }
-    } catch {
-      setFetchErr("Network error — could not load group.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void fetchGroup();
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const groupKey = groupKeys.manage(uid, projectId);
+  const setGroup = (fn: GroupDetail | ((g: GroupDetail | null) => GroupDetail | null)) =>
+    queryClient.setQueryData<GroupDetail | null>(groupKey, (g) => (typeof fn === "function" ? fn(g ?? null) : fn));
+  /** After the user's own mutation: refresh everything this user caches about the group. */
+  const refreshGroup = () => queryClient.invalidateQueries({ queryKey: groupKeys.all(uid) });
+  const refreshRequests = () => queryClient.invalidateQueries({ queryKey: groupKeys.requests(uid, projectId) });
+  const refreshSuggestions = () => queryClient.invalidateQueries({ queryKey: groupKeys.roleSuggestions(uid, projectId) });
 
   const myMembership = group?.members.find((m) => m.userId === currentUserId);
   const amLeader     = myMembership?.role === "LEADER";
   const canManage    = isInstructor || amLeader;
 
+  // ── Actions ────────────────────────────────────────────────────────────────
+  // One shared runner: blocks a double submit, shows the busy label, and gives feedback. The success
+  // toast appears only after the server says ok; errors stay inline in the modal (setActionErr).
+  const authHeaders = { Authorization: `Bearer ${token}` };
+
+  async function runAction<T>(
+    key: string,
+    work: () => Promise<T>,
+    opts: { success: string | ((v: T) => string); error: string; onSuccess?: (v: T) => void; onFail?: () => void },
+  ) {
+    setActionErr("");
+    setPending(key);
+    try {
+      await action.run(work, {
+        success: opts.success,
+        error: opts.error,
+        onSuccess: opts.onSuccess,
+        onError: (message) => { setActionErr(message); opts.onFail?.(); },
+      });
+    } finally {
+      setPending(null);
+    }
+  }
+
   // ── Reassign leader ────────────────────────────────────────────────────────
   async function handleReassign() {
     if (!reassignTarget) return;
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/reassign-leader`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ userId: reassignTarget }),
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not reassign leader."); return; }
-      onChanged();
-      setStep("list");
-      setReassignTarget(null);
-      await fetchGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction("reassign", () => fetch(`/api/groups/${projectId}/reassign-leader`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body:    JSON.stringify({ userId: reassignTarget }),
+    }), {
+      success: "Leader changed.",
+      error: "Could not change the leader. Try again.",
+      onSuccess: () => { onChanged(); setStep("list"); setReassignTarget(null); void refreshGroup(); },
+    });
   }
 
   // ── Accept / decline join requests ────────────────────────────────────────
   async function handleAccept(requestId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/requests/${requestId}/accept`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not accept request."); return; }
-      onChanged();
-      await fetchGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`accept:${requestId}`, () => fetch(`/api/groups/requests/${requestId}/accept`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Request accepted.",
+      error: "Could not accept the request. Try again.",
+      onSuccess: () => { onChanged(); void refreshGroup(); },
+    });
+  }
+
+  async function handleAcceptAll() {
+    await runAction("accept-all", async () => {
+      const res = await fetch(`/api/groups/${projectId}/requests/accept-all`, { method: "POST", headers: authHeaders });
+      await ensureOk(res, "Could not accept the requests. Try again.");
+      return (await res.json()) as { accepted?: number };
+    }, {
+      success: (data) => {
+        const n = data.accepted ?? 0;
+        return `${n} request${n === 1 ? "" : "s"} accepted.`;
+      },
+      error: "Could not accept the requests. Try again.",
+      onSuccess: () => { onChanged(); setStep("list"); void refreshGroup(); },
+      onFail: () => setStep("list"),
+    });
   }
 
   async function handleDecline(requestId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/requests/${requestId}/decline`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not decline request."); return; }
-      await fetchRequests();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`decline:${requestId}`, () => fetch(`/api/groups/requests/${requestId}/decline`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Request declined.",
+      error: "Could not decline the request. Try again.",
+      onSuccess: () => { void refreshRequests(); },
+    });
   }
 
   // ── Accept / decline role suggestions ────────────────────────────────────
   async function handleAcceptSuggestion(suggestionId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/role-suggestions/${suggestionId}/accept`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not accept suggestion."); return; }
-      onChanged();
-      await fetchGroup();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`sug-accept:${suggestionId}`, () => fetch(`/api/groups/role-suggestions/${suggestionId}/accept`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Role request accepted.",
+      error: "Could not accept the role request. Try again.",
+      onSuccess: () => { onChanged(); void refreshGroup(); },
+    });
   }
 
   async function handleDeclineSuggestion(suggestionId: number) {
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/role-suggestions/${suggestionId}/decline`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not decline suggestion."); return; }
-      await fetchRoleSuggestions();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`sug-decline:${suggestionId}`, () => fetch(`/api/groups/role-suggestions/${suggestionId}/decline`, {
+      method: "POST", headers: authHeaders,
+    }), {
+      success: "Role request declined.",
+      error: "Could not decline the role request. Try again.",
+      onSuccess: () => { void refreshSuggestions(); },
+    });
   }
 
   // ── Remove / leave ─────────────────────────────────────────────────────────
-  async function handleRemove(targetUserId: number) {
+  // `disband` is the "only member leaves, group is deleted" path. The toast survives the modal closing
+  // (and any later navigation) because ToastProvider sits above the routes.
+  async function handleRemove(targetUserId: number, disband = false) {
     const isSelf = targetUserId === currentUserId;
-    setBusy(true);
-    setActionErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}/members/${targetUserId}`, {
-        method:  "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) { setActionErr(data.error ?? "Could not remove member."); setStep("list"); return; }
-      onChanged();
-      if (isSelf) {
-        onClose();
-      } else {
-        setStep("list");
-        await fetchGroup();
-      }
-    } finally {
-      setBusy(false);
-    }
+    await runAction(`remove:${targetUserId}`, () => fetch(`/api/groups/${projectId}/members/${targetUserId}`, {
+      method: "DELETE", headers: authHeaders,
+    }), {
+      success: disband ? "Group deleted." : isSelf ? "You left the group." : "Member removed.",
+      error: isSelf ? "Could not leave the group. Try again." : "Could not remove the member. Try again.",
+      onSuccess: () => {
+        onChanged();
+        if (isSelf) onClose();
+        else { setStep("list"); void refreshGroup(); }
+      },
+      onFail: () => setStep("list"),
+    });
   }
 
   // ── Rename group ────────────────────────────────────────────────────────
@@ -305,25 +272,25 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
     if (!group) return;
     const trimmed = nameDraft.trim();
     if (!trimmed) { setNameErr("Group name is required."); return; }
-    setNameBusy(true);
     setNameErr("");
-    try {
-      const res  = await fetch(`/api/groups/${projectId}`, {
+    await nameAction.run(async () => {
+      const res = await fetch(`/api/groups/${projectId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ groupName: trimmed }),
       });
-      const data = await res.json() as { groupName?: string; error?: string };
-      if (!res.ok) { setNameErr(data.error ?? "Could not update name."); return; }
-      const confirmed = data.groupName ?? trimmed;
-      setGroup((g) => g ? { ...g, groupName: confirmed } : g);
-      setEditingName(false);
-      showSuccessToast("Group name updated.");
-    } catch {
-      setNameErr("Network error — could not update name.");
-    } finally {
-      setNameBusy(false);
-    }
+      await ensureOk(res, "Could not update the name. Try again.");
+      return (await res.json()) as { groupName?: string };
+    }, {
+      success: "Group name updated.",
+      error: "Could not update the name. Try again.",
+      onError: setNameErr,
+      onSuccess: (data) => {
+        const confirmed = data.groupName ?? trimmed;
+        setGroup((g) => g ? { ...g, groupName: confirmed } : g);
+        setEditingName(false);
+      },
+    });
   }
 
   // ── Set functional roles (optimistic update, revert on error) ─────────────
@@ -415,7 +382,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   disabled={nameBusy}
                   className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1.5 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                 >
-                  {nameBusy ? "Saving…" : "Save"}
+                  <BusyLabel busy={nameBusy} idle="Save" busyText="Saving…" />
                 </button>
                 <button
                   onClick={() => setEditingName(false)}
@@ -432,7 +399,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   onClick={startEditName}
                   title="Rename group"
                   aria-label="Rename group"
-                  className="shrink-0 w-3.5 h-3.5 inline-flex items-center justify-center rounded-full text-slate-300 hover:text-indigo-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
+                  className="ft-hit shrink-0 w-3.5 h-3.5 rounded-full text-slate-500 hover:text-indigo-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400 transition-colors"
                 >
                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
@@ -446,8 +413,14 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         {/* ── Members ─────────────────────────────────────────────────────── */}
         <div className="mb-5">
           <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
-            <h3 className="text-xs font-semibold text-slate-700">Members</h3>
-            <p className="text-[11px] text-slate-400">
+            <h3 className="flex items-center gap-1 text-xs font-semibold text-slate-700">
+              Members
+              <InfoTip label="About roles" helpHref={helpLink("roles")}>
+                {TIPS.roles}
+                {!canManage && " You can suggest a role for yourself from your project view."}
+              </InfoTip>
+            </h3>
+            <p className="text-xs text-slate-600">
               {group.members.length}
               {group.maxGroupSize ? ` / ${group.maxGroupSize}` : ""} members
               {group.repoUrl && (
@@ -456,11 +429,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             </p>
           </div>
 
-          {/* Role-context note */}
-          <p className="text-xs text-slate-400 mb-3">
-            Roles are context only — they never affect contribution scores.
-            {!canManage && " Members can suggest a role from their project view."}
-          </p>
 
           <ul className="space-y-2">
             {group.members.map((m) => {
@@ -478,9 +446,9 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-semibold text-slate-800 truncate">
-                        {m.name}{isSelf && <span className="text-slate-400 font-normal"> (you)</span>}
+                        {m.name}{isSelf && <span className="text-slate-600 font-normal"> (you)</span>}
                       </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
                         isThisLeader
                           ? "text-indigo-700 bg-indigo-50 border-indigo-200"
                           : "text-slate-500 bg-white border-slate-200"
@@ -489,7 +457,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                       </span>
                     </div>
                     {m.githubUsername && (
-                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">@{m.githubUsername}</p>
+                      <p className="text-xs text-slate-600 font-mono mt-0.5">@{m.githubUsername}</p>
                     )}
 
                     {/* Functional role chips — filtered by sourceType (Fix 1); at least one always required (Fix 3) */}
@@ -502,7 +470,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         if (!canEditRoles) {
                           if (!active) return null;
                           return (
-                            <span key={role} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
+                            <span key={role} className={`text-xs px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}>
                               {meta.label}
                             </span>
                           );
@@ -513,7 +481,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                             <span
                               key={role}
                               title="Required for this project's source type — cannot be removed"
-                              className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}
+                              className={`text-xs px-1.5 py-0.5 rounded border font-medium ${meta.activeClass}`}
                             >
                               ✓ {meta.label}
                             </span>
@@ -535,7 +503,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                               void handleSetRoles(m.userId, next);
                             }}
                             title={isLastRemaining ? "At least one role must be assigned." : undefined}
-                            className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
+                            className={`ft-hit text-xs px-2 rounded border font-medium transition-colors disabled:opacity-50 ${
                               active ? meta.activeClass : meta.inactiveClass
                             }`}
                           >
@@ -544,7 +512,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         );
                       })}
                       {roleBusy === m.userId && (
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-slate-600 flex items-center gap-1">
                           <span className="h-2.5 w-2.5 rounded-full border border-indigo-300 border-t-indigo-600 animate-spin" />
                           saving…
                         </span>
@@ -554,9 +522,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                    {isSelf && isThisLeader && (
-                      <span className="text-xs text-slate-400">Reassign to leave</span>
-                    )}
                     {isSelf && !isThisLeader && (
                       <button
                         onClick={() => setStep({ type: "confirm-remove", userId: m.userId, name: m.name })}
@@ -584,22 +549,19 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             <div className="mt-5 pt-4 border-t border-slate-100">
               <button
                 onClick={() => { setStep("reassign-select"); setReassignTarget(null); setActionErr(""); }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                className="ft-hit gap-1.5 rounded px-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
                 Change leader
               </button>
-              <p className="text-xs text-slate-400 mt-1">
-                Leadership is administrative only — it grants no contribution credit.
-              </p>
             </div>
           )}
 
           {canManage && nonLeaderMembers.length === 0 && amLeader && (
             <div className="mt-5 pt-4 border-t border-slate-100">
-              <p className="text-[11px] text-slate-400 mb-2">
+              <p className="text-xs text-slate-600 mb-2">
                 You are the only member of this group.
               </p>
               <button
@@ -616,32 +578,41 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         {canManage && (
           <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
-              <h3 className="text-xs font-semibold text-slate-700">Pending Join Requests</h3>
+              <h3 className="text-xs font-semibold text-slate-700">Join requests</h3>
               {requests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold px-1 leading-none">
+                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-indigo-600 text-white text-xs font-bold px-1 leading-none">
                   {requests.length}
                 </span>
               )}
+              {requests.length >= 2 && (
+                <button
+                  onClick={() => { setStep({ type: "confirm-accept-all" }); setActionErr(""); }}
+                  disabled={busy}
+                  className="ml-auto text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:cursor-not-allowed"
+                >
+                  Accept all
+                </button>
+              )}
             </div>
 
-            {requestsLoading ? (
-              <p className="text-[11px] text-slate-400">Loading requests…</p>
-            ) : requestsErr ? (
-              <p className="text-[11px] text-red-500">{requestsErr}</p>
+            {requestsErr ? (
+              <p className="text-xs text-red-500">{requestsErr}</p>
             ) : requests.length === 0 ? (
-              <p className="text-[11px] text-slate-400 italic">No pending requests.</p>
+              <p className="text-xs text-slate-600">No join requests waiting.</p>
             ) : (
               <ul className="space-y-2">
                 {requests.map((r) => (
                   <li
                     key={r.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-amber-100 bg-amber-50"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-amber-200 border-l-4 border-l-amber-500 bg-amber-50"
                   >
                     <Initials name={r.student.name} leader={false} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{r.student.name}</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {r.student.name} <span className="ml-1 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">Pending</span>
+                      </p>
                       {r.student.githubUsername && (
-                        <p className="text-[11px] text-slate-400 font-mono">@{r.student.githubUsername}</p>
+                        <p className="text-xs text-slate-600 font-mono">@{r.student.githubUsername}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -650,14 +621,14 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         disabled={busy}
                         className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                       >
-                        Accept
+                        <BusyLabel busy={pending === `accept:${r.id}`} idle="Accept" busyText="Accepting…" />
                       </button>
                       <button
                         onClick={() => void handleDecline(r.id)}
                         disabled={busy}
                         className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
-                        Decline
+                        <BusyLabel busy={pending === `decline:${r.id}`} idle="Decline" busyText="Declining…" />
                       </button>
                     </div>
                   </li>
@@ -671,31 +642,31 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
         {canManage && (
           <div className="mb-5 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
-              <h3 className="text-xs font-semibold text-slate-700">Pending Role Suggestions</h3>
+              <h3 className="text-xs font-semibold text-slate-700">Role requests</h3>
               {roleSuggestions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-teal-600 text-white text-[9px] font-bold px-1 leading-none">
+                <span className="inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-teal-600 text-white text-xs font-bold px-1 leading-none">
                   {roleSuggestions.length}
                 </span>
               )}
             </div>
 
-            {roleSuggestionsLoading ? (
-              <p className="text-[11px] text-slate-400">Loading suggestions…</p>
-            ) : roleSuggestionsErr ? (
-              <p className="text-[11px] text-red-500">{roleSuggestionsErr}</p>
+            {roleSuggestionsErr ? (
+              <p className="text-xs text-red-500">{roleSuggestionsErr}</p>
             ) : roleSuggestions.length === 0 ? (
-              <p className="text-[11px] text-slate-400 italic">No pending role suggestions.</p>
+              <p className="text-xs text-slate-600">No role requests waiting.</p>
             ) : (
               <ul className="space-y-2">
                 {roleSuggestions.map((s) => (
                   <li
                     key={s.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-teal-100 bg-teal-50"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-teal-200 border-l-4 border-l-teal-600 bg-teal-50"
                   >
                     <Initials name={s.user.name} leader={false} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{s.user.name}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {s.user.name} <span className="ml-1 rounded-full border border-teal-300 bg-teal-100 px-1.5 py-0.5 text-xs font-semibold text-teal-900">Pending</span>
+                      </p>
+                      <p className="text-xs text-slate-600 mt-0.5">
                         Suggests:{" "}
                         {s.suggestedRoles.map((r) => ROLE_META[r]?.label ?? r).join(" + ")}
                       </p>
@@ -706,14 +677,14 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                         disabled={busy}
                         className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded hover:bg-emerald-50 transition-colors disabled:opacity-50"
                       >
-                        Accept
+                        <BusyLabel busy={pending === `sug-accept:${s.id}`} idle="Accept" busyText="Accepting…" />
                       </button>
                       <button
                         onClick={() => void handleDeclineSuggestion(s.id)}
                         disabled={busy}
                         className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
-                        Decline
+                        <BusyLabel busy={pending === `sug-decline:${s.id}`} idle="Decline" busyText="Declining…" />
                       </button>
                     </div>
                   </li>
@@ -760,16 +731,16 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               <Initials name={m.name} leader={false} />
               <span className="text-xs font-medium text-slate-700">
                 {m.name}
-                {m.userId === currentUserId && <span className="text-slate-400"> (you)</span>}
+                {m.userId === currentUserId && <span className="text-slate-600"> (you)</span>}
               </span>
               {m.githubUsername && (
-                <span className="text-[11px] text-slate-400 font-mono ml-auto">@{m.githubUsername}</span>
+                <span className="text-xs text-slate-600 font-mono ml-auto">@{m.githubUsername}</span>
               )}
             </label>
           ))}
         </div>
 
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-600 mb-4">
           Leadership is administrative only. The new leader is scored on their actual work, the same as every other member.
         </p>
 
@@ -788,7 +759,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
               if (target) setStep({ type: "confirm-reassign", userId: target.userId, name: target.name });
             }}
             disabled={!reassignTarget || busy}
-            className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:bg-slate-200 disabled:text-slate-400"
+            className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:bg-slate-200 disabled:text-slate-600"
           >
             Continue →
           </button>
@@ -813,10 +784,6 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
           </div>
         )}
 
-        <p className="text-[11px] text-slate-400 mb-5">
-          Leadership is administrative only and grants no contribution credit. Scores are based on actual work.
-        </p>
-
         <div className="flex justify-end gap-2">
           <button
             onClick={() => { setStep("reassign-select"); setActionErr(""); }}
@@ -833,7 +800,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy ? "Reassigning…" : "Confirm reassignment"}
+            <BusyLabel busy={busy} idle="Confirm leader change" busyText="Changing leader…" />
           </button>
         </div>
       </>
@@ -870,11 +837,47 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy
-              ? (isSelf ? "Leaving…" : "Removing…")
-              : (isSelf ? "Leave group" : `Remove ${targetName}`)
-            }
+            <BusyLabel
+              busy={busy}
+              idle={isSelf ? "Leave group" : `Remove ${targetName}`}
+              busyText={isSelf ? "Leaving…" : "Removing…"}
+            />
           </button>
+        </div>
+      </>
+    );
+  }
+
+  function renderConfirmAcceptAll() {
+    const plan = planAcceptAll(requests.length, group?.members.length ?? 0, group?.maxGroupSize ?? null);
+    return (
+      <>
+        <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-800 leading-relaxed mb-5" role="status">
+          <p className="font-semibold">{plan.title}</p>
+          {plan.detail && <p className="mt-1 text-slate-700">{plan.detail}</p>}
+        </div>
+        {actionErr && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs text-red-700">
+            {actionErr}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => { setStep("list"); setActionErr(""); }}
+            disabled={busy}
+            className="px-4 py-2 rounded-lg text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors font-medium disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          {plan.accepting > 0 && (
+            <button
+              onClick={() => void handleAcceptAll()}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg text-sm text-white bg-emerald-700 hover:bg-emerald-800 transition-colors font-semibold disabled:opacity-50"
+            >
+              <BusyLabel busy={busy} idle={`Accept ${plan.accepting}`} busyText="Accepting…" />
+            </button>
+          )}
         </div>
       </>
     );
@@ -900,11 +903,11 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
             Cancel
           </button>
           <button
-            onClick={() => void handleRemove(currentUserId)}
+            onClick={() => void handleRemove(currentUserId, true)}
             disabled={busy}
             className="px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700 transition-colors font-semibold disabled:opacity-50"
           >
-            {busy ? "Leaving…" : "Leave and delete group"}
+            <BusyLabel busy={busy} idle="Leave and delete group" busyText="Deleting group…" />
           </button>
         </div>
       </>
@@ -914,10 +917,11 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   // ── Title per step ─────────────────────────────────────────────────────────
   function stepTitle() {
     if (step === "list")            return "Manage Group";
-    if (step === "reassign-select") return "Change Leader";
-    if (typeof step === "object" && step.type === "confirm-reassign") return "Confirm Leader Change";
+    if (step === "reassign-select") return "Change leader";
+    if (typeof step === "object" && step.type === "confirm-reassign") return "Confirm leader change";
     if (typeof step === "object" && step.type === "confirm-remove")   return "Are you sure?";
     if (typeof step === "object" && step.type === "confirm-disband")  return "Delete group?";
+    if (typeof step === "object" && step.type === "confirm-accept-all") return "Accept join requests";
     return "Manage Group";
   }
 
@@ -927,37 +931,23 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
   const needsGitHub    = githubRequired && !!myMembership && !myMembership.githubUsername;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-800">{stepTitle()}</h2>
-            {group && (
-              <p className="text-xs text-slate-400 mt-0.5">{group.groupName}</p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded"
-            aria-label="Close"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      open
+      onClose={onClose}
+      title={stepTitle()}
+      size="sm"
+      heading={
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">{stepTitle()}</h2>
+          {group && <p className="mt-0.5 text-xs text-slate-600">{group.groupName}</p>}
         </div>
-
+      }
+    >
+      <div>
         {/* Body */}
-        <div className="px-6 py-5">
+        <div>
           {loading && (
-            <div className="flex items-center gap-2 py-8 justify-center text-sm text-slate-400">
+            <div className="flex items-center gap-2 py-8 justify-center text-sm text-slate-600">
               <span className="h-4 w-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin" />
               Loading members…
             </div>
@@ -982,6 +972,7 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 </div>
               )}
 
+              <SlowNote show={action.slow || nameAction.slow} />
               {step === "list" && renderList()}
               {step === "reassign-select" && renderReassignSelect()}
               {typeof step === "object" && step.type === "confirm-reassign" &&
@@ -990,10 +981,12 @@ export function GroupManageModal({ projectId, isInstructor, onClose, onChanged }
                 renderConfirmRemove(step.userId, step.name)}
               {typeof step === "object" && step.type === "confirm-disband" &&
                 renderConfirmDisband()}
+              {typeof step === "object" && step.type === "confirm-accept-all" &&
+                renderConfirmAcceptAll()}
             </>
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

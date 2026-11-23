@@ -1,14 +1,28 @@
-import { useEffect, useState, useCallback } from "react";
-import type { ProjectSummaryItem, StoredReportResponse } from "@shared/types";
-import { AppTopBar } from "../components/AppTopBar";
+import { groupsNeedAttention } from "../lib/attentionLabel";
+import { useToast } from "../components/Toast";
+import { NoActivityHeaderPill } from "../components/NoActivityRollup";
+import { AppFooter } from "../components/AppFooter";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { ProjectSummaryItem, StoredReportResponse, ProjectScoringConfig } from "@shared/types";
+import { isAtRiskGroup, noActivityCount, presentedHealth, visibleFlags } from "../lib/groupActivity";
+import { ScoringSettingsModal } from "../components/ScoringSettingsModal";
 import { GroupSummaryCard } from "../components/GroupSummaryCard";
+import { useAssignmentTaskSummary } from "../hooks/useAssignmentTaskSummary";
 import { GroupManageModal } from "../components/GroupManageModal";
-import { TaskManageModal } from "../components/TaskManageModal";
 import { classAtRiskCount } from "../components/ClassCard";
 import { PrintableReportBundle, type PrintableReportBundleItem } from "../components/PrintableReportBundle";
 import { computeAssignmentBenchmark } from "../lib/benchmark";
 import { useRouter } from "../router";
+import { Breadcrumbs } from "../components/layout/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
+import { BriefCard } from "../components/BriefCard";
+import { highlightFromHash } from "../lib/instructionsCheck";
+import { classCrumb, classFullLabel } from "../lib/classLabel";
+import { EditAssignmentModal } from "../components/EditAssignmentModal";
+import type { BriefAttachment } from "../lib/briefAttachments";
+import { REPO_NOT_LINKED_MESSAGE, repoNotLinked } from "../lib/repoNotice";
+import { analysisBodyText, NETWORK_ERROR_TEXT } from "../lib/failureText";
 
 // ── Lifecycle API types ───────────────────────────────────────────────────────
 interface AssignmentMeta {
@@ -20,6 +34,9 @@ interface AssignmentMeta {
   sourceType: "GITHUB" | "EDITOR" | "COMBINED";
   createdAt: string;
   classSectionId: number;
+  description: string | null;
+  scoringConfig: ProjectScoringConfig;
+  attachments: BriefAttachment[];
 }
 
 interface ClassInfo {
@@ -34,7 +51,7 @@ interface ClassInfo {
 interface LifecycleGroup {
   id: number;
   groupName: string;
-  repoUrl: string;
+  repoUrl: string | null;
   memberCount: number;
   lastAnalyzedAt: string | null;
   isAnalyzed: boolean;
@@ -46,7 +63,8 @@ type FilterMode = "all" | "at-risk";
 
 function riskScore(item: ProjectSummaryItem): number {
   if (!item.isAnalyzed) return 10;
-  const hasFlags = item.flagsPresent.length > 0;
+  if (presentedHealth(item) === "no-activity") return 6; // after real health, before not analyzed
+  const hasFlags = visibleFlags(item).length > 0;
   if (item.teamHealth === "High Risk")     return hasFlags ? 0 : 1;
   if (item.teamHealth === "Moderate Risk") return hasFlags ? 2 : 3;
   return hasFlags ? 4 : 5;
@@ -64,9 +82,7 @@ function sortItems(items: ProjectSummaryItem[], mode: SortMode): ProjectSummaryI
 
 function filterItems(items: ProjectSummaryItem[], mode: FilterMode): ProjectSummaryItem[] {
   if (mode === "all") return items;
-  return items.filter(
-    (i) => i.teamHealth === "High Risk" || i.teamHealth === "Moderate Risk" || i.flagsPresent.length > 0
-  );
+  return items.filter(isAtRiskGroup);
 }
 
 function fmtDeadline(iso: string | null): string {
@@ -78,8 +94,11 @@ function fmtDeadline(iso: string | null): string {
 interface Props { classId: number; assignmentId: number }
 
 export function AssignmentPage({ classId, assignmentId }: Props) {
+  const taskSummary = useAssignmentTaskSummary(assignmentId);
   const { navigate } = useRouter();
   const { token, user } = useAuth();
+  const { showSuccessToast } = useToast();
+  const queryClient = useQueryClient();
   const isAdmin = user?.systemRole === "ADMIN";
 
   const [assignment, setAssignment] = useState<AssignmentMeta | null>(null);
@@ -91,14 +110,22 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [search, setSearch]         = useState("");
   const [analyzing, setAnalyzing]       = useState<Set<number>>(new Set());
+  const analyzingRef = useRef<Set<number>>(new Set());
+  const bulkLock     = useRef(false);
   const [managingGroupId, setManagingGroupId] = useState<number | null>(null);
-  const [tasksGroupId, setTasksGroupId]       = useState<number | null>(null);
+  const [editingBrief, setEditingBrief]       = useState(false);
+  // "See in the instructions" links carry the sentence in the #highlight= hash, so it never reaches a server log.
+  const [highlight] = useState(() => highlightFromHash(window.location.hash));
+  const [showScoring, setShowScoring]         = useState(false);
 
   // ── Bulk selection / bulk analyze / bulk export ────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkFailures, setBulkFailures] = useState<string[]>([]);
+  // What the first failed group was told (the sentence names what to do), shown after the group names.
+  const [bulkFailureReason, setBulkFailureReason] = useState<string | null>(null);
+  const [bulkNotice, setBulkNotice]     = useState<string | null>(null);
   const [bulkExporting, setBulkExporting] = useState(false);
   const [exportItems, setExportItems] = useState<PrintableReportBundleItem[] | null>(null);
 
@@ -144,19 +171,36 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   useEffect(() => { void fetchData(); }, [fetchData]);
 
   async function handleReanalyze(projectId: number) {
+    const item = summary.find((s) => s.projectId === projectId);
+    if (item && repoNotLinked(item)) { setBulkNotice(`${item.groupName}: ${REPO_NOT_LINKED_MESSAGE}`); return; }
+    if (analyzingRef.current.has(projectId)) return; // already running: ignore a second click
+    analyzingRef.current.add(projectId);
     setAnalyzing((prev) => new Set(prev).add(projectId));
     try {
-      await fetch(`/api/projects/${projectId}/analyze`, {
+      const analyzeRes = await fetch(`/api/projects/${projectId}/analyze`, {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!analyzeRes.ok) {
+        // Say what happened and what to do, instead of the button just stopping.
+        const body = (await analyzeRes.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
+        const name = item?.groupName ?? `Project ${projectId}`;
+        setBulkNotice(`${name}: ${analysisBodyText(body)}`);
+      } else {
+        showSuccessToast("Analysis updated.");
+      }
       // Re-fetch just the summary after re-analysis
       if (assignment) {
         const res  = await fetch(`/api/assignments/${assignmentId}`, { headers: { Authorization: `Bearer ${token}` } });
         const data = (await res.json()) as { groups: LifecycleGroup[] };
         await fetchSummaryForAssignment(data.groups);
       }
+      // The dashboard, class page and sidebar share one cached summary: make them pick up this analysis.
+      void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
+    } catch {
+      setBulkNotice(`${item?.groupName ?? `Project ${projectId}`}: ${NETWORK_ERROR_TEXT}`);
     } finally {
+      analyzingRef.current.delete(projectId);
       setAnalyzing((prev) => {
         const next = new Set(prev);
         next.delete(projectId);
@@ -184,12 +228,20 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
   // instructor navigates away partway through, everything analyzed so far
   // is already saved, and a failed project doesn't stop the rest.
   async function handleBulkAnalyze() {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    const all = Array.from(selectedIds);
+    // Groups with no repository are skipped up front and named, instead of failing one by one.
+    const skipped = all.filter((id) => { const s = summary.find((x) => x.projectId === id); return !!s && repoNotLinked(s); });
+    const ids = all.filter((id) => !skipped.includes(id));
+    setBulkNotice(skipped.length
+      ? `Not analyzed, no repository linked yet: ${skipped.map((id) => summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`).join(", ")}.`
+      : null);
+    if (ids.length === 0 || bulkLock.current) return;
+    bulkLock.current = true;
     setBulkRunning(true);
     setBulkFailures([]);
     setBulkProgress({ done: 0, total: ids.length });
     const failures: string[] = [];
+    let firstReason: string | null = null;
     for (const id of ids) {
       setAnalyzing((prev) => new Set(prev).add(id));
       try {
@@ -200,10 +252,12 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         if (!res.ok) {
           const groupName = summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`;
           failures.push(groupName);
+          if (!firstReason) firstReason = analysisBodyText(await res.json().catch(() => null));
         }
       } catch {
         const groupName = summary.find((s) => s.projectId === id)?.groupName ?? `Project ${id}`;
         failures.push(groupName);
+        if (!firstReason) firstReason = NETWORK_ERROR_TEXT;
       } finally {
         setAnalyzing((prev) => {
           const next = new Set(prev);
@@ -214,8 +268,13 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
       }
     }
     setBulkFailures(failures);
+    setBulkFailureReason(firstReason);
+    const analyzedCount = ids.length - failures.length;
+    if (analyzedCount > 0) showSuccessToast(`${analyzedCount} ${analyzedCount === 1 ? "group" : "groups"} analyzed.`);
     setBulkRunning(false);
+    bulkLock.current = false;
     setBulkProgress(null);
+    void queryClient.invalidateQueries({ queryKey: ["projects-summary"] });
     await fetchData();
   }
 
@@ -235,8 +294,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         });
         if (!res.ok) continue;
         const stored = (await res.json()) as StoredReportResponse;
-        const assignmentLabel = summary.find((s) => s.projectId === id)?.assignmentLabel ?? "";
-        items.push({ projectId: id, stored, narrative: stored.narrative ?? null, assignmentLabel });
+        items.push({ projectId: id, stored, meta: summary.find((s) => s.projectId === id) ?? null });
       }
       setExportItems(items);
     } finally {
@@ -263,6 +321,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
     ? sorted.filter((i) => i.groupName.toLowerCase().includes(search.trim().toLowerCase()))
     : sorted;
   const atRiskCount = classAtRiskCount(summary);
+  const quietCount  = noActivityCount(summary);
   const classUrl    = `/class/${classId}`;
   // Page-level reference stat — average across every analyzed group in this assignment
   // (self-inclusive; `summary` is already scoped to this one assignment).
@@ -270,10 +329,6 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="print:hidden">
-        <AppTopBar />
-      </div>
-
       {managingGroupId !== null && (
         <GroupManageModal
           projectId={managingGroupId}
@@ -283,38 +338,49 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         />
       )}
 
-      {tasksGroupId !== null && (
-        <TaskManageModal
-          projectId={tasksGroupId}
-          isInstructor={true}
-          onClose={() => setTasksGroupId(null)}
-          onChanged={() => void fetchData()}
+      {editingBrief && assignment && !isAdmin && (
+        <EditAssignmentModal
+          assignmentId={assignment.id}
+          token={token}
+          onClose={() => setEditingBrief(false)}
+          onSaved={() => void fetchData()}
+        />
+      )}
+
+      {showScoring && assignment && !isAdmin && (
+        <ScoringSettingsModal
+          assignmentId={assignment.id}
+          currentConfig={assignment.scoringConfig}
+          sourceType={assignment.sourceType}
+          onClose={() => setShowScoring(false)}
+          onSaved={() => { setShowScoring(false); void fetchData(); }}
         />
       )}
 
       {/* Page header */}
       <div className="print:hidden bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <button onClick={() => navigate(classUrl)} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to {classInfo?.subjectCode ?? "…"}
-            </button>
+          <div className="min-w-0 flex-1 basis-64">
+            <Breadcrumbs
+              items={[
+                { label: isAdmin ? "Admin" : "Dashboard", href: isAdmin ? "/admin" : "/dashboard" },
+                classCrumb(classInfo, classUrl),
+                { label: assignment?.title ?? "Assignment" },
+              ]}
+            />
             <div className="min-w-0">
               {assignment ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-900 truncate">{assignment.title}</h1>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
+                  <h1 className="text-xl font-semibold text-slate-900 truncate">{assignment.title}</h1>
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-1.5 py-0.5 tracking-wide uppercase shrink-0">
                     {assignment.sourceType}
                   </span>
                 </div>
               ) : (
-                <h1 className="text-xl font-bold text-slate-400">Loading…</h1>
+                <h1 className="text-xl font-semibold text-slate-600">Loading…</h1>
               )}
-              <p className="text-sm text-slate-400 mt-0.5">
-                {classInfo?.subjectName && <span className="mr-1">{classInfo.subjectName} ·</span>}
+              <p className="text-sm text-slate-600 mt-0.5">
+                {classInfo && <span className="mr-1">{classFullLabel(classInfo)}{classInfo.subjectName ? ` · ${classInfo.subjectName}` : ""} ·</span>}
                 {summary.length} group{summary.length !== 1 ? "s" : ""}
                 {assignment?.deadline && <span className="ml-1">· Deadline: {fmtDeadline(assignment.deadline)}</span>}
                 {/* Require at least 2 analyzed groups — a page-level "average" of just one
@@ -331,9 +397,20 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
 
           <div className="flex items-center gap-3 flex-wrap">
             {isAdmin && (
-              <span className="text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
+              <span className="text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5">
                 Admin view — read only
               </span>
+            )}
+            {/* Project-level scoring settings — owning instructor only; Docs-only projects get the writing weights */}
+            {!isAdmin && assignment && (
+              <button
+                type="button"
+                onClick={() => setShowScoring(true)}
+                title="Weights and flag thresholds for every group in this project"
+                className="inline-flex items-center min-h-9 px-3 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Scoring settings
+              </button>
             )}
             {atRiskCount > 0 && (
               <button
@@ -345,14 +422,28 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 }`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {atRiskCount} group{atRiskCount !== 1 ? "s" : ""} need attention
+                {groupsNeedAttention(atRiskCount)}
               </button>
             )}
+            <NoActivityHeaderPill count={quietCount} />
           </div>
         </div>
       </div>
 
       <main className="print:hidden flex-1 max-w-6xl w-full mx-auto px-6 sm:px-8 py-8">
+
+        {/* Project brief — instructor-written context for students; never affects scoring */}
+        {assignment && (
+          <div className="mb-6">
+            <BriefCard
+              assignmentId={assignment.id}
+              description={assignment.description}
+              attachments={assignment.attachments}
+              onEdit={isAdmin ? undefined : () => setEditingBrief(true)}
+              highlight={highlight}
+            />
+          </div>
+        )}
 
         {/* Bulk select / bulk action bar — instructors only */}
         {!isAdmin && !loading && !loadError && processed.length > 0 && (
@@ -362,14 +453,14 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 type="checkbox"
                 checked={processed.length > 0 && processed.every((i) => selectedIds.has(i.projectId))}
                 onChange={() => toggleSelectAll(processed.map((i) => i.projectId))}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0"
+                className="h-6 w-6 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400 focus:ring-offset-0"
               />
               Select all
             </label>
 
             {selectedIds.size > 0 && (
               <>
-                <span className="text-xs text-slate-400">{selectedIds.size} selected</span>
+                <span className="text-xs text-slate-600">{selectedIds.size} selected</span>
                 <button
                   onClick={() => void handleBulkAnalyze()}
                   disabled={bulkRunning || bulkExporting}
@@ -391,10 +482,17 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
           </div>
         )}
 
+        {bulkNotice && (
+          <div role="status" className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+            <button onClick={() => setBulkNotice(null)} aria-label="Dismiss" className="float-right text-amber-700 hover:text-amber-900 ml-2">✕</button>
+            {bulkNotice}
+          </div>
+        )}
+
         {bulkFailures.length > 0 && (
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
             <button onClick={() => setBulkFailures([])} className="float-right text-amber-400 hover:text-amber-700 ml-2">✕</button>
-            Failed to analyze: {bulkFailures.join(", ")}. You can retry these individually.
+            Failed to analyze: {bulkFailures.join(", ")}. {bulkFailureReason ?? "You can retry these individually."}
           </div>
         )}
 
@@ -408,7 +506,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search groups…"
-              className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40"
+              className="pl-8 pr-3 py-1 rounded-full text-xs text-slate-700 bg-white border border-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40"
             />
           </div>
           <span className="text-slate-200 hidden sm:block">|</span>
@@ -436,7 +534,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         </div>
 
         {loading && (
-          <div className="flex items-center gap-3 py-16 text-slate-400 text-sm justify-center">
+          <div className="flex items-center gap-3 py-16 text-slate-600 text-sm justify-center">
             <span className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
             Loading groups…
           </div>
@@ -447,7 +545,7 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
         )}
 
         {!loading && !loadError && processed.length === 0 && (
-          <div className="text-center py-16 text-slate-400 text-sm">
+          <div className="text-center py-16 text-slate-600 text-sm">
             {search.trim() ? (
               <>
                 No groups match &ldquo;{search}&rdquo;.{" "}
@@ -473,7 +571,8 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
                 onAnalyze={isAdmin ? undefined : handleReanalyze}
                 analyzing={analyzing.has(item.projectId)}
                 onManage={isAdmin ? undefined : (id) => setManagingGroupId(id)}
-                onTasks={isAdmin ? undefined : (id) => setTasksGroupId(id)}
+                onTasks={(id) => navigate(`/project/${id}?tab=tasks`)}
+                tasks={taskSummary.data?.groups.find((g) => g.projectId === item.projectId)}
                 selectable={!isAdmin}
                 selected={selectedIds.has(item.projectId)}
                 onToggleSelect={toggleSelect}
@@ -481,18 +580,10 @@ export function AssignmentPage({ classId, assignmentId }: Props) {
             ))}
           </div>
         )}
+
       </main>
 
-      <footer className="print:hidden border-t border-slate-200 bg-white">
-        <div className="px-6 sm:px-8 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-slate-400">
-            Outputs are evidence to support instructor judgment — they do not constitute grades or final assessments.
-          </p>
-          <button onClick={() => navigate("/overview")} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            System Overview →
-          </button>
-        </div>
-      </footer>
+      <AppFooter printHidden />
 
       {/* Print-only bundle for bulk export — hidden on screen, populated only while a
           bulk-export print pass is in flight (see handleBulkExport / the afterprint effect). */}

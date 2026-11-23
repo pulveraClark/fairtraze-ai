@@ -51,6 +51,7 @@ describe("GET /api/groups/:id/document/export", () => {
   // touch the document's persisted state, proving readDocumentStructure's scratch Y.Doc never
   // triggers authorshipCapture.ts (which it would if it went through getYDoc() the way the import
   // route deliberately does).
+  // DOC-07
   it("downloads a real .docx and leaves EditEvent/EditSession/Document rows byte-for-byte unchanged", async () => {
     const { member, project } = await setupEditorGroup();
     const buffer = await buildTestDocx([

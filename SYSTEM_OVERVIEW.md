@@ -39,7 +39,7 @@ Traditional group assignments grade the group, not the individual. It is difficu
 - Enrolls in a class using the instructor's join code
 - Requests to join a group (leader approves or declines)
 - Views their own group's fairness report (read-only)
-- Sees their own contribution share and any flags applied to them
+- Sees their own contribution share, any flags applied to them, and a plain-language evenness label for the group (no Gini value, no band names)
 - Files a dispute if they believe their contribution was not accurately captured
 - Suggests a functional role for themselves (leader approves)
 - If they are the group leader: approves join requests from other students, assigns roles to members, and manages the group roster
@@ -93,7 +93,7 @@ If a student's request is declined, they can request to join a different group. 
 
 ### Step 7 — Student views their own report
 
-**Working now:** Students see a read-only version of the report for their own group. They can see the team's overall health, their own contribution share, and any flags applied to them. They cannot see other members' individual data.
+**Working now:** Students see a read-only version of the report for their own group. They can see a plain-language label for how evenly work is shared in the group ("Work is evenly shared", "Work is a bit uneven" or "Work is very uneven"), their own contribution share, and any flags applied to them. The Gini value, the band names and the team-health rating are never shown to students. On screen, regular members cannot see other members' individual data; the group leader also sees each member's share, flags and task counts to distribute work fairly. Separately, any member can print one group Contribution Evidence Report that lists every member's recorded share and flags; it never shows the Gini value, bands, team health, AI text, usernames, emails or commit and line counts.
 
 ### Step 8 — Student disputes a flag (optional)
 
@@ -113,7 +113,7 @@ For each member, the system collects:
 - Commit timestamps (to calculate active days and detect deadline-driven work)
 - Per-commit diffs (to classify added lines as code, comments, or blank lines)
 
-Up to 50 commits per member are sampled for the diff analysis.
+Up to 100 commits per member (the newest, merge commits excluded) are sampled for the diff analysis.
 
 ### Meaningful lines
 
@@ -178,8 +178,8 @@ After shares are computed, each member is checked against four flag conditions:
 
 | Flag | Meaning | Default trigger |
 |---|---|---|
-| **Inactive** | Zero commits recorded | 0 commits |
-| **Free-rider** | Contribution share is very low relative to an equal split | Below 50% of what an equal share would be |
+| **Low contribution** (no recorded activity) | Zero commits recorded. Stored as the `inactive` flag; shown with the reason "No recorded activity" | 0 commits |
+| **Low contribution** (low share) | Contribution share is very low relative to an equal split. Stored as the `free-rider` flag; shown with the reason "Below half of an equal share (X% for N members)" | Below 50% of what an equal share would be |
 | **Overload** | Carrying a disproportionately large share of the work | Above 175% of what an equal share would be |
 | **Deadline-driven** | Most activity concentrated in the final third of the project timeline | More than 60% of commits in the last third |
 
@@ -316,7 +316,7 @@ For assignments where both GitHub and document contributions are relevant, the s
 Combined Share = (GitHub Share × GitHub weight) + (Docs Share × Docs weight)
 ```
 
-The default blend is 50/50, configurable per assignment by the instructor. Both sources go through the same deterministic math — the AI explains the combined result but does not compute it.
+The default blend is 55/45 (GitHub/Docs), configurable per assignment by the instructor. Both sources go through the same deterministic math — the AI explains the combined result but does not compute it.
 
 ## Role-Source Mismatch Detection (Working Now)
 

@@ -1,0 +1,611 @@
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { DocSectionProvider } from "../hooks/useDocSectionLink";
+import { BriefCheckCard, CheckHeaderActions, NOT_CONFIRMED_WHY, CHECK_WORK_LINE, quoted, truncateQuote } from "./BriefCheckCard";
+import { Narrative } from "./Narrative";
+import { ToastProvider } from "./Toast";
+import type { MarksApi } from "../hooks/useRequirementMarks";
+import type { RequirementMark } from "../lib/requirementMarks";
+import { briefStatusLine, type AiBriefCheck, type AiReviewResponse } from "../lib/aiReview";
+import { NO_INSTRUCTIONS_LINE } from "../lib/instructionsCheck";
+
+vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ token: "t", user: { id: 1 } }) }));
+afterEach(() => { vi.unstubAllGlobals(); });
+
+const LONG = "The survey asks members how the work was shared and what each person did during the project. ".repeat(3).trim();
+const gh = "https://github.com/example/Trips/commit/a41f9c2d0e5b#diff-abc";
+const QUOTE = "The app must have a login page.";
+const TESTS_QUOTE = "Write tests for the app.";
+
+const check: AiBriefCheck = {
+  generatedAt: "2026-10-26T01:00:00Z",
+  outdated: false,
+  nothingFound: false,
+  aiAddressedCount: 2,
+  requirements: [
+    { text: "Has a login page", status: "FOUND", unverified: false, sourceQuote: QUOTE, evidence: [
+      { type: "file", ref: "src/Login.tsx", quote: "", quoteHidden: false, href: gh, isCommit: true, more: [{ sha: "b52e0d3", href: "https://github.com/example/Trips/commit/b52e0d3" }] },
+      { type: "file", ref: "src/Login.tsx", quote: "", quoteHidden: false, href: gh, isCommit: true },
+      { type: "doc", ref: "Methodology", quote: "", quoteHidden: true },
+    ] },
+    { text: "Has a survey", status: "FOUND", unverified: false, sourceFile: "brief.pdf", sourcePage: 2, evidence: [{ type: "doc", ref: "Survey", quote: LONG, quoteHidden: false }] },
+    { text: "Has charts", status: "PARTLY_FOUND", unverified: false, sourceQuote: "Show the results in charts.", evidence: [] },
+    { text: "Has a README", status: "NOT_FOUND", unverified: false, evidence: [] },
+    { text: "Has tests", status: "NOT_FOUND", unverified: true, sourceQuote: TESTS_QUOTE, evidence: [] },
+  ],
+};
+
+const pill = (label: string) => screen.getByText((_c, el) => el?.tagName === "SPAN" && el.textContent?.endsWith(label) === true && el.className.includes("rounded-full"));
+const open = () => userEvent.click(screen.getByText("Project instructions check"));
+const rowOf = (text: string) => screen.getAllByRole("listitem").find((li) => li.querySelector("p")?.textContent === text)!;
+
+describe("BriefCheckCard", () => {
+  it("is collapsed by default, titled 'Project instructions check' with the AI findings badge and no 'may be wrong' in the title", async () => {
+    render(<BriefCheckCard check={check} instructor />);
+    const details = screen.getByText("Project instructions check").closest("details")!;
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")!.textContent).toBe("Project instructions checkAI findings");
+    await open();
+    expect(details.open).toBe(true);
+    expect(screen.getByText("AI findings")).toBeTruthy();
+    expect(details.querySelector("summary")!.textContent).not.toMatch(/wrong/i);
+    expect(screen.queryByText(/%/)).toBeNull();
+  });
+
+  it("first line says what was compared and that it is not a grade; the activity named follows the source type", async () => {
+    const { rerender } = render(<BriefCheckCard check={check} />);
+    await open();
+    expect(screen.getByText(/The AI compared the members' GitHub and Docs activity with the project instructions\. It can make mistakes, so check anything important\. This is not a grade\./)).toBeTruthy();
+    rerender(<BriefCheckCard check={check} sourceType="EDITOR" />);
+    expect(screen.getByText(/members' Docs activity with the project instructions/)).toBeTruthy();
+    rerender(<BriefCheckCard check={check} sourceType="GITHUB" />);
+    expect(screen.getByText(/members' GitHub activity with the project instructions/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "About the project instructions check" })).toBeTruthy();
+  });
+
+  it("summary sentence: covered of total, then the other counts with zeros left out", async () => {
+    render(<BriefCheckCard check={check} instructor />);
+    await open();
+    expect(screen.getByText("2 of 5 requirements are covered in the work. 1 partly covered, 1 not covered yet, 1 needs your check.")).toBeTruthy();
+  });
+
+  it("omits a zero count; the leader and students read 'not clear yet'", async () => {
+    const some = { ...check, requirements: [check.requirements[0]!, check.requirements[2]!, check.requirements[4]!] };
+    render(<BriefCheckCard check={some} />);
+    await open();
+    expect(screen.getByText("1 of 3 requirements are covered in the work. 1 partly covered, 1 not clear yet.")).toBeTruthy();
+    expect(screen.queryByText(/not covered yet/)).toBeNull();
+  });
+
+  it("all covered: one sentence and the covered list stays one click away", async () => {
+    const all = { ...check, requirements: [check.requirements[0]!, check.requirements[1]!] };
+    render(<BriefCheckCard check={all} />);
+    await open();
+    expect(screen.getByText("All 2 requirements are covered in the work.")).toBeTruthy();
+    expect(screen.queryByRole("list")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "2 covered requirements · show" }));
+    expect(screen.getByText("Has a login page")).toBeTruthy();
+  });
+
+  it("pills carry an icon and text; the instructor sees 'Needs your check', the leader 'Not clear yet'", async () => {
+    const { unmount } = render(<BriefCheckCard check={check} instructor />);
+    await open();
+    expect(pill("Partly covered").textContent).toBe("◐Partly covered");
+    expect(pill("Not covered yet").textContent).toBe("○Not covered yet");
+    expect(pill("Needs your check").textContent).toBe("?Needs your check");
+    unmount();
+    render(<BriefCheckCard check={check} />);
+    await open();
+    expect(pill("Not clear yet").textContent).toBe("?Not clear yet");
+    expect(screen.queryByText("Needs your check")).toBeNull();
+  });
+
+  it("shows attention items first (partly, not covered, check) with covered ones hidden until the toggle is used", async () => {
+    render(<BriefCheckCard check={check} />);
+    await open();
+    const text = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+    const order = ["Has charts", "Has a README", "Has tests"].map((t) => text.findIndex((x) => x.includes(t)));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(screen.queryByText("Has a login page")).toBeNull();
+
+    const toggle = screen.getByRole("button", { name: "2 covered requirements · show" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.className).toContain("min-h-11"); // a 44px full-width disclosure row
+    expect(toggle.className).toContain("w-full");
+    await userEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "2 covered requirements · hide" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Has a login page")).toBeTruthy();
+    expect(screen.getByText("Has a survey")).toBeTruthy();
+    // One line per covered row: a plain tick with a hidden "Covered", no chip, and a Proof button.
+    expect(screen.queryByText((_c, el) => typeof el?.className === "string" && el.className.includes("rounded-full") && el.textContent?.endsWith("Covered") === true)).toBeNull();
+    expect(screen.getAllByText("Covered").every((el) => String(el.className).includes("sr-only"))).toBe(true);
+    expect(screen.getAllByRole("button", { name: /^Proof/ })).toHaveLength(2);
+    expect(screen.queryByText("See proof")).toBeNull();
+  });
+
+  it("covered rows keep their proof closed; it starts with where it comes from; an older code proof is a file link only, docs show one short quote", async () => {
+    const openDoc = vi.fn();
+    render(<DocSectionProvider value={openDoc}><BriefCheckCard check={check} instructionsHref="/class/1/assignment/2" /></DocSectionProvider>);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "2 covered requirements · show" }));
+    const proofs = screen.getAllByRole("button", { name: /^Proof/ });
+    expect(proofs.length).toBe(2);
+    expect(proofs.every((b) => b.getAttribute("aria-expanded") === "false" && b.className.includes("min-h-10"))).toBe(true);
+    expect(screen.queryByText("From the project instructions:")).toBeNull();
+    for (const b of proofs) await userEvent.click(b);
+    expect(proofs.every((b) => b.getAttribute("aria-expanded") === "true")).toBe(true);
+
+    const login = within(rowOf("Has a login page"));
+    expect(login.getByText("From the project instructions:")).toBeTruthy();
+    expect(login.getByRole("link", { name: "See in the instructions (new tab)" })).toBeTruthy();
+    const files = login.getAllByRole("link", { name: "Open Login.tsx changes on GitHub (new tab)" });
+    expect(files.length).toBe(1);
+    expect(files[0]!.getAttribute("href")).toBe(gh);
+    expect(files[0]!.getAttribute("target")).toBe("_blank");
+    expect(files[0]!.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(screen.queryByText("export function Login()")).toBeNull();
+    expect(screen.queryByText("second quote")).toBeNull();
+    expect(screen.queryByText(/\+1 more/)).toBeNull();
+    expect(screen.queryByText(/b52e0d3|a41f9c2/)).toBeNull();
+    expect(login.getByText(/Text written by another member is not shown/)).toBeTruthy();
+
+    const survey = within(rowOf("Has a survey"));
+    expect(survey.getByText("From attached file: brief.pdf")).toBeTruthy();
+    expect(survey.queryByRole("button", { name: /Open file/ })).toBeNull(); // no way to open it was given
+    expect(survey.queryByText(/page/i)).toBeNull();
+    const quote = survey.getByText((_c, el) => el?.tagName === "BLOCKQUOTE")!;
+    expect(quote.textContent!.length).toBeLessThanOrEqual(141);
+    expect(quote.textContent!.endsWith("…")).toBe(true);
+    await userEvent.click(survey.getByRole("link", { name: "Open section Survey in Docs" }));
+    expect(openDoc).toHaveBeenCalledWith("Survey");
+  });
+
+  it("code proof names the file and the quoted lines, links to those lines at the analyzed commit, and shows the quote", async () => {
+    const blob = "https://github.com/example/Trips/blob/" + "a".repeat(40) + "/Graphhopper.py#L12-L14";
+    const two: AiBriefCheck = {
+      ...check,
+      requirements: [
+        { text: "Build a route planner that uses GraphHopper", status: "FOUND", unverified: false, sourceQuote: "Build a route planner that uses GraphHopper.", evidence: [
+          { type: "file", ref: "Graphhopper.py", quote: "return graphhopper.route(a, b)", quoteHidden: false, href: blob, isCommit: false, lines: [12, 14] },
+        ] },
+        { text: "The route planner must have a Tkinter GUI", status: "FOUND", unverified: false, sourceQuote: "The route planner must have a Tkinter GUI.", evidence: [
+          { type: "file", ref: "Graphhopper.py", quote: "", quoteHidden: false, href: "https://github.com/example/Trips/blob/" + "a".repeat(40) + "/Graphhopper.py", isCommit: false },
+        ] },
+      ],
+    };
+    render(<BriefCheckCard check={two} instructionsHref="/class/1/assignment/2" />);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: /covered requirements/ }));
+    for (const b of screen.getAllByRole("button", { name: /^Proof/ })) await userEvent.click(b);
+    const first = within(rowOf("Build a route planner that uses GraphHopper"));
+    const a = first.getByRole("link", { name: "Open Graphhopper.py, lines 12 to 14, on GitHub (new tab)" });
+    expect(a.getAttribute("href")).toBe(blob);
+    expect(a.textContent).toBe("Graphhopper.py, lines 12-14");
+    expect(first.getByText("return graphhopper.route(a, b)")).toBeTruthy();
+    // Lines or quote not known (hidden for safety): the file at the commit, no line text, no quote.
+    const second = within(rowOf("The route planner must have a Tkinter GUI"));
+    const b = second.getByRole("link", { name: "Open Graphhopper.py file on GitHub (new tab)" });
+    expect(b.getAttribute("href")).not.toContain("#L");
+    expect(second.queryByRole("blockquote")).toBeNull();
+  });
+
+  it("truncates only long quotes", () => {
+    expect(truncateQuote("short")).toBe("short");
+    expect(truncateQuote(LONG).length).toBeLessThanOrEqual(141);
+  });
+
+  describe("a requirement that needs checking", () => {
+    it("instructor: Check / From / Why / Look in, with Docs and repository links", async () => {
+      const openDocs = vi.fn();
+      render(
+        <DocSectionProvider value={openDocs}>
+          <BriefCheckCard check={check} instructor repoUrl="https://github.com/example/Trips" instructionsHref="/class/1/assignment/2" />
+        </DocSectionProvider>,
+      );
+      await open();
+      const row = within(rowOf("Has tests"));
+      expect(row.getByText("Check")).toBeTruthy();
+      expect(row.getByText("Does the work include “Has tests”?")).toBeTruthy();
+      expect(row.queryByText(/^Project instructions:/)).toBeNull(); // the quote is reached through "See in the instructions"
+      expect(row.queryByText("From")).toBeNull();
+      expect(row.getByText("Why")).toBeTruthy();
+      expect(row.getByText(NOT_CONFIRMED_WHY)).toBeTruthy();
+      expect(NOT_CONFIRMED_WHY).toBe("The AI could not confirm this one. It may still be there. Open the Docs or the repository to check.");
+      expect(row.getByText("Look in")).toBeTruthy();
+      await userEvent.click(row.getByRole("link", { name: "Open FairTraze Docs" }));
+      expect(openDocs).toHaveBeenCalledWith("");
+      const repo = row.getByRole("link", { name: "Open the repository on GitHub (new tab)" });
+      expect(repo.getAttribute("href")).toBe("https://github.com/example/Trips");
+      expect(repo.getAttribute("target")).toBe("_blank");
+      expect(repo.getAttribute("rel")).toContain("noopener");
+      expect(repo.className).toContain("min-h-10");
+    });
+
+    it("Look in: only the link that exists, a GitHub-only group has no Docs link, and a plain line when neither", async () => {
+      const { unmount } = render(<BriefCheckCard check={check} instructor repoUrl="https://github.com/example/Trips" />);
+      await open();
+      expect(screen.queryByRole("link", { name: "Open FairTraze Docs" })).toBeNull();
+      expect(screen.getByRole("link", { name: /Open the repository/ })).toBeTruthy();
+      unmount();
+      const withDocs = render(
+        <DocSectionProvider value={vi.fn()}><BriefCheckCard check={check} instructor sourceType="GITHUB" repoUrl="https://github.com/example/Trips" /></DocSectionProvider>,
+      );
+      await open();
+      expect(screen.queryByRole("link", { name: "Open FairTraze Docs" })).toBeNull();
+      withDocs.unmount();
+      render(<BriefCheckCard check={check} instructor />);
+      await open();
+      expect(screen.getByText(CHECK_WORK_LINE)).toBeTruthy();
+      expect(CHECK_WORK_LINE).toBe("Please check the group's work for this one.");
+    });
+
+    it("leader and students: 'Not clear yet' with the same wording and the same Docs and repository links", async () => {
+      const openDocs = vi.fn();
+      render(
+        <DocSectionProvider value={openDocs}>
+          <BriefCheckCard check={check} repoUrl="https://github.com/example/Trips" />
+        </DocSectionProvider>,
+      );
+      await open();
+      const row = within(rowOf("Has tests"));
+      expect(row.getByText("Is “Has tests” in your work?")).toBeTruthy();
+      expect(row.getByText(NOT_CONFIRMED_WHY)).toBeTruthy();
+      expect(row.getByText("Look in")).toBeTruthy();
+      expect(row.getByRole("link", { name: "Open FairTraze Docs" })).toBeTruthy();
+      expect(row.getByRole("link", { name: "Open the repository on GitHub (new tab)" }).getAttribute("href")).toBe("https://github.com/example/Trips");
+      expect(row.queryByText(/said yes|blame|fault/i)).toBeNull();
+    });
+
+    it("the quoted requirement in the Check line loses its closing full stop", () => {
+      expect(quoted("Write system documentation.")).toBe("Write system documentation");
+      expect(quoted("Use Python 3.11")).toBe("Use Python 3.11");
+      expect(quoted("  Has tests. ")).toBe("Has tests");
+    });
+
+    it("the Check / From / Why / Look in labels line up with the first line of their text", async () => {
+      render(<BriefCheckCard check={check} instructor />);
+      await open();
+      const grid = rowOf("Has tests").querySelector("dl");
+      expect(grid?.className).toContain("items-baseline");
+    });
+
+    it("a file source reads 'From attached file: <file>' with 'Open file' and never a page; no source, no From line (older checks)", async () => {
+      const fromFile = { ...check, requirements: [{ ...check.requirements[4]!, sourceQuote: undefined, sourceFile: "brief.pdf", sourcePage: 3 }, check.requirements[3]!] };
+      const openFile = vi.fn(async () => "ok" as const);
+      const { unmount } = render(<BriefCheckCard check={fromFile} instructor instructionsHref="/class/1/assignment/2" onOpenFile={openFile} />);
+      await open();
+      const tests = within(rowOf("Has tests"));
+      expect(tests.getByText("From attached file: brief.pdf")).toBeTruthy();
+      // "Open file" opens the attached file itself, by name; it is not the instructions window or page.
+      await userEvent.click(tests.getByRole("button", { name: "Open file (new tab)" }));
+      expect(openFile).toHaveBeenCalledWith("brief.pdf");
+      expect(tests.queryByText(/page/i)).toBeNull();
+      expect(tests.queryByRole("link", { name: /See in the instructions/ })).toBeNull(); // replaced, not doubled
+      // Where the role cannot open the file there is no Open file control (even with the instructions link), but the name still shows.
+      unmount();
+      render(<BriefCheckCard check={fromFile} instructor />);
+      await open();
+      expect(within(rowOf("Has tests")).getByText("From attached file: brief.pdf")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Open file/ })).toBeNull();
+      expect(screen.queryByRole("link", { name: /Open file/ })).toBeNull();
+      expect(screen.queryByText(/page 3/i)).toBeNull();
+      const none = within(rowOf("Has a README"));
+      expect(none.queryByText(/From/)).toBeNull();
+      expect(none.queryByRole("button", { name: /^Proof/ })).toBeNull();
+    });
+  });
+
+  describe("opening the project instructions", () => {
+    it("instructor: 'View the instructions' is a new-tab link, and each sentence link carries the quote in the hash", async () => {
+      render(<BriefCheckCard check={check} instructor instructionsHref="/class/1/assignment/2" />);
+      await open();
+      const view = screen.getByRole("link", { name: "View the instructions (new tab)" });
+      expect(view.getAttribute("href")).toBe("/class/1/assignment/2");
+      expect(view.getAttribute("target")).toBe("_blank");
+      expect(view.getAttribute("rel")).toBe("noopener noreferrer");
+      const see = within(rowOf("Has tests")).getByRole("link", { name: "See in the instructions (new tab)" });
+      expect(see.getAttribute("href")).toBe(`/class/1/assignment/2#highlight=${encodeURIComponent(TESTS_QUOTE)}`);
+      expect(see.getAttribute("href")).not.toContain("?");
+    });
+
+    it("leader and students: buttons open the window, the sentence one with that sentence", async () => {
+      const onView = vi.fn();
+      render(<BriefCheckCard check={check} onViewInstructions={onView} />);
+      await open();
+      await userEvent.click(screen.getByRole("button", { name: "View the instructions" }));
+      expect(onView).toHaveBeenLastCalledWith();
+      await userEvent.click(within(rowOf("Has tests")).getByRole("button", { name: "See in the instructions" }));
+      expect(onView).toHaveBeenLastCalledWith(TESTS_QUOTE);
+      await userEvent.click(within(rowOf("Has charts")).getByRole("button", { name: "See in the instructions" }));
+      expect(onView).toHaveBeenLastCalledWith("Show the results in charts.");
+    });
+
+    it("no way to open them, no button and no link", async () => {
+      render(<BriefCheckCard check={check} />);
+      await open();
+      expect(screen.queryByText("View the instructions")).toBeNull();
+      expect(screen.queryByText("See in the instructions")).toBeNull();
+    });
+  });
+
+  it("says how many listed items were left out because their source was not found", async () => {
+    const { rerender } = render(<BriefCheckCard check={{ ...check, sources: { writtenBrief: true, filesRead: 0, skipped: [], droppedCount: 1 } }} />);
+    await open();
+    expect(screen.getByText("1 item the AI listed was not found in the project instructions and was left out.")).toBeTruthy();
+    rerender(<BriefCheckCard check={{ ...check, sources: { writtenBrief: true, filesRead: 0, skipped: [], droppedCount: 3 } }} />);
+    expect(screen.getByText("3 items the AI listed were not found in the project instructions and were left out.")).toBeTruthy();
+    rerender(<BriefCheckCard check={{ ...check, sources: { writtenBrief: true, filesRead: 0, skipped: [], droppedCount: 0 } }} />);
+    expect(screen.queryByText(/left out/)).toBeNull();
+  });
+
+  it("footer: one disclaimer, the date, the outdated notice, and the AI-addressed note for the instructor only", async () => {
+    const { rerender } = render(<BriefCheckCard check={{ ...check, outdated: true }} instructor />);
+    await open();
+    expect(screen.getByText(/May be wrong · Based on the analysis of/)).toBeTruthy();
+    expect(screen.getByText(/The project instructions or the analysis changed since\. Generate again to update it\./)).toBeTruthy();
+    expect(screen.getByText(/appears to address the AI/)).toBeTruthy();
+    expect(screen.queryByText(/supports your assessment/)).toBeNull();
+    rerender(<BriefCheckCard check={{ ...check, outdated: false }} />);
+    expect(screen.queryByText(/appears to address the AI/)).toBeNull();
+    expect(screen.queryByText(/changed since/)).toBeNull();
+  });
+
+  describe("what the AI read", () => {
+    const withSources = (sources: NonNullable<AiBriefCheck["sources"]>): AiBriefCheck => ({ ...check, sources });
+    const none = { writtenBrief: true, filesRead: 0, skipped: [] };
+
+    it("written instructions and attached files", async () => {
+      render(<BriefCheckCard check={withSources({ ...none, filesRead: 2 })} />);
+      await open();
+      expect(screen.getByText("The AI read: the written instructions and 2 attached files.")).toBeTruthy();
+      expect(screen.getByText("Scanned pages may be read less accurately.")).toBeTruthy();
+      expect(screen.queryByText(/were not checked/)).toBeNull();
+    });
+
+    it("attached files only, and one file in the singular", async () => {
+      const { rerender } = render(<BriefCheckCard check={withSources({ writtenBrief: false, filesRead: 2, skipped: [] })} />);
+      await open();
+      expect(screen.getByText("The AI read: 2 attached files. No written instructions were added.")).toBeTruthy();
+      rerender(<BriefCheckCard check={withSources({ ...none, filesRead: 1 })} />);
+      expect(screen.getByText("The AI read: the written instructions and 1 attached file.")).toBeTruthy();
+    });
+
+    it("written instructions only: no read line and no scanned-pages note", async () => {
+      render(<BriefCheckCard check={withSources(none)} />);
+      await open();
+      expect(screen.queryByText(/The AI read:/)).toBeNull();
+      expect(screen.queryByText(/Scanned pages/)).toBeNull();
+    });
+
+    it("older checks with no sources show no read lines", async () => {
+      render(<BriefCheckCard check={check} />);
+      await open();
+      expect(screen.queryByText(/The AI read:|was skipped|Scanned pages|were not checked/)).toBeNull();
+    });
+
+    it("each skipped file gets one plain sentence, then one line saying its requirements were not checked", async () => {
+      const skipped = [
+        { filename: "big.pdf", reason: "TOO_LARGE" as const },
+        { filename: "huge.png", reason: "TOO_LARGE" as const },
+        { filename: "long.pdf", reason: "TOO_MANY_PAGES" as const },
+        { filename: "notes.txt", reason: "UNSUPPORTED" as const },
+        { filename: "scan.pdf", reason: "UNREADABLE" as const },
+        { filename: "shot4.png", reason: "TOO_MANY_FILES" as const },
+        { filename: "second.pdf", reason: "TOO_MANY_FILES" as const },
+        { filename: "last.png", reason: "TOTAL_TOO_LARGE" as const },
+      ];
+      render(<BriefCheckCard check={withSources({ ...none, filesRead: 1, skipped })} />);
+      await open();
+      for (const line of [
+        "big.pdf was too large (over 5 MB) and was skipped.",
+        "huge.png was too large (over 1 MB) and was skipped.",
+        "long.pdf has too many pages (over 20) and was skipped.",
+        "notes.txt is not a supported type and was skipped.",
+        "scan.pdf could not be read.",
+        "shot4.png was not read: only the first 3 images are read.",
+        "second.pdf was not read: only one PDF is read.",
+        "last.png was not read: the files together are over 6 MB.",
+      ]) expect(screen.getByText(line)).toBeTruthy();
+      expect(screen.getAllByText("Requirements in skipped files were not checked.")).toHaveLength(1);
+    });
+
+    it("a long file name wraps instead of widening the card", async () => {
+      const name = `${"very-long-name-".repeat(8)}.pdf`;
+      render(<BriefCheckCard check={withSources({ ...none, skipped: [{ filename: name, reason: "UNREADABLE" }] })} />);
+      await open();
+      expect(screen.getByText(`${name} could not be read.`).parentElement!.className).toContain("[overflow-wrap:anywhere]");
+    });
+  });
+
+  describe("nothing could be read", () => {
+    const nothing: AiBriefCheck = {
+      ...check, requirements: [], nothingRead: true,
+      sources: { writtenBrief: false, filesRead: 0, skipped: [{ filename: "scan.pdf", reason: "TOO_LARGE" }, { filename: "notes.txt", reason: "UNSUPPORTED" }] },
+    };
+
+    it("replaces the body: title line, the skipped files and what to do; no list, no summary, no 'no instructions' line", async () => {
+      const { container } = render(<BriefCheckCard check={nothing} instructor />);
+      await open();
+      expect(screen.getByText("Project instructions check · nothing could be read.")).toBeTruthy();
+      expect(screen.getByText("scan.pdf was too large (over 5 MB) and was skipped.")).toBeTruthy();
+      expect(screen.getByText("notes.txt is not a supported type and was skipped.")).toBeTruthy();
+      expect(screen.getByText("Requirements in skipped files were not checked.")).toBeTruthy();
+      expect(screen.getByText("Add the project instructions as text, or attach a smaller file.")).toBeTruthy();
+      expect(container.querySelector("ul")).toBeNull();
+      expect(screen.queryByText(/requirements are covered/)).toBeNull();
+      expect(screen.queryByText(/no instructions added yet/)).toBeNull();
+      expect(screen.queryByText(/The AI compared/)).toBeNull();
+    });
+
+    it("the leader is told to ask the instructor", async () => {
+      render(<BriefCheckCard check={nothing} />);
+      await open();
+      expect(screen.getByText("Ask your instructor to add the project instructions as text, or attach a smaller file.")).toBeTruthy();
+    });
+  });
+
+  it("renders nothing when there are no requirements", () => {
+    const { container } = render(<BriefCheckCard check={{ ...check, requirements: [] }} />);
+    expect(container.innerHTML).toBe("");
+  });
+});
+
+const base: AiReviewResponse = { enabled: true, running: false, canGenerate: true, hasReport: true, summaries: [] };
+
+describe("project instructions check placement", () => {
+  it("instructor: the check sits in the AI findings card; a failed run gets one calm line", () => {
+    const start = vi.fn();
+    const { rerender } = render(<ToastProvider><Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefCheck: check }, error: null, start }} /></ToastProvider>);
+    expect(screen.getByRole("button", { name: /^2 covered requirements, with proof/ })).toBeTruthy();
+    rerender(<ToastProvider><Narrative narrative="T." projectId={1} onNarrativeGenerated={() => {}} review={{ data: { ...base, briefFailed: true }, error: null, start }} /></ToastProvider>);
+    expect(screen.queryByRole("button", { name: /Project instructions check/ })).toBeNull();
+    expect(screen.getByText("The project instructions check could not run. Try again later.")).toBeTruthy();
+    expect(briefStatusLine({ ...base, briefFailed: true, running: true })).toBeNull();
+  });
+
+  describe("no instructions added yet (instructor only)", () => {
+    const start = vi.fn();
+    const renderWith = (data: AiReviewResponse, href?: string) =>
+      render(<ToastProvider><Narrative narrative={null} projectId={1} onNarrativeGenerated={() => {}} instructionsHref={href} review={{ data, error: null, start }} /></ToastProvider>);
+
+    it("shows one quiet line with a link to add them when the server says there are none", () => {
+      renderWith({ ...base, hasInstructions: false }, "/class/1/assignment/2");
+      expect(screen.getByText(NO_INSTRUCTIONS_LINE)).toBeTruthy();
+      expect(NO_INSTRUCTIONS_LINE).toBe("Project instructions check · no instructions added yet. Add the project instructions to compare the work with them.");
+      const add = screen.getByRole("link", { name: "Add the instructions" });
+      expect(add.getAttribute("href")).toBe("/class/1/assignment/2");
+      expect(add.className).toContain("min-h-10");
+    });
+
+    it("says nothing when instructions exist, when the server did not say, when AI review is off, or for a non-instructor", () => {
+      const { unmount } = renderWith({ ...base, hasInstructions: true });
+      expect(screen.queryByText(NO_INSTRUCTIONS_LINE)).toBeNull();
+      unmount();
+      const second = renderWith({ ...base });
+      expect(screen.queryByText(NO_INSTRUCTIONS_LINE)).toBeNull();
+      second.unmount();
+      const third = renderWith({ enabled: false, hasInstructions: false });
+      expect(screen.queryByText(NO_INSTRUCTIONS_LINE)).toBeNull();
+      third.unmount();
+      renderWith({ ...base, canGenerate: false, hasInstructions: false });
+      expect(screen.queryByText(NO_INSTRUCTIONS_LINE)).toBeNull();
+    });
+  });
+});
+
+describe("lighter rows", () => {
+  const withNames: AiBriefCheck = {
+    ...check,
+    requirements: check.requirements.map((r) => ({ ...r, key: r.text, contributors: r.text === "Has a login page" ? ["Ana R.", "Ben C.", "Cy D."] : [] })),
+  };
+  const mark = (over: Partial<RequirementMark>): RequirementMark => ({
+    id: 1, requirementKey: "Has tests", requirementText: "Has tests.", role: "INSTRUCTOR", status: "INSTRUCTOR_CONFIRMED", note: null,
+    hasImage: false, imageUrl: null, markedBy: { id: 2, name: "Ida" }, markedByYou: false, createdAt: "2026-10-26T01:00:00Z",
+    updatedAt: "2026-10-26T01:00:00Z", stale: true, ...over,
+  });
+  const api = (role: "leader" | "instructor", marks: RequirementMark[] = []): MarksApi => ({
+    marks, role, error: null, claim: vi.fn(async () => true), confirm: vi.fn(async () => true), decline: vi.fn(async () => true),
+    remove: vi.fn(async () => true), loadImage: vi.fn(async () => new Blob(["x"])),
+  });
+
+  it("a covered row is one line: tick, text, up to 2 names then +N, and a Proof button; no chip, no 'See proof'", async () => {
+    render(<BriefCheckCard check={withNames} instructor embedded />);
+    const row = within(rowOf("Has a login page"));
+    expect(row.getByText("Ana R.")).toBeTruthy();
+    expect(row.getByText("Ben C.")).toBeTruthy();
+    expect(row.queryByText("Cy D.")).toBeNull();
+    expect(row.getByText("+1")).toBeTruthy();
+    expect(row.getByRole("button", { name: /^Proof/ })).toBeTruthy();
+    expect(row.queryByText("See proof")).toBeNull();
+    // A covered row with no known names shows no "Worked on by" label at all.
+    expect(within(rowOf("Has a survey")).queryByText("Worked on by")).toBeNull();
+  });
+
+  it("embedded lists only the covered rows, straight away: no not-covered rows and no show/hide toggle", () => {
+    render(<BriefCheckCard check={withNames} instructor embedded />);
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Has a README")).toBeNull();
+    expect(screen.queryByText("Has charts")).toBeNull();
+    expect(screen.queryByRole("button", { name: /covered requirements . (show|hide)/ })).toBeNull();
+  });
+
+  it("embedded: an item the instructor confirmed is listed with a tick, no pill and no Proof button", () => {
+    render(<BriefCheckCard check={withNames} instructor embedded marks={api("instructor", [mark({ requirementKey: "Has a README", requirementText: "Has a README.", stale: false })])} />);
+    const row = within(rowOf("Has a README"));
+    expect(row.queryByText("Not covered yet")).toBeNull();
+    expect(row.getByText("Confirmed by the instructor")).toBeTruthy();
+    expect(row.queryByRole("button", { name: /^Proof/ })).toBeNull();
+  });
+
+  it("a not-covered row without names has no 'Worked on by' and no 'No one found yet'", () => {
+    render(<BriefCheckCard check={withNames} instructor />);
+    const row = within(rowOf("Has a README"));
+    expect(row.queryByText("Worked on by")).toBeNull();
+    expect(screen.queryByText(/No one found yet/)).toBeNull();
+  });
+
+  it("embedded drops the intro, the headline and the second disclaimer; the normal card keeps them", () => {
+    const { unmount } = render(<BriefCheckCard check={withNames} instructor embedded />);
+    expect(screen.queryByText(/The AI compared/)).toBeNull();
+    expect(screen.queryByText(/requirements are covered in the work/)).toBeNull();
+    expect(screen.queryByText(/May be wrong/)).toBeNull();
+    unmount();
+    render(<BriefCheckCard check={withNames} instructor />);
+    expect(screen.getByText(/The AI compared/)).toBeTruthy();
+    expect(screen.getByText(/requirements are covered in the work/)).toBeTruthy();
+    expect(screen.getByText(/May be wrong/)).toBeTruthy();
+  });
+
+  it("a stale mark sits on its own row, not at the bottom, and its text has no double period", () => {
+    render(<BriefCheckCard check={withNames} instructor marks={api("instructor", [mark({})])} />);
+    const note = within(rowOf("Has tests")).getByText("Instructions changed since your mark. Check again.");
+    expect(note).toBeTruthy();
+    expect(screen.getAllByText(/Instructions changed/)).toHaveLength(1);
+    expect(note.textContent).not.toMatch(/\.\.|\.”\./);
+  });
+
+  it("a stale mark with no row left shows nothing at all (ignored silently) and changes no count", () => {
+    const { container, rerender } = render(<BriefCheckCard check={withNames} instructor marks={api("instructor", [])} />);
+    const before = container.textContent;
+    rerender(<BriefCheckCard check={withNames} instructor marks={api("instructor", [mark({ requirementKey: "gone", requirementText: "Old one." })])} />);
+    expect(screen.queryByText(/no longer applies/)).toBeNull();
+    expect(screen.queryByText(/Instructions changed/)).toBeNull();
+    expect(container.textContent).toBe(before);
+  });
+
+  it("'Open file' says so when the file is gone or cannot be loaded", async () => {
+    const fromFile = { ...check, requirements: [{ ...check.requirements[4]!, sourceQuote: undefined, sourceFile: "brief.pdf" }] };
+    const openFile = vi.fn(async () => "missing" as const);
+    render(<BriefCheckCard check={fromFile} instructor onOpenFile={openFile} />);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Open file (new tab)" }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "This file is no longer attached.");
+  });
+
+  it("the (i) tip opens on tap and holds the long note in three short sentences", async () => {
+    render(<CheckHeaderActions sources={undefined} instructionsHref="/c/1" />);
+    const tip = screen.getByRole("button", { name: "About the project instructions check" });
+    expect(tip.className).toContain("h-10");
+    await userEvent.click(tip);
+    const text = screen.getByRole("group", { name: "About the project instructions check" }).textContent ?? "";
+    expect(text).toContain("Names show who changed the proof files or wrote the Docs text, not everyone who helped.");
+    expect(text).toContain("This is not a grade.");
+    expect(text).toContain("Requirements from attached files are read by the AI and are not quote-checked. Open the file to confirm.");
+    expect(screen.getByRole("link", { name: "View the instructions (new tab)" })).toBeTruthy();
+  });
+
+  it("the leader's card tip carries the attached-file sentence too", async () => {
+    render(<BriefCheckCard check={withNames} />);
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "About the project instructions check" }));
+    expect(screen.getByRole("group", { name: "About the project instructions check" }).textContent).toContain("are not quote-checked. Open the file to confirm.");
+  });
+
+  it("the leader's card keeps its claim flow on a row that needs a check", async () => {
+    render(<BriefCheckCard check={withNames} marks={api("leader")} />);
+    await open();
+    expect(within(rowOf("Has tests")).getByRole("button", { name: "We have this" })).toBeTruthy();
+  });
+});

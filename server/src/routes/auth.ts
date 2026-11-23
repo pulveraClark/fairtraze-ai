@@ -2,15 +2,21 @@ import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { addTimingMs } from "../lib/queryCounter.js";
 import type { SystemRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { authenticateToken, isEmailVerificationRequired } from "../middleware/auth.js";
+import { recordSessionRefresh } from "../lib/lastLogin.js";
 import { issueRefreshToken, rotateRefreshToken, revokeRefreshToken } from "../lib/refreshToken.js";
-import { issueResetToken, consumeResetToken } from "../lib/passwordReset.js";
-import { issueVerificationToken, consumeVerificationToken } from "../lib/emailVerification.js";
+import { issueResetToken, consumeResetToken, peekResetToken } from "../lib/passwordReset.js";
+import { findUserByEmail } from "../lib/userByEmail.js";
+import { issueVerificationToken, consumeVerificationToken, peekVerificationToken } from "../lib/emailVerification.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
+import { isEmailEnabled, effectiveEmailVerified } from "../lib/emailConfig.js";
+import { resendVerificationLimiter } from "../middleware/security.js";
 import { notify, activeAdminIds } from "../lib/notify.js";
+import { PRIVACY_NOTICE_VERSION } from "@shared/privacyNotice.js";
 
 export const authRouter = Router();
 
@@ -50,11 +56,23 @@ function clearRefreshCookie(res: Response): void {
 const SELF_REGISTRABLE_ROLES = ["INSTRUCTOR", "STUDENT"] as const;
 
 const registerSchema = z.object({
-  email:    z.string().email(),
+  // Trimmed and lowercased only when an account is created; lookups stay case-insensitive.
+  email:    z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
   name:     z.string().min(1),
   role:     z.enum(SELF_REGISTRABLE_ROLES).optional(),
+  // Privacy consent (RA 10173) is required to create an account.
+  acceptPrivacy: z.literal(true),
+  privacyVersion: z.string().min(1),
 });
+
+// The user fields the client needs to decide whether to show the blocking consent screen.
+function consentFields(u: { consentVersion: string | null; consentAcceptedAt: Date | null }) {
+  return {
+    consentVersion:  u.consentVersion,
+    consentRequired: u.consentVersion !== PRIVACY_NOTICE_VERSION,
+  };
+}
 
 const loginSchema = z.object({
   email:    z.string().email(),
@@ -70,6 +88,8 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
+const VERIFY_LINK_USED_TEXT = "This link expired or was already used.";
+
 const verifyEmailSchema = z.object({
   token: z.string().min(1),
 });
@@ -82,9 +102,17 @@ authRouter.post("/api/auth/register", async (req, res) => {
     return;
   }
 
-  const { email, password, name, role } = result.data;
+  const { email, password, name, role, privacyVersion } = result.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  if (privacyVersion !== PRIVACY_NOTICE_VERSION) {
+    res.status(409).json({
+      error: "The Privacy Notice was updated. Reload the page and review the latest version.",
+      code:  "NOTICE_VERSION_MISMATCH",
+    });
+    return;
+  }
+
+  const existing = await findUserByEmail(email);
   if (existing) {
     res.status(409).json({ error: "An account with that email already exists" });
     return;
@@ -97,7 +125,12 @@ authRouter.post("/api/auth/register", async (req, res) => {
       passwordHash,
       name,
       systemRole: (role ?? "STUDENT") as SystemRole,
-      emailVerified: false,
+      // Email off: nobody could ever verify, so sign-ups are verified up front.
+      emailVerified: !isEmailEnabled(),
+      consentVersion:   PRIVACY_NOTICE_VERSION,
+      consentAcceptedAt: new Date(),
+      // Instructor sign-ups need admin approval before any instructor feature works.
+      ...(role === "INSTRUCTOR" ? { instructorStatus: "PENDING" as const } : {}),
     },
   });
 
@@ -107,8 +140,8 @@ authRouter.post("/api/auth/register", async (req, res) => {
     await notify({
       recipientIds: activeAdminIds,
       type:         "USER_REGISTERED",
-      message:      `New instructor account registered: ${user.name}`,
-      link:         "/admin",
+      message:      `New instructor account awaiting approval: ${user.name}`,
+      link:         "/admin?section=instructor-approvals",
       refType:      "USER",
       refId:        user.id,
     });
@@ -123,15 +156,16 @@ authRouter.post("/api/auth/register", async (req, res) => {
     const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
     // A delivery failure must not block registration — the account is already
     // created; the user can request a fresh link via resend-verification.
-    sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
-      console.error("[auth] failed to send verification email", err)
+    sendVerificationEmail(user.email, user.name, verifyLink).catch(() =>
+      console.error("[auth] failed to send verification email")
     );
   }
 
   res.status(201).json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: effectiveEmailVerified(user), instructorStatus: user.instructorStatus, ...consentFields(user) },
     emailVerificationRequired: isEmailVerificationRequired(),
+    emailEnabled: isEmailEnabled(),
   });
 });
 
@@ -145,7 +179,7 @@ authRouter.post("/api/auth/login", async (req, res) => {
 
   const { email, password } = result.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await findUserByEmail(email);
   if (!user) {
     // Generic message — don't reveal whether the email exists
     res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
@@ -161,7 +195,9 @@ authRouter.post("/api/auth/login", async (req, res) => {
     return;
   }
 
+  const bcryptStart = process.hrtime.bigint();
   const valid = await bcrypt.compare(password, user.passwordHash);
+  addTimingMs("bcrypt", Number(process.hrtime.bigint() - bcryptStart) / 1e6); // a number for the timing line only
   if (!valid) {
     const failedLoginAttempts = user.failedLoginAttempts + 1;
     const locked = failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
@@ -191,24 +227,36 @@ authRouter.post("/api/auth/login", async (req, res) => {
     return;
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { failedLoginAttempts: 0, lockedUntil: null },
-  });
-
   if (!user.active) {
+    // As before, a correct password clears the failure counters even for a deactivated account (and does nothing
+    // else); the write is skipped when they are already clean.
+    if (user.failedLoginAttempts !== 0 || user.lockedUntil !== null) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+    }
     res.status(403).json({ error: "Your account has been deactivated. Contact an administrator." });
     return;
   }
 
+  // One write for the counter reset and the sign-in time, started together with the refresh token insert
+  // (neither needs the other). Same end state as the old reset, then recordSignIn, then token.
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
-  const refreshToken = await issueRefreshToken(user.id);
+  const [, refreshToken] = await Promise.all([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+    }),
+    issueRefreshToken(user.id),
+  ]);
   setRefreshCookie(res, refreshToken);
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: user.emailVerified },
+    user: { id: user.id, email: user.email, name: user.name, systemRole: user.systemRole, githubUsername: user.githubUsername ?? null, emailVerified: effectiveEmailVerified(user), instructorStatus: user.instructorStatus, ...consentFields(user) },
     emailVerificationRequired: isEmailVerificationRequired(),
+    emailEnabled: isEmailEnabled(),
   });
 });
 
@@ -234,6 +282,7 @@ authRouter.post("/api/auth/refresh", async (req, res) => {
     return;
   }
 
+  await recordSessionRefresh(user.id);
   const token = signToken({ sub: user.id, email: user.email, name: user.name, role: user.systemRole });
   setRefreshCookie(res, rotated.newRawToken);
 
@@ -250,6 +299,18 @@ authRouter.post("/api/auth/logout", async (req, res) => {
   res.json({ message: "Logged out successfully" });
 });
 
+// Audit rows for the reset flow: ids only, never the token, the link or the email. A failed write
+// is logged as a fixed string and never changes what the caller sees.
+async function auditReset(action: "PASSWORD_RESET_REQUESTED" | "PASSWORD_RESET_COMPLETED", user: { id: number; name: string }): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: { actorId: user.id, actorName: user.name, action, targetType: "USER", targetId: String(user.id) },
+    });
+  } catch {
+    console.error("[auth] failed to write password reset audit row");
+  }
+}
+
 const GENERIC_FORGOT_PASSWORD_MESSAGE = "If an account exists for that email, a password reset link has been sent.";
 
 // POST /api/auth/forgot-password
@@ -260,25 +321,41 @@ authRouter.post("/api/auth/forgot-password", async (req, res) => {
     return;
   }
 
+  // Email off: say so plainly (it is server-wide, so it reveals nothing about any account).
+  if (!isEmailEnabled()) {
+    res.status(503).json({ error: "Password reset by email is turned off. Contact your administrator.", code: "EMAIL_DISABLED" });
+    return;
+  }
+
   const { email } = result.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await findUserByEmail(email);
   if (user && user.active) {
     // Any failure here (token issue, a synchronous throw from the sender, or an
     // async delivery failure) must not change the response — that would leak
     // whether the email is registered, and would break the UX besides.
     try {
       const rawToken = await issueResetToken(user.id);
+      await auditReset("PASSWORD_RESET_REQUESTED", user);
       const resetLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/reset-password?token=${rawToken}`;
-      Promise.resolve(sendPasswordResetEmail(user.email, user.name, resetLink)).catch((err) =>
-        console.error("[auth] failed to send password reset email", err)
+      Promise.resolve(sendPasswordResetEmail(user.email, user.name, resetLink)).catch(() =>
+        console.error("[auth] failed to send password reset email")
       );
-    } catch (err) {
-      console.error("[auth] failed to start password reset", err);
+    } catch {
+      console.error("[auth] failed to start password reset");
     }
   }
 
   res.json({ message: GENERIC_FORGOT_PASSWORD_MESSAGE });
+});
+
+// GET /api/auth/reset-password/check?token=...
+// Read-only. The same { valid } answer for an unknown, used or expired link, so it tells a visitor nothing
+// about why. The page calls it on open so a used link shows its message at once.
+authRouter.get("/api/auth/reset-password/check", async (req, res) => {
+  const token = req.query.token;
+  const valid = typeof token === "string" && token.length > 0 && token.length <= 256 && (await peekResetToken(token));
+  res.json({ valid });
 });
 
 // POST /api/auth/reset-password
@@ -300,7 +377,7 @@ authRouter.post("/api/auth/reset-password", async (req, res) => {
   const passwordHash = await bcrypt.hash(newPassword, 10);
   // Resetting proves account ownership, so clear any lockout the same as a
   // successful login would.
-  await prisma.user.update({
+  const resetUser = await prisma.user.update({
     where: { id: userId },
     data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null },
   });
@@ -309,6 +386,7 @@ authRouter.post("/api/auth/reset-password", async (req, res) => {
   // prompt a normal re-login — in case the reset was triggered because
   // credentials were compromised.
   await prisma.refreshToken.deleteMany({ where: { userId } });
+  await auditReset("PASSWORD_RESET_COMPLETED", resetUser);
 
   res.json({ message: "Password reset successful. Please log in with your new password." });
 });
@@ -338,9 +416,13 @@ authRouter.get("/api/auth/me", authenticateToken, async (req, res) => {
     name:                      user.name,
     systemRole:                user.systemRole,
     githubUsername:            user.githubUsername,
-    emailVerified:             user.emailVerified,
+    emailVerified:             effectiveEmailVerified(user),
+    instructorStatus:          user.instructorStatus,
+    ...consentFields(user),
+    avatarUpdatedAt:          user.avatarUpdatedAt ? user.avatarUpdatedAt.toISOString() : null,
     createdAt:                 user.createdAt,
     emailVerificationRequired: isEmailVerificationRequired(),
+    emailEnabled: isEmailEnabled(),
   });
 });
 
@@ -353,8 +435,12 @@ authRouter.post("/api/auth/verify-email", async (req, res) => {
   }
 
   const userId = await consumeVerificationToken(result.data.token);
-  if (!userId) {
-    res.status(400).json({ error: "This verification link is invalid or has expired." });
+  const target = userId
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { active: true, deletedAt: true } })
+    : null;
+  // A deleted or deactivated account is never marked verified; the answer is the same as for a bad link.
+  if (!userId || !target || !target.active || target.deletedAt) {
+    res.status(400).json({ error: VERIFY_LINK_USED_TEXT });
     return;
   }
 
@@ -363,10 +449,19 @@ authRouter.post("/api/auth/verify-email", async (req, res) => {
   res.json({ message: "Email verified successfully." });
 });
 
+// GET /api/auth/verify-email/check?token=...
+// Read-only. The same { valid } answer for an unknown, used or expired link. The page calls it on open, so an
+// email scanner or a prefetch that opens the link cannot use it up: only the person's own button press does.
+authRouter.get("/api/auth/verify-email/check", async (req, res) => {
+  const token = req.query.token;
+  const valid = typeof token === "string" && token.length > 0 && token.length <= 256 && (await peekVerificationToken(token));
+  res.json({ valid });
+});
+
 // POST /api/auth/resend-verification — authenticated, so it can't be used to
 // probe which emails are registered (unlike forgot-password, which must stay
 // generic because it's reachable while logged out).
-authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, res) => {
+authRouter.post("/api/auth/resend-verification", authenticateToken, resendVerificationLimiter, async (req, res) => {
   if (!req.user) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -378,16 +473,26 @@ authRouter.post("/api/auth/resend-verification", authenticateToken, async (req, 
     return;
   }
 
-  if (user.emailVerified) {
+  if (effectiveEmailVerified(user)) {
     res.json({ message: "Your email is already verified." });
     return;
   }
 
   const rawVerifyToken = await issueVerificationToken(user.id);
   const verifyLink = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/verify-email?token=${rawVerifyToken}`;
-  sendVerificationEmail(user.email, user.name, verifyLink).catch((err) =>
-    console.error("[auth] failed to send verification email", err)
-  );
+  // Awaited: the person pressed a button and is waiting, so "sent" must be true. (Register stays fire-and-forget.)
+  // `false` = mail is not configured on this server; a thrown error = the provider or network failed.
+  let sent = true;
+  try {
+    sent = (await sendVerificationEmail(user.email, user.name, verifyLink)) !== false;
+  } catch {
+    sent = false;
+    console.error("[auth] failed to send verification email");
+  }
+  if (!sent) {
+    res.status(502).json({ error: "Could not send the email. Try again in a minute.", code: "EMAIL_SEND_FAILED" });
+    return;
+  }
 
   res.json({ message: "Verification email sent." });
 });
