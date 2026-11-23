@@ -274,6 +274,9 @@ describe("GET /api/student/group/:projectId — team-level AI explanation (leade
 
   it("the leader gets the explanation without the sentence that states the Gini value; a member gets none of it", async () => {
     const { project, studentA, studentB } = await setup("EDITOR"); // A = member, B = leader
+    // The accounts carry the names the stored report and text use, so no display-time swap applies here.
+    await prisma.user.update({ where: { id: studentA.id }, data: { name: "Alice" } });
+    await prisma.user.update({ where: { id: studentB.id }, data: { name: "Bob" } });
     const report = teamReport([
       documentScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.6 }),
       documentScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.4 }),
@@ -290,6 +293,24 @@ describe("GET /api/student/group/:projectId — team-level AI explanation (leade
     const asMember = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentA));
     expect(asMember.body.report.narrative).toBeUndefined();
     expect(JSON.stringify(asMember.body)).not.toContain("Alice made most commits");
+  });
+
+  it("a member renamed after the report was saved is shown to the leader under the current name", async () => {
+    const { project, studentA, studentB } = await setup("EDITOR");
+    await prisma.user.update({ where: { id: studentA.id }, data: { name: "Alicia" } });
+    await prisma.user.update({ where: { id: studentB.id }, data: { name: "Bob" } });
+    const report = teamReport([
+      documentScoredMember({ studentName: "Alice", userId: studentA.id, contributionShare: 0.6 }),
+      documentScoredMember({ studentName: "Bob", userId: studentB.id, contributionShare: 0.4 }),
+    ]);
+    await prisma.report.create({
+      data: { projectId: project.id, gini: report.gini, teamHealth: report.teamHealth, content: JSON.stringify({ report, narrative: TEXT }) },
+    });
+
+    const asLeader = await request(app).get(`/api/student/group/${project.id}`).set("Authorization", authHeaderFor(studentB));
+    expect(asLeader.status).toBe(200);
+    expect(asLeader.body.report.narrative).toBe("The team shares the work fairly evenly.\n\nAlicia made most commits.");
+    expect(asLeader.body.report.narrative).not.toContain("Alice");
   });
 
   it("studentNarrative drops every sentence that states a team measure and keeps clean ones", () => {
