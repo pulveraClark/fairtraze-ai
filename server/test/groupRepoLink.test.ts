@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Request, Response, NextFunction } from "express";
 import request from "supertest";
 import { prisma } from "../src/lib/prisma.js";
 import { createApp } from "../src/app.js";
@@ -6,6 +7,15 @@ import { checkRepoReachable } from "../src/lib/githubRepoCheck.js";
 import {
   createUser, authHeaderFor, createClassSection, createAssignment, createProject, createMembership,
 } from "./factories.js";
+
+// repoLinkLimiter (10 per minute per user id) is an in-memory singleton. The afterEach TRUNCATE ... RESTART
+// IDENTITY gives every test the same user ids, so on a fast runner the whole file lands in one bucket and
+// answers 429. This file tests the route's rules, not the limiter, so the limiter is a pass-through here;
+// everything else in the module stays real. (vi.mock is hoisted above the imports, so createApp() sees it.)
+vi.mock("../src/middleware/security.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/middleware/security.js")>()),
+  repoLinkLimiter: (_req: Request, _res: Response, next: NextFunction) => next(),
+}));
 
 const app = createApp();
 const reach = vi.mocked(checkRepoReachable);
