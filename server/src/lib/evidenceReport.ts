@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { getOrCreateReportId } from "./reportId.js";
+import { currentPeopleFrom, withCurrentNames } from "./currentNames.js";
 import type { EvidenceMemberRow, EvidenceReportDto } from "@shared/evidenceReport.js";
 import { classFullLabel } from "@shared/classLabel.js";
 import type {
@@ -68,7 +69,7 @@ export async function buildEvidenceDto(
           classSection: { select: { subjectCode: true, edpCode: true, department: { select: { name: true } } } },
         },
       },
-      groupMemberships: { where: { role: "LEADER" }, select: { user: { select: { name: true } } }, take: 1 },
+      groupMemberships: { select: { role: true, userId: true, user: { select: { name: true, githubUsername: true, deletedAt: true } } } },
     },
   });
   if (!project?.assignment) return null;
@@ -96,8 +97,10 @@ export async function buildEvidenceDto(
       : null,
     memberCount,
     equalSharePct: memberCount > 0 ? Math.round((1000 / memberCount)) / 10 : 0,
-    members: evidenceRows(team.members, sourceType),
-    leaderName: project.groupMemberships[0]?.user.name ?? null,
+    // Current names by member id (display only; the stored report is not changed). Same code for the
+    // student/instructor print page and the verify endpoint.
+    members: evidenceRows(withCurrentNames(team, currentPeopleFrom(project.groupMemberships)).members, sourceType),
+    leaderName: project.groupMemberships.find((m) => m.role === "LEADER")?.user.name ?? null,
     reportId: await getOrCreateReportId(projectId, report.id),
   };
 }
