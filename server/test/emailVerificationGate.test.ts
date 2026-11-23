@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import {
   createUser,
   authHeaderFor,
+  CONSENT,
   createClassSection,
   createAssignment,
   createProject,
@@ -40,7 +41,7 @@ describe("requireVerifiedEmail soft gate", () => {
 
     const blocked = await request(app).post("/api/join/create-group").set("Authorization", authHeaderFor(student)).send(body);
     expect(blocked.status).toBe(403);
-    expect(blocked.body.error).toBe("Please verify your email before doing this.");
+    expect(blocked.body.error).toBe("Please verify your email before doing this. Check your inbox or use Resend email at the top of the page.");
     expect(blocked.body.code).toBe("EMAIL_NOT_VERIFIED");
     expect(await prisma.project.count({ where: { assignmentId: assignment.id } })).toBe(0);
 
@@ -135,6 +136,33 @@ describe("requireVerifiedEmail soft gate", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("EMAIL_NOT_VERIFIED");
+  });
+
+  // AUTH-36: documents the live finding. With the gate off, a sign-up is stored UNVERIFIED (email is on) yet
+  // can create a group; nothing is blocked and no verification email is sent.
+  it("with REQUIRE_EMAIL_VERIFICATION=false a new unverified student is NOT blocked from creating a group", async () => {
+    const { user: instructor } = await createUser({ systemRole: "INSTRUCTOR" });
+    const classSection = await createClassSection(instructor.id);
+    const assignment = await createAssignment(classSection.id);
+
+    process.env.REQUIRE_EMAIL_VERIFICATION = "false";
+    try {
+      const reg = await request(app).post("/api/auth/register").send({
+        ...CONSENT, email: "gateoff@example.com", password: "password123", name: "Gate Off", role: "STUDENT",
+      });
+      expect(reg.status).toBe(201);
+      expect((await prisma.user.findUnique({ where: { email: "gateoff@example.com" } }))?.emailVerified).toBe(false);
+      expect(await prisma.emailVerificationToken.count({ where: { userId: reg.body.user.id } })).toBe(0);
+
+      await enroll(reg.body.user.id, classSection.id);
+      const res = await request(app)
+        .post("/api/join/create-group")
+        .set("Authorization", `Bearer ${reg.body.token}`)
+        .send({ assignmentId: assignment.id, groupName: "Gate Off Group" });
+      expect(res.status).toBe(201);
+    } finally {
+      delete process.env.REQUIRE_EMAIL_VERIFICATION;
+    }
   });
 
   it("passes through without a DB check when REQUIRE_EMAIL_VERIFICATION=false", async () => {
