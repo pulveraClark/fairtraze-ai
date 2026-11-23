@@ -44,6 +44,22 @@ export function evidenceRows(
   });
 }
 
+/**
+ * The blend that actually produced the shares: the effective wGitHub/wDocs every Combined member stores
+ * (1/0 or 0/1 when one source was quiet). The configured blend is only the fallback for a report whose
+ * members do not carry them.
+ */
+export function effectiveBlend(
+  members: AnyScoredMember[],
+  configured: { wGitHub: number; wDocs: number },
+): { wGitHub: number; wDocs: number } {
+  for (const m of members) {
+    const { wGitHub, wDocs } = m as Partial<CombinedScoredMember>;
+    if (typeof wGitHub === "number" && typeof wDocs === "number") return { wGitHub, wDocs };
+  }
+  return configured;
+}
+
 /** Null when the group, its assignment, or the report's stored content is missing. */
 export async function buildEvidenceDto(
   projectId: number,
@@ -77,9 +93,10 @@ export async function buildEvidenceDto(
   const cs = asgn.classSection;
   const sourceType = asgn.sourceType;
 
-  // The blend that produced these numbers is the one stored with the report; the live assignment
-  // value is only a fallback for an old report that did not store it.
-  const blend = stored.scoringConfig?.blend ?? { wGitHub: asgn.weightGithub, wDocs: asgn.weightDocs };
+  // The weights that produced these numbers are the members' effective ones; the configured blend stored
+  // with the report (then the live assignment value) is only a fallback.
+  const configured = stored.scoringConfig?.blend ?? { wGitHub: asgn.weightGithub, wDocs: asgn.weightDocs };
+  const blend = effectiveBlend(team.members, configured);
   const memberCount = team.members.length;
 
   return {

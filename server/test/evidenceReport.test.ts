@@ -124,6 +124,18 @@ describe("GET /api/groups/:id/evidence-report", () => {
     // The blend that produced the numbers (stored with the report: 40/60), not the live default.
     expect(c.weights).toEqual({ githubPct: 40, docsPct: 60 });
   });
+
+  it("prints the effective weights when one source was quiet (members 1/0, configured blend 55/45)", async () => {
+    const co = await setup("COMBINED");
+    await saveReport(co.project.id, "COMBINED", "quiet-docs");
+    expect((await get(co.project.id, co.leader)).body.weights).toEqual({ githubPct: 100, docsPct: 0 });
+  });
+
+  it("falls back to the configured blend when the members carry no weights", async () => {
+    const co = await setup("COMBINED");
+    await saveReport(co.project.id, "COMBINED", "no-member-weights");
+    expect((await get(co.project.id, co.leader)).body.weights).toEqual({ githubPct: 55, docsPct: 45 });
+  });
 });
 
 describe("Report ID", () => {

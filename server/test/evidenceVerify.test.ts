@@ -38,6 +38,14 @@ describe("POST /api/evidence-reports/verify", () => {
     expect(res.body.members).toEqual(printout.body.members);
   });
 
+  it("verify shows the effective weights when one source was quiet (members 1/0, configured blend 55/45)", async () => {
+    const { project, leader, instructor } = await setup("COMBINED");
+    await saveReport(project.id, "COMBINED", "quiet-docs");
+    const res = await verify(instructor, await idOf(project.id, leader));
+    expect(res.status).toBe(200);
+    expect(res.body.weights).toEqual({ githubPct: 100, docsPct: 0 });
+  });
+
   it("accepts the code typed in lower case or without dashes", async () => {
     const { project, leader, instructor } = await setup("GITHUB");
     await saveReport(project.id, "GITHUB");
