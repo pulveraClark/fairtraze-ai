@@ -46,9 +46,11 @@ describe("a changed full name shows in the report views", () => {
     expect(live).not.toContain("Old Leader Name");
     expect(live).toContain("Teammate Tan");
 
-    // The instructor's report is the stored analysis, so it keeps the name it was scored under
-    // until the group is analyzed again (routes/projects.ts reads studentName from Report.content).
-    expect(await instructorNames()).toContain("Old Leader Name");
+    // The instructor's report shows the current name too: names are swapped in by member id at display time
+    // (the stored Report.content keeps its own snapshot until the next analysis refreshes it).
+    const instructorLive = await instructorNames();
+    expect(instructorLive).toContain("New Leader Name");
+    expect(instructorLive).not.toContain("Old Leader Name");
 
     expect((await analyze()).status).toBe(200);
     const after = await instructorNames();
