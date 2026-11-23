@@ -20,7 +20,8 @@ import type {
 import { contentHasNoRecordedActivity, hasNoRecordedActivity, quietSource } from "../lib/reportActivity.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 import { autoUpdateFailed } from "../lib/autoAnalysis.js";
-import { loadCurrentNames, narrativeForDisplay } from "../lib/currentNamesDb.js";
+import { narrativeForDisplay } from "../lib/currentNamesDb.js";
+import { currentPeopleFrom, type CurrentPerson } from "../lib/currentNames.js";
 
 export const joinRouter = Router();
 
@@ -570,16 +571,25 @@ export async function buildLeaderTeamView(
   reportMembers: AnyScoredMember[],
   sourceType: string,
 ): Promise<LeaderTeamMemberView[]> {
+  return (await loadLeaderTeam(projectId, reportMembers, sourceType)).team;
+}
+
+/** Same read as above; also returns the members' current names (built from the rows already loaded, no extra query). */
+async function loadLeaderTeam(
+  projectId: number,
+  reportMembers: AnyScoredMember[],
+  sourceType: string,
+): Promise<{ team: LeaderTeamMemberView[]; current: Map<number, CurrentPerson> }> {
   const [memberships, tasks] = await Promise.all([
     prisma.groupMembership.findMany({
       where: { projectId },
       orderBy: { joinedAt: "asc" },
-      include: { user: { select: { id: true, name: true, githubUsername: true, avatarUpdatedAt: true } } },
+      include: { user: { select: { id: true, name: true, githubUsername: true, avatarUpdatedAt: true, deletedAt: true } } },
     }),
     prisma.task.findMany({ where: { projectId }, select: { assignedToUserId: true, done: true } }),
   ]);
 
-  return memberships.map((m) => {
+  const team = memberships.map((m) => {
     const gh = m.user.githubUsername?.toLowerCase() ?? null;
     const scored = sourceType === "GITHUB"
       ? (gh ? reportMembers.find((r) => r.githubUsername.toLowerCase() === gh) : undefined)
@@ -600,6 +610,7 @@ export async function buildLeaderTeamView(
       tasks: { open: mine.filter((t) => !t.done).length, done: mine.filter((t) => t.done).length },
     };
   });
+  return { team, current: currentPeopleFrom(memberships) };
 }
 
 // ─── GET /api/student/group/:projectId ───────────────────────────────────────
@@ -659,13 +670,14 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
 
   // Stage 2 (leader only): the badge counts on "Manage Group" and the team view, read together. Counts only;
   // RoleSuggestion is the one table behind both "change my role" and "add a role" requests. A member runs none of it.
-  const [pendingJoinRequests, pendingRoleRequests, team] = isLeader
+  const [pendingJoinRequests, pendingRoleRequests, built] = isLeader
     ? await Promise.all([
         prisma.groupJoinRequest.count({ where: { projectId, status: "PENDING" } }),
         prisma.roleSuggestion.count({ where: { projectId, status: "PENDING" } }),
-        teamReport ? buildLeaderTeamView(projectId, teamReport.members, sourceType) : Promise.resolve(undefined),
+        teamReport ? loadLeaderTeam(projectId, teamReport.members, sourceType) : Promise.resolve(undefined),
       ])
     : [0, 0, undefined];
+  const team = built?.team;
 
   const base = {
     classSection: {
@@ -783,7 +795,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   // narrative to show, and the extra reads happen only for the leader). Done before studentNarrative, which
   // matches flagged people by name.
   const leaderNarrativeText = team && stored.narrative
-    ? await narrativeForDisplay(projectId, stored, await loadCurrentNames(projectId))
+    ? await narrativeForDisplay(projectId, stored, built!.current)
     : stored.narrative;
 
   res.json({
