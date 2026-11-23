@@ -686,12 +686,12 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div data-testid="group-header-actions" className="flex flex-wrap items-center gap-2 sm:shrink-0">
             {(assignment.description || assignment.attachments.length > 0) && (
               <button
                 type="button"
                 onClick={() => setShowBrief(true)}
-                className="inline-flex min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
+                className="inline-flex min-h-11 sm:min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
               >
                 Instructions
               </button>
@@ -700,7 +700,7 @@ export function StudentGroupPage({ projectId }: { projectId: number }) {
             <button
               onClick={() => setShowManageModal(true)}
               aria-label={manageGroupLabel(pendingRequests)}
-              className="inline-flex min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
+              className="inline-flex min-h-11 sm:min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 text-sm font-medium transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />

@@ -100,6 +100,30 @@ describe("StudentGroupPage", () => {
     expect(screen.getByText("No analysis yet.")).toBeTruthy();
   });
 
+  // UX-01: at 375px the button row must wrap, not clip "Manage Group".
+  it("the header buttons wrap on narrow screens and keep a 44px touch height", () => {
+    state.data = groupFixture({
+      membership: { role: "LEADER", functionalRoles: ["DEVELOPER"], joinedAt: "2026-10-01T00:00:00Z", roleSuggestion: null },
+      assignment: { id: 9, title: "Project", deadline: null, sourceType: "COMBINED", description: "Do the work", attachments: [] },
+    });
+    renderPage();
+    const row = screen.getByTestId("group-header-actions");
+    expect(row.className).toContain("flex-wrap");
+    expect(row.className).not.toMatch(/(^|\s)shrink-0(\s|$)/);
+    for (const name of ["Instructions", "Print evidence report", "Manage Group"]) {
+      const btn = within(row).getByRole("button", { name });
+      expect(btn.className, name).toContain("min-h-11");
+      expect(btn.className, name).toContain("sm:min-h-10");
+    }
+  });
+
+  it("a plain member's row wraps too and keeps Manage Group", () => {
+    renderPage();
+    const row = screen.getByTestId("group-header-actions");
+    expect(row.className).toContain("flex-wrap");
+    expect(within(row).getByRole("button", { name: "Manage Group" }).className).toContain("min-h-11");
+  });
+
   it("calls it a note everywhere a student sees it: Add a note, Send note, Note status", () => {
     window.history.pushState({}, "", REPORT);
     state.data = flagged();
