@@ -20,6 +20,7 @@ import type {
 import { contentHasNoRecordedActivity, hasNoRecordedActivity, quietSource } from "../lib/reportActivity.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 import { autoUpdateFailed } from "../lib/autoAnalysis.js";
+import { loadCurrentNames, narrativeForDisplay } from "../lib/currentNamesDb.js";
 
 export const joinRouter = Router();
 
@@ -652,7 +653,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
 
   const latestReport = project.reports[0] ?? null;
   const stored = latestReport?.content
-    ? JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean; narrativeBasis?: string }
+    ? JSON.parse(latestReport.content) as { report?: TeamReport<AnyScoredMember>; scoringRulesVersion?: number; trigger?: "manual" | "auto"; narrative?: string; narrativeOutdated?: boolean; narrativeBasis?: string; narrativeAt?: string; narrativeNames?: Array<{ userId: number; name: string }> }
     : null;
   const teamReport = stored?.report ?? null;
 
@@ -778,6 +779,13 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
   // GroupMembership.role) additionally receives `team`, a whitelisted per-member view used to
   // distribute work fairly. Never includes disputes, instructor notes, emails or raw stats.
 
+  // The leader's team explanation shows each member's CURRENT name (display only; read only when there is a
+  // narrative to show, and the extra reads happen only for the leader). Done before studentNarrative, which
+  // matches flagged people by name.
+  const leaderNarrativeText = team && stored.narrative
+    ? await narrativeForDisplay(projectId, stored, await loadCurrentNames(projectId))
+    : stored.narrative;
+
   res.json({
     ...base,
     hasReport: true,
@@ -798,7 +806,7 @@ joinRouter.get("/api/student/group/:projectId", ...requireRole("STUDENT"), async
       myContribution,
       ...(team ? { team } : {}),
       // The leader reads the same team-level AI explanation as the instructor (without the Gini sentence).
-      ...(team ? { narrative: studentNarrative(stored.narrative, team.map((m) => ({ name: m.name, flags: m.flags }))), narrativeOutdated: isNarrativeOutdated({ ...stored, report: teamReport }) } : {}),
+      ...(team ? { narrative: studentNarrative(leaderNarrativeText, team.map((m) => ({ name: m.name, flags: m.flags }))), narrativeOutdated: isNarrativeOutdated({ ...stored, report: teamReport }) } : {}),
     },
   });
 });
