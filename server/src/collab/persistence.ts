@@ -218,6 +218,15 @@ export const yjsPersistence = {
       console.error(`[collab] not persisting ${room}: its restore failed`);
       return;
     }
-    await persist(room, ydoc);
+    try {
+      await persist(room, ydoc);
+    } catch (err) {
+      // y-websocket's closeConn calls writeState without a .catch, so a rejection here would be an
+      // unhandled rejection (a process exit on modern Node). P2003 = the group (and so its
+      // Document's parent) was deleted: nothing to save, ignore it quietly. Anything else is
+      // logged with the room name only (no error object) and not rethrown. Saved bytes unchanged.
+      if ((err as { code?: string } | null)?.code === "P2003") return;
+      console.error(`[collab] persist failed for ${room}`);
+    }
   },
 };
