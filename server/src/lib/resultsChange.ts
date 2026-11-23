@@ -31,6 +31,8 @@ interface PreviousContent {
   narrativeBasis?: string;
   narrativeInputHash?: string;
   narrativeAt?: string;
+  // Names the saved text holds (server-only; used to show current names at display time), carried with it.
+  narrativeNames?: Array<{ userId: number; name: string }>;
 }
 
 /**
@@ -47,7 +49,7 @@ export function reportPolicy(
   previous: PreviousContent,
   next: ComparableReport,
   savedNarrative: string | null,
-): { notify: boolean; contentExtras: { trigger: AnalysisTrigger; narrativeOutdated?: true; narrativeBasis?: string; narrativeInputHash?: string; narrativeAt?: string } } {
+): { notify: boolean; contentExtras: { trigger: AnalysisTrigger; narrativeOutdated?: true; narrativeBasis?: string; narrativeInputHash?: string; narrativeAt?: string; narrativeNames?: Array<{ userId: number; name: string }> } } {
   const changed = resultsChanged(previous.report, next);
   const basisDiffers = previous.narrativeBasis ? previous.narrativeBasis !== narrativeBasisOf(next) : changed;
   const narrativeOutdated = savedNarrative !== null && (previous.narrativeOutdated === true || basisDiffers);
@@ -59,6 +61,7 @@ export function reportPolicy(
       ...(savedNarrative !== null && previous.narrativeBasis ? { narrativeBasis: previous.narrativeBasis } : {}),
       ...(savedNarrative !== null && previous.narrativeInputHash ? { narrativeInputHash: previous.narrativeInputHash } : {}),
       ...(savedNarrative !== null && previous.narrativeAt ? { narrativeAt: previous.narrativeAt } : {}),
+      ...(savedNarrative !== null && previous.narrativeNames ? { narrativeNames: previous.narrativeNames } : {}),
     },
   };
 }

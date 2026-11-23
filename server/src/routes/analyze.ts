@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { requireRole, requireVerifiedEmail } from "../middleware/auth.js";
 import { generateFairnessNarrative, narrativeInputHash } from "../lib/gemini.js";
 import { narrativeBasisOf } from "../lib/narrativeBasis.js";
+import { buildNameMap, storedNameRefs, swapNames, type StoredNameRef } from "../lib/currentNames.js";
+import { loadCurrentNames, narrativeForDisplay } from "../lib/currentNamesDb.js";
 import { aiFailureOf, plainAiFailure, NARRATIVE_KEPT_TEXT } from "../lib/aiFailureText.js";
 import { ANALYSIS_FAILURE_TEXT } from "@shared/failureMessages.js";
 import { quotaGate } from "../lib/aiReview/limiter.js";
@@ -150,12 +152,19 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
   const stored = latestReport.content
     ? (JSON.parse(latestReport.content) as {
         report?: TeamReport; narrative?: string; narrativeOutdated?: boolean; narrativeInputHash?: string; narrativeBasis?: string; narrativeAt?: string;
+        narrativeNames?: StoredNameRef[];
       })
     : {};
 
+  // Display only: the saved text shows each member's CURRENT name. Applied on the way out; the hash, the
+  // prompt and what is saved always use the stored report and text as they are.
+  const current = await loadCurrentNames(projectId);
+  const shown = (text: string): Promise<string> =>
+    narrativeForDisplay(projectId, { ...stored, narrative: text }, current).then((t) => t ?? text);
+
   // Return cached narrative if present and not regenerating
   if (stored.narrative && !regenerate) {
-    res.json({ narrative: stored.narrative, cached: true });
+    res.json({ narrative: await shown(stored.narrative), cached: true });
     return;
   }
 
@@ -172,7 +181,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
   // saved before the fingerprint existed, is never "unchanged".
   const inputHash = narrativeInputHash(groupLabel, stored.report, briefContext);
   if (stored.narrative && regenerate && !stored.narrativeOutdated && stored.narrativeAt && stored.narrativeInputHash === inputHash) {
-    res.json({ narrative: stored.narrative, cached: true, upToDate: { since: stored.narrativeAt } });
+    res.json({ narrative: await shown(stored.narrative), cached: true, upToDate: { since: stored.narrativeAt } });
     return;
   }
 
@@ -183,7 +192,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
   if (!gate.ok) {
     const quotaInfo = { code: "AI_QUOTA_DAILY", retryAt: new Date(Date.now() + gate.retryAfterMs).toISOString() };
     if (stored.narrative) {
-      res.json({ narrative: stored.narrative, cached: true, warning: plainAiFailure("AI_QUOTA_DAILY", gate.retryAfterMs), ...quotaInfo });
+      res.json({ narrative: await shown(stored.narrative), cached: true, warning: plainAiFailure("AI_QUOTA_DAILY", gate.retryAfterMs), ...quotaInfo });
     } else {
       res.status(429).json({ error: plainAiFailure("AI_QUOTA_DAILY", gate.retryAfterMs), ...quotaInfo });
     }
@@ -194,13 +203,16 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
   try {
     const narrative = await generateFairnessNarrative(groupLabel, stored.report, briefContext);
     logReadability(`score explanation (group ${projectId})`, [narrative]); // log only
+    // Which names the text holds (the report's names it was written from), so a later rename can be shown at
+    // display time. Server-only: stripped from every response, never sent to a client.
+    const narrativeNames = storedNameRefs(stored.report, current);
     await prisma.report.update({
       where: { id: latestReport.id },
       data: {
-        content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined, narrativeInputHash: inputHash, narrativeBasis: narrativeBasisOf(stored.report), narrativeAt: new Date().toISOString() }),
+        content: JSON.stringify({ ...stored, narrative, narrativeOutdated: undefined, narrativeInputHash: inputHash, narrativeBasis: narrativeBasisOf(stored.report), narrativeAt: new Date().toISOString(), narrativeNames }),
       },
     });
-    res.json({ narrative, cached: false });
+    res.json({ narrative: swapNames(narrative, buildNameMap(narrativeNames, current)), cached: false });
   } catch (err) {
     console.error("[Gemini] narrative generation failed:", err);
     // Only these plain sentences leave the server, never the provider's text.
@@ -215,7 +227,7 @@ analyzeRouter.post("/api/projects/:id/narrative", ...requireRole("INSTRUCTOR"), 
     if (stored.narrative) {
       // Degrade gracefully: return saved narrative with a warning
       res.json({
-        narrative: stored.narrative,
+        narrative: await shown(stored.narrative),
         cached: true,
         warning: quota || failure.code === "AI_RATE_LIMITED" || failure.code === "AI_TIMEOUT"
           ? plainAiFailure(failure.code, failure.retryAfterMs)

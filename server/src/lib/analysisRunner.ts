@@ -211,6 +211,7 @@ function buildRawMembers(
 interface StoredReport {
   report?: TeamReport; narrative?: string; narrativeOutdated?: boolean;
   narrativeBasis?: string; narrativeInputHash?: string; narrativeAt?: string;
+  narrativeNames?: Array<{ userId: number; name: string }>;
 }
 
 export interface AnalysisResult {
