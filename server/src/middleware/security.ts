@@ -216,8 +216,8 @@ export const joinCodeLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
-// Task comments (and the @mentions inside them): 30 per minute per user, its own bucket so a burst of
-// comments never eats the task-creation allowance. Needs authenticateToken first (see app.ts).
+// Requirement marks (claim, confirm, decline, read and the screenshot routes under
+// /api/groups/:id/requirement-marks): 30 per minute per user, one shared bucket. Needs authenticateToken first (see app.ts).
 export const requirementMarkLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 60 * 1000,
@@ -236,6 +236,8 @@ export const evidenceVerifyLimiter = rateLimit({
   keyGenerator: (req) => (req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? "")),
 });
 
+// Task comments (and the @mentions inside them): 30 per minute per user, its own bucket so a burst of
+// comments never eats the task-creation allowance. Needs authenticateToken first (see app.ts).
 export const taskCommentLimiter = rateLimit({
   ...rateLimitDefaults,
   windowMs: 60 * 1000,
