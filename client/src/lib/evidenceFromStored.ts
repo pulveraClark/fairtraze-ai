@@ -18,6 +18,21 @@ export const equalSharePct = (memberCount: number): number => (memberCount > 0 ?
 /** Server: `Math.round(weight * 100)`. */
 export const weightPct = (weight: number): number => Math.round(weight * 100);
 
+/**
+ * Server: `effectiveBlend`. The effective wGitHub/wDocs every Combined member stores (1/0 or 0/1 when one
+ * source was quiet); the configured blend is only the fallback for members that do not carry them.
+ */
+export function effectiveBlendFromStored(
+  members: AnyScoredMember[],
+  configured: { wGitHub: number; wDocs: number } | null,
+): { wGitHub: number; wDocs: number } | null {
+  for (const m of members) {
+    const { wGitHub, wDocs } = m as Partial<CombinedScoredMember>;
+    if (typeof wGitHub === "number" && typeof wDocs === "number") return { wGitHub, wDocs };
+  }
+  return configured;
+}
+
 export function evidenceRowsFromStored(
   members: AnyScoredMember[],
   sourceType: EvidenceReportDto["sourceType"],
@@ -53,7 +68,7 @@ export function evidenceSourceType(sourceType: string | null): EvidenceReportDto
 export function evidenceDtoFromStored(stored: StoredReportResponse, meta?: ExportClassSource | null): EvidenceReportDto {
   const sourceType = evidenceSourceType(stored.sourceType);
   const members = stored.report.members;
-  const blend = stored.scoringConfig?.blend ?? null;
+  const blend = effectiveBlendFromStored(members, stored.scoringConfig?.blend ?? null);
   return {
     collegeName: "",
     groupName: stored.groupName,

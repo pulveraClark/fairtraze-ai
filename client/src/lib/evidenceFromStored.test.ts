@@ -55,6 +55,17 @@ describe("evidenceDtoFromStored", () => {
     expect(dto.weights).toEqual({ githubPct: 40, docsPct: 60 });
   });
 
+  it("uses the members' effective weights when one source was quiet (1/0 against a configured 55/45)", () => {
+    const quiet = { ...combined, wGitHub: 1, wDocs: 0 };
+    const dto = evidenceDtoFromStored(stored({ scoringConfig: { blend: { wGitHub: 0.55, wDocs: 0.45 } } as never }, [quiet, { ...quiet, studentName: "Ben" }]));
+    expect(dto.weights).toEqual({ githubPct: 100, docsPct: 0 });
+  });
+
+  it("falls back to the configured blend when the members carry no wGitHub/wDocs", () => {
+    const dto = evidenceDtoFromStored(stored({ scoringConfig: { blend: { wGitHub: 0.55, wDocs: 0.45 } } as never }, [combined]));
+    expect(dto.weights).toEqual({ githubPct: 55, docsPct: 45 });
+  });
+
   it("GitHub-only and Editor-only: one source column, no weights", () => {
     const gh = evidenceDtoFromStored(stored({ sourceType: "GITHUB" }, [{ studentName: "Ana", flags: [], contributionShare: 0.5 }]));
     expect(gh.members[0]).toEqual({ name: "Ana", githubPct: 50, docsPct: null, combinedPct: 50, flags: [] });
