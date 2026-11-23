@@ -103,3 +103,10 @@ export function withCurrentNames<R extends TeamReport<AnyScoredMember>>(
     }),
   };
 }
+
+/** Current people from group-membership rows that already carry the user's name (no extra query). */
+export function currentPeopleFrom(
+  rows: ReadonlyArray<{ userId: number; user: { name: string; githubUsername: string | null; deletedAt: Date | null } }>,
+): Map<number, CurrentPerson> {
+  return new Map(rows.map((r) => [r.userId, { name: r.user.name, githubUsername: r.user.githubUsername, deleted: r.user.deletedAt != null }]));
+}

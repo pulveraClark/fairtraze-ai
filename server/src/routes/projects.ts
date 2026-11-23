@@ -12,6 +12,8 @@ import { projectsWithRepoChangedSince } from "../lib/repoChange.js";
 import { autoUpdateFailed } from "../lib/autoAnalysis.js";
 import { LATEST_REPORT_ORDER } from "../lib/latestReport.js";
 import { isNarrativeOutdated } from "../lib/narrativeBasis.js";
+import { currentPeopleFrom, withCurrentNames } from "../lib/currentNames.js";
+import { narrativeForDisplay } from "../lib/currentNamesDb.js";
 
 export const projectsRouter = Router();
 
@@ -90,6 +92,7 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
     },
     include: {
       members: true,
+      groupMemberships: { select: { userId: true, user: { select: { name: true, githubUsername: true, deletedAt: true } } } },
       reports: { orderBy: [...LATEST_REPORT_ORDER], take: 1 },
       assignment: { select: { id: true, title: true, classSectionId: true, classSection: { select: { subjectCode: true, subjectName: true, edpCode: true } }, sourceType: true, ...ASSIGNMENT_CONFIG_SELECT } },
     },
@@ -107,7 +110,9 @@ projectsRouter.get("/api/projects/summary", ...requireRole("INSTRUCTOR"), async 
       : null;
     const report = stored?.report ?? null;
 
-    const memberShares = report?.members.map((m) => ({
+    // Current names by member id (display only; the stored report is not changed).
+    const shownReport = report ? withCurrentNames(report, currentPeopleFrom(p.groupMemberships)) : null;
+    const memberShares = shownReport?.members.map((m) => ({
       studentName: m.studentName,
       contributionShare: m.contributionShare,
       flags: m.flags,
@@ -174,7 +179,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
       include: {
         assignment: { select: { id: true, sourceType: true, deadline: true, createdAt: true, ...ASSIGNMENT_CONFIG_SELECT, classSection: { select: { instructorId: true } } } },
         groupMemberships: {
-          include: { user: { select: { id: true, githubUsername: true, avatarUpdatedAt: true } } },
+          include: { user: { select: { id: true, name: true, githubUsername: true, avatarUpdatedAt: true, deletedAt: true } } },
           orderBy: { joinedAt: "asc" },
         },
       },
@@ -215,6 +220,8 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
         trigger?: "manual" | "auto";
         narrativeOutdated?: boolean;
         narrativeBasis?: string;
+        narrativeAt?: string;
+        narrativeNames?: Array<{ userId: number; name: string }>;
       })
     : {};
 
@@ -224,6 +231,7 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
   }
 
   const currentCfg = assignmentScoringConfig(project.assignment);
+  const currentPeople = currentPeopleFrom(project.groupMemberships.map((m) => ({ userId: m.userId, user: m.user })));
 
   // Build memberRoles — context-only; never affects scores, flags, Gini, or team health.
   // Mismatch note: Developer assigned but member has 0 commits in the stored report.
@@ -262,8 +270,9 @@ projectsRouter.get("/api/projects/:id/report", ...requireRole("INSTRUCTOR"), asy
     groupName: project.groupName || `Group ${projectId}`,
     repoUrl: project.repoUrl,
     analyzedAt: latestReport.generatedAt.toISOString(),
-    report: stored.report,
-    narrative: stored.narrative ?? null,
+    // Display only: each member's current name, by member id. The stored report and text are not changed.
+    report: withCurrentNames(stored.report, currentPeople),
+    narrative: await narrativeForDisplay(projectId, stored, currentPeople),
     evidenceReportId: evidenceRow?.code ?? null,
     unmatchedGitHubLogins: stored.unmatchedLogins ?? [],
     sourceType: project.assignment?.sourceType ?? null,

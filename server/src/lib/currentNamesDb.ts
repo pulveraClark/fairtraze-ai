@@ -1,5 +1,5 @@
 import { prisma } from "./prisma.js";
-import { buildNameMap, storedNameRefs, swapNames, type CurrentPerson, type StoredNameRef } from "./currentNames.js";
+import { buildNameMap, currentPeopleFrom, storedNameRefs, swapNames, type CurrentPerson, type StoredNameRef } from "./currentNames.js";
 
 // Database side of the display-time names (see currentNames.ts). Read-only.
 
@@ -8,7 +8,7 @@ export async function loadCurrentNames(projectId: number): Promise<Map<number, C
     where: { projectId },
     select: { userId: true, user: { select: { name: true, githubUsername: true, deletedAt: true } } },
   });
-  return new Map(rows.map((r) => [r.userId, { name: r.user.name, githubUsername: r.user.githubUsername, deleted: r.user.deletedAt != null }]));
+  return currentPeopleFrom(rows);
 }
 
 export interface NarrativeSource {
