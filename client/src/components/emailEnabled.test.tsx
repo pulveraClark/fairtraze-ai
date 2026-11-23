@@ -43,14 +43,14 @@ describe("VerifyEmailBanner", () => {
   });
 
   // AUTH-19
-  it("Resend email posts to the server, then shows 'Sent — check your inbox.' in place of the button", async () => {
+  it("Resend email posts to the server, then shows 'Sent — check your inbox, and your spam folder too.' in place of the button", async () => {
     mockAuth(unverified);
     const f = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ message: "ok" }) });
     vi.stubGlobal("fetch", f);
     render(<VerifyEmailBanner />);
     expect(screen.getByText(/Please verify your email address \(a@b\.c\)/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /resend email/i }));
-    expect(await screen.findByText("Sent — check your inbox.")).toBeInTheDocument();
+    expect(await screen.findByText("Sent — check your inbox, and your spam folder too.")).toBeInTheDocument();
     expect(f).toHaveBeenCalledTimes(1);
     expect(f.mock.calls[0][0]).toBe("/api/auth/resend-verification");
     expect((f.mock.calls[0][1] as RequestInit).method).toBe("POST");

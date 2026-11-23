@@ -73,6 +73,31 @@ describe("creating and requesting a group", () => {
     expect(await screen.findByText(/Could not reach the server/)).toBeInTheDocument();
   });
 
+  // AUTH-38: the server's 403 EMAIL_NOT_VERIFIED text is shown in full, next to the form, and is not swallowed.
+  const VERIFY_TEXT = "Please verify your email before doing this. Check your inbox or use Resend email at the top of the page.";
+  const refused = () => ({ ok: false, status: 403, json: async () => ({ error: VERIFY_TEXT, code: "EMAIL_NOT_VERIFIED" }) });
+
+  it("AUTH-38 the Create group form shows the verify-your-email message with the next step", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => refused()));
+    renderCard(asgn());
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Create group$/i }));
+    await user.type(screen.getByPlaceholderText(/group name/i), "Team Rocket");
+    await user.click(screen.getByRole("button", { name: "Create Group" }));
+    expect(await screen.findByText(VERIFY_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText("Group created.")).not.toBeInTheDocument();
+  });
+
+  it("AUTH-38 the Join (request) form shows the same message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => refused()));
+    renderCard(asgn());
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Request to join a group/i }));
+    await user.click(screen.getByRole("radio", { name: /Group A/i }));
+    await user.click(screen.getByRole("button", { name: /Send Request/i }));
+    expect(await screen.findByText(VERIFY_TEXT)).toBeInTheDocument();
+  });
+
   it("cancelling a join request says 'Request cancelled.'", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ok({})));
     renderCard(asgn({ myRequest: { id: 4, projectId: 3, groupName: "Group A", status: "PENDING" } }));
