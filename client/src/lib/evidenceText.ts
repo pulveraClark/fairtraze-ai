@@ -25,9 +25,14 @@ export function flagsText(flags: readonly string[]): string {
   return flags.length ? flagLabels(flags).join(", ") : "None";
 }
 
-/** "Combined = 50% GitHub + 50% Documents." Only for COMBINED; the other source types have no such sentence. */
+/**
+ * "Combined = 50% GitHub + 50% Documents." Only for COMBINED; the other source types have no such sentence.
+ * When one source carried the whole blend (100/0 or 0/100, the other source was quiet) it says so instead.
+ */
 export function combinedText(dto: Pick<EvidenceReportDto, "sourceType" | "weights">): string | null {
   if (dto.sourceType === "COMBINED" && dto.weights) {
+    if (dto.weights.githubPct === 100 && dto.weights.docsPct === 0) return "Shares are based on GitHub only.";
+    if (dto.weights.githubPct === 0 && dto.weights.docsPct === 100) return "Shares are based on Documents only.";
     return `Combined = ${dto.weights.githubPct}% GitHub + ${dto.weights.docsPct}% Documents.`;
   }
   return null;

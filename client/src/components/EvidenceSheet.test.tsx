@@ -139,6 +139,19 @@ describe("EvidenceSheet", () => {
     expect(screen.getByText(note)).toBeTruthy();
   });
 
+  it("says 'GitHub only' or 'Documents only' instead of a 100/0 blend", () => {
+    const base = { memberCount: 3, equalSharePct: 33.3, sourceType: "COMBINED" as const };
+    const gh = tableNote({ ...base, weights: { githubPct: 100, docsPct: 0 } });
+    expect(gh).toContain("Shares are based on GitHub only.");
+    expect(gh).not.toContain("Combined =");
+    const docs = tableNote({ ...base, weights: { githubPct: 0, docsPct: 100 } });
+    expect(docs).toContain("Shares are based on Documents only.");
+    expect(docs).not.toContain("Combined =");
+
+    render(<EvidenceSheet dto={dto({ weights: { githubPct: 100, docsPct: 0 } })} />);
+    expect(screen.getByText(/Shares are based on GitHub only\./)).toBeTruthy();
+  });
+
   // RPT-12
   it("has three EMPTY decision boxes, a Remarks line, the signature lines and the footer", () => {
     render(<EvidenceSheet dto={dto()} />);
