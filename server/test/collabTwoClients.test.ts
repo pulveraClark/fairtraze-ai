@@ -10,6 +10,8 @@ import { createApp } from "../src/app.js";
 import * as Y from "yjs";
 import { attachYjsCollabServer } from "../src/collab/yjsServer.js";
 import { COLLAB_SCHEMA_VERSION } from "@shared/collabVersion.js";
+import { computeDocumentTeamReport } from "@shared/documentScoring.js";
+import { computeDocumentRawStats } from "../src/collab/editStats.js";
 import { authHeaderFor, createAssignment, createClassSection, createMembership, createProject, createUser } from "./factories.js";
 
 // Two group members open the same document room over real WebSockets (same server path the browser
@@ -104,5 +106,12 @@ describe("collab: two people in the same document", () => {
     const chars = (userId: number) => events.filter((e) => e.userId === userId).reduce((n, e) => n + e.length, 0);
     expect(chars(ana.id)).toBe(fromAna.length);
     expect(chars(ben.id)).toBe(fromBen.length);
+
+    // Scored share: the same two steps the analysis runs for an EDITOR group.
+    const roster = [ana, ben].map((u) => ({ userId: u.id, studentName: u.name, githubUsername: "" }));
+    const report = computeDocumentTeamReport(await computeDocumentRawStats(doc!.id, roster));
+    const shares = report.members.map((m) => m.contributionShare);
+    expect(shares.every((s) => s > 0), "both members have a share above 0").toBe(true);
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 3);
   }, 90000);
 });
