@@ -26,15 +26,62 @@ function renderAs(role: "STUDENT" | "INSTRUCTOR" | null) {
 
 describe("HelpPage", () => {
   // UX-09
-  it("opens on the student view for students and logged-out visitors, the instructor view for instructors", () => {
+  it("only instructors and admins get the audience switch; they open on the instructor view", () => {
     const a = renderAs("STUDENT");
-    expect(screen.getByRole("button", { name: "For students" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "For students" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "For instructors" })).toBeNull();
     a.unmount();
     const b = renderAs(null);
-    expect(screen.getByRole("button", { name: "For students" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "For instructors" })).toBeNull();
     b.unmount();
-    renderAs("INSTRUCTOR");
+    const c = renderAs("INSTRUCTOR");
     expect(screen.getByRole("button", { name: "For instructors" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "For students" })).toHaveAttribute("aria-pressed", "false");
+    c.unmount();
+    renderAs("ADMIN" as never);
+    expect(screen.getByRole("button", { name: "For instructors" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  const INSTRUCTOR_ONLY_IDS = ["report", "settings-howto", "updates", "ai-use", "verify"];
+  const INSTRUCTOR_ONLY_TEXT = [
+    /Gini/, /coefficient/i, /Healthy below/, /Moderate risk/, /High risk/, /team index/i,
+    /Show the exact numbers/, /Verify report/, /Scoring settings/, /Reading a group's report/,
+  ];
+
+  it("a student (or leader, or visitor) never gets instructor-only text or sections, even by #hash", () => {
+    const scroll = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scroll;
+    for (const role of ["STUDENT", null] as const) {
+      for (const hash of ["#gini", "#report", "#verify", "#settings-howto"]) {
+        window.location.hash = hash;
+        const r = renderAs(role);
+        const text = document.body.textContent ?? "";
+        for (const re of INSTRUCTOR_ONLY_TEXT) expect(text, `${role} ${hash} ${re}`).not.toMatch(re);
+        for (const id of INSTRUCTOR_ONLY_IDS) expect(document.getElementById(id), `${role} #${id}`).toBeNull();
+        r.unmount();
+      }
+    }
+    window.location.hash = "";
+  });
+
+  it("instructors get the extra sections, listed in 'On this page'", () => {
+    renderAs("INSTRUCTOR");
+    for (const id of INSTRUCTOR_ONLY_IDS) expect(document.getElementById(id), `#${id}`).not.toBeNull();
+    const nav = screen.getByRole("navigation", { name: "On this page" });
+    for (const label of ["Reading a report", "Scoring settings", "When reports update", "AI explanation and findings", "Verify report"]) {
+      expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    for (const a of within(nav).getAllByRole("link")) {
+      expect(document.getElementById(a.getAttribute("href")!.slice(1)), a.textContent ?? "").not.toBeNull();
+    }
+  });
+
+  it("switching an instructor to the student view removes the instructor-only sections", async () => {
+    const user = userEvent.setup();
+    renderAs("INSTRUCTOR");
+    await user.click(screen.getByRole("button", { name: "For students" }));
+    for (const id of INSTRUCTOR_ONLY_IDS) expect(document.getElementById(id), `#${id}`).toBeNull();
+    expect(screen.queryByText(/Gini/)).toBeNull();
   });
 
   it("signed in: drops its own Back button and uses the shared footer without a self-link", () => {
@@ -77,7 +124,7 @@ describe("HelpPage", () => {
 
   it("has an element for every anchor the app links to, in both views", async () => {
     const user = userEvent.setup();
-    renderAs("STUDENT");
+    renderAs("INSTRUCTOR");
     for (const view of ["For students", "For instructors"]) {
       await user.click(screen.getByRole("button", { name: view }));
       for (const id of HELP_ANCHORS) expect(document.getElementById(id), `#${id} in ${view}`).not.toBeNull();
@@ -161,7 +208,6 @@ describe("HelpPage", () => {
       await user.type(box, "zzzzqq");
       expect(screen.getByRole("status")).toHaveTextContent("No results. Try 'flags' or 'tasks'.");
       expect(visibleSections()).toEqual([]);
-      expect(screen.getByRole("button", { name: "For instructors" })).toBeInTheDocument();
       await user.keyboard("{Escape}");
       expect(box).toHaveValue("");
       expect(visibleSections().length).toBe(document.querySelectorAll("[data-help-section]").length);

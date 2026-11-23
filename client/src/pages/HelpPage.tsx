@@ -67,10 +67,12 @@ export function HelpPage() {
   const { user } = useAuth();
   const { navigate } = useRouter();
   const home = roleHome(user?.systemRole);
-  const [view, setView] = useState<View>(
-    user?.systemRole === "INSTRUCTOR" || user?.systemRole === "ADMIN" ? "instructor" : "student",
-  );
-  const student = view === "student";
+  // Only instructors and admins can open the instructor view. Students, leaders and logged-out
+  // visitors always get the student view, so nothing instructor-only is rendered for them at all
+  // (a #hash link cannot reach what is not on the page).
+  const canSeeInstructorView = user?.systemRole === "INSTRUCTOR" || user?.systemRole === "ADMIN";
+  const [view, setView] = useState<View>(canSeeInstructorView ? "instructor" : "student");
+  const student = !canSeeInstructorView || view === "student";
 
   // The page loads after React mounts, so the browser cannot jump to #section by itself.
   useEffect(() => {
@@ -164,6 +166,7 @@ export function HelpPage() {
             </button>
           )}
           <h1 className="text-xl font-semibold text-slate-900">How FairTraze works</h1>
+          {canSeeInstructorView && (
           <div role="group" aria-label="Show help for" className="mt-3 inline-flex rounded-lg border border-slate-300 bg-slate-50 p-0.5">
             {(["student", "instructor"] as const).map((v) => (
               <button
@@ -179,6 +182,7 @@ export function HelpPage() {
               </button>
             ))}
           </div>
+          )}
           <div className="mt-3">
             <label htmlFor="help-search" className="sr-only">Search help</label>
             <input
@@ -202,7 +206,10 @@ export function HelpPage() {
           <p className="text-sm font-semibold text-slate-900">On this page</p>
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {[
-              ["what", "What it does"], ["shares", "How shares are calculated"], ["flags", "What flags mean"],
+              ["what", "What it does"], ["shares", "How shares are calculated"],
+              ...(student ? [] : [["report", "Reading a report"]]),
+              ["flags", "What flags mean"],
+              ...(student ? [] : [["settings-howto", "Scoring settings"], ["updates", "When reports update"], ["ai-use", "AI explanation and findings"], ["verify", "Verify report"]]),
               ["ai", "The AI"], ["tasks", "Tasks"], ["github-link", "Linking GitHub"], ["roles", "Roles and leaders"], ["notes", "Your notes"],
               ["privacy", "Privacy"], ["faq", "Questions"],
             ].filter(([id]) => !hiddenIds.has(id)).map(([id, label]) => (
@@ -303,6 +310,18 @@ export function HelpPage() {
           )}
         </Section>
 
+        {!student && (
+          <Section id="report" title="Reading a group's report">
+            <ul>
+              <li>Open a group from its class to see its report. A bar at the top shows the team health label, the Gini value and how many members are flagged. Press the (i) next to the Gini value to see how it is read and the three bands.</li>
+              <li>A small "Early data" tag appears while a group has little recorded activity. It means the results may change as work continues. It goes away after the due date.</li>
+              <li>Each member has a bar with a marker for the equal share. Select a member to open their details window. "How this was counted" there lists, for GitHub and Docs, what counts fully, what counts less and what does not count.</li>
+              <li>Under each flag a short line gives the reason, for example that the share is below half of an equal share.</li>
+              <li>A line under the report says when it was last analyzed.</li>
+            </ul>
+          </Section>
+        )}
+
         <Section id="flags" title="What flags mean">
           {student ? (
             <>
@@ -345,6 +364,48 @@ export function HelpPage() {
             </>
           )}
         </Section>
+
+        {!student && (
+          <>
+            <Section id="settings-howto" title="Changing the scoring settings">
+              <ul>
+                <li>Open Scoring settings from a project page or from a group's report.</li>
+                <li>You can change the GitHub weights, the Docs weights, the GitHub and Docs blend, the three flag thresholds and, for Docs projects, how many images count for each member (3, 5, 10 or no limit). Each set of weights must add up to 1.00 before you can save.</li>
+                <li>The settings apply to every group in the project. Only the instructor who owns the class can change them.</li>
+                <li>Saving marks every group's report as outdated. They update on their own at the next automatic run (about an hour), or at once when you press Re-analyze. A saved report keeps the settings it was scored with.</li>
+              </ul>
+            </Section>
+
+            <Section id="updates" title="When reports update">
+              <ul>
+                <li>About once an hour, FairTraze analyzes each group in an active project, but only if something changed since its last report: new commits, new document edits, or a change to the members, the repository or the settings.</li>
+                <li>A project is active from the day the assignment is created until 7 days after its due date. After that the report is final and does not update.</li>
+                <li>Opening a report can also start an update when the report is more than an hour old.</li>
+                <li>Re-analyze, on a group card or a report, runs an analysis right away.</li>
+                <li>Automatic updates do not write a new AI explanation. If the results changed, the report says so and you can generate a new one.</li>
+                <li>When the scoring rules are updated, older reports say so and are re-analyzed.</li>
+              </ul>
+            </Section>
+
+            <Section id="ai-use" title="AI explanation and findings">
+              <ul>
+                <li>On a report, Generate writes a plain-language explanation of the numbers that were already computed. The AI does not change a share, a flag or the team health label.</li>
+                <li>When AI findings are on for the class, Generate also writes a short description of what each member worked on, and checks the project instructions: each requirement is shown as covered or still needing a look, with its evidence.</li>
+                <li>For a requirement that needs a look, you can choose Mark as covered. The AI never writes that mark.</li>
+                <li>You can turn AI findings on or off for a class on the class page.</li>
+              </ul>
+            </Section>
+
+            <Section id="verify" title="Verify report">
+              <ul>
+                <li>The group leader can print a Contribution Evidence Report. It lists every member's recorded share and flags and has a Report ID. The decision box on it is empty. It does not suggest a grade.</li>
+                <li>To check a printout, choose Verify report in the left menu and type the Report ID. You see the group, the project, the date it was analyzed and the numbers on the printout, and whether it is the latest report or an older one.</li>
+                <li>Only the instructor who owns the class can verify a Report ID for that class.</li>
+                <li>On a group's report, Export / Print makes a detailed printable report for you.</li>
+              </ul>
+            </Section>
+          </>
+        )}
 
         <Section id="ai" title="The math scores. The AI explains. The instructor decides.">
           <ul>
