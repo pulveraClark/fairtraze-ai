@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "../router";
 import { StudentGroupPage } from "./StudentGroupPage";
+import { quietSourceText } from "../lib/groupActivity";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const state: { data: any; notes: any[]; setup: any; tasks: any[] } = { data: null, notes: [], setup: undefined, tasks: [] };
@@ -122,6 +123,20 @@ describe("StudentGroupPage", () => {
     const row = screen.getByTestId("group-header-actions");
     expect(row.className).toContain("flex-wrap");
     expect(within(row).getByRole("button", { name: "Manage Group" }).className).toContain("min-h-11");
+  });
+
+  // Part of a live check that showed old wording: the Report tab must show the one shared notice text.
+  it("the Report tab shows the quiet-source notice exactly as quietSourceText words it", () => {
+    window.history.pushState({}, "", REPORT);
+    const base = groupFixture();
+    for (const source of ["Docs", "GitHub"] as const) {
+      state.data = groupFixture({ report: { ...(base.report as object), quietSource: source } });
+      const { unmount } = renderPage();
+      const notice = screen.getByRole("note");
+      expect(notice.textContent).toBe(quietSourceText(source));
+      unmount();
+    }
+    expect(quietSourceText("Docs")).toBe("No Docs activity yet. Shares are based on GitHub only for now.");
   });
 
   it("calls it a note everywhere a student sees it: Add a note, Send note, Note status", () => {
