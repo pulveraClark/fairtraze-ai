@@ -299,6 +299,7 @@ function MemberSidebar({
             )}
             {oneGo && (
               <p className="flex flex-wrap items-center gap-x-1" data-testid="one-go-line">
+                <span className="basis-full font-semibold text-slate-900 mb-1">Added in One Go</span>
                 <span>{oneGoLine(oneGo.day)}</span>
                 <HoverTip label="About this note">{ONE_GO_TIP}</HoverTip>
                 {onOpenDocumentHistory && (

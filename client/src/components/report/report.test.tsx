@@ -262,6 +262,7 @@ describe("MemberDrawer", () => {
       const onOpen = vi.fn();
       render(<MemberDrawer {...baseProps} source="document" member={doc} docsOneGo={[{ userId: 2, day: "2026-11-10" }]} onOpenDocumentHistory={onOpen} />);
       const line = screen.getByTestId("one-go-line");
+      expect(line).toHaveTextContent("Added in One Go");
       expect(line).toHaveTextContent("Worth a look: a large part of this member's text was added in one go on Nov 10. Please compare snapshots in the document history.");
       // No danger colour. (The small (i) info tip is the shared HoverTip, not a warning icon.)
       expect(line.outerHTML).not.toMatch(/(text|bg|border)-(red|rose)-/);
